@@ -1,0 +1,135 @@
+<script>
+	import TaskCard from '$lib/components/TaskCard.svelte';
+	import { openComposer, tasks } from '$lib/workspace.svelte.js';
+
+	const STATUS_ORDER = ['inReview', 'inProgress', 'open', 'backlog', 'closed', 'canceled'];
+	const STATUS_LABELS = {
+		inReview: 'IN REVIEW',
+		inProgress: 'IN PROGRESS',
+		open: 'OPEN',
+		backlog: 'BACKLOG',
+		closed: 'CLOSED',
+		canceled: 'CANCELED'
+	};
+
+	const groups = $derived.by(() => {
+		/** @type {Map<string, typeof tasks>} */
+		const map = new Map();
+		const sorted = [...tasks].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+		for (const task of sorted) {
+			const key = STATUS_ORDER.includes(task.status) ? task.status : 'open';
+			if (!map.has(key)) map.set(key, []);
+			map.get(key).push(task);
+		}
+		return STATUS_ORDER.filter((key) => (map.get(key)?.length ?? 0) > 0).map((key) => ({
+			key,
+			label: STATUS_LABELS[key],
+			items: map.get(key)
+		}));
+	});
+</script>
+
+<svelte:head><title>Tasks</title></svelte:head>
+
+<div class="feed">
+	{#if tasks.length === 0}
+		<p class="empty">No Tasks yet</p>
+	{:else}
+		{#each groups as group (group.key)}
+			<div class="task-group-header">
+				<span class="eyebrow-label-xs">{group.label}</span>
+				<span class="task-group-count">{group.items.length}</span>
+				<button
+					type="button"
+					class="task-group-add-btn"
+					aria-label="Add task with status {group.label}"
+					onclick={() => openComposer('task', undefined, group.key)}
+				>
+					<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+						<path d="M6 1v10M1 6h10" stroke="var(--white33)" stroke-width="2" stroke-linecap="round" />
+					</svg>
+				</button>
+			</div>
+			{#each group.items as task (task.id)}
+				<TaskCard
+					title={task.title}
+					status={task.status}
+					priority={task.priority}
+					labels={task.labels}
+					targets={task.targets}
+					author={task.author}
+					assignees={task.assignees}
+					commenters={task.commenters}
+					onclick={() => openComposer('task', task.id)}
+				/>
+			{/each}
+		{/each}
+	{/if}
+</div>
+
+<style>
+	.feed {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow: auto;
+	}
+
+	.empty {
+		padding: 48px 16px;
+		color: var(--white66);
+	}
+
+	.task-group-header {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 6px 10px 6px 16px;
+		background: var(--white4);
+		border-bottom: 1.4px solid var(--white11);
+	}
+
+	@media (min-width: 768px) {
+		.task-group-header {
+			padding: 8px 12px 8px 16px;
+		}
+	}
+
+	.eyebrow-label-xs {
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--white66);
+	}
+
+	.task-group-count {
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--white33);
+	}
+
+	.task-group-add-btn {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 6px;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		flex-shrink: 0;
+		padding: 0;
+	}
+
+	.task-group-add-btn:hover {
+		background: var(--white4);
+	}
+
+	.task-group-add-btn:active {
+		background: var(--white11);
+	}
+</style>
