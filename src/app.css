@@ -1,66 +1,87 @@
-@import url('https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap');
+@import url('https://fonts.bunny.net/css?family=inter:400,500,600,700|ovo:400&display=swap');
 
-/* Zapstore tokens. Gray is the default. Light and dark override the same names. */
+/*
+ * Alpha Admin — Zapstore shell layout + Bley-aligned brand knobs.
+ * --accent / --font-display set from brand.svelte.js (Space settings).
+ * Shell still uses --black (bg) / --white (ink) names from Zapstore.
+ */
 
+:root {
+	--accent: #dd8f87;
+	--font-display: 'Ovo', 'Times New Roman', Georgia, serif;
+	--bg-base: #f8f8f8;
+	--ink-base: #040404;
+	--bg-raw: color-mix(in oklab, var(--bg-base) 97%, var(--accent) 3%);
+	--ink-raw: color-mix(in oklab, var(--ink-base) 95%, var(--accent) 5%);
+	--scrim: color-mix(in srgb, var(--ink-raw) 48%, transparent);
+
+	--font: 'Inter', system-ui, -apple-system, sans-serif;
+	--side: 248px;
+	--radius-16: 16px;
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Gray (default) — dark shell, accent-tinted ink poles */
 :root,
 :root[data-theme='gray'] {
-	--white: #ffffff;
-	--white66: #ffffffa8;
-	--white33: #ffffff54;
-	--white16: #ffffff29;
-	--white11: #ffffff1c;
-	--white8: #ffffff14;
-	--white4: #ffffff0a;
+	--white: color-mix(in oklab, #f5f5f5 96%, var(--accent) 4%);
+	--white66: color-mix(in srgb, var(--white) 66%, transparent);
+	--white33: color-mix(in srgb, var(--white) 33%, transparent);
+	--white16: color-mix(in srgb, var(--white) 16%, transparent);
+	--white11: color-mix(in srgb, var(--white) 11%, transparent);
+	--white8: color-mix(in srgb, var(--white) 8%, transparent);
+	--white4: color-mix(in srgb, var(--white) 4%, transparent);
 	--whiteEnforced: #ffffff;
-	--black: #121212;
-	--black33: #00000054;
-	--gray: #242424;
-	--gray66: #333333a8;
-	--gray33: #33333354;
-	--blurpleColor: #5a58fe;
-	--blurpleColor66: #5a58fea8;
-	--blurpleLightColor: #8280ff;
+	--black: color-mix(in oklab, #121212 94%, var(--accent) 6%);
+	--black33: color-mix(in srgb, #000000 33%, transparent);
+	--gray: color-mix(in oklab, #242424 94%, var(--accent) 6%);
+	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
+	--gray33: color-mix(in srgb, var(--gray) 33%, transparent);
+	--blurpleColor: var(--accent);
+	--blurpleColor66: color-mix(in srgb, var(--accent) 66%, transparent);
+	--blurpleLightColor: color-mix(in oklab, var(--accent) 70%, #ffffff 30%);
 	--goldColor: #ffb237;
 	--goldColor66: #ffb237a8;
 	--destructive: #ff4778;
-	--black66: #000000a8;
+	--black66: color-mix(in srgb, #000000 66%, transparent);
 	--shell-border: var(--white11);
-	--gradient-blurple: radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%);
-	--gradient-blurple-hover: radial-gradient(circle at top left, #4245ff 0%, #2c29ff 100%);
+	--gradient-blurple: radial-gradient(
+		circle at top left,
+		color-mix(in oklab, var(--accent) 80%, #fff 20%) 0%,
+		var(--accent) 100%
+	);
+	--gradient-blurple-hover: radial-gradient(
+		circle at top left,
+		var(--accent) 0%,
+		color-mix(in oklab, var(--accent) 70%, #000 30%) 100%
+	);
 	--gradient-rouge: radial-gradient(circle at top left, #ff4778 0%, #ff005e 100%);
 	color-scheme: dark;
 }
 
 :root[data-theme='dark'] {
-	--black: #000000;
-	--black33: #00000054;
-	--gray: #242424;
-	--gray66: #333333a8;
+	--black: var(--ink-raw);
+	--black33: color-mix(in srgb, #000000 33%, transparent);
+	--gray: color-mix(in oklab, #1a1a1a 94%, var(--accent) 6%);
+	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
 	color-scheme: dark;
 }
 
 :root[data-theme='light'] {
-	--white: #241b0f;
-	--white66: #241b0fa8;
-	--white33: #241b0f54;
-	--white16: #241b0f29;
-	--white11: #241b0f1c;
-	--white8: #241b0f14;
-	--white4: #241b0f0a;
+	--white: var(--ink-raw);
+	--white66: color-mix(in srgb, var(--ink-raw) 66%, transparent);
+	--white33: color-mix(in srgb, var(--ink-raw) 33%, transparent);
+	--white16: color-mix(in srgb, var(--ink-raw) 16%, transparent);
+	--white11: color-mix(in srgb, var(--ink-raw) 11%, transparent);
+	--white8: color-mix(in srgb, var(--ink-raw) 8%, transparent);
+	--white4: color-mix(in srgb, var(--ink-raw) 4%, transparent);
 	--whiteEnforced: #ffffff;
-	--black: #f3ece2;
-	--black33: #f0e9e054;
-	--gray: #c4baab;
-	--gray66: #beb09da8;
-	--gray33: #beb09d54;
+	--black: var(--bg-raw);
+	--black33: color-mix(in srgb, var(--bg-raw) 54%, transparent);
+	--gray: color-mix(in oklab, #e8e8e8 94%, var(--accent) 6%);
+	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
+	--gray33: color-mix(in srgb, var(--gray) 33%, transparent);
 	color-scheme: light;
-}
-
-:root {
-	--font: 'Inter', system-ui, -apple-system, sans-serif;
-	--side: 248px;
-	--radius-16: 16px;
-	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 *,
@@ -106,8 +127,9 @@ p {
 
 h1,
 h2 {
-	font-weight: 650;
-	letter-spacing: -0.03em;
+	font-family: var(--font-display);
+	font-weight: 700;
+	letter-spacing: -0.02em;
 }
 
 .page-head {
