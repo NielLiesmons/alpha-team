@@ -3,7 +3,7 @@
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
-	import { closeComposer, tasks, ui } from '$lib/workspace.svelte.js';
+	import { closeComposer, saveTask, tasks, ui } from '$lib/workspace.svelte.js';
 
 	const statuses = [
 		{ value: 'backlog', label: 'Backlog' },
@@ -45,31 +45,29 @@
 		priorityOpen = false;
 	});
 
-	function save() {
+	async function save() {
 		const nextTitle = title.trim();
 		if (!nextTitle) return;
-		if (editing) {
-			editing.title = nextTitle;
-			editing.body = body;
-			editing.status = status;
-			editing.priority = priority;
-			editing.labels = labels;
-		} else {
-			tasks.unshift({
-				id: crypto.randomUUID(),
-				title: nextTitle,
-				body,
-				status,
-				priority,
-				labels,
-				targets: [],
-				author: { pubkey: 'niel', name: 'Niel' },
-				assignees: [],
-				commenters: [],
-				createdAt: Date.now()
-			});
+		const draft = {
+			id: editing?.id,
+			title: nextTitle,
+			body,
+			status,
+			priority,
+			labels,
+			targets: editing?.targets ?? [],
+			project_ids: editing?.project_ids ?? [],
+			author: editing?.author,
+			assignees: editing?.assignees ?? [],
+			commenters: editing?.commenters ?? [],
+			_drive: editing?._drive
+		};
+		try {
+			await saveTask(draft, !editing);
+			closeComposer();
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
 		}
-		closeComposer();
 	}
 </script>
 

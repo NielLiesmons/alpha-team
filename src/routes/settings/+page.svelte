@@ -1,5 +1,12 @@
 <script>
 	import { brand, setBrand } from '$lib/brand.svelte.js';
+	import { health } from '$lib/drive/client.js';
+	import {
+		clearSession,
+		driveSession,
+		saveSession
+	} from '$lib/drive/session.svelte.js';
+	import { refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { setTheme, themeChoice } from '$lib/theme.svelte.js';
 
 	const choices = [
@@ -14,6 +21,43 @@
 		{ id: 'Georgia', label: 'Georgia' },
 		{ id: 'Inter', label: 'Inter' }
 	];
+
+	let url = $state(driveSession.url);
+	let token = $state(driveSession.token);
+	let rootKey = $state(driveSession.rootKey);
+	let busy = $state(false);
+	let msg = $state('');
+
+	async function connect() {
+		busy = true;
+		msg = '';
+		try {
+			const session = {
+				url: url.trim().replace(/\/$/, ''),
+				token: token.trim(),
+				rootKey: rootKey.trim()
+			};
+			const ok = await health(session);
+			if (ok !== 'ok') throw new Error(`unexpected health: ${ok}`);
+			saveSession(session);
+			await refreshFromDrive();
+			msg = driveSession.error
+				? `Connected, but load failed: ${driveSession.error}`
+				: 'Connected — Tasks load from Drive.';
+		} catch (e) {
+			msg = e instanceof Error ? e.message : String(e);
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function disconnect() {
+		clearSession();
+		await refreshFromDrive();
+		token = '';
+		rootKey = '';
+		msg = 'Disconnected — demo Tasks again.';
+	}
 </script>
 
 <svelte:head>
@@ -23,9 +67,45 @@
 <header class="page-head">
 	<div>
 		<h1>Settings</h1>
-		<p>Space brand and appearance for this browser (fixture until Drive-backed).</p>
+		<p>Brand, appearance, and Drive credentials for this browser only.</p>
 	</div>
 </header>
+
+<section class="block">
+	<p class="field-label">Drive</p>
+	<p class="hint">
+		Bearer token + family root key stay in localStorage on this device. The server only ever sees
+		ciphertext. Default URL is production.
+	</p>
+	<label class="row stack">
+		<span>URL</span>
+		<input type="url" bind:value={url} autocomplete="off" spellcheck="false" />
+	</label>
+	<label class="row stack">
+		<span>API token</span>
+		<input type="password" bind:value={token} autocomplete="off" spellcheck="false" />
+	</label>
+	<label class="row stack">
+		<span>Root key</span>
+		<input type="password" bind:value={rootKey} autocomplete="off" spellcheck="false" />
+	</label>
+	<div class="actions">
+		<button type="button" class="btn" disabled={busy || !token.trim() || !rootKey.trim()} onclick={connect}>
+			{busy ? 'Connecting…' : driveSession.connected ? 'Reconnect' : 'Connect'}
+		</button>
+		{#if driveSession.connected}
+			<button type="button" class="btn ghost" disabled={busy} onclick={disconnect}>Disconnect</button>
+		{/if}
+	</div>
+	{#if driveSession.connected}
+		<p class="status on">Connected to {driveSession.url}</p>
+	{:else}
+		<p class="status">Demo mode (sample Tasks)</p>
+	{/if}
+	{#if msg}
+		<p class="status">{msg}</p>
+	{/if}
+</section>
 
 <section class="block">
 	<p class="field-label">Brand</p>
@@ -94,6 +174,12 @@
 		font-weight: 600;
 	}
 
+	.row.stack {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.35rem;
+	}
+
 	.row span {
 		min-width: 6.5rem;
 		color: var(--white66);
@@ -110,6 +196,20 @@
 		cursor: pointer;
 	}
 
+	.row input[type='url'],
+	.row input[type='password'],
+	.row input[type='text'] {
+		width: 100%;
+		height: 2.25rem;
+		padding: 0 0.65rem;
+		border-radius: 10px;
+		border: 1px solid var(--white11);
+		background: var(--gray);
+		color: var(--white);
+		font: inherit;
+		font-weight: 400;
+	}
+
 	.row select {
 		flex: 1;
 		height: 2.25rem;
@@ -124,6 +224,46 @@
 	.row code {
 		font-size: 12px;
 		color: var(--white33);
+	}
+
+	.actions {
+		display: flex;
+		gap: 0.5rem;
+		margin: 0.5rem 0 0.75rem;
+	}
+
+	.btn {
+		height: 2.25rem;
+		padding: 0 1rem;
+		border-radius: 10px;
+		border: none;
+		background: var(--white);
+		color: var(--black);
+		font: inherit;
+		font-weight: 600;
+		font-size: 14px;
+		cursor: pointer;
+	}
+
+	.btn:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
+	.btn.ghost {
+		background: transparent;
+		color: var(--white66);
+		border: 1px solid var(--white11);
+	}
+
+	.status {
+		margin: 0.25rem 0 0;
+		font-size: 13px;
+		color: var(--white66);
+	}
+
+	.status.on {
+		color: var(--accent, var(--white));
 	}
 
 	.sample {

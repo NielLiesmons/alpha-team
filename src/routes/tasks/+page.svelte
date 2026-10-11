@@ -1,6 +1,7 @@
 <script>
 	import TaskCard from '$lib/components/TaskCard.svelte';
-	import { openComposer, tasks } from '$lib/workspace.svelte.js';
+	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { openComposer, tasks, ui } from '$lib/workspace.svelte.js';
 
 	const STATUS_ORDER = ['inReview', 'inProgress', 'open', 'backlog', 'closed', 'canceled'];
 	const STATUS_LABELS = {
@@ -32,6 +33,16 @@
 <svelte:head><title>Tasks</title></svelte:head>
 
 <div class="feed">
+	{#if ui.source === 'demo'}
+		<p class="banner">
+			Demo Tasks — connect Drive in <a href="/settings">Settings</a>
+			{#if driveSession.error}
+				<span class="err"> · {driveSession.error}</span>
+			{/if}
+		</p>
+	{:else if driveSession.loading}
+		<p class="banner">Loading from Drive…</p>
+	{/if}
 	{#if tasks.length === 0}
 		<p class="empty">No Tasks yet</p>
 	{:else}
@@ -73,6 +84,23 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
+	}
+
+	.banner {
+		margin: 0;
+		padding: 10px 16px;
+		font-size: 13px;
+		color: var(--white66);
+		border-bottom: 1.4px solid var(--white11);
+	}
+
+	.banner a {
+		color: var(--white);
+		text-underline-offset: 2px;
+	}
+
+	.banner .err {
+		color: var(--accent, #c44);
 	}
 
 	.empty {
