@@ -2,10 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { primaryNav, space } from '$lib/sections.js';
-	import { notes, openComposer, projects, ui } from '$lib/workspace.svelte.js';
+	import { openComposer } from '$lib/workspace.svelte.js';
+	import NavIcon from './NavIcon.svelte';
 	import TaskCreate from './TaskCreate.svelte';
-	import ProjectCreate from './ProjectCreate.svelte';
-	import NoteCreate from './NoteCreate.svelte';
 
 	let { children } = $props();
 	let mobileOpen = $state(false);
@@ -19,7 +18,7 @@
 
 	const activeLabel = $derived(
 		primaryNav.find((item) => active(item.href))?.label ??
-			(active('/projects') ? 'Projects' : active('/notes') ? 'Notes' : active('/accounting') ? 'Accounting' : active('/settings') ? 'Settings' : 'Drive')
+			(active('/settings') ? 'Settings' : 'Alpha')
 	);
 
 	/** @param {string} href */
@@ -31,20 +30,24 @@
 
 <div class="dashboard">
 	<div class="mobile-nav">
-		<button type="button" class="mobile-zone" aria-expanded={mobileOpen} onclick={() => (mobileOpen = !mobileOpen)}>
+		<button
+			type="button"
+			class="mobile-zone"
+			aria-expanded={mobileOpen}
+			onclick={() => (mobileOpen = !mobileOpen)}
+		>
 			<span>{activeLabel}</span>
 			<span class="chev" class:open={mobileOpen}>⌄</span>
 		</button>
 		{#if mobileOpen}
 			<div class="mobile-panel">
 				{@render nav()}
-				<button type="button" class="mobile-rest" aria-label="Close menu" onclick={() => (mobileOpen = false)}></button>
 			</div>
 		{/if}
 	</div>
 
 	<aside class="sidebar">
-		<a class="brand" href="/drive">
+		<a class="brand" href="/tasks">
 			<span class="brand-name">{space.name}</span>
 			<span class="brand-host">{space.host}</span>
 		</a>
@@ -59,85 +62,46 @@
 </div>
 
 <TaskCreate />
-<ProjectCreate />
-<NoteCreate />
-
-{#snippet emoji(src)}
-	<span class="emoji" class:empty={!src}>
-		{#if src}<img src={src} alt="" />{/if}
-	</span>
-{/snippet}
-
-{#snippet plus(label, onclick)}
-	<button type="button" class="plus" aria-label={label} {onclick}>
-		<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-			<path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-		</svg>
-	</button>
-{/snippet}
 
 {#snippet nav()}
 	<nav class="sidebar-nav" aria-label="Sections">
 		{#each primaryNav as item (item.href)}
-			<button type="button" class="nav-item" class:active={active(item.href)} onclick={() => go(item.href)}>
-				<span class="icon-wrap">{@render emoji(item.emoji)}</span>
-				<span class="nav-label">{item.label}</span>
-			</button>
+			<div class="nav-row" class:active={active(item.href)}>
+				<button type="button" class="nav-item" onclick={() => go(item.href)}>
+					<span class="icon-wrap"><NavIcon name={item.icon} /></span>
+					<span class="nav-label">{item.label}</span>
+				</button>
+				{#if item.href === '/tasks'}
+					<button
+						type="button"
+						class="plus"
+						aria-label="New task"
+						onclick={() => {
+							mobileOpen = false;
+							openComposer('task');
+						}}
+					>
+						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+							<path
+								d="M6 1.5v9M1.5 6h9"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
+				{/if}
+			</div>
 		{/each}
 	</nav>
 
-	<div class="sidebar-mid">
-		<div class="side-section">
-			<div class="section-head">
-				<span class="eyebrow">Projects</span>
-				{@render plus('New project', () => { mobileOpen = false; openComposer('project'); })}
-			</div>
-			{#if projects.length === 0}
-				<button type="button" class="nav-item" onclick={() => openComposer('project')}>
-					<span class="nav-label quiet">No projects yet</span>
-				</button>
-			{/if}
-			{#each projects as project (project.id)}
-				<button
-					type="button"
-					class="nav-item"
-					class:active={active('/projects') && ui.projectId === project.id}
-					onclick={() => { ui.projectId = project.id; go('/projects'); }}
-				>
-					<span class="icon-wrap">{@render emoji('/emoji/stack.png')}</span>
-					<span class="nav-label">{project.title}</span>
-				</button>
-			{/each}
-		</div>
-
-		<div class="side-section">
-			<div class="section-head">
-				<span class="eyebrow">Notes</span>
-				{@render plus('New note', () => { mobileOpen = false; openComposer('note'); })}
-			</div>
-			{#each notes as note (note.id)}
-				<button
-					type="button"
-					class="nav-item"
-					class:active={active('/notes') && ui.noteId === note.id}
-					onclick={() => { ui.noteId = note.id; go('/notes'); }}
-				>
-					<span class="icon-wrap">{@render emoji('/emoji/note.png')}</span>
-					<span class="nav-label">{note.title}</span>
-				</button>
-			{/each}
-		</div>
-	</div>
-
 	<div class="sidebar-foot">
-		<button type="button" class="nav-item" class:active={active('/accounting')} onclick={() => go('/accounting')}>
-			<span class="icon-wrap">{@render emoji(null)}</span>
-			<span class="nav-label">Accounting</span>
-		</button>
-		<button type="button" class="nav-item" class:active={active('/settings')} onclick={() => go('/settings')}>
-			<span class="icon-wrap">{@render emoji(null)}</span>
-			<span class="nav-label">Settings</span>
-		</button>
+		<div class="nav-row" class:active={active('/settings')}>
+			<button type="button" class="nav-item" onclick={() => go('/settings')}>
+				<span class="icon-wrap"><NavIcon name="settings" /></span>
+				<span class="nav-label">Settings</span>
+			</button>
+		</div>
 	</div>
 {/snippet}
 
@@ -168,8 +132,9 @@
 	}
 
 	.brand-name {
-		font-size: 16px;
-		font-weight: 600;
+		font-family: var(--font-display);
+		font-size: 18px;
+		font-weight: 700;
 		letter-spacing: -0.02em;
 	}
 
@@ -182,60 +147,36 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		flex-shrink: 0;
-	}
-
-	.sidebar-mid {
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
 	}
 
-	.side-section {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		margin-top: 16px;
-	}
-
-	.section-head {
+	.nav-row {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		padding: 0 10px;
-		margin-bottom: 4px;
+		gap: 2px;
+		border-radius: 8px;
 	}
 
-	.eyebrow {
-		font-size: 12px;
-		font-weight: 500;
-		letter-spacing: 0.18em;
-		text-transform: uppercase;
-		color: var(--white33);
-	}
-
-	.plus {
-		width: 20px;
-		height: 20px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		border-radius: 6px;
-		background: transparent;
-		color: var(--white33);
-		padding: 0;
-		cursor: pointer;
-	}
-
-	.plus:hover {
+	.nav-row:hover {
 		background: var(--white4);
+	}
+
+	.nav-row.active {
+		background: var(--white8);
+	}
+
+	.nav-row.active .nav-item {
+		color: var(--white);
 	}
 
 	.nav-item {
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		padding: 8px 12px;
 		border: 0;
 		border-radius: 8px;
@@ -247,15 +188,6 @@
 		cursor: pointer;
 	}
 
-	.nav-item:hover:not(.active) {
-		background: var(--white4);
-	}
-
-	.nav-item.active {
-		color: var(--white);
-		background: var(--white8);
-	}
-
 	.icon-wrap {
 		width: 18px;
 		height: 18px;
@@ -263,36 +195,34 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-	}
-
-	.emoji {
-		width: 18px;
-		height: 18px;
-		display: block;
-	}
-
-	.emoji.empty {
-		border-radius: 4px;
-		background: var(--white8);
-	}
-
-	.emoji img {
-		width: 18px;
-		height: 18px;
-		object-fit: cover;
-		border-radius: 4px;
-		display: block;
+		opacity: 0.9;
 	}
 
 	.nav-label {
+		flex: 1;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.quiet {
+	.plus {
+		width: 22px;
+		height: 22px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 6px;
+		background: transparent;
 		color: var(--white33);
+		padding: 0;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.plus:hover {
+		background: var(--white4);
+		color: var(--white);
 	}
 
 	.sidebar-foot {
@@ -381,10 +311,6 @@
 			padding: 8px 8px 12px;
 			display: flex;
 			flex-direction: column;
-		}
-
-		.mobile-rest {
-			display: none;
 		}
 	}
 </style>
