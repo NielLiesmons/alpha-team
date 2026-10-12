@@ -25,12 +25,9 @@
 	--task-box-stroke: 1.4;
 	--task-check-stroke: calc(var(--task-box-stroke) * 1.35);
 	--font-display: 'Ovo', 'Times New Roman', Georgia, serif;
-	/* Same poles as Bley — light/dark flip; no separate gray palette */
-	--bg-base: #f8f8f8;
-	--ink-base: #000000;
-	--bg-raw: color-mix(in oklab, var(--bg-base) 97%, var(--accent) 3%);
-	/* Pure black + accent ≈ #160B0F (darker, more rose than gray-base mix) */
-	--ink-raw: color-mix(in oklab, var(--ink-base) 88%, var(--accent) 12%);
+	/* Same poles as Bley — accent hue only; fixed S/L (ink ≈ #160B0F) */
+	--ink-raw: hsl(from var(--accent) h 33% 6.5%);
+	--bg-raw: hsl(from var(--accent) h 12% 97.2%);
 	--scrim: color-mix(in srgb, var(--ink-raw) 48%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--ink-raw) 32%, transparent);
 	--radius-hero: 32px;
