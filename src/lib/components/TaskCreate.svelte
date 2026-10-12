@@ -266,7 +266,7 @@
 		top: calc(100% + 8px);
 		left: 0;
 		z-index: 20;
-		background: var(--popover);
+		background: var(--bg);
 		border: 1px solid var(--hairline);
 		border-radius: 12px;
 		overflow: hidden;

@@ -112,7 +112,7 @@
 		left: 0;
 		z-index: 5;
 		min-width: 168px;
-		background: var(--popover);
+		background: var(--bg);
 		border: 1px solid var(--hairline);
 		border-radius: 12px;
 		overflow: hidden;
