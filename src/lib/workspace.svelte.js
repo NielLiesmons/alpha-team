@@ -4,7 +4,9 @@
  */
 
 import {
+	createProject as driveCreateProject,
 	createTask as driveCreateTask,
+	ensureSpace,
 	fromUiTask,
 	listProjects,
 	listTasks,
@@ -164,6 +166,7 @@ export async function refreshFromDrive() {
 	driveSession.loading = true;
 	driveSession.error = null;
 	try {
+		await ensureSpace(session, 'Bley Family');
 		const [plist, tlist] = await Promise.all([listProjects(session), listTasks(session)]);
 		replaceArray(
 			projects,
@@ -235,6 +238,54 @@ export async function saveTask(draft, isNew) {
 		const uiTask = toUiTask(saved, plist);
 		if (idx >= 0) Object.assign(tasks[idx], uiTask);
 		else tasks.unshift(uiTask);
+	}
+}
+
+/**
+ * @param {any} draft
+ * @param {boolean} isNew
+ */
+export async function saveProject(draft, isNew) {
+	const session = activeSession();
+	if (!session) {
+		if (isNew) {
+			const id = draft.id || crypto.randomUUID();
+			projects.unshift({
+				id,
+				title: draft.title,
+				summary: draft.summary ?? '',
+				body: draft.body ?? '',
+				status: draft.status ?? 'planned'
+			});
+			ui.projectId = id;
+		} else {
+			const idx = projects.findIndex((p) => p.id === draft.id);
+			if (idx >= 0) Object.assign(projects[idx], draft);
+			ui.projectId = draft.id;
+		}
+		return;
+	}
+
+	if (isNew) {
+		const created = await driveCreateProject(session, {
+			title: draft.title,
+			description: draft.summary || draft.body || ''
+		});
+		projects.unshift({
+			id: created.id,
+			title: created.title,
+			summary: created.description ?? '',
+			body: '',
+			status: draft.status ?? 'planned',
+			slug: created.slug,
+			_drive: created
+		});
+		ui.projectId = created.id;
+	} else {
+		/* v0: local fields only; project.json rewrite comes with full edit later */
+		const idx = projects.findIndex((p) => p.id === draft.id);
+		if (idx >= 0) Object.assign(projects[idx], draft);
+		ui.projectId = draft.id;
 	}
 }
 

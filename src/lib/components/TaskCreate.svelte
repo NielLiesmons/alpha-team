@@ -3,7 +3,7 @@
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
-	import { closeComposer, saveTask, tasks, ui } from '$lib/workspace.svelte.js';
+	import { closeComposer, projects, saveTask, tasks, ui } from '$lib/workspace.svelte.js';
 
 	const statuses = [
 		{ value: 'backlog', label: 'Backlog' },
@@ -30,6 +30,8 @@
 	let priorityOpen = $state(false);
 	/** @type {string[]} */
 	let labels = $state([]);
+	/** @type {string[]} */
+	let projectIds = $state([]);
 
 	const editing = $derived(ui.composer?.kind === 'task' ? tasks.find((item) => item.id === ui.composer.id) : null);
 	const open = $derived(ui.composer?.kind === 'task');
@@ -41,9 +43,16 @@
 		status = editing?.status ?? ui.composer?.status ?? 'open';
 		priority = editing?.priority ?? 'none';
 		labels = [...(editing?.labels ?? [])];
+		projectIds = [...(editing?.project_ids ?? [])];
 		statusOpen = false;
 		priorityOpen = false;
 	});
+
+	/** @param {string} id */
+	function toggleProject(id) {
+		if (projectIds.includes(id)) projectIds = projectIds.filter((p) => p !== id);
+		else projectIds = [...projectIds, id];
+	}
 
 	async function save() {
 		const nextTitle = title.trim();
@@ -55,8 +64,11 @@
 			status,
 			priority,
 			labels,
-			targets: editing?.targets ?? [],
-			project_ids: editing?.project_ids ?? [],
+			targets: projectIds.map((id) => ({
+				id,
+				label: projects.find((p) => p.id === id)?.title ?? id
+			})),
+			project_ids: projectIds,
 			author: editing?.author,
 			assignees: editing?.assignees ?? [],
 			commenters: editing?.commenters ?? [],
@@ -155,13 +167,26 @@
 
 	<div class="post-form-divider"></div>
 
+	{#if projects.length > 0}
+		<div class="project-pick">
+			<span class="pick-label">Projects</span>
+			<div class="pick-chips">
+				{#each projects as project (project.id)}
+					<button
+						type="button"
+						class="pick-chip"
+						class:on={projectIds.includes(project.id)}
+						onclick={() => toggleProject(project.id)}
+					>
+						{project.title}
+					</button>
+				{/each}
+			</div>
+		</div>
+		<div class="post-form-divider"></div>
+	{/if}
+
 	<div class="task-bottom-row">
-		<button type="button" class="target-btn" aria-label="Set target">
-			<svg width="13" height="13" viewBox="-0.5 -0.5 15 15" fill="none" aria-hidden="true">
-				<path d="M6.70018 0.699219L6.70018 12.6992M12.7002 6.69912L0.700195 6.69912" stroke="var(--white33)" stroke-width="2.8" stroke-linecap="round" />
-			</svg>
-			<span class="target-text">Target</span>
-		</button>
 		<ProfilePicStack profiles={[]} text="Assign" size="sm" />
 		<button type="button" class="publish-btn" disabled={!title.trim()} onclick={save}>
 			{editing ? 'Save' : 'Publish'}
@@ -384,32 +409,51 @@
 		display: block;
 	}
 
+	.project-pick {
+		padding: 10px 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.pick-label {
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--white33);
+	}
+
+	.pick-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+
+	.pick-chip {
+		height: 28px;
+		padding: 0 10px;
+		border: 0;
+		border-radius: 8px;
+		background: var(--white8);
+		color: var(--white66);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 500;
+		cursor: pointer;
+	}
+
+	.pick-chip.on {
+		background: var(--white);
+		color: var(--black);
+	}
+
 	.task-bottom-row {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
 		padding: 10px 12px;
 		gap: 10px;
-	}
-
-	.target-btn {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 6px;
-		height: 28px;
-		padding: 0 10px 0 8px;
-		background: var(--white8);
-		border: none;
-		border-radius: 8px;
-		cursor: pointer;
-		flex-shrink: 0;
-	}
-
-	.target-text {
-		font-size: 14px;
-		font-weight: 500;
-		color: var(--white33);
 	}
 
 	.publish-btn {

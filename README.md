@@ -6,9 +6,9 @@ Public farm site stays in `bley`.
 
 ## Status
 
-- **Tasks** — real UI; demo fixtures until Settings → Drive connect.
+- **Tasks / Projects / Drive** — create & upload against Drive when connected (no CLI seed).
 - Drive client — browser encrypt/decrypt against `drive.bley.farm` (root key in localStorage only).
-- Everything else in the sidebar — empty stubs.
+- Mail / Chat / Publications / Notes / Calendar — stubs.
 - Settings — Drive credentials + appearance + brand knobs.
 - Nav — line icons (placeholders); no emoji stickers.
 

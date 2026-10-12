@@ -4,6 +4,7 @@
 	import { primaryNav, space } from '$lib/sections.js';
 	import { openComposer } from '$lib/workspace.svelte.js';
 	import NavIcon from './NavIcon.svelte';
+	import ProjectCreate from './ProjectCreate.svelte';
 	import TaskCreate from './TaskCreate.svelte';
 
 	let { children } = $props();
@@ -62,6 +63,7 @@
 </div>
 
 <TaskCreate />
+<ProjectCreate />
 
 {#snippet nav()}
 	<nav class="sidebar-nav" aria-label="Sections">
@@ -71,14 +73,14 @@
 					<span class="icon-wrap"><NavIcon name={item.icon} /></span>
 					<span class="nav-label">{item.label}</span>
 				</button>
-				{#if item.href === '/tasks'}
+				{#if item.href === '/tasks' || item.href === '/projects'}
 					<button
 						type="button"
 						class="plus"
-						aria-label="New task"
+						aria-label={item.href === '/tasks' ? 'New task' : 'New project'}
 						onclick={() => {
 							mobileOpen = false;
-							openComposer('task');
+							openComposer(item.href === '/tasks' ? 'task' : 'project');
 						}}
 					>
 						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">

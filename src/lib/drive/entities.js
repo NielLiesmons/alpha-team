@@ -36,18 +36,18 @@ export async function initSpace(session, name) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {string} title
- * @param {string} [slug]
+ * @param {{ title: string, slug?: string, description?: string }} input
  */
-export async function createProject(session, title, slug) {
+export async function createProject(session, input) {
 	const id = newId();
 	const home = `projects/${id}/home`;
 	const created = nowRfc3339();
 	const project = {
 		schema: 'alpha.project/1',
 		id,
-		slug: slug || slugify(title),
-		title,
+		slug: input.slug || slugify(input.title),
+		title: input.title,
+		description: input.description || undefined,
 		created_at: created,
 		updated_at: created,
 		drive: {
@@ -57,6 +57,49 @@ export async function createProject(session, title, slug) {
 	};
 	await putPath(session, `projects/${id}/project.json`, 'project', JSON.stringify(project, null, 2));
 	return project;
+}
+
+/**
+ * Ensure meta/space.json exists (first visit to an empty Drive).
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} [name]
+ */
+export async function ensureSpace(session, name = 'Family') {
+	try {
+		await getPath(session, 'meta/space.json');
+		return null;
+	} catch {
+		return initSpace(session, name);
+	}
+}
+
+/**
+ * List all encrypted root paths (flat map with `/` in names).
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listEntries(session) {
+	const dir = await loadRootDir(session);
+	return Object.entries(dir.children ?? {})
+		.map(([path, child]) => ({
+			path,
+			kind: child.kind ?? 'blob'
+		}))
+		.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * Upload a browser File under a folder prefix (content-type tree).
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} folder e.g. media/photos
+ * @param {File} file
+ */
+export async function uploadFile(session, folder, file) {
+	const safeName = file.name.replace(/[/\\]/g, '_').trim() || 'file';
+	const prefix = folder.replace(/^\/+|\/+$/g, '');
+	const path = prefix ? `${prefix}/${safeName}` : safeName;
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	await putPath(session, path, 'blob', bytes);
+	return path;
 }
 
 /**

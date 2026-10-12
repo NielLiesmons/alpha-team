@@ -1,7 +1,7 @@
 <script>
 	import CreateSheet from './CreateSheet.svelte';
 	import StatusBox from './StatusBox.svelte';
-	import { closeComposer, projects, ui } from '$lib/workspace.svelte.js';
+	import { closeComposer, projects, saveProject, ui } from '$lib/workspace.svelte.js';
 
 	const statuses = [
 		{ value: 'backlog', label: 'Backlog' },
@@ -30,21 +30,24 @@
 		statusOpen = false;
 	});
 
-	function save() {
+	async function save() {
 		const nextTitle = title.trim();
 		if (!nextTitle) return;
-		if (editing) {
-			editing.title = nextTitle;
-			editing.summary = summary;
-			editing.body = body;
-			editing.status = status;
-			ui.projectId = editing.id;
-		} else {
-			const id = crypto.randomUUID();
-			projects.unshift({ id, title: nextTitle, summary, body, status });
-			ui.projectId = id;
+		try {
+			await saveProject(
+				{
+					id: editing?.id,
+					title: nextTitle,
+					summary,
+					body,
+					status
+				},
+				!editing
+			);
+			closeComposer();
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
 		}
-		closeComposer();
 	}
 </script>
 
