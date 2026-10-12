@@ -4,7 +4,7 @@
 
 	/**
 	 * Bottom sheet on small screens, floating sheet on desktop.
-	 * Visual match for the Zapstore modal shell: gray66, 0.33px white8 edge, blur.
+	 * Bley modal shell: --modal-bg + hairline (same as public site).
 	 */
 	let {
 		open = $bindable(false),
@@ -55,13 +55,14 @@
 	.sheet {
 		pointer-events: auto;
 		width: 100%;
-		background: var(--gray66);
-		border: 0.33px solid var(--white8);
+		background: var(--modal-bg);
+		border: 1px solid var(--hairline);
 		border-bottom: none;
-		border-radius: 28px 28px 0 0;
+		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
 		padding: 16px;
-		backdrop-filter: blur(24px);
-		-webkit-backdrop-filter: blur(24px);
+		backdrop-filter: blur(18px);
+		-webkit-backdrop-filter: blur(18px);
+		box-shadow: 0 16px 48px var(--shadow-strong);
 	}
 
 	@media (min-width: 768px) {

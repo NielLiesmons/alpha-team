@@ -4,9 +4,9 @@
 	import { onMount } from 'svelte';
 
 	/**
-	 * Create / edit surface — one shell only (no nested darker form-box).
-	 * - Mobile: bottom sheet (gray66), content rows directly inside
-	 * - Desktop: right column panel, same shell treatment, rows directly inside
+	 * Create / edit — Bley modal surface tokens (not Zapstore gray66).
+	 * Mobile: bottom sheet = the rounded modal; rows directly inside.
+	 * Desktop: column + rounded sheet one level in (Bley modal bg).
 	 */
 	let {
 		open = $bindable(false),
@@ -41,14 +41,16 @@
 
 {#if open}
 	{#if desktop}
-		<aside
-			class="sheet panel"
-			role="dialog"
-			aria-modal="true"
-			aria-label={label}
-			transition:fly={{ x: 48, duration: 220, easing: cubicOut }}
-		>
-			{@render children?.()}
+		<aside class="panel-col" aria-label={label}>
+			<div
+				class="sheet"
+				role="dialog"
+				aria-modal="true"
+				aria-label={label}
+				transition:fly={{ x: 40, duration: 220, easing: cubicOut }}
+			>
+				{@render children?.()}
+			</div>
 		</aside>
 	{:else}
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -66,7 +68,9 @@
 		position: fixed;
 		inset: 0;
 		z-index: 40;
-		background: color-mix(in srgb, var(--black) 72%, transparent);
+		background: var(--scrim);
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
 	}
 
 	.wrap {
@@ -80,14 +84,28 @@
 		pointer-events: none;
 	}
 
-	/* Single shell — Zapstore gray sheet; rows live here directly */
+	/* Column only — page bg; rounded modal is the child */
+	.panel-col {
+		flex: 0 0 min(400px, 40vw);
+		width: min(400px, 40vw);
+		align-self: stretch;
+		min-height: 0;
+		padding: 12px;
+		border-left: 1px solid var(--hairline);
+		background: var(--black);
+		box-sizing: border-box;
+		overflow: auto;
+	}
+
+	/* Bley modal shell — content rows live directly here */
 	.sheet {
 		display: flex;
 		flex-direction: column;
-		background: var(--gray66);
-		border: 0.33px solid var(--white8);
-		backdrop-filter: blur(24px);
-		-webkit-backdrop-filter: blur(24px);
+		background: var(--modal-bg);
+		border: 1px solid var(--hairline);
+		backdrop-filter: blur(18px);
+		-webkit-backdrop-filter: blur(18px);
+		box-shadow: 0 16px 48px var(--shadow-strong);
 		overflow: auto;
 	}
 
@@ -96,21 +114,13 @@
 		width: 100%;
 		max-height: min(88dvh, 720px);
 		border-bottom: none;
-		border-radius: 28px 28px 0 0;
+		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
 		padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
 	}
 
-	.sheet.panel {
-		flex: 0 0 min(400px, 40vw);
-		width: min(400px, 40vw);
-		align-self: stretch;
-		min-height: 0;
-		border-left: 1px solid var(--shell-border);
-		border-radius: 0;
-		border-top: none;
-		border-bottom: none;
-		border-right: none;
-		padding: 12px 0;
-		box-sizing: border-box;
+	.panel-col .sheet {
+		min-height: min(100%, 520px);
+		border-radius: 24px;
+		padding: 8px 0;
 	}
 </style>

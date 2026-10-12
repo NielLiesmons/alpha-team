@@ -26,4 +26,14 @@
 		height: 100%;
 		overflow: visible;
 	}
+
+	/* Screen-px stroke — equal weight across different viewBoxes */
+	.icon :global(path),
+	.icon :global(rect),
+	.icon :global(circle),
+	.icon :global(line),
+	.icon :global(polyline) {
+		vector-effect: non-scaling-stroke;
+		stroke-width: var(--icon-stroke);
+	}
 </style>

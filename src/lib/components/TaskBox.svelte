@@ -1,10 +1,10 @@
 <script>
 	/**
-	 * Status box — uses --accent-success / --accent-progress (warm accents swap roles).
+	 * Status box — --accent-success / --accent-progress.
+	 * Check stroke tracks --task-box-stroke (slightly thicker).
 	 */
 	let { state = 'open', size = 24 } = $props();
 
-	const checkStroke = $derived(size >= 20 ? 2.6 : 1.4);
 	const checkSize = $derived(Math.round(size * 0.62));
 	const iconSize = $derived(Math.round(size * 0.58));
 	const crossSize = $derived(Math.round(size * 0.4));
@@ -23,7 +23,6 @@
 			viewBox="-1 -1 20 14"
 			fill="none"
 			stroke="var(--white)"
-			stroke-width={checkStroke}
 			stroke-linecap="round"
 			stroke-linejoin="round"
 			aria-hidden="true"
@@ -80,6 +79,11 @@
 		flex-shrink: 0;
 	}
 
+	.check :global(path) {
+		vector-effect: non-scaling-stroke;
+		stroke-width: var(--task-check-stroke);
+	}
+
 	.icon-slot {
 		width: 100%;
 		height: 100%;
@@ -90,12 +94,12 @@
 
 	.state-backlog {
 		background: transparent;
-		border: 1.4px dashed var(--white33);
+		border: var(--task-box-stroke) dashed var(--white33);
 	}
 
 	.state-open {
 		background: var(--black33);
-		border: 1.4px solid var(--white33);
+		border: var(--task-box-stroke) solid var(--white33);
 	}
 
 	.state-closed {
@@ -105,12 +109,12 @@
 
 	.state-inProgress {
 		background: var(--black33);
-		border: 1.4px solid var(--accent-progress-66);
+		border: var(--task-box-stroke) solid var(--accent-progress-66);
 	}
 
 	.state-inReview {
 		background: var(--black33);
-		border: 1.4px solid var(--accent-success-66);
+		border: var(--task-box-stroke) solid var(--accent-success-66);
 	}
 
 	.state-canceled {
