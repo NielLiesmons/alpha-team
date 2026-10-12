@@ -16,12 +16,12 @@
 	}
 
 	.open {
-		border-color: var(--blurpleColor);
+		border-color: var(--accent);
 	}
 
 	.inProgress {
-		border-color: var(--blurpleColor);
-		background: var(--blurpleColor);
+		border-color: var(--accent-2);
+		background: var(--accent-2);
 	}
 
 	.closed {

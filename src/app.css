@@ -8,6 +8,10 @@
 
 :root {
 	--accent: #dd8f87;
+	--accent-2: #6b9e8f;
+	--accent-2: oklch(from var(--accent) calc(l * 0.9) calc(c * 0.88) calc(h + 152));
+	--accent-66: color-mix(in srgb, var(--accent) 66%, transparent);
+	--accent-2-66: color-mix(in srgb, var(--accent-2) 66%, transparent);
 	--font-display: 'Ovo', 'Times New Roman', Georgia, serif;
 	--bg-base: #f8f8f8;
 	--ink-base: #040404;
@@ -21,7 +25,7 @@
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Gray (default) — dark shell, accent-tinted ink poles */
+/* Gray (default) — same soft dark shell as Bley dark / Admin Gray */
 :root,
 :root[data-theme='gray'] {
 	--white: color-mix(in oklab, #f5f5f5 96%, var(--accent) 4%);
@@ -37,25 +41,14 @@
 	--gray: color-mix(in oklab, #242424 94%, var(--accent) 6%);
 	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
 	--gray33: color-mix(in srgb, var(--gray) 33%, transparent);
+	/* Aliases → brand accents (no Zapstore gold / rouge) */
 	--blurpleColor: var(--accent);
-	--blurpleColor66: color-mix(in srgb, var(--accent) 66%, transparent);
-	--blurpleLightColor: color-mix(in oklab, var(--accent) 70%, #ffffff 30%);
-	--goldColor: #ffb237;
-	--goldColor66: #ffb237a8;
-	--destructive: #ff4778;
+	--blurpleColor66: var(--accent-66);
+	--goldColor: var(--accent-2);
+	--goldColor66: var(--accent-2-66);
+	--destructive: var(--white33);
 	--black66: color-mix(in srgb, #000000 66%, transparent);
 	--shell-border: var(--white11);
-	--gradient-blurple: radial-gradient(
-		circle at top left,
-		color-mix(in oklab, var(--accent) 80%, #fff 20%) 0%,
-		var(--accent) 100%
-	);
-	--gradient-blurple-hover: radial-gradient(
-		circle at top left,
-		var(--accent) 0%,
-		color-mix(in oklab, var(--accent) 70%, #000 30%) 100%
-	);
-	--gradient-rouge: radial-gradient(circle at top left, #ff4778 0%, #ff005e 100%);
 	color-scheme: dark;
 }
 
@@ -193,12 +186,12 @@ h2 {
 }
 
 .btn.primary {
-	background-image: var(--gradient-blurple);
-	color: var(--whiteEnforced);
+	background: var(--white);
+	color: var(--black);
 }
 
 .btn.primary:hover:not(:disabled) {
-	box-shadow: 0 0 20px color-mix(in srgb, var(--blurpleColor) 40%, transparent);
+	opacity: 0.92;
 }
 
 .btn.small {
@@ -221,8 +214,8 @@ h2 {
 
 .pill.published,
 .pill.in {
-	background: var(--blurpleColor);
-	color: var(--whiteEnforced);
+	background: var(--white);
+	color: var(--black);
 }
 
 .pill.sent {
@@ -346,8 +339,8 @@ textarea.body:focus {
 }
 
 .segments button.on {
-	background-image: var(--gradient-blurple);
-	color: var(--whiteEnforced);
+	background: var(--white);
+	color: var(--black);
 }
 
 .crumbs {
@@ -481,8 +474,8 @@ table.data tr.selected td {
 }
 
 .seg button.on {
-	background-image: var(--gradient-blurple);
-	color: var(--whiteEnforced);
+	background: var(--white);
+	color: var(--black);
 }
 
 /* Create sheets (Chateau form box, used inside CreateSheet) */
@@ -548,8 +541,8 @@ table.data tr.selected td {
 	padding: 0 16px;
 	border: 0;
 	border-radius: 8px;
-	background: var(--gradient-blurple);
-	color: var(--whiteEnforced);
+	background: var(--white);
+	color: var(--black);
 	font-size: 15px;
 	font-weight: 500;
 	cursor: pointer;

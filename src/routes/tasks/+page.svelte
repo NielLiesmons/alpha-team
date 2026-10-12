@@ -100,7 +100,7 @@
 	}
 
 	.banner .err {
-		color: var(--accent, #c44);
+		color: var(--white66);
 	}
 
 	.empty {

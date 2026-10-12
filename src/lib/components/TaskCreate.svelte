@@ -418,10 +418,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: var(--gradient-blurple);
+		background: var(--white);
 		border: none;
 		border-radius: 8px;
-		color: white;
+		color: var(--black);
 		font-size: 15px;
 		font-weight: 500;
 		cursor: pointer;

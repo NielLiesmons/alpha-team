@@ -109,7 +109,10 @@
 
 <section class="block">
 	<p class="field-label">Brand</p>
-	<p class="hint">One accent tints broken white/black. Display font is for headings.</p>
+	<p class="hint">
+		Accent tints surfaces and marks selection. A second accent is derived automatically for Tasks
+		(progress / urgent). CTAs stay ink-on-bg — never accent fills.
+	</p>
 	<label class="row">
 		<span>Accent</span>
 		<input
@@ -131,8 +134,9 @@
 		</select>
 	</label>
 	<p class="sample" style="font-family: var(--font-display)">
-		Bley · accent check
-		<span class="swatch" style="background: var(--accent)"></span>
+		Bley · accents
+		<span class="swatch" style="background: var(--accent)" title="accent"></span>
+		<span class="swatch" style="background: var(--accent-2)" title="accent-2"></span>
 	</p>
 </section>
 

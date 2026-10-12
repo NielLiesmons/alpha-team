@@ -21,13 +21,13 @@
 	}
 
 	.medium {
-		border-color: var(--goldColor, #ffb338);
-		background: color-mix(in srgb, var(--goldColor, #ffb338) 35%, transparent);
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 35%, transparent);
 	}
 
 	.high,
 	.urgent {
-		border-color: var(--rougeColor, #ff4778);
-		background: var(--rougeColor, #ff4778);
+		border-color: var(--accent-2);
+		background: var(--accent-2);
 	}
 </style>
