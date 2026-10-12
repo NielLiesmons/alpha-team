@@ -25,7 +25,10 @@
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Gray (default) — same soft dark shell as Bley dark / Admin Gray */
+/*
+ * Gray (default) — warm broken black ≈ #160B0F with Bley rose.
+ * Darker base + more accent than the old #121212 @ 6%.
+ */
 :root,
 :root[data-theme='gray'] {
 	--white: color-mix(in oklab, #f5f5f5 96%, var(--accent) 4%);
@@ -36,9 +39,9 @@
 	--white8: color-mix(in srgb, var(--white) 8%, transparent);
 	--white4: color-mix(in srgb, var(--white) 4%, transparent);
 	--whiteEnforced: #ffffff;
-	--black: color-mix(in oklab, #121212 94%, var(--accent) 6%);
+	--black: color-mix(in oklab, #0a0809 88%, var(--accent) 12%);
 	--black33: color-mix(in srgb, #000000 33%, transparent);
-	--gray: color-mix(in oklab, #242424 94%, var(--accent) 6%);
+	--gray: color-mix(in oklab, #1c1618 88%, var(--accent) 12%);
 	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
 	--gray33: color-mix(in srgb, var(--gray) 33%, transparent);
 	/* Aliases → brand accents (no Zapstore gold / rouge) */
@@ -52,11 +55,22 @@
 	color-scheme: dark;
 }
 
+/* Dark — deepest accent-tinted pole (ink-raw), still not pure #000 */
 :root[data-theme='dark'] {
 	--black: var(--ink-raw);
 	--black33: color-mix(in srgb, #000000 33%, transparent);
-	--gray: color-mix(in oklab, #1a1a1a 94%, var(--accent) 6%);
+	--gray: color-mix(in oklab, #141012 88%, var(--accent) 12%);
 	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
+	color-scheme: dark;
+}
+
+/* Black — literal #000 shell for Admin / Drive / Mail UIs (not public farm site) */
+:root[data-theme='black'] {
+	--black: #000000;
+	--black33: color-mix(in srgb, #000000 33%, transparent);
+	--gray: #141414;
+	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
+	--gray33: color-mix(in srgb, var(--gray) 33%, transparent);
 	color-scheme: dark;
 }
 

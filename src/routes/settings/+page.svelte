@@ -13,7 +13,8 @@
 		{ id: 'system', label: 'System' },
 		{ id: 'light', label: 'Light' },
 		{ id: 'gray', label: 'Gray' },
-		{ id: 'dark', label: 'Dark' }
+		{ id: 'dark', label: 'Dark' },
+		{ id: 'black', label: 'Black' }
 	];
 
 	const fonts = [
