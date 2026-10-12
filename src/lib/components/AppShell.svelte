@@ -92,7 +92,7 @@
 		{#each primaryNav as item (item.href)}
 			<div class="nav-row" class:active={active(item.href)}>
 				<button type="button" class="nav-item" onclick={() => go(item.href)}>
-					<span class="icon-wrap"><NavIcon name={item.icon} size={18} /></span>
+					<span class="icon-wrap"><NavIcon name={item.icon} size={22} /></span>
 					<span class="nav-label">{item.label}</span>
 				</button>
 				{#if item.href === '/tasks' || item.href === '/projects'}
@@ -119,7 +119,7 @@
 	<div class="sidebar-foot">
 		<div class="nav-row" class:active={active('/settings')}>
 			<button type="button" class="nav-item" onclick={() => go('/settings')}>
-				<span class="icon-wrap"><NavIcon name="settings" size={18} /></span>
+				<span class="icon-wrap"><NavIcon name="settings" size={22} /></span>
 				<span class="nav-label">Settings</span>
 			</button>
 		</div>
@@ -210,19 +210,13 @@
 	}
 
 	.icon-wrap {
-		width: 20px;
-		height: 20px;
+		width: 22px;
+		height: 22px;
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		color: inherit;
-	}
-
-	.icon-wrap :global(svg) {
-		display: block;
-		max-width: 100%;
-		max-height: 100%;
 	}
 
 	.nav-label {

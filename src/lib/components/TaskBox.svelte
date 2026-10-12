@@ -1,11 +1,11 @@
 <script>
 	/**
 	 * Status box — uses --accent-success / --accent-progress (warm accents swap roles).
-	 * backlog, open, inProgress, inReview, closed, canceled.
 	 */
 	let { state = 'open', size = 24 } = $props();
 
-	const checkStroke = $derived(size >= 20 ? 2.8 : 1.4);
+	const checkStroke = $derived(size >= 20 ? 2.6 : 1.4);
+	const checkSize = $derived(Math.round(size * 0.62));
 	const iconSize = $derived(Math.round(size * 0.58));
 	const crossSize = $derived(Math.round(size * 0.4));
 	const progressPadding = $derived(Math.round(size * 0.25));
@@ -17,17 +17,18 @@
 >
 	{#if state === 'closed'}
 		<svg
-			width={size * 0.5}
-			height={size * 0.5}
-			viewBox="0 0 18 12"
+			class="check"
+			width={checkSize}
+			height={checkSize * (12 / 18)}
+			viewBox="-1 -1 20 14"
 			fill="none"
-			stroke="var(--black)"
+			stroke="var(--white)"
 			stroke-width={checkStroke}
 			stroke-linecap="round"
 			stroke-linejoin="round"
 			aria-hidden="true"
 		>
-			<path d="M6.2002 11.1992L0.700195 5.69922L6.2002 10.9492L16.7002 0.699219L6.2002 11.1992Z" />
+			<path d="M6.2 11.2 0.7 5.7 6.2 10.95 16.7 0.7 6.2 11.2Z" />
 		</svg>
 	{:else if state === 'inProgress'}
 		<div class="icon-slot" style:padding-left="{progressPadding}px">
@@ -71,6 +72,12 @@
 		justify-content: center;
 		flex-shrink: 0;
 		box-sizing: border-box;
+		overflow: visible;
+	}
+
+	.check {
+		overflow: visible;
+		flex-shrink: 0;
 	}
 
 	.icon-slot {
