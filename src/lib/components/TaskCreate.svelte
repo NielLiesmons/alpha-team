@@ -266,10 +266,8 @@
 		top: calc(100% + 8px);
 		left: 0;
 		z-index: 20;
-		background: var(--glass);
+		background: var(--popover);
 		border: 1px solid var(--hairline);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
 		border-radius: 12px;
 		overflow: hidden;
 		min-width: 168px;
