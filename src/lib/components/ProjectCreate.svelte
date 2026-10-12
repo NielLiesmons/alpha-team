@@ -112,8 +112,10 @@
 		left: 0;
 		z-index: 5;
 		min-width: 168px;
-		background: var(--bg);
+		background: var(--glass);
 		border: 1px solid var(--hairline);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 		border-radius: 12px;
 		overflow: hidden;
 	}
