@@ -24,14 +24,14 @@ export function applyBrand(next = brand) {
 		`'${next.fontDisplay}', 'Times New Roman', Georgia, serif`
 	);
 	root.style.setProperty('--bg-base', '#f8f8f8');
-	root.style.setProperty('--ink-base', '#040404');
+	root.style.setProperty('--ink-base', '#0a0a0a');
 	root.style.setProperty(
 		'--bg-raw',
 		'color-mix(in oklab, var(--bg-base) 97%, var(--accent) 3%)'
 	);
 	root.style.setProperty(
 		'--ink-raw',
-		'color-mix(in oklab, var(--ink-base) 95%, var(--accent) 5%)'
+		'color-mix(in oklab, var(--ink-base) 88%, var(--accent) 12%)'
 	);
 	root.style.setProperty('--scrim', 'color-mix(in srgb, var(--ink-raw) 48%, transparent)');
 }
