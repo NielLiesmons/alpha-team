@@ -310,8 +310,8 @@
 			max-width: 100%;
 			margin: 0 auto;
 			border-radius: 999px;
-			background: color-mix(in srgb, var(--gray) 92%, transparent);
-			border: 1px solid var(--white11);
+			background: var(--modal-bg);
+			border: 1px solid var(--hairline);
 			backdrop-filter: blur(16px);
 			-webkit-backdrop-filter: blur(16px);
 			box-shadow: 0 8px 28px color-mix(in srgb, var(--ink-raw) 35%, transparent);

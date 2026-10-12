@@ -208,7 +208,7 @@
 		padding: 0 0.65rem;
 		border-radius: 10px;
 		border: 1px solid var(--white11);
-		background: var(--gray);
+		background: var(--surface);
 		color: var(--white);
 		font: inherit;
 		font-weight: 400;
@@ -220,7 +220,7 @@
 		padding: 0 0.65rem;
 		border-radius: 10px;
 		border: 1px solid var(--white11);
-		background: var(--gray);
+		background: var(--surface);
 		color: var(--white);
 		font: inherit;
 	}

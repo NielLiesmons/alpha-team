@@ -31,9 +31,6 @@
 	--bg-raw: color-mix(in oklab, var(--bg-base) 97%, var(--accent) 3%);
 	--ink-raw: color-mix(in oklab, var(--ink-base) 88%, var(--accent) 12%);
 	--scrim: color-mix(in srgb, var(--ink-raw) 48%, transparent);
-	/* Bley modal sheet surface (Admin --black = page bg) */
-	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
-	--hairline: var(--white11);
 	--shadow-strong: color-mix(in srgb, var(--ink-raw) 32%, transparent);
 	--radius-hero: 32px;
 
@@ -57,18 +54,20 @@
 :root[data-theme='dark'] {
 	--black: var(--ink-raw);
 	--white: var(--bg-raw);
+	/* Bley aliases — Admin --black = page bg, --white = ink */
+	--bg: var(--black);
+	--ink: var(--white);
+	--surface: color-mix(in srgb, var(--white) 6%, var(--black));
+	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
+	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
 	--white16: color-mix(in srgb, var(--white) 16%, transparent);
-	--white11: color-mix(in srgb, var(--white) 11%, transparent);
+	--white11: var(--hairline);
 	--white8: color-mix(in srgb, var(--white) 8%, transparent);
 	--white4: color-mix(in srgb, var(--white) 4%, transparent);
 	--black33: color-mix(in srgb, #000000 33%, transparent);
-	/* Elevated panel — lift from bg, not a separate mode */
-	--gray: color-mix(in oklab, var(--black) 86%, var(--white) 14%);
-	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
-	--gray33: color-mix(in srgb, var(--gray) 33%, transparent);
-	--shell-border: var(--white11);
+	--shell-border: var(--hairline);
 	color-scheme: dark;
 }
 
@@ -76,17 +75,19 @@
 :root[data-theme='light'] {
 	--black: var(--bg-raw);
 	--white: var(--ink-raw);
+	--bg: var(--black);
+	--ink: var(--white);
+	--surface: color-mix(in srgb, var(--white) 4%, var(--black));
+	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
+	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
 	--white16: color-mix(in srgb, var(--white) 16%, transparent);
-	--white11: color-mix(in srgb, var(--white) 11%, transparent);
+	--white11: var(--hairline);
 	--white8: color-mix(in srgb, var(--white) 8%, transparent);
 	--white4: color-mix(in srgb, var(--white) 4%, transparent);
 	--black33: color-mix(in srgb, var(--bg-raw) 54%, transparent);
-	--gray: color-mix(in oklab, var(--black) 92%, var(--white) 8%);
-	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
-	--gray33: color-mix(in srgb, var(--gray) 33%, transparent);
-	--shell-border: var(--white11);
+	--shell-border: var(--hairline);
 	color-scheme: light;
 }
 
@@ -94,17 +95,19 @@
 :root[data-theme='black'] {
 	--black: #000000;
 	--white: #ffffff;
+	--bg: var(--black);
+	--ink: var(--white);
+	--surface: color-mix(in srgb, var(--white) 8%, var(--black));
+	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
+	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
 	--white16: color-mix(in srgb, var(--white) 16%, transparent);
-	--white11: color-mix(in srgb, var(--white) 11%, transparent);
+	--white11: var(--hairline);
 	--white8: color-mix(in srgb, var(--white) 8%, transparent);
 	--white4: color-mix(in srgb, var(--white) 4%, transparent);
 	--black33: color-mix(in srgb, #000000 33%, transparent);
-	--gray: #141414;
-	--gray66: color-mix(in srgb, var(--gray) 66%, transparent);
-	--gray33: color-mix(in srgb, var(--gray) 33%, transparent);
-	--shell-border: var(--white11);
+	--shell-border: var(--hairline);
 	color-scheme: dark;
 }
 
@@ -212,7 +215,7 @@ h2 {
 }
 
 .btn.ghost {
-	background: var(--gray66);
+	background: var(--surface);
 	color: var(--white);
 }
 
@@ -273,7 +276,8 @@ h2 {
 }
 
 .panel {
-	background: var(--gray66);
+	background: var(--surface);
+	border: 1px solid var(--hairline);
 	border-radius: var(--radius-16);
 	overflow: hidden;
 }
@@ -437,7 +441,8 @@ table.data tr.selected td {
 }
 
 .stat {
-	background: var(--gray66);
+	background: var(--surface);
+	border: 1px solid var(--hairline);
 	border-radius: var(--radius-16);
 	padding: 16px;
 }
@@ -496,7 +501,7 @@ table.data tr.selected td {
 
 .seg button {
 	border: 0;
-	background: var(--gray66);
+	background: var(--surface);
 	color: var(--white66);
 	border-radius: 999px;
 	height: 36px;

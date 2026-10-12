@@ -266,8 +266,10 @@
 		top: calc(100% + 8px);
 		left: 0;
 		z-index: 20;
-		background: var(--gray);
-		border: 0.33px solid var(--white33);
+		background: var(--modal-bg);
+		border: 1px solid var(--hairline);
+		backdrop-filter: blur(18px);
+		-webkit-backdrop-filter: blur(18px);
 		border-radius: 12px;
 		overflow: hidden;
 		min-width: 168px;
