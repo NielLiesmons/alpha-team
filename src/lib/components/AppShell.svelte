@@ -1,14 +1,17 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { primaryNav, space } from '$lib/sections.js';
+	import { mobileNav, primaryNav, space } from '$lib/sections.js';
 	import { openComposer } from '$lib/workspace.svelte.js';
+	import { tick } from 'svelte';
 	import NavIcon from './NavIcon.svelte';
 	import ProjectCreate from './ProjectCreate.svelte';
 	import TaskCreate from './TaskCreate.svelte';
 
 	let { children } = $props();
-	let mobileOpen = $state(false);
+
+	/** @type {HTMLDivElement | undefined} */
+	let pillTrack = $state();
 
 	const path = $derived($page.url.pathname);
 
@@ -17,42 +20,41 @@
 		return path === href || path.startsWith(`${href}/`);
 	}
 
-	const activeLabel = $derived(
-		primaryNav.find((item) => active(item.href))?.label ??
-			(active('/settings') ? 'Settings' : 'Alpha')
+	const activeHref = $derived(
+		primaryNav.find((item) => active(item.href))?.href ??
+			(active('/settings') ? '/settings' : '/dashboard')
 	);
 
 	/** @param {string} href */
 	function go(href) {
-		mobileOpen = false;
 		goto(href);
 	}
+
+	async function centerActivePill() {
+		await tick();
+		const track = pillTrack;
+		if (!track) return;
+		const el = track.querySelector(`[data-href="${activeHref}"]`);
+		if (!(el instanceof HTMLElement)) return;
+		const left = el.offsetLeft - track.clientWidth / 2 + el.offsetWidth / 2;
+		track.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+	}
+
+	$effect(() => {
+		activeHref;
+		if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+			centerActivePill();
+		}
+	});
 </script>
 
-<div class="dashboard">
-	<div class="mobile-nav">
-		<button
-			type="button"
-			class="mobile-zone"
-			aria-expanded={mobileOpen}
-			onclick={() => (mobileOpen = !mobileOpen)}
-		>
-			<span>{activeLabel}</span>
-			<span class="chev" class:open={mobileOpen}>⌄</span>
-		</button>
-		{#if mobileOpen}
-			<div class="mobile-panel">
-				{@render nav()}
-			</div>
-		{/if}
-	</div>
-
+<div class="shell">
 	<aside class="sidebar">
-		<a class="brand" href="/tasks">
+		<a class="brand" href="/dashboard">
 			<span class="brand-name">{space.name}</span>
 			<span class="brand-host">{space.host}</span>
 		</a>
-		{@render nav()}
+		{@render desktopNav()}
 	</aside>
 
 	<div class="content">
@@ -60,17 +62,38 @@
 			{@render children()}
 		</div>
 	</div>
+
+	<nav class="bottom-pill" aria-label="Sections">
+		<div class="pill-inner">
+			<div class="pill-track" bind:this={pillTrack}>
+				{#each mobileNav as item (item.href)}
+					<button
+						type="button"
+						class="pill-item"
+						class:on={active(item.href)}
+						data-href={item.href}
+						aria-label={item.label}
+						aria-current={active(item.href) ? 'page' : undefined}
+						onclick={() => go(item.href)}
+					>
+						<span class="pill-icon"><NavIcon name={item.icon} size={22} /></span>
+						<span class="pill-label">{item.label}</span>
+					</button>
+				{/each}
+			</div>
+		</div>
+	</nav>
 </div>
 
 <TaskCreate />
 <ProjectCreate />
 
-{#snippet nav()}
+{#snippet desktopNav()}
 	<nav class="sidebar-nav" aria-label="Sections">
 		{#each primaryNav as item (item.href)}
 			<div class="nav-row" class:active={active(item.href)}>
 				<button type="button" class="nav-item" onclick={() => go(item.href)}>
-					<span class="icon-wrap"><NavIcon name={item.icon} /></span>
+					<span class="icon-wrap"><NavIcon name={item.icon} size={18} /></span>
 					<span class="nav-label">{item.label}</span>
 				</button>
 				{#if item.href === '/tasks' || item.href === '/projects'}
@@ -78,10 +101,7 @@
 						type="button"
 						class="plus"
 						aria-label={item.href === '/tasks' ? 'New task' : 'New project'}
-						onclick={() => {
-							mobileOpen = false;
-							openComposer(item.href === '/tasks' ? 'task' : 'project');
-						}}
+						onclick={() => openComposer(item.href === '/tasks' ? 'task' : 'project')}
 					>
 						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 							<path
@@ -100,7 +120,7 @@
 	<div class="sidebar-foot">
 		<div class="nav-row" class:active={active('/settings')}>
 			<button type="button" class="nav-item" onclick={() => go('/settings')}>
-				<span class="icon-wrap"><NavIcon name="settings" /></span>
+				<span class="icon-wrap"><NavIcon name="settings" size={18} /></span>
 				<span class="nav-label">Settings</span>
 			</button>
 		</div>
@@ -108,7 +128,7 @@
 {/snippet}
 
 <style>
-	.dashboard {
+	.shell {
 		display: flex;
 		height: 100dvh;
 		width: 100%;
@@ -191,13 +211,19 @@
 	}
 
 	.icon-wrap {
-		width: 18px;
-		height: 18px;
+		width: 20px;
+		height: 20px;
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		opacity: 0.9;
+		color: inherit;
+	}
+
+	.icon-wrap :global(svg) {
+		display: block;
+		max-width: 100%;
+		max-height: 100%;
 	}
 
 	.nav-label {
@@ -252,15 +278,17 @@
 	.content :global(.pane) {
 		flex: 1;
 		min-height: 0;
+		overflow: auto;
 	}
 
-	.mobile-nav {
+	.bottom-pill {
 		display: none;
 	}
 
 	@media (max-width: 767px) {
-		.dashboard {
+		.shell {
 			flex-direction: column;
+			padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.sidebar {
@@ -271,48 +299,90 @@
 			border-left: none;
 		}
 
-		.mobile-nav {
+		.bottom-pill {
 			display: block;
-			position: relative;
-			flex-shrink: 0;
-		}
-
-		.mobile-zone {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			width: 100%;
-			padding: 10px 16px;
-			background: transparent;
-			border: 0;
-			border-bottom: 1px solid var(--shell-border);
-			color: var(--white);
-			font-size: 14px;
-			font-weight: 500;
-		}
-
-		.chev {
-			color: var(--white33);
-			transition: transform 0.2s;
-		}
-
-		.chev.open {
-			transform: rotate(180deg);
-		}
-
-		.mobile-panel {
-			position: absolute;
-			z-index: 20;
+			position: fixed;
+			z-index: 40;
 			left: 0;
 			right: 0;
-			top: 100%;
-			max-height: 70dvh;
-			overflow: auto;
-			background: var(--black);
-			border-bottom: 1px solid var(--shell-border);
-			padding: 8px 8px 12px;
+			bottom: 0;
+			padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
+			pointer-events: none;
+		}
+
+		.pill-inner {
+			pointer-events: auto;
+			max-width: 100%;
+			margin: 0 auto;
+			border-radius: 999px;
+			background: color-mix(in srgb, var(--gray) 92%, transparent);
+			border: 1px solid var(--white11);
+			backdrop-filter: blur(16px);
+			-webkit-backdrop-filter: blur(16px);
+			box-shadow: 0 8px 28px color-mix(in srgb, var(--ink-raw) 35%, transparent);
+			overflow: hidden;
+		}
+
+		.pill-track {
+			display: flex;
+			align-items: stretch;
+			gap: 0;
+			overflow-x: auto;
+			scroll-snap-type: x mandatory;
+			scrollbar-width: none;
+			-ms-overflow-style: none;
+			padding: 6px 8px;
+			scroll-padding-inline: 40%;
+		}
+
+		.pill-track::-webkit-scrollbar {
+			display: none;
+		}
+
+		.pill-item {
+			scroll-snap-align: center;
+			flex: 0 0 auto;
 			display: flex;
 			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 2px;
+			min-width: 64px;
+			padding: 6px 10px;
+			border: 0;
+			border-radius: 999px;
+			background: transparent;
+			color: var(--white33);
+			cursor: pointer;
+		}
+
+		.pill-item.on {
+			color: var(--white);
+			background: var(--white8);
+		}
+
+		.pill-icon {
+			display: flex;
+			width: 24px;
+			height: 24px;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.pill-icon :global(svg) {
+			display: block;
+			max-width: 22px;
+			max-height: 20px;
+		}
+
+		.pill-label {
+			font-size: 9px;
+			font-weight: 500;
+			letter-spacing: 0.02em;
+			max-width: 4.5rem;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 	}
 </style>
