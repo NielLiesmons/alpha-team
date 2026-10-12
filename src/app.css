@@ -58,6 +58,7 @@
 	--bg: var(--black);
 	--ink: var(--white);
 	--surface: color-mix(in srgb, var(--white) 6%, var(--black));
+	--popover: color-mix(in srgb, var(--white) 12%, var(--black));
 	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
@@ -78,6 +79,7 @@
 	--bg: var(--black);
 	--ink: var(--white);
 	--surface: color-mix(in srgb, var(--white) 4%, var(--black));
+	--popover: color-mix(in srgb, var(--white) 8%, var(--black));
 	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
@@ -98,6 +100,7 @@
 	--bg: var(--black);
 	--ink: var(--white);
 	--surface: color-mix(in srgb, var(--white) 8%, var(--black));
+	--popover: color-mix(in srgb, var(--white) 14%, var(--black));
 	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
