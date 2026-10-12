@@ -27,8 +27,9 @@
 	--font-display: 'Ovo', 'Times New Roman', Georgia, serif;
 	/* Same poles as Bley — light/dark flip; no separate gray palette */
 	--bg-base: #f8f8f8;
-	--ink-base: #0a0a0a;
+	--ink-base: #000000;
 	--bg-raw: color-mix(in oklab, var(--bg-base) 97%, var(--accent) 3%);
+	/* Pure black + accent ≈ #160B0F (darker, more rose than gray-base mix) */
 	--ink-raw: color-mix(in oklab, var(--ink-base) 88%, var(--accent) 12%);
 	--scrim: color-mix(in srgb, var(--ink-raw) 48%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--ink-raw) 32%, transparent);
@@ -58,7 +59,7 @@
 	--bg: var(--black);
 	--ink: var(--white);
 	--surface: color-mix(in srgb, var(--white) 6%, var(--black));
-	--popover: color-mix(in srgb, var(--white) 12%, var(--black));
+	--popover: color-mix(in srgb, var(--white) 6%, var(--black));
 	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
@@ -79,7 +80,7 @@
 	--bg: var(--black);
 	--ink: var(--white);
 	--surface: color-mix(in srgb, var(--white) 4%, var(--black));
-	--popover: color-mix(in srgb, var(--white) 8%, var(--black));
+	--popover: color-mix(in srgb, var(--white) 4%, var(--black));
 	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
@@ -100,7 +101,7 @@
 	--bg: var(--black);
 	--ink: var(--white);
 	--surface: color-mix(in srgb, var(--white) 8%, var(--black));
-	--popover: color-mix(in srgb, var(--white) 14%, var(--black));
+	--popover: color-mix(in srgb, var(--white) 7%, var(--black));
 	--modal-bg: color-mix(in srgb, var(--black) 92%, transparent);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
