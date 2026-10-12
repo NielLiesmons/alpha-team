@@ -74,7 +74,7 @@
 	}
 
 	.urgent-triangle {
-		background: var(--accent-2);
+		background: var(--accent-progress);
 		flex-shrink: 0;
 	}
 

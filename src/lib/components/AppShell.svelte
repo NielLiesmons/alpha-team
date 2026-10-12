@@ -61,6 +61,8 @@
 		<div class="pane">
 			{@render children()}
 		</div>
+		<TaskCreate />
+		<ProjectCreate />
 	</div>
 
 	<nav class="bottom-pill" aria-label="Sections">
@@ -84,9 +86,6 @@
 		</div>
 	</nav>
 </div>
-
-<TaskCreate />
-<ProjectCreate />
 
 {#snippet desktopNav()}
 	<nav class="sidebar-nav" aria-label="Sections">
@@ -270,13 +269,15 @@
 		min-width: 0;
 		min-height: 0;
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
+		align-items: stretch;
 		overflow: hidden;
 		border-left: 1px solid var(--shell-border);
 	}
 
 	.content :global(.pane) {
 		flex: 1;
+		min-width: 0;
 		min-height: 0;
 		overflow: auto;
 	}

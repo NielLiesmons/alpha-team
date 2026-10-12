@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * Status box — accent / accent-2 for active states; grayscale for canceled.
+	 * Status box — uses --accent-success / --accent-progress (warm accents swap roles).
 	 * backlog, open, inProgress, inReview, closed, canceled.
 	 */
 	let { state = 'open', size = 24 } = $props();
@@ -33,7 +33,7 @@
 		<div class="icon-slot" style:padding-left="{progressPadding}px">
 			<svg width={iconSize} height={iconSize} viewBox="0 0 11 22" aria-hidden="true">
 				<path
-					fill="var(--accent-2)"
+					fill="var(--accent-progress)"
 					d="M1.56676 21.7923C6.89979 21.0318 11 16.4462 11 10.903C11 5.35977 6.89979 0.774213 1.56676 0.0137178C0.70758 -0.108803 0 0.60654 0 1.47442V20.3316C0 21.1994 0.707579 21.9148 1.56676 21.7923Z"
 				/>
 			</svg>
@@ -42,7 +42,7 @@
 		<div class="icon-slot">
 			<svg width={iconSize} height={iconSize} viewBox="0 0 20 20" aria-hidden="true">
 				<path
-					fill="var(--accent)"
+					fill="var(--accent-success)"
 					d="M9.95571 20C15.503 20 20 15.503 20 9.95571C20 4.8941 16.256 0.706948 11.3863 0.012526C10.6018 -0.0993499 9.95571 0.553842 9.95571 1.34631V8.52081C9.95571 9.31328 9.31328 9.95571 8.52081 9.95571H1.34632C0.553842 9.95571 -0.0993498 10.6018 0.012526 11.3863C0.706948 16.256 4.8941 20 9.95571 20Z"
 				/>
 			</svg>
@@ -92,18 +92,18 @@
 	}
 
 	.state-closed {
-		background: var(--white);
+		background: var(--accent-success);
 		border: none;
 	}
 
 	.state-inProgress {
 		background: var(--black33);
-		border: 1.4px solid var(--accent-2-66);
+		border: 1.4px solid var(--accent-progress-66);
 	}
 
 	.state-inReview {
 		background: var(--black33);
-		border: 1.4px solid var(--accent-66);
+		border: 1.4px solid var(--accent-success-66);
 	}
 
 	.state-canceled {

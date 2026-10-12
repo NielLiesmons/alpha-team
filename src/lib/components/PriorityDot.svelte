@@ -21,13 +21,13 @@
 	}
 
 	.medium {
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 35%, transparent);
+		border-color: var(--accent-progress);
+		background: color-mix(in srgb, var(--accent-progress) 35%, transparent);
 	}
 
 	.high,
 	.urgent {
-		border-color: var(--accent-2);
-		background: var(--accent-2);
+		border-color: var(--accent-progress);
+		background: var(--accent-progress);
 	}
 </style>

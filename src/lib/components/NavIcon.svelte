@@ -1,102 +1,74 @@
 <script>
 	/**
-	 * Nav glyphs — paths match alpha-ui/icons/*.svg (shared design system).
+	 * Nav glyphs — alpha-ui/icons, unified stroke (1.5, round joins, no overlapping edges).
+	 * Projects hex from Chateau ProjectBox (pointy top/bottom).
 	 * @type {{ name?: string, size?: number }}
 	 */
 	let { name = 'dot', size = 20 } = $props();
+
+	const sw = 1.5;
 </script>
 
-{#if name === 'drive'}
-	<svg width={size} height={size} viewBox="0 0 41 33" fill="none" aria-hidden="true">
+<svg
+	width={size}
+	height={size}
+	viewBox="0 0 24 24"
+	fill="none"
+	stroke="currentColor"
+	stroke-width={sw}
+	stroke-linecap="round"
+	stroke-linejoin="round"
+	aria-hidden="true"
+>
+	{#if name === 'dashboard'}
+		<path d="M4 4h7v7H4V4Z" />
+		<path d="M13 4h7v7h-7V4Z" />
+		<path d="M4 13h7v7H4v-7Z" />
+		<path d="M13 13h7v7h-7v-7Z" />
+	{:else if name === 'drive'}
+		<!-- Scaled from drive.svg; single stroke weight, round caps -->
+		<g transform="translate(1.2 2.4) scale(0.52)">
+			<path
+				d="M0.5 24.5L6.21 4.75C6.97 2.23 9.3 0.5 11.95 0.5h17.1c2.64 0 4.97 1.73 5.74 4.25L40.5 24.5"
+			/>
+			<path d="M7.5 18.5h26c3.87 0 7 3.13 7 7s-3.13 7-7 7h-26c-3.87 0-7-3.13-7-7s3.13-7 7-7Z" />
+			<path d="M6.5 25.5h4" />
+		</g>
+	{:else if name === 'mail'}
+		<path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5v-9Z" />
+		<path d="M5.2 7.2 12 12.2l6.8-5" />
+	{:else if name === 'chat'}
 		<path
-			d="M0.5 24.5L6.2056 4.75303C6.9745 2.22664 9.30483 0.5 11.9456 0.5H29.0544C31.6952 0.5 34.0255 2.22664 34.7944 4.75303L40.5 24.5M6.5 25.5H10.5M7.5 32.5H33.5C37.366 32.5 40.5 29.366 40.5 25.5C40.5 21.634 37.366 18.5 33.5 18.5H7.5C3.63401 18.5 0.5 21.634 0.5 25.5C0.5 29.366 3.63401 32.5 7.5 32.5Z"
-			stroke="currentColor"
-			stroke-linecap="round"
+			d="M12 3.5c4.14 0 7.5 3.14 7.5 7 0 3.86-3.36 7-7.5 7-1.05 0-2.04-.2-2.94-.57-.2-.09-.43-.11-.64-.05l-2.7.72c-.68.18-1.28-.46-1.06-1.12l.77-2.3c.08-.24.05-.5-.06-.72A6.7 6.7 0 0 1 4.5 10.5c0-3.86 3.36-7 7.5-7Z"
 		/>
-	</svg>
-{:else if name === 'chat'}
-	<svg width={size} height={size} viewBox="0 0 18 19" fill="none" aria-hidden="true">
+	{:else if name === 'tasks'}
+		<!-- Open TaskBox -->
+		<rect x="4.5" y="4.5" width="15" height="15" rx="4.5" />
+	{:else if name === 'projects'}
+		<!-- Chateau pointy-top hex (viewBox 24² path) -->
 		<path
-			d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
-			stroke="currentColor"
+			d="M13.3 1.75 20.23 5.75Q21.53 6.5 21.53 8v8q0 1.5-1.3 2.25L13.3 22.25Q12 23 10.7 22.25L3.77 18.25Q2.47 17.5 2.47 16V8q0-1.5 1.3-2.25L10.7 1.75Q12 1 13.3 1.75Z"
 		/>
-	</svg>
-{:else if name === 'mail'}
-	<svg width={size} height={size} viewBox="0 0 26 22" fill="none" aria-hidden="true">
+	{:else if name === 'notes'}
+		<!-- Single outline: page + BR dog-ear (no shared double strokes) -->
 		<path
-			d="M24.7 5.75371L14.7449 11.5613C13.5716 12.2457 12.1383 12.288 10.9324 11.6893L10.6941 11.5613L0.739062 5.75371V16.7195C0.739062 18.9176 2.52144 20.7 4.71953 20.7H20.7195C22.9176 20.7 24.7 18.9176 24.7 16.7195V5.75371ZM24.7 4.71953C24.7 2.52144 22.9176 0.739062 20.7195 0.739062H4.71953C2.52144 0.739062 0.739062 2.52144 0.739062 4.71953V5.70684L10.7137 11.5262L10.95 11.6541C12.1439 12.2469 13.5637 12.2038 14.7254 11.5262L24.7 5.70684V4.71953ZM24.7391 16.7195C24.7391 18.9397 22.9397 20.7391 20.7195 20.7391H4.71953C2.49935 20.7391 0.7 18.9397 0.7 16.7195V4.71953C0.7 2.49935 2.49935 0.7 4.71953 0.7H20.7195C22.9397 0.7 24.7391 2.49935 24.7391 4.71953V16.7195Z"
-			stroke="currentColor"
-			stroke-width="1.6"
-			stroke-linecap="round"
-			stroke-linejoin="round"
+			d="M6 3.5h8.5A2 2 0 0 1 16.5 5.5V14L13 20.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z"
 		/>
-	</svg>
-{:else if name === 'tasks'}
-	<svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
-		<rect x="1.5" y="1.5" width="15" height="15" rx="4.5" stroke="currentColor" stroke-width="1.4" />
-	</svg>
-{:else if name === 'projects'}
-	<svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
+		<path d="M16.5 14h-2.2A1.3 1.3 0 0 0 13 15.3V20.5" />
+	{:else if name === 'calendar'}
+		<!-- Outer + inset divider (stops short of sides — no bright joins) -->
+		<rect x="4" y="4" width="16" height="16" rx="3.5" />
+		<path d="M7 9.25h10" />
+	{:else if name === 'publications'}
+		<path d="M6 3.5h8L18.5 8v10.5a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z" />
+		<path d="M14 3.5V7.5h4" />
+		<path d="M8 12h8M8 15h5" />
+	{:else if name === 'settings'}
+		<circle cx="12" cy="12" r="2.5" />
 		<path
-			d="M5.2 2.8h7.6c.45 0 .87.24 1.1.63l3.05 5.07c.23.39.23.87 0 1.26l-3.05 5.07c-.23.39-.65.63-1.1.63H5.2c-.45 0-.87-.24-1.1-.63L1.05 9.76c-.23-.39-.23-.87 0-1.26L4.1 3.43c.23-.39.65-.63 1.1-.63Z"
-			stroke="currentColor"
-			stroke-width="1.4"
-			stroke-linejoin="round"
+			d="M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4"
 		/>
-	</svg>
-{:else if name === 'notes'}
-	<svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
-		<path
-			d="M4 1.5h10A2.5 2.5 0 0 1 16.5 4v8L12 16.5H4A2.5 2.5 0 0 1 1.5 14V4A2.5 2.5 0 0 1 4 1.5Z"
-			stroke="currentColor"
-			stroke-width="1.4"
-			stroke-linejoin="round"
-		/>
-		<path
-			d="M16.5 12H13.5A1.5 1.5 0 0 0 12 13.5V16.5"
-			stroke="currentColor"
-			stroke-width="1.4"
-			stroke-linejoin="round"
-		/>
-	</svg>
-{:else if name === 'calendar'}
-	<svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
-		<rect x="1.5" y="1.5" width="15" height="15" rx="4" stroke="currentColor" stroke-width="1.4" />
-		<path d="M1.5 6.5h15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-	</svg>
-{:else if name === 'dashboard'}
-	<svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
-		<rect x="1.5" y="1.5" width="15" height="15" rx="1" stroke="currentColor" stroke-width="1.4" />
-		<path d="M9 1.5v15M1.5 9h15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-	</svg>
-{:else if name === 'publications'}
-	<svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
-		<path
-			d="M3.5 2.5h8L15.5 6v9a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 2.5 15V4A1.5 1.5 0 0 1 4 2.5h-.5Z"
-			stroke="currentColor"
-			stroke-width="1.4"
-			stroke-linejoin="round"
-		/>
-		<path
-			d="M11.5 2.5V5.5H14.5M5.5 9h7M5.5 11.5h5"
-			stroke="currentColor"
-			stroke-width="1.4"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-		/>
-	</svg>
-{:else if name === 'settings'}
-	<svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
-		<circle cx="9" cy="9" r="2.25" stroke="currentColor" stroke-width="1.4" />
-		<path
-			d="M9 1.75v1.5M9 14.75v1.5M1.75 9h1.5M14.75 9h1.5M3.4 3.4l1.06 1.06M13.54 13.54l1.06 1.06M14.6 3.4l-1.06 1.06M4.46 13.54l-1.06 1.06"
-			stroke="currentColor"
-			stroke-width="1.4"
-			stroke-linecap="round"
-		/>
-	</svg>
-{:else}
-	<svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
-		<circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="1.4" />
-	</svg>
-{/if}
+	{:else}
+		<circle cx="12" cy="12" r="2.5" />
+	{/if}
+</svg>
