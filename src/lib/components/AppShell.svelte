@@ -310,7 +310,7 @@
 	}
 
 	.sidebar {
-		width: 260px;
+		width: var(--side);
 		flex-shrink: 0;
 		padding: 12px;
 		display: flex;
@@ -405,9 +405,15 @@
 		width: 30px;
 		height: 30px;
 		border-radius: 999px;
-		background: var(--popover);
+		background: color-mix(in srgb, var(--white) 12%, var(--popover));
 		color: var(--white66);
 		border: 1px solid var(--hairline);
+	}
+
+	.top-plus {
+		background: color-mix(in srgb, #fff 14%, #111);
+		border: 1px solid color-mix(in srgb, #fff 14%, transparent);
+		box-sizing: border-box;
 	}
 
 	.top-plus:hover,
@@ -418,6 +424,13 @@
 	.list-plus:hover {
 		color: var(--white);
 		background: var(--white8);
+	}
+
+	/* Desktop: create from nav hover + / top + — not the list chrome */
+	@media (min-width: 768px) {
+		.list-plus {
+			display: none;
+		}
 	}
 
 	.menu-scrim {
@@ -552,38 +565,47 @@
 		flex-shrink: 0;
 		min-width: 1.25rem;
 		padding: 0 2px;
+		font-family: var(--font);
 		font-size: 12px;
-		font-weight: 500;
-		color: color-mix(in srgb, #fff 33%, transparent);
+		font-weight: 600;
+		color: var(--accent-66);
 		text-align: right;
 		font-variant-numeric: tabular-nums;
 		transition:
 			opacity 0.22s var(--ease),
-			transform 0.22s var(--ease);
+			transform 0.22s var(--ease),
+			color 0.15s ease;
+	}
+
+	.nav-row.active .count {
+		color: var(--accent);
 	}
 
 	.row-plus {
 		position: absolute;
 		right: 8px;
 		top: 50%;
-		width: 22px;
-		height: 22px;
+		width: 24px;
+		height: 24px;
 		display: grid;
 		place-items: center;
-		border: 0;
+		border: 1px solid color-mix(in srgb, #fff 14%, transparent);
 		border-radius: 999px;
-		background: color-mix(in srgb, #fff 10%, #000);
-		color: color-mix(in srgb, #fff 70%, transparent);
+		background: color-mix(in srgb, #fff 14%, #111);
+		color: color-mix(in srgb, #fff 82%, transparent);
 		padding: 0;
 		cursor: pointer;
 		flex-shrink: 0;
 		opacity: 0;
 		transform: translate(10px, -50%);
 		pointer-events: none;
+		box-sizing: border-box;
 		transition:
 			opacity 0.22s var(--ease),
 			transform 0.22s var(--ease),
-			color 0.15s ease;
+			color 0.15s ease,
+			background 0.15s ease,
+			border-color 0.15s ease;
 	}
 
 	.nav-row.creatable:hover .count,
@@ -601,6 +623,8 @@
 
 	.row-plus:hover {
 		color: #fff;
+		background: color-mix(in srgb, #fff 20%, #111);
+		border-color: color-mix(in srgb, #fff 22%, transparent);
 	}
 
 	.brand-panel {
@@ -712,13 +736,13 @@
 		align-items: stretch;
 		overflow: hidden;
 		border-radius: 20px;
-		/* Always the dark-mode page bg (broken black), never pure #000 */
+		/* Operator dark surfaces (#111 / #1A1A + accent), never pure #000 */
 		--black: var(--ink-raw);
 		--white: var(--bg-raw);
 		--bg: var(--ink-raw);
 		--ink: var(--bg-raw);
-		--surface: color-mix(in srgb, var(--white) 6%, var(--black));
-		--popover: color-mix(in srgb, var(--white) 7%, var(--black));
+		--surface: color-mix(in srgb, var(--white) 5%, var(--black));
+		--popover: var(--popover-raw);
 		--modal-bg: var(--popover);
 		--hairline: color-mix(in srgb, var(--white) 12%, transparent);
 		--white66: color-mix(in srgb, var(--white) 66%, transparent);
@@ -733,10 +757,9 @@
 	}
 
 	.list-col {
-		flex: 0 0 min(300px, 32%);
-		width: min(300px, 32%);
-		max-width: 340px;
-		min-width: 240px;
+		flex: 0 0 var(--list);
+		width: var(--list);
+		min-width: 280px;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
