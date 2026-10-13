@@ -1,6 +1,6 @@
 /**
  * Per-Space brand knobs (fixture for now → later meta/brand.json on Drive).
- * Surfaces derive from accent + broken grayscale poles — same recipe as Bley.
+ * Poles match Bley exactly: accent hue only; fixed S/L on --ink-raw / --bg-raw.
  */
 
 import { isWarmAccent } from './color-roles.js';
@@ -25,17 +25,11 @@ export function applyBrand(next = brand) {
 		'--font-display',
 		`'${next.fontDisplay}', 'Times New Roman', Georgia, serif`
 	);
-	root.style.setProperty('--bg-base', '#f8f8f8');
-	root.style.setProperty('--ink-base', '#0a0a0a');
-	root.style.setProperty(
-		'--bg-raw',
-		'color-mix(in oklab, var(--bg-base) 97%, var(--accent) 3%)'
-	);
-	root.style.setProperty(
-		'--ink-raw',
-		'color-mix(in oklab, var(--ink-base) 88%, var(--accent) 12%)'
-	);
+	/* Same recipe as Bley public site — do not oklab-mix gray bases */
+	root.style.setProperty('--ink-raw', 'hsl(from var(--accent) h 33% 6.5%)');
+	root.style.setProperty('--bg-raw', 'hsl(from var(--accent) h 12% 97.2%)');
 	root.style.setProperty('--scrim', 'color-mix(in srgb, var(--ink-raw) 48%, transparent)');
+	root.style.setProperty('--shadow-strong', 'color-mix(in srgb, var(--ink-raw) 32%, transparent)');
 
 	/* Warm accent (pink/red/orange) → success uses complementary; else accent is success */
 	const warm = isWarmAccent(next.accent);

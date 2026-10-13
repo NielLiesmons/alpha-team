@@ -3,16 +3,26 @@
  * Desktop order: Dashboard first. Mobile pill order centers Dashboard.
  */
 
-/** @type {{ href: string, label: string, icon: string }[]} */
+/**
+ * @typedef {{
+ *   href: string,
+ *   label: string,
+ *   icon: string,
+ *   countKey?: 'tasks' | 'projects' | 'notes',
+ *   createKind?: 'task' | 'project' | 'note'
+ * }} NavItem
+ */
+
+/** @type {NavItem[]} */
 export const primaryNav = [
 	{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
 	{ href: '/drive', label: 'Drive', icon: 'drive' },
 	{ href: '/mail', label: 'Mail', icon: 'mail' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/publications', label: 'Publications', icon: 'publications' },
-	{ href: '/projects', label: 'Projects', icon: 'projects' },
-	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },
-	{ href: '/notes', label: 'Notes', icon: 'notes' },
+	{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
+	{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
+	{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar' }
 ];
 
@@ -34,5 +44,6 @@ export const mobileNav = [
 
 export const space = {
 	name: 'Bley',
-	host: 'admin.bley.farm'
+	description: 'Regenerative family farm in Saint-Nicodème.',
+	siteUrl: 'https://bley.farm'
 };

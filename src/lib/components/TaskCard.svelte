@@ -18,6 +18,7 @@
 		commenters = [],
 		targets = [],
 		labels = [],
+		selected = false,
 		onclick = () => {}
 	} = $props();
 
@@ -52,8 +53,10 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role a11y_click_events_have_key_events -->
 <article
 	class="task-card"
+	class:selected
 	role="button"
 	tabindex="0"
+	aria-current={selected ? 'true' : undefined}
 	{onclick}
 	onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), onclick())}
 >
@@ -112,6 +115,10 @@
 
 	.task-card:focus-visible {
 		background: var(--white4);
+	}
+
+	.task-card.selected {
+		background: var(--white8);
 	}
 
 	.row-main {

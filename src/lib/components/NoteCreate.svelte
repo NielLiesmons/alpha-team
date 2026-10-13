@@ -5,25 +5,36 @@
 	let title = $state('');
 	let body = $state('');
 
-	const open = $derived(ui.composer?.kind === 'note' && !ui.composer.id);
+	const editing = $derived(
+		ui.composer?.kind === 'note' && ui.composer.id
+			? notes.find((n) => n.id === ui.composer.id)
+			: null
+	);
+	const open = $derived(ui.composer?.kind === 'note');
 
 	$effect(() => {
 		if (!open) return;
-		title = '';
-		body = '';
+		title = editing?.title ?? '';
+		body = editing?.body ?? '';
 	});
 
 	function save() {
 		const nextTitle = title.trim();
 		if (!nextTitle) return;
-		const id = crypto.randomUUID();
-		notes.unshift({ id, title: nextTitle, body });
-		ui.noteId = id;
+		if (editing) {
+			editing.title = nextTitle;
+			editing.body = body;
+		} else {
+			const id = crypto.randomUUID();
+			notes.unshift({ id, title: nextTitle, body });
+			ui.noteId = id;
+			ui.selection = { kind: 'note', id };
+		}
 		closeComposer();
 	}
 </script>
 
-<CreateSheet {open} label="New note" onclose={closeComposer}>
+<CreateSheet {open} label={editing ? 'Edit note' : 'New note'} onclose={closeComposer}>
 	<div class="title-row">
 		<input class="sheet-input" placeholder="Note title" bind:value={title} />
 	</div>
@@ -31,6 +42,8 @@
 	<textarea class="sheet-body" placeholder="Write in markdown" bind:value={body}></textarea>
 	<div class="form-divider"></div>
 	<div class="sheet-bottom">
-		<button type="button" class="publish-btn" disabled={!title.trim()} onclick={save}>Create</button>
+		<button type="button" class="publish-btn" disabled={!title.trim()} onclick={save}>
+			{editing ? 'Save' : 'Create'}
+		</button>
 	</div>
 </CreateSheet>

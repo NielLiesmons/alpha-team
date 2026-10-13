@@ -1,6 +1,6 @@
 <script>
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { openComposer, projects, ui } from '$lib/workspace.svelte.js';
+	import { openComposer, projects, selectEntity, ui } from '$lib/workspace.svelte.js';
 </script>
 
 <svelte:head><title>Projects</title></svelte:head>
@@ -28,7 +28,12 @@
 	<ul class="list">
 		{#each projects as project (project.id)}
 			<li>
-				<button type="button" class="row" onclick={() => openComposer('project', project.id)}>
+				<button
+					type="button"
+					class="row"
+					class:on={ui.selection?.kind === 'project' && ui.selection.id === project.id}
+					onclick={() => selectEntity('project', project.id)}
+				>
 					<span class="title">{project.title}</span>
 					{#if project.summary}
 						<span class="sum">{project.summary}</span>
@@ -108,6 +113,10 @@
 
 	.row:hover {
 		background: var(--white4);
+	}
+
+	.row.on {
+		background: var(--white8);
 	}
 
 	.title {

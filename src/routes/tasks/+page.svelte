@@ -1,7 +1,7 @@
 <script>
 	import TaskCard from '$lib/components/TaskCard.svelte';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { openComposer, tasks, ui } from '$lib/workspace.svelte.js';
+	import { openComposer, selectEntity, tasks, ui } from '$lib/workspace.svelte.js';
 
 	const STATUS_ORDER = ['inReview', 'inProgress', 'open', 'backlog', 'closed', 'canceled'];
 	const STATUS_LABELS = {
@@ -71,7 +71,8 @@
 					author={task.author}
 					assignees={task.assignees}
 					commenters={task.commenters}
-					onclick={() => openComposer('task', task.id)}
+					onclick={() => selectEntity('task', task.id)}
+					selected={ui.selection?.kind === 'task' && ui.selection.id === task.id}
 				/>
 			{/each}
 		{/each}
