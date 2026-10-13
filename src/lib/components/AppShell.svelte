@@ -207,15 +207,20 @@
 						<div class="filter-wrap">
 							<button
 								type="button"
-								class="chip"
+								class="filter-btn"
 								class:on={filter !== 'all'}
+								aria-label="Filter"
 								aria-expanded={filterOpen}
 								aria-haspopup="listbox"
 								onclick={() => (filterOpen = !filterOpen)}
 							>
-								Filter
-								<svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-									<path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<path
+										d="M2.5 4h11M4.5 8h7M6.5 12h3"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+									/>
 								</svg>
 							</button>
 							{#if filterOpen}
@@ -712,7 +717,7 @@
 		align-items: stretch;
 		overflow: hidden;
 		border-radius: 20px;
-		/* Follows theme page bg (#111-ish dark / soft light) */
+		/* Follows theme page bg (#121212-ish dark / soft light) */
 		background: var(--bg);
 		border: 1px solid var(--hairline);
 		color: var(--white);
@@ -743,37 +748,36 @@
 
 	.list-title {
 		margin: 0;
-		font-family: var(--font);
-		font-size: 15px;
-		font-weight: 650;
-		letter-spacing: -0.01em;
-		color: var(--white);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 13px;
+		font-weight: 500;
+		letter-spacing: 0;
+		color: var(--white33);
 	}
 
 	.list-actions {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 4px;
 	}
 
-	.chip {
+	.filter-btn {
+		width: 30px;
 		height: 30px;
-		padding: 0 10px;
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid var(--hairline);
-		border-radius: 999px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 8px;
 		background: transparent;
-		color: var(--white66);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 500;
+		color: var(--white33);
 		cursor: pointer;
+		box-sizing: border-box;
 	}
 
-	.chip.on,
-	.chip:hover {
+	.filter-btn:hover,
+	.filter-btn.on,
+	.filter-btn[aria-expanded='true'] {
 		color: var(--white);
 		background: var(--white4);
 	}

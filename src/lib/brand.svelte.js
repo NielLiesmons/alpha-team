@@ -1,6 +1,6 @@
 /**
  * Per-Space brand knobs (fixture for now → later meta/brand.json on Drive).
- * Operator UIs: #111 / #1A1A bases + a touch of accent (not the public Bley poles).
+ * Operator UIs: #121212 / #1A1A1A bases + a whisper of accent hue (not public Bley poles).
  */
 
 import { isWarmAccent } from './color-roles.js';
@@ -25,13 +25,13 @@ export function applyBrand(next = brand) {
 		'--font-display',
 		`'${next.fontDisplay}', 'Times New Roman', Georgia, serif`
 	);
-	/* Hue only — fixed L/C so accent never lifts #111 / #1A1A brightness */
-	root.style.setProperty('--page-raw', 'oklch(from var(--accent) 0.177 0.006 h)');
-	root.style.setProperty('--popover-raw', 'oklch(from var(--accent) 0.235 0.005 h)');
-	root.style.setProperty('--type-raw', 'oklch(from var(--accent) 0.97 0.004 h)');
-	root.style.setProperty('--page-raw-light', 'oklch(from var(--accent) 0.975 0.004 h)');
-	root.style.setProperty('--popover-raw-light', 'oklch(from var(--accent) 0.99 0.003 h)');
-	root.style.setProperty('--type-raw-light', 'oklch(from var(--accent) 0.22 0.006 h)');
+	/* Hue only — fixed L/C so accent never lifts #121212 / #1A1A1A brightness */
+	root.style.setProperty('--page-raw', 'oklch(from var(--accent) 0.182 0.0025 h)');
+	root.style.setProperty('--popover-raw', 'oklch(from var(--accent) 0.218 0.002 h)');
+	root.style.setProperty('--type-raw', 'oklch(from var(--accent) 0.97 0.002 h)');
+	root.style.setProperty('--page-raw-light', 'oklch(from var(--accent) 0.975 0.002 h)');
+	root.style.setProperty('--popover-raw-light', 'oklch(from var(--accent) 0.99 0.0015 h)');
+	root.style.setProperty('--type-raw-light', 'oklch(from var(--accent) 0.22 0.0025 h)');
 	root.style.setProperty('--scrim', 'color-mix(in srgb, #000000 55%, transparent)');
 	root.style.setProperty('--shadow-strong', 'color-mix(in srgb, #000000 40%, transparent)');
 

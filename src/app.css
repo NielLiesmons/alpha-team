@@ -26,19 +26,19 @@
 	--task-check-stroke: calc(var(--task-box-stroke) * 1.35);
 	--font-display: 'Ovo', 'Times New Roman', Georgia, serif;
 	/*
-	 * Operator UIs — lock #111 / #1A1A lightness; only borrow accent hue
+	 * Operator UIs — lock #121212 / #1A1A1A lightness; only borrow accent hue
 	 * via tiny chroma (oklch). Never color-mix bright accent into the base.
-	 * #111 ≈ oklch(0.177 …); #1A1A ≈ oklch(0.235 …)
+	 * #121212 ≈ oklch(0.182 …); #1A1A1A ≈ oklch(0.218 …)
 	 */
 	--shell: #090909;
-	--page-raw: oklch(from var(--accent) 0.177 0.006 h);
-	--popover-raw: oklch(from var(--accent) 0.235 0.005 h);
-	--type-raw: oklch(from var(--accent) 0.97 0.004 h);
+	--page-raw: oklch(from var(--accent) 0.182 0.0025 h);
+	--popover-raw: oklch(from var(--accent) 0.218 0.002 h);
+	--type-raw: oklch(from var(--accent) 0.97 0.002 h);
 	/* Light mirrors: soft page / slightly elevated panel / dark type */
 	--shell-light: #f6f6f6;
-	--page-raw-light: oklch(from var(--accent) 0.975 0.004 h);
-	--popover-raw-light: oklch(from var(--accent) 0.99 0.003 h);
-	--type-raw-light: oklch(from var(--accent) 0.22 0.006 h);
+	--page-raw-light: oklch(from var(--accent) 0.975 0.002 h);
+	--popover-raw-light: oklch(from var(--accent) 0.99 0.0015 h);
+	--type-raw-light: oklch(from var(--accent) 0.22 0.0025 h);
 	--scrim: color-mix(in srgb, #000000 55%, transparent);
 	--shadow-strong: color-mix(in srgb, #000000 40%, transparent);
 	--radius-hero: 32px;
@@ -60,7 +60,7 @@
 	--whiteEnforced: #ffffff;
 }
 
-/* Dark — page ≈ #111, popover ≈ #1A1A (hue only); chrome #090909 */
+/* Dark — page ≈ #121212, popover/modals ≈ #1A1A1A (hue only); chrome #090909 */
 :root,
 :root[data-theme='dark'] {
 	--shell: #090909;
