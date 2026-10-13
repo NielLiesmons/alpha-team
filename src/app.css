@@ -135,6 +135,16 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
+/* Nav counts must stay Inter — never inherit display/serif from brand chrome */
+.sidebar-nav .count,
+.nav-item .count {
+	font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+	font-style: normal !important;
+	font-weight: 600 !important;
+	font-synthesis: none;
+	letter-spacing: 0 !important;
+}
+
 button,
 input,
 textarea {

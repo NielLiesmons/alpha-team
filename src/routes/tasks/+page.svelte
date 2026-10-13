@@ -114,14 +114,14 @@
 		align-items: center;
 		gap: 10px;
 		width: 100%;
-		padding: 6px 10px 6px 16px;
+		padding: 4px 6px 4px 16px;
 		background: var(--white4);
 		border-bottom: 1.4px solid var(--white11);
 	}
 
 	@media (min-width: 768px) {
 		.task-group-header {
-			padding: 8px 12px 8px 16px;
+			padding: 5px 6px 5px 16px;
 		}
 	}
 
@@ -134,6 +134,7 @@
 	}
 
 	.task-group-count {
+		font-family: 'Inter', system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 500;
 		color: var(--white33);
@@ -154,11 +155,12 @@
 		padding: 0;
 	}
 
-	.task-group-add-btn:hover {
-		background: var(--white4);
+	.task-group-add-btn:hover,
+	.task-group-add-btn:active {
+		background: transparent;
 	}
 
-	.task-group-add-btn:active {
-		background: var(--white11);
+	.task-group-add-btn:hover :global(svg path) {
+		stroke: var(--white66);
 	}
 </style>

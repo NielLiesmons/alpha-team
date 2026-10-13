@@ -158,7 +158,7 @@
 						<span class="icon-wrap"><NavIcon name={item.icon} size={18} /></span>
 						<span class="nav-label">{item.label}</span>
 						{#if count != null}
-							<span class="count">{count}</span>
+							<span class="count" style="font-family: Inter, system-ui, sans-serif">{count}</span>
 						{/if}
 					</button>
 					{#if item.createKind}
@@ -193,7 +193,18 @@
 			<div class="brand-copy">
 				<p class="brand-name">{space.name}</p>
 				<p class="brand-desc">{space.description}</p>
-				<a class="brand-open" href={space.siteUrl} target="_blank" rel="noopener noreferrer">Open site</a>
+				<a class="brand-open" href={space.siteUrl} target="_blank" rel="noopener noreferrer">
+					Website
+					<svg class="brand-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+						<path
+							d="M3.5 8.5 8.5 3.5M4.25 3.5H8.5V7.75"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</a>
 			</div>
 		</div>
 	</aside>
@@ -258,16 +269,6 @@
 								</div>
 							{/if}
 						</div>
-						<button type="button" class="list-plus" aria-label="Create" onclick={onListPlus}>
-							<svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-								<path
-									d="M6 1.5v9M1.5 6h9"
-									stroke="currentColor"
-									stroke-width="1.6"
-									stroke-linecap="round"
-								/>
-							</svg>
-						</button>
 					</div>
 				</header>
 				<div class="pane">
@@ -281,6 +282,12 @@
 	<TaskCreate />
 	<ProjectCreate />
 	<NoteCreate />
+
+	<button type="button" class="mobile-fab" aria-label="Create" onclick={onListPlus}>
+		<svg width="22" height="22" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+			<path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+		</svg>
+	</button>
 
 	<nav class="bottom-pill" aria-label="Sections">
 		<div class="pill-inner">
@@ -316,7 +323,7 @@
 	.sidebar {
 		width: var(--side);
 		flex-shrink: 0;
-		padding: 12px;
+		padding: 20px 16px 12px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
@@ -391,8 +398,7 @@
 		flex-shrink: 0;
 	}
 
-	.top-plus,
-	.list-plus {
+	.top-plus {
 		width: 32px;
 		height: 32px;
 		display: grid;
@@ -406,25 +412,13 @@
 		box-sizing: border-box;
 	}
 
-	.list-plus {
-		width: 30px;
-		height: 30px;
-		border-radius: 999px;
-		background: var(--white8);
-		color: var(--white66);
-	}
-
-	.top-plus:hover,
-	.list-plus:hover {
+	.top-plus:hover {
 		color: var(--white);
 		background: var(--white8);
 	}
 
-	/* Desktop: create from nav hover + / top + — not the list chrome */
-	@media (min-width: 768px) {
-		.list-plus {
-			display: none;
-		}
+	.mobile-fab {
+		display: none;
 	}
 
 	.menu-scrim {
@@ -486,7 +480,7 @@
 		position: relative;
 		display: flex;
 		align-items: center;
-		border-radius: 8px;
+		border-radius: 999px;
 		overflow: hidden;
 	}
 
@@ -510,7 +504,7 @@
 		min-width: 0;
 		padding: 8px 10px;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 999px;
 		background: transparent;
 		color: var(--white66);
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
@@ -546,14 +540,17 @@
 		flex-shrink: 0;
 		min-width: 1.25rem;
 		padding: 0 2px;
-		/* Inter only — never inherit display/serif from brand */
-		font: 600 12px/1.2 'Inter', system-ui, -apple-system, sans-serif;
+		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+		font-size: 12px;
+		font-weight: 600;
 		font-style: normal;
+		line-height: 1.2;
 		letter-spacing: 0;
 		color: var(--accent-66);
 		text-align: right;
 		font-variant-numeric: tabular-nums;
 		font-feature-settings: 'tnum' 1;
+		font-synthesis: none;
 		transition:
 			opacity 0.22s var(--ease),
 			transform 0.22s var(--ease),
@@ -566,7 +563,7 @@
 
 	.row-plus {
 		position: absolute;
-		right: 8px;
+		right: 6px;
 		top: 50%;
 		width: 24px;
 		height: 24px;
@@ -574,7 +571,7 @@
 		place-items: center;
 		border: 0;
 		border-radius: 999px;
-		background: var(--nav-plus-bg);
+		background: transparent;
 		color: var(--nav-plus-fg);
 		padding: 0;
 		cursor: pointer;
@@ -628,6 +625,7 @@
 		position: absolute;
 		inset: 0;
 		z-index: 0;
+		opacity: 0.42;
 	}
 
 	.brand-media picture,
@@ -637,8 +635,8 @@
 		height: 100%;
 		object-fit: cover;
 		object-position: center 35%;
-		filter: blur(14px) saturate(1.05);
-		transform: scale(1.12);
+		filter: blur(6px) saturate(0.85) brightness(0.72);
+		transform: scale(1.06);
 	}
 
 	.brand-scrim {
@@ -647,9 +645,9 @@
 		z-index: 1;
 		background: linear-gradient(
 			to top,
-			color-mix(in srgb, #000 88%, transparent) 0%,
-			color-mix(in srgb, #000 55%, transparent) 45%,
-			color-mix(in srgb, #000 28%, transparent) 100%
+			color-mix(in srgb, #000 92%, transparent) 0%,
+			color-mix(in srgb, #000 72%, transparent) 48%,
+			color-mix(in srgb, #000 55%, transparent) 100%
 		);
 	}
 
@@ -684,15 +682,22 @@
 		padding: 0 12px;
 		display: inline-flex;
 		align-items: center;
+		gap: 6px;
 		border-radius: 999px;
 		border: 1px solid color-mix(in srgb, #fff 18%, transparent);
 		background: color-mix(in srgb, #fff 8%, transparent);
 		color: #fff;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 550;
 		text-decoration: none;
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
+	}
+
+	.brand-arrow {
+		display: block;
+		flex-shrink: 0;
 	}
 
 	.brand-open:hover {
@@ -740,8 +745,8 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
-		height: 52px;
-		padding: 0 12px 0 16px;
+		height: 40px;
+		padding: 0 8px 0 16px;
 		border-bottom: 1px solid var(--hairline);
 		box-sizing: border-box;
 	}
@@ -831,6 +836,28 @@
 			max-width: none;
 			min-width: 0;
 			border-right: 0;
+		}
+
+		.mobile-fab {
+			display: grid;
+			place-items: center;
+			position: fixed;
+			z-index: 45;
+			right: 16px;
+			bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+			width: 56px;
+			height: 56px;
+			padding: 0;
+			border: 0;
+			border-radius: 999px;
+			background: var(--accent);
+			color: #fff;
+			box-shadow: 0 10px 28px var(--shadow-strong);
+			cursor: pointer;
+		}
+
+		.mobile-fab:hover {
+			filter: brightness(1.06);
 		}
 
 		.bottom-pill {
