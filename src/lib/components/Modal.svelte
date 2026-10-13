@@ -60,8 +60,6 @@
 		border-bottom: none;
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
 		padding: 16px;
-		backdrop-filter: blur(18px);
-		-webkit-backdrop-filter: blur(18px);
 		box-shadow: 0 16px 48px var(--shadow-strong);
 	}
 
@@ -70,7 +68,7 @@
 			max-width: 560px;
 			margin-bottom: 16px;
 			border-radius: 28px;
-			border-bottom: 0.33px solid var(--white8);
+			border-bottom: 1px solid var(--hairline);
 			padding: 12px;
 		}
 	}
