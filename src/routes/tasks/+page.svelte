@@ -57,7 +57,7 @@
 					onclick={() => openComposer('task', undefined, group.key)}
 				>
 					<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-						<path d="M6 1v10M1 6h10" stroke="var(--white33)" stroke-width="2" stroke-linecap="round" />
+						<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
 					</svg>
 				</button>
 			</div>
@@ -150,6 +150,7 @@
 		border-radius: 6px;
 		background: transparent;
 		border: none;
+		color: var(--white33);
 		cursor: pointer;
 		flex-shrink: 0;
 		padding: 0;
@@ -158,9 +159,6 @@
 	.task-group-add-btn:hover,
 	.task-group-add-btn:active {
 		background: transparent;
-	}
-
-	.task-group-add-btn:hover :global(svg path) {
-		stroke: var(--white66);
+		color: var(--white66);
 	}
 </style>
