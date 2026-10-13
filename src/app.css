@@ -59,7 +59,7 @@
 	--glass: color-mix(in srgb, var(--black) 88%, transparent);
 	--glass-blur: 14px;
 	--popover: color-mix(in srgb, var(--white) 6%, var(--black));
-	--modal-bg: color-mix(in srgb, var(--white) 10%, var(--black));
+	--modal-bg: var(--popover);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
@@ -82,7 +82,7 @@
 	--glass: color-mix(in srgb, var(--black) 88%, transparent);
 	--glass-blur: 14px;
 	--popover: color-mix(in srgb, var(--white) 4%, var(--black));
-	--modal-bg: color-mix(in srgb, var(--white) 6%, var(--black));
+	--modal-bg: var(--popover);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
@@ -105,7 +105,7 @@
 	--glass: color-mix(in srgb, var(--black) 88%, transparent);
 	--glass-blur: 14px;
 	--popover: color-mix(in srgb, var(--white) 7%, var(--black));
-	--modal-bg: color-mix(in srgb, var(--white) 12%, var(--black));
+	--modal-bg: var(--popover);
 	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
