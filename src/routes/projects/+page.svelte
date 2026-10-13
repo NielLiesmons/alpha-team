@@ -1,24 +1,15 @@
 <script>
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { openComposer, projects, selectEntity, ui } from '$lib/workspace.svelte.js';
+	import { projects, selectEntity, ui } from '$lib/workspace.svelte.js';
 </script>
 
 <svelte:head><title>Projects</title></svelte:head>
 
-<header class="page-head">
-	<div>
-		<h1>Projects</h1>
-		<p>
-			{#if ui.source === 'drive'}
-				On Drive — create here; optional <code>home/</code> for docs. Files elsewhere can wear many
-				project labels.
-			{:else}
-				Demo list — <a href="/settings">connect Drive</a> to create for real.
-			{/if}
-		</p>
-	</div>
-	<button type="button" class="new-btn" onclick={() => openComposer('project')}>New project</button>
-</header>
+{#if ui.source === 'demo'}
+	<p class="banner">
+		Demo projects — connect Drive in <a href="/settings">Settings</a>
+	</p>
+{/if}
 
 {#if driveSession.loading}
 	<p class="muted">Loading…</p>
@@ -46,42 +37,16 @@
 {/if}
 
 <style>
-	.page-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 1rem 1rem 0.75rem;
-	}
-
-	.page-head p {
-		margin: 0.35rem 0 0;
+	.banner {
+		margin: 0;
+		padding: 10px 16px;
 		font-size: 13px;
 		color: var(--white66);
-		max-width: 36rem;
+		border-bottom: 1px solid var(--white11);
 	}
 
-	.page-head a {
+	.banner a {
 		color: var(--white);
-	}
-
-	.page-head code {
-		font-size: 12px;
-		color: var(--white33);
-	}
-
-	.new-btn {
-		flex-shrink: 0;
-		height: 2.25rem;
-		padding: 0 1rem;
-		border: 0;
-		border-radius: 10px;
-		background: var(--white);
-		color: var(--black);
-		font: inherit;
-		font-size: 14px;
-		font-weight: 600;
-		cursor: pointer;
 	}
 
 	.muted,

@@ -12,14 +12,12 @@
 	const choices = [
 		{ id: 'system', label: 'System' },
 		{ id: 'light', label: 'Light' },
-		{ id: 'dark', label: 'Dark' },
-		{ id: 'black', label: 'Black' }
+		{ id: 'dark', label: 'Dark' }
 	];
 
 	const fonts = [
 		{ id: 'Ovo', label: 'Ovo' },
-		{ id: 'Georgia', label: 'Georgia' },
-		{ id: 'Inter', label: 'Inter' }
+		{ id: 'Georgia', label: 'Georgia' }
 	];
 
 	let url = $state(driveSession.url);
@@ -123,7 +121,7 @@
 		<code>{brand.accent}</code>
 	</label>
 	<label class="row">
-		<span>Display font</span>
+		<span>Brand panel font</span>
 		<select
 			value={brand.fontDisplay}
 			onchange={(e) => setBrand({ fontDisplay: e.currentTarget.value })}
@@ -133,6 +131,7 @@
 			{/each}
 		</select>
 	</label>
+	<p class="hint">Admin UI stays Inter. Display font only appears on the sidebar Bley panel.</p>
 	<p class="sample" style="font-family: var(--font-display)">
 		Bley · accents
 		<span class="swatch" style="background: var(--accent)" title="accent"></span>

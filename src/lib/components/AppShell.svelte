@@ -2,7 +2,13 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { mobileNav, primaryNav, space } from '$lib/sections.js';
-	import { notes, openComposer, projects, tasks } from '$lib/workspace.svelte.js';
+	import {
+		clearSelection,
+		notes,
+		openComposer,
+		projects,
+		tasks
+	} from '$lib/workspace.svelte.js';
 	import { tick } from 'svelte';
 	import DetailColumn from './DetailColumn.svelte';
 	import NavIcon from './NavIcon.svelte';
@@ -17,6 +23,9 @@
 	let pillTrack = $state();
 	let search = $state('');
 	let createMenuOpen = $state(false);
+	let filterOpen = $state(false);
+	/** @type {string} */
+	let filter = $state('all');
 
 	const path = $derived($page.url.pathname);
 
@@ -25,10 +34,14 @@
 		return path === href || path.startsWith(`${href}/`);
 	}
 
-	const activeHref = $derived(
-		primaryNav.find((item) => active(item.href))?.href ??
-			(active('/settings') ? '/settings' : '/dashboard')
+	const activeItem = $derived(
+		primaryNav.find((item) => active(item.href)) ??
+			(active('/settings')
+				? { href: '/settings', label: 'Settings', icon: 'settings' }
+				: primaryNav[0])
 	);
+
+	const activeHref = $derived(activeItem.href);
 
 	const counts = $derived({
 		tasks: tasks.length,
@@ -40,6 +53,18 @@
 		const q = search.trim().toLowerCase();
 		if (!q) return primaryNav;
 		return primaryNav.filter((item) => item.label.toLowerCase().includes(q));
+	});
+
+	const createKind = $derived(
+		'createKind' in activeItem ? /** @type {'task' | 'project' | 'note' | undefined} */ (activeItem.createKind) : undefined
+	);
+
+	/** Clear detail whenever the section changes — never carry a Task into Mail, etc. */
+	$effect(() => {
+		path;
+		clearSelection();
+		filter = 'all';
+		filterOpen = false;
 	});
 
 	/** @param {string} href */
@@ -54,6 +79,11 @@
 		if (kind === 'task') go('/tasks');
 		else if (kind === 'project') go('/projects');
 		else if (kind === 'note') go('/notes');
+	}
+
+	function onListPlus() {
+		if (createKind) openComposer(createKind);
+		else createMenuOpen = true;
 	}
 
 	async function centerActivePill() {
@@ -77,12 +107,7 @@
 <div class="shell">
 	<aside class="sidebar">
 		<header class="side-top">
-			<button
-				type="button"
-				class="pfp-btn"
-				aria-label="Settings"
-				onclick={() => go('/settings')}
-			>
+			<button type="button" class="pfp-btn" aria-label="Settings" onclick={() => go('/settings')}>
 				<ProfilePic name="Niel" size={32} />
 			</button>
 			<label class="search">
@@ -110,7 +135,11 @@
 					</svg>
 				</button>
 				{#if createMenuOpen}
-					<button type="button" class="menu-scrim" aria-label="Close" onclick={() => (createMenuOpen = false)}
+					<button
+						type="button"
+						class="menu-scrim"
+						aria-label="Close"
+						onclick={() => (createMenuOpen = false)}
 					></button>
 					<div class="create-menu" role="menu">
 						<button type="button" role="menuitem" onclick={() => create('task')}>New task</button>
@@ -154,17 +183,94 @@
 		</nav>
 
 		<div class="brand-panel">
-			<p class="brand-name">{space.name}</p>
-			<p class="brand-desc">{space.description}</p>
-			<a class="brand-open" href={space.siteUrl} target="_blank" rel="noopener noreferrer">Open site</a>
+			<div class="brand-media" aria-hidden="true">
+				<picture>
+					<source srcset="/space-cover.webp" type="image/webp" />
+					<img src="/space-cover.jpg" alt="" width="800" height="800" />
+				</picture>
+			</div>
+			<div class="brand-scrim" aria-hidden="true"></div>
+			<div class="brand-copy">
+				<p class="brand-name">{space.name}</p>
+				<p class="brand-desc">{space.description}</p>
+				<a class="brand-open" href={space.siteUrl} target="_blank" rel="noopener noreferrer">Open site</a>
+			</div>
 		</div>
 	</aside>
 
-	<div class="content">
-		<div class="pane">
-			{@render children()}
+	<div class="workspace-wrap">
+		<div class="workspace">
+			<section class="list-col" aria-label={activeItem.label}>
+				<header class="list-top">
+					<h1 class="list-title">{activeItem.label}</h1>
+					<div class="list-actions">
+						<div class="filter-wrap">
+							<button
+								type="button"
+								class="chip"
+								class:on={filter !== 'all'}
+								aria-expanded={filterOpen}
+								aria-haspopup="listbox"
+								onclick={() => (filterOpen = !filterOpen)}
+							>
+								Filter
+								<svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+									<path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+								</svg>
+							</button>
+							{#if filterOpen}
+								<button
+									type="button"
+									class="menu-scrim"
+									aria-label="Close filter"
+									onclick={() => (filterOpen = false)}
+								></button>
+								<div class="filter-menu" role="listbox">
+									<button
+										type="button"
+										class:on={filter === 'all'}
+										onclick={() => {
+											filter = 'all';
+											filterOpen = false;
+										}}>All</button
+									>
+									<button
+										type="button"
+										class:on={filter === 'open'}
+										onclick={() => {
+											filter = 'open';
+											filterOpen = false;
+										}}>Open</button
+									>
+									<button
+										type="button"
+										class:on={filter === 'done'}
+										onclick={() => {
+											filter = 'done';
+											filterOpen = false;
+										}}>Done</button
+									>
+								</div>
+							{/if}
+						</div>
+						<button type="button" class="list-plus" aria-label="Create" onclick={onListPlus}>
+							<svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path
+									d="M6 1.5v9M1.5 6h9"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+								/>
+							</svg>
+						</button>
+					</div>
+				</header>
+				<div class="pane">
+					{@render children()}
+				</div>
+			</section>
+			<DetailColumn />
 		</div>
-		<DetailColumn />
 	</div>
 
 	<TaskCreate />
@@ -199,7 +305,8 @@
 		height: 100dvh;
 		width: 100%;
 		overflow: hidden;
-		background: var(--black);
+		/* Pure black chrome behind the nav column */
+		background: #000000;
 	}
 
 	.sidebar {
@@ -211,6 +318,8 @@
 		min-height: 0;
 		overflow: hidden;
 		gap: 10px;
+		background: #000000;
+		color: #f5f2f2;
 	}
 
 	.side-top {
@@ -245,10 +354,10 @@
 		align-items: center;
 		gap: 8px;
 		padding: 0 10px;
-		border: 1px solid var(--white16);
+		border: 1px solid color-mix(in srgb, #fff 16%, transparent);
 		border-radius: 12px;
 		background: transparent;
-		color: var(--white33);
+		color: color-mix(in srgb, #fff 40%, transparent);
 		box-sizing: border-box;
 	}
 
@@ -262,36 +371,53 @@
 		height: 100%;
 		border: 0;
 		background: transparent;
-		color: var(--white);
+		color: #f5f2f2;
 		font: inherit;
 		font-size: 13px;
 		outline: none;
 	}
 
 	.search input::placeholder {
-		color: var(--white33);
+		color: color-mix(in srgb, #fff 40%, transparent);
 	}
 
-	.create-wrap {
+	.create-wrap,
+	.filter-wrap {
 		position: relative;
 		flex-shrink: 0;
 	}
 
-	.top-plus {
+	.top-plus,
+	.list-plus {
 		width: 32px;
 		height: 32px;
 		display: grid;
 		place-items: center;
 		border: 0;
 		border-radius: 12px;
-		background: var(--popover);
-		color: var(--white66);
+		background: color-mix(in srgb, #fff 8%, transparent);
+		color: color-mix(in srgb, #fff 70%, transparent);
 		cursor: pointer;
 		padding: 0;
 	}
 
-	.top-plus:hover {
+	.list-plus {
+		width: 30px;
+		height: 30px;
+		border-radius: 999px;
+		background: var(--popover);
+		color: var(--white66);
+		border: 1px solid var(--hairline);
+	}
+
+	.top-plus:hover,
+	.list-plus:hover {
+		color: #fff;
+	}
+
+	.list-plus:hover {
 		color: var(--white);
+		background: var(--white8);
 	}
 
 	.menu-scrim {
@@ -303,12 +429,13 @@
 		cursor: default;
 	}
 
-	.create-menu {
+	.create-menu,
+	.filter-menu {
 		position: absolute;
 		top: calc(100% + 8px);
 		right: 0;
 		z-index: 50;
-		min-width: 160px;
+		min-width: 148px;
 		padding: 4px;
 		background: var(--popover);
 		border: 1px solid var(--hairline);
@@ -316,7 +443,13 @@
 		box-shadow: 0 12px 32px var(--shadow-strong);
 	}
 
-	.create-menu button {
+	.create-menu {
+		background: #161016;
+		border-color: color-mix(in srgb, #fff 12%, transparent);
+	}
+
+	.create-menu button,
+	.filter-menu button {
 		display: block;
 		width: 100%;
 		padding: 8px 10px;
@@ -331,9 +464,20 @@
 		cursor: pointer;
 	}
 
-	.create-menu button:hover {
+	.create-menu button {
+		color: color-mix(in srgb, #fff 70%, transparent);
+	}
+
+	.create-menu button:hover,
+	.filter-menu button:hover,
+	.filter-menu button.on {
 		background: var(--white8);
 		color: var(--white);
+	}
+
+	.create-menu button:hover {
+		background: color-mix(in srgb, #fff 8%, transparent);
+		color: #fff;
 	}
 
 	.sidebar-nav {
@@ -354,15 +498,15 @@
 	}
 
 	.nav-row:hover {
-		background: var(--white4);
+		background: color-mix(in srgb, #fff 5%, transparent);
 	}
 
 	.nav-row.active {
-		background: var(--white8);
+		background: color-mix(in srgb, #fff 9%, transparent);
 	}
 
 	.nav-row.active .nav-item {
-		color: var(--white);
+		color: #fff;
 	}
 
 	.nav-item {
@@ -371,12 +515,11 @@
 		gap: 10px;
 		flex: 1;
 		min-width: 0;
-		/* 2px less left than previous 12px */
-		padding: 8px 10px 8px 10px;
+		padding: 8px 10px;
 		border: 0;
 		border-radius: 8px;
 		background: transparent;
-		color: var(--white66);
+		color: color-mix(in srgb, #fff 66%, transparent);
 		font-size: 14px;
 		font-weight: 500;
 		text-align: left;
@@ -384,7 +527,6 @@
 	}
 
 	.nav-row.creatable .nav-item {
-		/* Room for count; matches vertical pad rhythm on the right */
 		padding-right: 8px;
 	}
 
@@ -412,7 +554,7 @@
 		padding: 0 2px;
 		font-size: 12px;
 		font-weight: 500;
-		color: var(--white33);
+		color: color-mix(in srgb, #fff 33%, transparent);
 		text-align: right;
 		font-variant-numeric: tabular-nums;
 		transition:
@@ -430,8 +572,8 @@
 		place-items: center;
 		border: 0;
 		border-radius: 999px;
-		background: var(--popover);
-		color: var(--white66);
+		background: color-mix(in srgb, #fff 10%, #000);
+		color: color-mix(in srgb, #fff 70%, transparent);
 		padding: 0;
 		cursor: pointer;
 		flex-shrink: 0;
@@ -441,8 +583,7 @@
 		transition:
 			opacity 0.22s var(--ease),
 			transform 0.22s var(--ease),
-			color 0.15s ease,
-			background 0.15s ease;
+			color 0.15s ease;
 	}
 
 	.nav-row.creatable:hover .count,
@@ -459,17 +600,57 @@
 	}
 
 	.row-plus:hover {
-		color: var(--white);
-		background: var(--white8);
+		color: #fff;
 	}
 
 	.brand-panel {
+		position: relative;
+		isolation: isolate;
 		flex-shrink: 0;
 		margin-top: auto;
+		min-height: 132px;
 		padding: 14px;
-		border: 1px solid var(--hairline);
+		border: 1px solid color-mix(in srgb, #fff 12%, transparent);
 		border-radius: 16px;
-		background: var(--surface);
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+		gap: 0.35rem;
+	}
+
+	.brand-media {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+	}
+
+	.brand-media picture,
+	.brand-media img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center 35%;
+		filter: blur(14px) saturate(1.05);
+		transform: scale(1.12);
+	}
+
+	.brand-scrim {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		background: linear-gradient(
+			to top,
+			color-mix(in srgb, #000 88%, transparent) 0%,
+			color-mix(in srgb, #000 55%, transparent) 45%,
+			color-mix(in srgb, #000 28%, transparent) 100%
+		);
+	}
+
+	.brand-copy {
+		position: relative;
+		z-index: 2;
 		display: flex;
 		flex-direction: column;
 		gap: 0.35rem;
@@ -478,44 +659,51 @@
 	.brand-name {
 		margin: 0;
 		font-family: var(--font-display);
-		font-size: 17px;
+		font-size: 18px;
 		font-weight: 700;
 		letter-spacing: -0.02em;
-		color: var(--white);
+		color: #fff;
 	}
 
 	.brand-desc {
 		margin: 0;
 		font-size: 12px;
 		line-height: 1.45;
-		color: var(--white33);
+		color: color-mix(in srgb, #fff 66%, transparent);
 	}
 
 	.brand-open {
-		margin-top: 0.45rem;
+		margin-top: 0.35rem;
 		align-self: flex-start;
 		height: 30px;
 		padding: 0 12px;
 		display: inline-flex;
 		align-items: center;
 		border-radius: 999px;
-		border: 1px solid var(--hairline);
-		background: transparent;
-		color: var(--white66);
+		border: 1px solid color-mix(in srgb, #fff 18%, transparent);
+		background: color-mix(in srgb, #fff 8%, transparent);
+		color: #fff;
 		font-size: 13px;
 		font-weight: 550;
 		text-decoration: none;
-		transition:
-			color 0.15s ease,
-			background 0.15s ease;
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
 	}
 
 	.brand-open:hover {
-		color: var(--white);
-		background: var(--white4);
+		background: color-mix(in srgb, #fff 14%, transparent);
 	}
 
-	.content {
+	.workspace-wrap {
+		flex: 1;
+		min-width: 0;
+		min-height: 0;
+		padding: 12px 12px 12px 0;
+		box-sizing: border-box;
+		display: flex;
+	}
+
+	.workspace {
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
@@ -523,10 +711,89 @@
 		flex-direction: row;
 		align-items: stretch;
 		overflow: hidden;
-		border-left: 1px solid var(--shell-border);
+		border-radius: 20px;
+		/* Always the dark-mode page bg (broken black), never pure #000 */
+		--black: var(--ink-raw);
+		--white: var(--bg-raw);
+		--bg: var(--ink-raw);
+		--ink: var(--bg-raw);
+		--surface: color-mix(in srgb, var(--white) 6%, var(--black));
+		--popover: color-mix(in srgb, var(--white) 7%, var(--black));
+		--modal-bg: var(--popover);
+		--hairline: color-mix(in srgb, var(--white) 12%, transparent);
+		--white66: color-mix(in srgb, var(--white) 66%, transparent);
+		--white33: color-mix(in srgb, var(--white) 33%, transparent);
+		--white16: color-mix(in srgb, var(--white) 16%, transparent);
+		--white11: var(--hairline);
+		--white8: color-mix(in srgb, var(--white) 8%, transparent);
+		--white4: color-mix(in srgb, var(--white) 4%, transparent);
+		background: var(--bg);
+		border: 1px solid var(--hairline);
+		color: var(--white);
 	}
 
-	.content :global(.pane) {
+	.list-col {
+		flex: 0 0 min(300px, 32%);
+		width: min(300px, 32%);
+		max-width: 340px;
+		min-width: 240px;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		border-right: 1px solid var(--hairline);
+		overflow: hidden;
+	}
+
+	.list-top {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		height: 52px;
+		padding: 0 12px 0 16px;
+		border-bottom: 1px solid var(--hairline);
+		box-sizing: border-box;
+	}
+
+	.list-title {
+		margin: 0;
+		font-family: var(--font);
+		font-size: 15px;
+		font-weight: 650;
+		letter-spacing: -0.01em;
+		color: var(--white);
+	}
+
+	.list-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.chip {
+		height: 30px;
+		padding: 0 10px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid var(--hairline);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--white66);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 500;
+		cursor: pointer;
+	}
+
+	.chip.on,
+	.chip:hover {
+		color: var(--white);
+		background: var(--white4);
+	}
+
+	.pane {
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
@@ -553,14 +820,28 @@
 		.shell {
 			flex-direction: column;
 			padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+			background: var(--black);
 		}
 
 		.sidebar {
 			display: none;
 		}
 
-		.content {
-			border-left: none;
+		.workspace-wrap {
+			padding: 0;
+		}
+
+		.workspace {
+			border-radius: 0;
+			border: 0;
+		}
+
+		.list-col {
+			flex: 1;
+			width: 100%;
+			max-width: none;
+			min-width: 0;
+			border-right: 0;
 		}
 
 		.bottom-pill {

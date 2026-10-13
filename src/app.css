@@ -95,29 +95,6 @@
 	color-scheme: light;
 }
 
-/* Black — literal #000 / #fff (Admin / Drive / Mail only; optional) */
-:root[data-theme='black'] {
-	--black: #000000;
-	--white: #ffffff;
-	--bg: var(--black);
-	--ink: var(--white);
-	--surface: color-mix(in srgb, var(--white) 8%, var(--black));
-	--glass: color-mix(in srgb, var(--black) 88%, transparent);
-	--glass-blur: 14px;
-	--popover: color-mix(in srgb, var(--white) 7%, var(--black));
-	--modal-bg: var(--popover);
-	--hairline: color-mix(in srgb, var(--white) 12%, transparent);
-	--white66: color-mix(in srgb, var(--white) 66%, transparent);
-	--white33: color-mix(in srgb, var(--white) 33%, transparent);
-	--white16: color-mix(in srgb, var(--white) 16%, transparent);
-	--white11: var(--hairline);
-	--white8: color-mix(in srgb, var(--white) 8%, transparent);
-	--white4: color-mix(in srgb, var(--white) 4%, transparent);
-	--black33: color-mix(in srgb, #000000 33%, transparent);
-	--shell-border: var(--hairline);
-	color-scheme: dark;
-}
-
 *,
 *::before,
 *::after {
@@ -129,7 +106,8 @@ body {
 	margin: 0;
 	height: 100%;
 	overflow: hidden;
-	background: var(--black);
+	/* Pure black behind the nav + card margin gutter */
+	background: #000000;
 	color: var(--white);
 	font-family: var(--font);
 	font-size: 16px;
@@ -161,7 +139,7 @@ p {
 
 h1,
 h2 {
-	font-family: var(--font-display);
+	font-family: var(--font);
 	font-weight: 700;
 	letter-spacing: -0.02em;
 }

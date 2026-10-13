@@ -110,6 +110,9 @@
 		<header class="head">
 			<div class="head-main">
 				<h2 class="title">{note.title}</h2>
+				{#if note.targets?.length}
+					<p class="summary">{note.targets.map((t) => t.label).join(' · ')}</p>
+				{/if}
 			</div>
 			<div class="head-actions">
 				<button type="button" class="ghost" onclick={editCurrent}>Edit</button>
@@ -129,14 +132,12 @@
 
 <style>
 	.detail {
-		flex: 0 0 min(400px, 38vw);
-		width: min(400px, 38vw);
-		min-width: 280px;
+		flex: 1 1 auto;
+		min-width: 0;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		border-left: 1px solid var(--shell-border);
-		background: var(--black);
+		background: transparent;
 		overflow: hidden;
 	}
 
@@ -160,7 +161,7 @@
 		flex: 1;
 		min-width: 0;
 		margin: 0;
-		font-family: var(--font-display);
+		font-family: var(--font);
 		font-size: 1.15rem;
 		font-weight: 700;
 		letter-spacing: -0.02em;
@@ -257,7 +258,7 @@
 
 	.empty-title {
 		margin: 0;
-		font-family: var(--font-display);
+		font-family: var(--font);
 		font-size: 1.25rem;
 		font-weight: 700;
 		color: var(--white);

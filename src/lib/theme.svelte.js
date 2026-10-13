@@ -1,6 +1,6 @@
 const KEY = 'alpha-admin-theme';
 
-/** @typedef {'system' | 'light' | 'dark' | 'black'} ThemeChoice */
+/** @typedef {'system' | 'light' | 'dark'} ThemeChoice */
 
 export const themeChoice = $state(/** @type {{ value: ThemeChoice }} */ ({ value: 'system' }));
 
@@ -15,8 +15,7 @@ export function applyTheme(choice) {
 	const resolved = resolveTheme(choice);
 	document.documentElement.dataset.theme = resolved;
 	const meta = document.querySelector('meta[name="theme-color"]');
-	const color =
-		resolved === 'light' ? '#f5f2f2' : resolved === 'black' ? '#000000' : '#160b0f';
+	const color = resolved === 'light' ? '#f8f5f5' : '#160b0f';
 	meta?.setAttribute('content', color);
 }
 
@@ -31,10 +30,10 @@ export function initTheme() {
 	const saved = localStorage.getItem(KEY);
 	/** @type {ThemeChoice} */
 	let choice = 'system';
-	if (saved === 'light' || saved === 'dark' || saved === 'black' || saved === 'system') {
+	if (saved === 'light' || saved === 'dark' || saved === 'system') {
 		choice = saved;
-	} else if (saved === 'gray') {
-		/* legacy “Gray mode” → standard dark flip */
+	} else if (saved === 'gray' || saved === 'black') {
+		/* legacy Black / Gray → standard dark */
 		choice = 'dark';
 	}
 	themeChoice.value = choice;
