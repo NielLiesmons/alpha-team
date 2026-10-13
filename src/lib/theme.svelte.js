@@ -15,7 +15,7 @@ export function applyTheme(choice) {
 	const resolved = resolveTheme(choice);
 	document.documentElement.dataset.theme = resolved;
 	const meta = document.querySelector('meta[name="theme-color"]');
-	const color = resolved === 'light' ? '#f8f5f5' : '#160b0f';
+	const color = resolved === 'light' ? '#f6f6f6' : '#090909';
 	meta?.setAttribute('content', color);
 }
 

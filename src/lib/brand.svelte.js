@@ -25,9 +25,13 @@ export function applyBrand(next = brand) {
 		'--font-display',
 		`'${next.fontDisplay}', 'Times New Roman', Georgia, serif`
 	);
-	root.style.setProperty('--ink-raw', 'color-mix(in srgb, #111111 94%, var(--accent) 6%)');
-	root.style.setProperty('--bg-raw', 'hsl(from var(--accent) h 12% 97.2%)');
-	root.style.setProperty('--popover-raw', 'color-mix(in srgb, #1a1a1a 93%, var(--accent) 7%)');
+	/* Hue only — fixed L/C so accent never lifts #111 / #1A1A brightness */
+	root.style.setProperty('--page-raw', 'oklch(from var(--accent) 0.177 0.006 h)');
+	root.style.setProperty('--popover-raw', 'oklch(from var(--accent) 0.235 0.005 h)');
+	root.style.setProperty('--type-raw', 'oklch(from var(--accent) 0.97 0.004 h)');
+	root.style.setProperty('--page-raw-light', 'oklch(from var(--accent) 0.975 0.004 h)');
+	root.style.setProperty('--popover-raw-light', 'oklch(from var(--accent) 0.99 0.003 h)');
+	root.style.setProperty('--type-raw-light', 'oklch(from var(--accent) 0.22 0.006 h)');
 	root.style.setProperty('--scrim', 'color-mix(in srgb, #000000 55%, transparent)');
 	root.style.setProperty('--shadow-strong', 'color-mix(in srgb, #000000 40%, transparent)');
 

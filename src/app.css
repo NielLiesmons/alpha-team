@@ -26,12 +26,19 @@
 	--task-check-stroke: calc(var(--task-box-stroke) * 1.35);
 	--font-display: 'Ovo', 'Times New Roman', Georgia, serif;
 	/*
-	 * Operator UIs (Admin / Drive / …): near-black bases + a touch of accent.
-	 * Public Bley site keeps its own warmer poles.
+	 * Operator UIs — lock #111 / #1A1A lightness; only borrow accent hue
+	 * via tiny chroma (oklch). Never color-mix bright accent into the base.
+	 * #111 ≈ oklch(0.177 …); #1A1A ≈ oklch(0.235 …)
 	 */
-	--ink-raw: color-mix(in srgb, #111111 94%, var(--accent) 6%);
-	--bg-raw: hsl(from var(--accent) h 12% 97.2%);
-	--popover-raw: color-mix(in srgb, #1a1a1a 93%, var(--accent) 7%);
+	--shell: #090909;
+	--page-raw: oklch(from var(--accent) 0.177 0.006 h);
+	--popover-raw: oklch(from var(--accent) 0.235 0.005 h);
+	--type-raw: oklch(from var(--accent) 0.97 0.004 h);
+	/* Light mirrors: soft page / slightly elevated panel / dark type */
+	--shell-light: #f6f6f6;
+	--page-raw-light: oklch(from var(--accent) 0.975 0.004 h);
+	--popover-raw-light: oklch(from var(--accent) 0.99 0.003 h);
+	--type-raw-light: oklch(from var(--accent) 0.22 0.006 h);
 	--scrim: color-mix(in srgb, #000000 55%, transparent);
 	--shadow-strong: color-mix(in srgb, #000000 40%, transparent);
 	--radius-hero: 32px;
@@ -53,11 +60,12 @@
 	--whiteEnforced: #ffffff;
 }
 
-/* Dark (default) — #111 / #1A1A bases with accent tint; light type */
+/* Dark — page ≈ #111, popover ≈ #1A1A (hue only); chrome #090909 */
 :root,
 :root[data-theme='dark'] {
-	--black: var(--ink-raw);
-	--white: var(--bg-raw);
+	--shell: #090909;
+	--black: var(--page-raw);
+	--white: var(--type-raw);
 	--bg: var(--black);
 	--ink: var(--white);
 	--surface: color-mix(in srgb, var(--white) 5%, var(--black));
@@ -74,19 +82,22 @@
 	--white4: color-mix(in srgb, var(--white) 4%, transparent);
 	--black33: color-mix(in srgb, #000000 33%, transparent);
 	--shell-border: var(--hairline);
+	--nav-plus-bg: color-mix(in srgb, #ffffff 3.5%, transparent);
+	--nav-plus-fg: color-mix(in srgb, #ffffff 48%, transparent);
 	color-scheme: dark;
 }
 
-/* Light — same poles, flipped (match Bley light) */
+/* Light — mirrored: soft page, elevated panel, #f6f6f6 chrome */
 :root[data-theme='light'] {
-	--black: var(--bg-raw);
-	--white: var(--ink-raw);
+	--shell: var(--shell-light);
+	--black: var(--page-raw-light);
+	--white: var(--type-raw-light);
 	--bg: var(--black);
 	--ink: var(--white);
 	--surface: color-mix(in srgb, var(--white) 4%, var(--black));
 	--glass: color-mix(in srgb, var(--black) 88%, transparent);
 	--glass-blur: 14px;
-	--popover: color-mix(in srgb, var(--white) 5%, var(--black));
+	--popover: var(--popover-raw-light);
 	--modal-bg: var(--popover);
 	--hairline: color-mix(in srgb, var(--white) 12%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
@@ -95,8 +106,12 @@
 	--white11: var(--hairline);
 	--white8: color-mix(in srgb, var(--white) 8%, transparent);
 	--white4: color-mix(in srgb, var(--white) 4%, transparent);
-	--black33: color-mix(in srgb, var(--bg-raw) 54%, transparent);
+	--black33: color-mix(in srgb, var(--page-raw-light) 54%, transparent);
 	--shell-border: var(--hairline);
+	--nav-plus-bg: color-mix(in srgb, #000000 3.5%, transparent);
+	--nav-plus-fg: color-mix(in srgb, #000000 42%, transparent);
+	--scrim: color-mix(in srgb, #000000 35%, transparent);
+	--shadow-strong: color-mix(in srgb, #000000 18%, transparent);
 	color-scheme: light;
 }
 
@@ -111,8 +126,8 @@ body {
 	margin: 0;
 	height: 100%;
 	overflow: hidden;
-	/* Pure black behind the nav + card margin gutter */
-	background: #000000;
+	/* Chrome behind nav + card gutter (#090909 dark / #f6f6f6 light) */
+	background: var(--shell);
 	color: var(--white);
 	font-family: var(--font);
 	font-size: 16px;

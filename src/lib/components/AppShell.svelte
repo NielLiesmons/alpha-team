@@ -305,8 +305,7 @@
 		height: 100dvh;
 		width: 100%;
 		overflow: hidden;
-		/* Pure black chrome behind the nav column */
-		background: #000000;
+		background: var(--shell);
 	}
 
 	.sidebar {
@@ -318,8 +317,8 @@
 		min-height: 0;
 		overflow: hidden;
 		gap: 10px;
-		background: #000000;
-		color: #f5f2f2;
+		background: var(--shell);
+		color: var(--white);
 	}
 
 	.side-top {
@@ -354,10 +353,10 @@
 		align-items: center;
 		gap: 8px;
 		padding: 0 10px;
-		border: 1px solid color-mix(in srgb, #fff 16%, transparent);
+		border: 1px solid var(--white16);
 		border-radius: 12px;
 		background: transparent;
-		color: color-mix(in srgb, #fff 40%, transparent);
+		color: var(--white33);
 		box-sizing: border-box;
 	}
 
@@ -371,14 +370,14 @@
 		height: 100%;
 		border: 0;
 		background: transparent;
-		color: #f5f2f2;
+		color: var(--white);
 		font: inherit;
 		font-size: 13px;
 		outline: none;
 	}
 
 	.search input::placeholder {
-		color: color-mix(in srgb, #fff 40%, transparent);
+		color: var(--white33);
 	}
 
 	.create-wrap,
@@ -395,32 +394,22 @@
 		place-items: center;
 		border: 0;
 		border-radius: 12px;
-		background: color-mix(in srgb, #fff 8%, transparent);
-		color: color-mix(in srgb, #fff 70%, transparent);
+		background: var(--nav-plus-bg);
+		color: var(--nav-plus-fg);
 		cursor: pointer;
 		padding: 0;
+		box-sizing: border-box;
 	}
 
 	.list-plus {
 		width: 30px;
 		height: 30px;
 		border-radius: 999px;
-		background: color-mix(in srgb, var(--white) 12%, var(--popover));
+		background: var(--white8);
 		color: var(--white66);
-		border: 1px solid var(--hairline);
-	}
-
-	.top-plus {
-		background: color-mix(in srgb, #fff 14%, #111);
-		border: 1px solid color-mix(in srgb, #fff 14%, transparent);
-		box-sizing: border-box;
 	}
 
 	.top-plus:hover,
-	.list-plus:hover {
-		color: #fff;
-	}
-
 	.list-plus:hover {
 		color: var(--white);
 		background: var(--white8);
@@ -456,11 +445,6 @@
 		box-shadow: 0 12px 32px var(--shadow-strong);
 	}
 
-	.create-menu {
-		background: #161016;
-		border-color: color-mix(in srgb, #fff 12%, transparent);
-	}
-
 	.create-menu button,
 	.filter-menu button {
 		display: block;
@@ -477,20 +461,11 @@
 		cursor: pointer;
 	}
 
-	.create-menu button {
-		color: color-mix(in srgb, #fff 70%, transparent);
-	}
-
 	.create-menu button:hover,
 	.filter-menu button:hover,
 	.filter-menu button.on {
 		background: var(--white8);
 		color: var(--white);
-	}
-
-	.create-menu button:hover {
-		background: color-mix(in srgb, #fff 8%, transparent);
-		color: #fff;
 	}
 
 	.sidebar-nav {
@@ -511,15 +486,15 @@
 	}
 
 	.nav-row:hover {
-		background: color-mix(in srgb, #fff 5%, transparent);
+		background: var(--white4);
 	}
 
 	.nav-row.active {
-		background: color-mix(in srgb, #fff 9%, transparent);
+		background: var(--white8);
 	}
 
 	.nav-row.active .nav-item {
-		color: #fff;
+		color: var(--white);
 	}
 
 	.nav-item {
@@ -532,7 +507,8 @@
 		border: 0;
 		border-radius: 8px;
 		background: transparent;
-		color: color-mix(in srgb, #fff 66%, transparent);
+		color: var(--white66);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 14px;
 		font-weight: 500;
 		text-align: left;
@@ -565,12 +541,14 @@
 		flex-shrink: 0;
 		min-width: 1.25rem;
 		padding: 0 2px;
-		font-family: var(--font);
-		font-size: 12px;
-		font-weight: 600;
+		/* Inter only — never inherit display/serif from brand */
+		font: 600 12px/1.2 'Inter', system-ui, -apple-system, sans-serif;
+		font-style: normal;
+		letter-spacing: 0;
 		color: var(--accent-66);
 		text-align: right;
 		font-variant-numeric: tabular-nums;
+		font-feature-settings: 'tnum' 1;
 		transition:
 			opacity 0.22s var(--ease),
 			transform 0.22s var(--ease),
@@ -589,10 +567,10 @@
 		height: 24px;
 		display: grid;
 		place-items: center;
-		border: 1px solid color-mix(in srgb, #fff 14%, transparent);
+		border: 0;
 		border-radius: 999px;
-		background: color-mix(in srgb, #fff 14%, #111);
-		color: color-mix(in srgb, #fff 82%, transparent);
+		background: var(--nav-plus-bg);
+		color: var(--nav-plus-fg);
 		padding: 0;
 		cursor: pointer;
 		flex-shrink: 0;
@@ -604,8 +582,7 @@
 			opacity 0.22s var(--ease),
 			transform 0.22s var(--ease),
 			color 0.15s ease,
-			background 0.15s ease,
-			border-color 0.15s ease;
+			background 0.15s ease;
 	}
 
 	.nav-row.creatable:hover .count,
@@ -622,9 +599,8 @@
 	}
 
 	.row-plus:hover {
-		color: #fff;
-		background: color-mix(in srgb, #fff 20%, #111);
-		border-color: color-mix(in srgb, #fff 22%, transparent);
+		color: var(--white);
+		background: var(--white8);
 	}
 
 	.brand-panel {
@@ -736,21 +712,7 @@
 		align-items: stretch;
 		overflow: hidden;
 		border-radius: 20px;
-		/* Operator dark surfaces (#111 / #1A1A + accent), never pure #000 */
-		--black: var(--ink-raw);
-		--white: var(--bg-raw);
-		--bg: var(--ink-raw);
-		--ink: var(--bg-raw);
-		--surface: color-mix(in srgb, var(--white) 5%, var(--black));
-		--popover: var(--popover-raw);
-		--modal-bg: var(--popover);
-		--hairline: color-mix(in srgb, var(--white) 12%, transparent);
-		--white66: color-mix(in srgb, var(--white) 66%, transparent);
-		--white33: color-mix(in srgb, var(--white) 33%, transparent);
-		--white16: color-mix(in srgb, var(--white) 16%, transparent);
-		--white11: var(--hairline);
-		--white8: color-mix(in srgb, var(--white) 8%, transparent);
-		--white4: color-mix(in srgb, var(--white) 4%, transparent);
+		/* Follows theme page bg (#111-ish dark / soft light) */
 		background: var(--bg);
 		border: 1px solid var(--hairline);
 		color: var(--white);
@@ -843,7 +805,7 @@
 		.shell {
 			flex-direction: column;
 			padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-			background: var(--black);
+			background: var(--bg);
 		}
 
 		.sidebar {
@@ -885,7 +847,7 @@
 			border-radius: 999px;
 			background: var(--modal-bg);
 			border: 1px solid var(--hairline);
-			box-shadow: 0 8px 28px color-mix(in srgb, var(--ink-raw) 35%, transparent);
+			box-shadow: 0 8px 28px var(--shadow-strong);
 			overflow: hidden;
 		}
 

@@ -3,20 +3,24 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="theme-color" content="#121212" />
+		<meta name="theme-color" content="#090909" />
 		<script>
 			(function () {
 				try {
 					var saved = localStorage.getItem('alpha-admin-theme') || 'system';
 					var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-					var theme = saved === 'light' || saved === 'gray' || saved === 'dark' ? saved : dark ? 'gray' : 'light';
+					var theme =
+						saved === 'light' || saved === 'dark'
+							? saved
+							: saved === 'gray' || saved === 'black'
+								? 'dark'
+								: dark
+									? 'dark'
+									: 'light';
 					document.documentElement.dataset.theme = theme;
 					var meta = document.querySelector('meta[name="theme-color"]');
 					if (meta) {
-						meta.setAttribute(
-							'content',
-							theme === 'light' ? '#F3ECE2' : theme === 'dark' ? '#000000' : '#121212'
-						);
+						meta.setAttribute('content', theme === 'light' ? '#f6f6f6' : '#090909');
 					}
 				} catch (e) {}
 			})();
