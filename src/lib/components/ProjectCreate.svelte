@@ -69,16 +69,6 @@
 			{/if}
 		</div>
 		<input class="sheet-input" placeholder="Project title" bind:value={title} />
-		<button type="button" class="close-hit" aria-label="Close" onclick={closeComposer}>
-			<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-				<path
-					d="M2 2l10 10M12 2 2 12"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-				/>
-			</svg>
-		</button>
 	</div>
 	<div class="form-divider"></div>
 	<input class="summary" placeholder="Short summary" bind:value={summary} />
@@ -136,25 +126,6 @@
 	.menu button.on {
 		color: var(--white);
 		font-weight: 600;
-	}
-
-	.close-hit {
-		flex-shrink: 0;
-		width: 28px;
-		height: 28px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--white33);
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.close-hit:hover {
-		background: var(--white8);
-		color: var(--white);
 	}
 
 	.summary {

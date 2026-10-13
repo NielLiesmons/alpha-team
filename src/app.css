@@ -47,7 +47,7 @@
 	--whiteEnforced: #ffffff;
 }
 
-/* Dark (default) — flip: page bg = broken black, text = broken white */
+/* Dark (default) — flip: page bg = broken black, text = broken white (match Bley) */
 :root,
 :root[data-theme='dark'] {
 	--black: var(--ink-raw);
@@ -58,9 +58,9 @@
 	--surface: color-mix(in srgb, var(--white) 6%, var(--black));
 	--glass: color-mix(in srgb, var(--black) 88%, transparent);
 	--glass-blur: 14px;
-	--popover: color-mix(in srgb, var(--white) 6%, var(--black));
+	--popover: color-mix(in srgb, var(--white) 7%, var(--black));
 	--modal-bg: var(--popover);
-	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
+	--hairline: color-mix(in srgb, var(--white) 12%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
 	--white16: color-mix(in srgb, var(--white) 16%, transparent);
@@ -72,7 +72,7 @@
 	color-scheme: dark;
 }
 
-/* Light — same poles, flipped */
+/* Light — same poles, flipped (match Bley light) */
 :root[data-theme='light'] {
 	--black: var(--bg-raw);
 	--white: var(--ink-raw);
@@ -81,9 +81,9 @@
 	--surface: color-mix(in srgb, var(--white) 4%, var(--black));
 	--glass: color-mix(in srgb, var(--black) 88%, transparent);
 	--glass-blur: 14px;
-	--popover: color-mix(in srgb, var(--white) 4%, var(--black));
+	--popover: color-mix(in srgb, var(--white) 5%, var(--black));
 	--modal-bg: var(--popover);
-	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
+	--hairline: color-mix(in srgb, var(--white) 12%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
 	--white16: color-mix(in srgb, var(--white) 16%, transparent);
@@ -106,7 +106,7 @@
 	--glass-blur: 14px;
 	--popover: color-mix(in srgb, var(--white) 7%, var(--black));
 	--modal-bg: var(--popover);
-	--hairline: color-mix(in srgb, var(--white) 11%, transparent);
+	--hairline: color-mix(in srgb, var(--white) 12%, transparent);
 	--white66: color-mix(in srgb, var(--white) 66%, transparent);
 	--white33: color-mix(in srgb, var(--white) 33%, transparent);
 	--white16: color-mix(in srgb, var(--white) 16%, transparent);

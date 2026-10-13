@@ -1,12 +1,10 @@
 <script>
-	import { fade, fly } from 'svelte/transition';
+	import { fade } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
-	import { onMount } from 'svelte';
 
 	/**
-	 * Create / edit — Bley modal surface tokens (not Zapstore gray66).
-	 * Mobile: bottom sheet = the rounded modal; rows directly inside.
-	 * Desktop: column + rounded sheet one level in (Bley modal bg).
+	 * Create / edit overlay — Bley-style centered sheet (not a desktop side column).
+	 * Mobile: bottom sheet. Desktop: large centered card. No chrome X (Escape / scrim).
 	 */
 	let {
 		open = $bindable(false),
@@ -14,18 +12,6 @@
 		onclose = () => {},
 		children
 	} = $props();
-
-	let desktop = $state(false);
-
-	onMount(() => {
-		const mq = window.matchMedia('(min-width: 768px)');
-		const sync = () => {
-			desktop = mq.matches;
-		};
-		sync();
-		mq.addEventListener('change', sync);
-		return () => mq.removeEventListener('change', sync);
-	});
 
 	function close() {
 		open = false;
@@ -35,39 +21,43 @@
 	function onKey(event) {
 		if (open && event.key === 'Escape') close();
 	}
+
+	/** Soft sheet slide — matches Bley News/Shop modals */
+	function sheetSlide(_node, { duration = 320 } = {}) {
+		const mobile =
+			typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
+		if (!mobile) {
+			return {
+				duration: 240,
+				easing: cubicOut,
+				css: (t, u) => `opacity: ${t}; transform: translate3d(0, ${u * 14}px, 0)`
+			};
+		}
+		return {
+			duration,
+			easing: (t) => 1 - Math.pow(1 - t, 4),
+			css: (_t, u) => `transform: translate3d(0, ${u * 100}%, 0)`
+		};
+	}
 </script>
 
 <svelte:window onkeydown={onKey} />
 
 {#if open}
-	{#if desktop}
-		<aside class="panel-col" aria-label={label}>
-			<div
-				class="sheet"
-				role="dialog"
-				aria-modal="true"
-				aria-label={label}
-				transition:fly={{ x: 40, duration: 220, easing: cubicOut }}
-			>
-				{@render children?.()}
-			</div>
-		</aside>
-	{:else}
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="overlay" onclick={close} role="presentation" transition:fade={{ duration: 180 }}></div>
-		<div class="wrap" role="dialog" aria-modal="true" aria-label={label}>
-			<div class="sheet mobile" transition:fly={{ y: 100, duration: 200, easing: cubicOut }}>
-				{@render children?.()}
-			</div>
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="overlay" onclick={close} role="presentation" transition:fade={{ duration: 180 }}></div>
+	<div class="wrap" role="dialog" aria-modal="true" aria-label={label}>
+		<div class="sheet" transition:sheetSlide>
+			{@render children?.()}
 		</div>
-	{/if}
+	</div>
 {/if}
 
 <style>
 	.overlay {
 		position: fixed;
 		inset: 0;
-		z-index: 40;
+		z-index: 60;
 		background: var(--scrim);
 		backdrop-filter: blur(6px);
 		-webkit-backdrop-filter: blur(6px);
@@ -75,52 +65,46 @@
 
 	.wrap {
 		position: fixed;
-		z-index: 50;
-		left: 0;
-		right: 0;
-		bottom: 0;
+		inset: 0;
+		z-index: 70;
 		display: flex;
+		align-items: flex-end;
 		justify-content: center;
 		pointer-events: none;
-	}
-
-	/* Column only — page bg; rounded modal is the child */
-	.panel-col {
-		flex: 0 0 min(400px, 40vw);
-		width: min(400px, 40vw);
-		align-self: stretch;
-		min-height: 0;
-		padding: 12px;
-		border-left: 1px solid var(--hairline);
-		background: var(--black);
+		padding: 0;
 		box-sizing: border-box;
-		overflow: auto;
 	}
 
-	/* Bley modal shell — content rows live directly here */
 	.sheet {
+		pointer-events: auto;
 		display: flex;
 		flex-direction: column;
+		width: 100%;
+		max-height: min(92svh, 880px);
 		background: var(--modal-bg);
 		border: 1px solid var(--hairline);
-		backdrop-filter: blur(18px);
-		-webkit-backdrop-filter: blur(18px);
-		box-shadow: 0 16px 48px var(--shadow-strong);
-		overflow: auto;
-	}
-
-	.sheet.mobile {
-		pointer-events: auto;
-		width: 100%;
-		max-height: min(88dvh, 720px);
 		border-bottom: none;
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
-		padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+		box-shadow: 0 16px 48px var(--shadow-strong);
+		overflow: auto;
+		padding: 8px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+		box-sizing: border-box;
 	}
 
-	.panel-col .sheet {
-		min-height: min(100%, 520px);
-		border-radius: 24px;
-		padding: 8px 0;
+	@media (min-width: 640px) {
+		.wrap {
+			align-items: center;
+			padding: 0.55rem;
+		}
+
+		.sheet {
+			width: min(640px, calc(100vw - 7.5rem));
+			max-width: min(640px, calc(100vw - 7.5rem));
+			height: min(720px, 90svh);
+			max-height: min(720px, 90svh);
+			border-radius: calc(var(--radius-hero) - 2px);
+			border-bottom: 1px solid var(--hairline);
+			padding: 8px 0 12px;
+		}
 	}
 </style>

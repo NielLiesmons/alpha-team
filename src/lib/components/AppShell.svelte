@@ -61,9 +61,11 @@
 		<div class="pane">
 			{@render children()}
 		</div>
-		<TaskCreate />
-		<ProjectCreate />
 	</div>
+
+	<!-- Overlay composers (not a desktop third column) -->
+	<TaskCreate />
+	<ProjectCreate />
 
 	<nav class="bottom-pill" aria-label="Sections">
 		<div class="pill-inner">
@@ -312,8 +314,6 @@
 			border-radius: 999px;
 			background: var(--modal-bg);
 			border: 1px solid var(--hairline);
-			backdrop-filter: blur(16px);
-			-webkit-backdrop-filter: blur(16px);
 			box-shadow: 0 8px 28px color-mix(in srgb, var(--ink-raw) 35%, transparent);
 			overflow: hidden;
 		}
