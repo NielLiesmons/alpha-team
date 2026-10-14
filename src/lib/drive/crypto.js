@@ -107,6 +107,76 @@ export async function decryptWithKey(keyBytes, ciphertext) {
 }
 
 /**
+ * Encrypt under a known 32-byte file key (media manifests share key with chunks).
+ * @param {Uint8Array} fileKey
+ * @param {Uint8Array} plaintext
+ */
+export async function encryptWithKey(fileKey, plaintext) {
+	if (fileKey.length !== 32) throw new Error('key must be 32 bytes');
+	const nonce = crypto.getRandomValues(new Uint8Array(12));
+	const key = await importAesKey(fileKey);
+	const ct = new Uint8Array(
+		await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, plaintext)
+	);
+	const out = new Uint8Array(12 + ct.length);
+	out.set(nonce, 0);
+	out.set(ct, 12);
+	return out;
+}
+
+/** @param {number} chunkIndex */
+function chunkAad(chunkIndex) {
+	const aad = new Uint8Array(4);
+	new DataView(aad.buffer).setUint32(0, chunkIndex >>> 0, true);
+	return aad;
+}
+
+/**
+ * Media chunk encrypt — AAD = LE u32 index (matches alpha-drive).
+ * @param {Uint8Array} fileKey
+ * @param {number} chunkIndex
+ * @param {Uint8Array} plaintext
+ */
+export async function encryptChunk(fileKey, chunkIndex, plaintext) {
+	if (fileKey.length !== 32) throw new Error('key must be 32 bytes');
+	const nonce = crypto.getRandomValues(new Uint8Array(12));
+	const key = await importAesKey(fileKey);
+	const aad = chunkAad(chunkIndex);
+	const ct = new Uint8Array(
+		await crypto.subtle.encrypt(
+			{ name: 'AES-GCM', iv: nonce, additionalData: aad },
+			key,
+			plaintext
+		)
+	);
+	const out = new Uint8Array(12 + ct.length);
+	out.set(nonce, 0);
+	out.set(ct, 12);
+	return out;
+}
+
+/**
+ * @param {Uint8Array} fileKey
+ * @param {number} chunkIndex
+ * @param {Uint8Array} ciphertext
+ */
+export async function decryptChunk(fileKey, chunkIndex, ciphertext) {
+	if (fileKey.length !== 32) throw new Error('key must be 32 bytes');
+	if (ciphertext.length < 12) throw new Error('chunk ciphertext too short');
+	const nonce = ciphertext.slice(0, 12);
+	const ct = ciphertext.slice(12);
+	const key = await importAesKey(fileKey);
+	const aad = chunkAad(chunkIndex);
+	return new Uint8Array(
+		await crypto.subtle.decrypt(
+			{ name: 'AES-GCM', iv: nonce, additionalData: aad },
+			key,
+			ct
+		)
+	);
+}
+
+/**
  * @param {Uint8Array} data
  */
 export async function sha256Hex(data) {

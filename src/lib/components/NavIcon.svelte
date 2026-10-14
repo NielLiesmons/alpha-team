@@ -70,6 +70,11 @@
 			<rect x="1.5" y="1.5" width="15" height="15" rx="1" stroke="currentColor" />
 			<path d="M9 1.5v15M1.5 9h15" stroke="currentColor" stroke-linecap="round" />
 		</svg>
+	{:else if name === 'player'}
+		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<circle cx="9" cy="9" r="7.5" stroke="currentColor" />
+			<path d="M7.2 5.8v6.4L13 9 7.2 5.8Z" stroke="currentColor" stroke-linejoin="round" />
+		</svg>
 	{:else if name === 'publications'}
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
 			<path

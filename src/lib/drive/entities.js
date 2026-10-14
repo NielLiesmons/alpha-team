@@ -1,6 +1,7 @@
-/** Project / Task / Note helpers over the browser Drive client. */
+/** Project / Task / Note / Track helpers over the browser Drive client. */
 
 import { getPath, loadRootDir, putPath } from './client.js';
+import { putMediaBlob } from './media.js';
 
 function nowRfc3339() {
 	return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -307,6 +308,89 @@ export function fromUiNote(ui) {
 		created_at: ui._drive?.created_at ?? nowRfc3339(),
 		updated_at: nowRfc3339()
 	};
+}
+
+/**
+ * Guess title/artist from a filename like "Artist - Title.mp3".
+ * @param {string} filename
+ */
+export function parseAudioFilename(filename) {
+	const base = filename.replace(/\.[^.]+$/, '').trim() || 'Untitled';
+	const m = base.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+	if (m) return { artists: [m[1].trim()], title: m[2].trim(), album: '' };
+	return { artists: ['Unknown'], title: base, album: '' };
+}
+
+/**
+ * Upload an audio File as chunked media + alpha.track/1.
+ * @param {import('./client.js').DriveSession} session
+ * @param {File} file
+ * @param {{ onProgress?: (phase: string, done: number, total: number) => void }} [opts]
+ */
+export async function uploadTrack(session, file, opts = {}) {
+	const id = newId();
+	const meta = parseAudioFilename(file.name);
+	const contentType = file.type || 'audio/mpeg';
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	const mediaPath = `media/audio/tracks/${id}/media.json`;
+	const trackPath = `media/audio/tracks/${id}/track.json`;
+
+	opts.onProgress?.('upload', 0, 1);
+	await putMediaBlob(session, mediaPath, contentType, bytes, {
+		onProgress: (done, total) => opts.onProgress?.('upload', done, total)
+	});
+
+	const created = nowRfc3339();
+	const track = {
+		schema: 'alpha.track/1',
+		id,
+		title: meta.title,
+		artists: meta.artists,
+		album: meta.album || undefined,
+		media_path: mediaPath,
+		duration_ms: null,
+		genres: [],
+		project_ids: [],
+		labels: [],
+		created_at: created,
+		updated_at: created
+	};
+	opts.onProgress?.('index', 1, 1);
+	await putPath(session, trackPath, 'track', JSON.stringify(track, null, 2));
+	return track;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listTracks(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'track' || path.endsWith('/track.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				const t = JSON.parse(new TextDecoder().decode(bytes));
+				t.schema = 'alpha.track/1';
+				t.artists = Array.isArray(t.artists) && t.artists.length ? t.artists : ['Unknown'];
+				t.album = t.album ?? '';
+				out.push(t);
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => {
+		const aa = String(a.artists?.[0] ?? '');
+		const ba = String(b.artists?.[0] ?? '');
+		if (aa !== ba) return aa.localeCompare(ba);
+		const al = String(a.album ?? '');
+		const bl = String(b.album ?? '');
+		if (al !== bl) return al.localeCompare(bl);
+		return String(a.title).localeCompare(String(b.title));
+	});
+	return out;
 }
 
 /**

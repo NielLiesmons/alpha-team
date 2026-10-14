@@ -17,6 +17,7 @@
 export const primaryNav = [
 	{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
 	{ href: '/drive', label: 'Drive', icon: 'drive' },
+	{ href: '/player', label: 'Player', icon: 'player' },
 	{ href: '/mail', label: 'Mail', icon: 'mail' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/publications', label: 'Publications', icon: 'publications' },
@@ -36,6 +37,7 @@ export const mobileNav = [
 	{ href: '/notes', label: 'Notes', icon: 'notes' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/mail', label: 'Mail', icon: 'mail' },
+	{ href: '/player', label: 'Player', icon: 'player' },
 	{ href: '/drive', label: 'Drive', icon: 'drive' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },
 	{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
