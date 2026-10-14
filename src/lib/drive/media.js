@@ -4,7 +4,7 @@ import { getBlock, getPathWithKey, putBlock, putPathWithKey } from './client.js'
 import { bytesToHex, decryptChunk, encryptChunk, hexToBytes, sha256Hex } from './crypto.js';
 
 export const DEFAULT_CHUNK_SIZE = 256 * 1024;
-const FETCH_CONCURRENCY = 6;
+const FETCH_CONCURRENCY = 8;
 
 /**
  * @template T
@@ -13,8 +13,9 @@ const FETCH_CONCURRENCY = 6;
  * @param {(item: T, index: number) => Promise<void>} fn
  */
 async function mapPool(items, limit, fn) {
+	if (!items.length) return;
 	let next = 0;
-	const workers = Array.from({ length: Math.min(limit, Math.max(items.length, 1)) }, async () => {
+	const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
 		while (next < items.length) {
 			const i = next++;
 			await fn(items[i], i);
@@ -94,10 +95,27 @@ export async function loadMediaManifest(session, manifestPath, signal) {
 }
 
 /**
+ * Decrypt one chunk given a loaded manifest + key.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} manifest
+ * @param {string} fileKeyHex
+ * @param {number} chunkIndex
+ * @param {AbortSignal} [signal]
+ */
+export async function fetchDecryptChunk(session, manifest, fileKeyHex, chunkIndex, signal) {
+	const meta = manifest.chunks.find((/** @type {{ i: number }} */ c) => c.i === chunkIndex);
+	if (!meta) throw new Error(`chunk ${chunkIndex} not found`);
+	const ct = await getBlock(session, meta.hash, signal);
+	const pt = await decryptChunk(hexToBytes(fileKeyHex), chunkIndex, ct);
+	if (pt.length !== meta.plain_len) throw new Error('chunk length mismatch');
+	return pt;
+}
+
+/**
  * @param {import('./client.js').DriveSession} session
  * @param {string} manifestPath
  * @param {number} chunkIndex
- * @param {string} [fileKeyHex] skip re-reading manifest if known
+ * @param {string} [fileKeyHex]
  * @param {any} [manifest]
  * @param {AbortSignal} [signal]
  */
@@ -116,23 +134,22 @@ export async function getMediaChunk(
 		keyHex = loaded.fileKeyHex;
 		man = loaded.manifest;
 	}
-	const meta = man.chunks.find((/** @type {{ i: number }} */ c) => c.i === chunkIndex);
-	if (!meta) throw new Error(`chunk ${chunkIndex} not found`);
-	const ct = await getBlock(session, meta.hash, signal);
-	return decryptChunk(hexToBytes(keyHex), chunkIndex, ct);
+	return fetchDecryptChunk(session, man, keyHex, chunkIndex, signal);
 }
 
 /**
  * Fetch all chunks. Parallel download + abortable.
  * @param {import('./client.js').DriveSession} session
  * @param {string} manifestPath
- * @param {{ onProgress?: (doneBytes: number, totalBytes: number) => void, signal?: AbortSignal }} [opts]
+ * @param {{ onProgress?: (doneBytes: number, totalBytes: number) => void, signal?: AbortSignal, manifest?: any, fileKeyHex?: string }} [opts]
  */
 export async function getMediaBlob(session, manifestPath, opts = {}) {
 	const parts = [];
 	const { manifest } = await streamMediaChunks(session, manifestPath, {
 		signal: opts.signal,
 		onProgress: opts.onProgress,
+		manifest: opts.manifest,
+		fileKeyHex: opts.fileKeyHex,
 		onChunk: async (_i, bytes) => {
 			parts.push(bytes);
 		}
@@ -148,17 +165,24 @@ export async function getMediaBlob(session, manifestPath, opts = {}) {
 }
 
 /**
- * Parallel prefetch, ordered delivery — for play-while-buffering (MSE).
+ * Parallel prefetch with ordered delivery. Fetches chunk 0 first so play can start ASAP.
+ * Fetch workers never block on SourceBuffer appends.
  * @param {import('./client.js').DriveSession} session
  * @param {string} manifestPath
  * @param {{
  *   onChunk: (index: number, bytes: Uint8Array, manifest: any) => void | Promise<void>,
  *   onProgress?: (doneBytes: number, totalBytes: number) => void,
- *   signal?: AbortSignal
+ *   signal?: AbortSignal,
+ *   manifest?: any,
+ *   fileKeyHex?: string
  * }} opts
  */
 export async function streamMediaChunks(session, manifestPath, opts) {
-	const { manifest, fileKeyHex } = await loadMediaManifest(session, manifestPath, opts.signal);
+	const loaded =
+		opts.manifest && opts.fileKeyHex
+			? { manifest: opts.manifest, fileKeyHex: opts.fileKeyHex }
+			: await loadMediaManifest(session, manifestPath, opts.signal);
+	const { manifest, fileKeyHex } = loaded;
 	const fileKey = hexToBytes(fileKeyHex);
 	const totalBytes = Number(manifest.plaintext_len) || 0;
 	const n = manifest.chunks.length;
@@ -183,16 +207,30 @@ export async function streamMediaChunks(session, manifestPath, opts) {
 		return deliverChain;
 	};
 
-	await mapPool(manifest.chunks, FETCH_CONCURRENCY, async (meta) => {
+	/**
+	 * @param {{ i: number, hash: string, plain_len: number }} meta
+	 */
+	async function fetchOne(meta) {
 		throwIfAborted(opts.signal);
 		const ct = await getBlock(session, meta.hash, opts.signal);
 		const pt = await decryptChunk(fileKey, meta.i, ct);
 		if (pt.length !== meta.plain_len) throw new Error('chunk length mismatch');
 		parts[meta.i] = pt;
-		await scheduleDeliver();
-	});
+		// Do not await — keep the download pool saturated while MSE appends.
+		void scheduleDeliver();
+	}
 
-	await deliverChain;
+	// Chunk 0 first — unblocks play while the rest prefetch.
+	if (n > 0) {
+		await fetchOne(manifest.chunks[0]);
+		await deliverChain;
+	}
+
+	if (n > 1) {
+		await mapPool(manifest.chunks.slice(1), FETCH_CONCURRENCY, fetchOne);
+		await deliverChain;
+	}
+
 	throwIfAborted(opts.signal);
 	return { manifest, fileKeyHex };
 }
@@ -203,15 +241,16 @@ export async function streamMediaChunks(session, manifestPath, opts) {
  */
 export function mseMimeForContentType(contentType) {
 	const ct = (contentType || '').toLowerCase();
-	if (ct.includes('mpeg') || ct === 'audio/mp3' || ct.endsWith('/mp3')) {
-		return typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported('audio/mpeg')
-			? 'audio/mpeg'
-			: null;
+	if (ct.includes('mpeg') || ct === 'audio/mp3' || ct.endsWith('/mp3') || ct === '') {
+		// Empty type: treat as mp3 (common for odd uploads).
+		if (typeof MediaSource === 'undefined') return null;
+		if (MediaSource.isTypeSupported('audio/mpeg')) return 'audio/mpeg';
+		// Some Chromium builds lie — still try at call site.
+		return null;
 	}
 	if (ct.includes('ogg') || ct.includes('opus')) {
 		const mime = ct.includes('opus') ? 'audio/webm; codecs="opus"' : 'audio/ogg';
 		return typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(mime) ? mime : null;
 	}
-	// Whole-file M4A from iTunes is not fragmented — MSE usually fails.
 	return null;
 }

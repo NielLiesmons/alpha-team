@@ -61,7 +61,7 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		padding: 8px 0 24px;
+		padding: 0 0 24px;
 	}
 
 	.eyebrow {

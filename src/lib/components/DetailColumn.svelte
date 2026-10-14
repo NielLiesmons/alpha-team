@@ -359,15 +359,36 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		padding: 16px;
+		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 0;
+	}
+
+	.title-row,
+	.block,
+	.prose,
+	.summary,
+	.muted {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+
+	.title-row {
+		padding-top: 14px;
+		padding-bottom: 10px;
+	}
+
+	.block {
+		padding-top: 8px;
+		padding-bottom: 8px;
 	}
 
 	.prose,
 	.summary {
 		margin: 0;
+		padding-top: 4px;
+		padding-bottom: 8px;
 		font-size: 15px;
 		line-height: 1.55;
 		color: var(--white66);
@@ -550,7 +571,7 @@
 		}
 
 		.body {
-			padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+			padding: 0 0 calc(12px + env(safe-area-inset-bottom, 0px));
 		}
 	}
 </style>

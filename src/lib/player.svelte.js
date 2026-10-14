@@ -214,20 +214,35 @@ function appendBuffer(sb, data, signal) {
 }
 
 /**
+ * Attach MediaSource URL to the bound <audio> immediately (don't wait for Svelte effects).
+ * @param {string} url
+ */
+function attachAudioSrc(url) {
+	if (!boundAudio) return;
+	if (boundAudio.src !== url) {
+		boundAudio.src = url;
+		boundAudio.load();
+	}
+}
+
+/**
  * Play via MediaSource — audio starts after the first chunk lands.
  * @param {import('./drive/client.js').DriveSession} session
  * @param {any} track
  * @param {string} mime
+ * @param {any} manifest
+ * @param {string} fileKeyHex
  * @param {number} generation
  * @param {AbortSignal} signal
  */
-async function playViaMse(session, track, mime, generation, signal) {
+async function playViaMse(session, track, mime, manifest, fileKeyHex, generation, signal) {
 	const ms = new MediaSource();
 	activeMediaSource = ms;
 	const url = URL.createObjectURL(ms);
 	playerUi.objectUrl = url;
+	attachAudioSrc(url);
 
-	await new Promise((resolve, reject) => {
+	const sourceOpen = new Promise((resolve, reject) => {
 		const onOpen = () => {
 			cleanup();
 			resolve(undefined);
@@ -242,15 +257,24 @@ async function playViaMse(session, track, mime, generation, signal) {
 			ms.removeEventListener('sourceopen', onOpen);
 			signal.removeEventListener('abort', onAbort);
 		};
+		if (ms.readyState === 'open') {
+			cleanup();
+			resolve(undefined);
+			return;
+		}
 		if (signal.aborted) {
 			onAbort();
 			return;
 		}
 		ms.addEventListener('sourceopen', onOpen, { once: true });
 		signal.addEventListener('abort', onAbort);
+		// Re-attach in case effect hadn't bound audio yet when URL was set.
+		attachAudioSrc(url);
 	});
 
+	await sourceOpen;
 	if (generation !== playGeneration) return null;
+
 	const sb = ms.addSourceBuffer(mime);
 	try {
 		sb.mode = 'sequence';
@@ -261,6 +285,8 @@ async function playViaMse(session, track, mime, generation, signal) {
 	let started = false;
 	await streamMediaChunks(session, track.media_path, {
 		signal,
+		manifest,
+		fileKeyHex,
 		onProgress: (done, total) => {
 			if (generation !== playGeneration) return;
 			playerUi.bufferRatio = total > 0 ? done / total : 0;
@@ -271,6 +297,7 @@ async function playViaMse(session, track, mime, generation, signal) {
 			if (!started && generation === playGeneration) {
 				started = true;
 				playerUi.status = 'ready';
+				attachAudioSrc(url);
 				boundAudio?.play().catch(() => {});
 			}
 		}
@@ -296,12 +323,16 @@ async function playViaMse(session, track, mime, generation, signal) {
  * Fallback: assemble then play (M4A / unsupported MSE). Silent buffer only.
  * @param {import('./drive/client.js').DriveSession} session
  * @param {any} track
+ * @param {any} manifest
+ * @param {string} fileKeyHex
  * @param {number} generation
  * @param {AbortSignal} signal
  */
-async function playViaBlob(session, track, generation, signal) {
-	const { manifest, bytes } = await getMediaBlob(session, track.media_path, {
+async function playViaBlob(session, track, manifest, fileKeyHex, generation, signal) {
+	const { bytes } = await getMediaBlob(session, track.media_path, {
 		signal,
+		manifest,
+		fileKeyHex,
 		onProgress: (done, total) => {
 			if (generation !== playGeneration) return;
 			playerUi.bufferRatio = total > 0 ? done / total : 0;
@@ -309,11 +340,13 @@ async function playViaBlob(session, track, generation, signal) {
 	});
 	if (generation !== playGeneration) return null;
 	const blob = new Blob([bytes], { type: manifest.content_type || 'audio/mpeg' });
-	playerUi.objectUrl = URL.createObjectURL(blob);
+	const url = URL.createObjectURL(blob);
+	playerUi.objectUrl = url;
+	attachAudioSrc(url);
 	playerUi.status = 'ready';
 	playerUi.bufferRatio = 1;
 	boundAudio?.play().catch(() => {});
-	return playerUi.objectUrl;
+	return url;
 }
 
 /**
@@ -337,15 +370,46 @@ export async function playTrack(track) {
 	playerUi.error = '';
 
 	try {
-		const { manifest } = await loadMediaManifest(session, track.media_path, ac.signal);
+		const { manifest, fileKeyHex } = await loadMediaManifest(
+			session,
+			track.media_path,
+			ac.signal
+		);
 		if (generation !== playGeneration) return null;
 
-		const mime = mseMimeForContentType(manifest.content_type || 'audio/mpeg');
+		const ct = manifest.content_type || 'audio/mpeg';
+		let mime = mseMimeForContentType(ct);
+		// Prefer progressive MSE for mp3 even when isTypeSupported is conservative.
+		if (!mime && /mpeg|mp3/i.test(ct) && typeof MediaSource !== 'undefined') {
+			mime = 'audio/mpeg';
+		}
+
 		let url;
 		if (mime) {
-			url = await playViaMse(session, track, mime, generation, ac.signal);
+			try {
+				url = await playViaMse(
+					session,
+					track,
+					mime,
+					manifest,
+					fileKeyHex,
+					generation,
+					ac.signal
+				);
+			} catch (e) {
+				if (e?.name === 'AbortError' || generation !== playGeneration) throw e;
+				// Safari / picky MSE — fall back to full blob.
+				url = await playViaBlob(
+					session,
+					track,
+					manifest,
+					fileKeyHex,
+					generation,
+					ac.signal
+				);
+			}
 		} else {
-			url = await playViaBlob(session, track, generation, ac.signal);
+			url = await playViaBlob(session, track, manifest, fileKeyHex, generation, ac.signal);
 		}
 		if (generation === playGeneration) playAbort = null;
 		return url;

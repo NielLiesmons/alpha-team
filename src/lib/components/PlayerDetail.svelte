@@ -168,23 +168,24 @@
 
 	.head {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		padding: 14px 16px 12px;
+		height: 40px;
+		padding: 0 8px 0 16px;
 		border-bottom: 1px solid var(--hairline);
+		box-sizing: border-box;
 		flex-shrink: 0;
 	}
 
 	.head-main {
 		min-width: 0;
 		display: flex;
-		flex-direction: column;
-		gap: 4px;
+		align-items: center;
+		gap: 10px;
 	}
 
 	.back {
-		align-self: flex-start;
 		margin: 0;
 		padding: 0;
 		border: 0;
@@ -194,6 +195,7 @@
 		font-weight: 600;
 		color: var(--white33);
 		cursor: pointer;
+		flex-shrink: 0;
 	}
 
 	.back:hover {
@@ -202,11 +204,13 @@
 
 	.title {
 		margin: 0;
-		font-family: var(--font);
-		font-size: 1.15rem;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		color: var(--white);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--white33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.head-actions {

@@ -47,6 +47,12 @@
 		}
 	});
 
+	// Keep scrubber buffer lane live while chunks download (before metadata exists).
+	$effect(() => {
+		playerUi.currentId;
+		bufferRatio = playerUi.bufferRatio;
+	});
+
 	onDestroy(() => {
 		stopPlayback();
 	});
@@ -58,7 +64,10 @@
 		}
 		const d = audioEl.duration;
 		if (Number.isFinite(d) && d > 0 && audioEl.buffered.length > 0) {
-			bufferRatio = Math.min(1, audioEl.buffered.end(audioEl.buffered.length - 1) / d);
+			bufferRatio = Math.max(
+				playerUi.bufferRatio,
+				Math.min(1, audioEl.buffered.end(audioEl.buffered.length - 1) / d)
+			);
 		} else {
 			bufferRatio = playerUi.bufferRatio;
 		}
@@ -95,6 +104,8 @@
 	}
 
 	const playedRatio = $derived(duration > 0 ? currentTime / duration : 0);
+	const bufferPct = $derived(Math.round(Math.min(1, bufferRatio) * 100));
+	const playedPct = $derived(Math.round(Math.min(1, playedRatio) * 100));
 </script>
 
 {#if show}
@@ -134,8 +145,8 @@
 				onclick={seek}
 			>
 				<span class="scrub-track">
-					<span class="scrub-buffer" style={`width: ${Math.round(bufferRatio * 100)}%`}></span>
-					<span class="scrub-played" style={`width: ${Math.round(playedRatio * 100)}%`}></span>
+					<span class="scrub-buffer" style={`width: ${bufferPct}%`}></span>
+					<span class="scrub-played" style={`width: ${playedPct}%`}></span>
 				</span>
 			</button>
 
@@ -165,6 +176,7 @@
 		padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
 		border-top: 1px solid var(--hairline);
 		background: var(--popover);
+		min-width: 0;
 	}
 
 	.np-title {
@@ -191,6 +203,8 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
+		min-width: 0;
+		width: 100%;
 	}
 
 	.play-btn {
@@ -230,8 +244,8 @@
 	}
 
 	.scrub {
-		flex: 1;
-		min-width: 0;
+		flex: 1 1 auto;
+		min-width: 48px;
 		height: 28px;
 		display: flex;
 		align-items: center;
@@ -249,9 +263,9 @@
 		position: relative;
 		display: block;
 		width: 100%;
-		height: 3px;
+		height: 4px;
 		border-radius: 2px;
-		background: var(--white11);
+		background: var(--white16, rgba(255, 255, 255, 0.16));
 		overflow: hidden;
 	}
 

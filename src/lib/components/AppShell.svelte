@@ -214,7 +214,7 @@
 	</aside>
 
 	<div class="workspace-wrap">
-		<div class="workspace">
+		<div class="workspace" class:player-layout={active( '/player')}>
 			<section class="list-col" aria-label={activeItem.label}>
 				<header class="list-top">
 					<h1 class="list-title">{activeItem.label}</h1>
@@ -752,6 +752,13 @@
 		flex-direction: column;
 		border-right: 1px solid var(--hairline);
 		overflow: hidden;
+	}
+
+	/* Player: narrow browse rail, wide library + now-playing */
+	.workspace.player-layout .list-col {
+		flex-basis: 220px;
+		width: 220px;
+		min-width: 200px;
 	}
 
 	.list-top {
