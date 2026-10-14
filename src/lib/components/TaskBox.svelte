@@ -104,7 +104,7 @@
 
 	.state-closed {
 		background: var(--accent-success);
-		border: none;
+		border: var(--task-box-stroke) solid transparent;
 	}
 
 	.state-inProgress {
@@ -119,6 +119,6 @@
 
 	.state-canceled {
 		background: var(--white8);
-		border: none;
+		border: var(--task-box-stroke) solid transparent;
 	}
 </style>

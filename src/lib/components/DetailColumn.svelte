@@ -1,10 +1,13 @@
 <script>
+	import { page } from '$app/stores';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import StatusBox from './StatusBox.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
 	import LabelStack from './LabelStack.svelte';
 	import NoteEditor from './NoteEditor.svelte';
+	import PlayerDetail from './PlayerDetail.svelte';
+	import { closePlayerDetail, playerBrowse } from '$lib/player.svelte.js';
 	import {
 		clearSelection,
 		notes,
@@ -15,6 +18,7 @@
 	} from '$lib/workspace.svelte.js';
 
 	const selection = $derived(ui.selection);
+	const isPlayer = $derived($page.url.pathname.startsWith('/player'));
 
 	const task = $derived(
 		selection?.kind === 'task' ? tasks.find((t) => t.id === selection.id) : null
@@ -27,6 +31,7 @@
 	);
 
 	const typeLabel = $derived.by(() => {
+		if (isPlayer) return 'Player';
 		if (task) return 'Task';
 		if (project) return 'Project';
 		if (note) return 'Note';
@@ -35,10 +40,12 @@
 		return 'Detail';
 	});
 
-	const open = $derived(Boolean(task || project || note));
+	const open = $derived(
+		Boolean((isPlayer && playerBrowse.detailOpen) || task || project || note)
+	);
 
 	const emptyCopy = $derived.by(() => {
-		const path = typeof window !== 'undefined' ? window.location.pathname : '';
+		const path = $page.url.pathname;
 		if (path.startsWith('/tasks')) return { title: 'No task selected', body: 'Pick a task from the list to read it here.' };
 		if (path.startsWith('/projects')) return { title: 'No project selected', body: 'Open a project to see its summary and notes.' };
 		if (path.startsWith('/notes')) return { title: 'No note selected', body: 'Choose a note to read it beside the list.' };
@@ -66,7 +73,12 @@
 <aside class="detail" class:open aria-label="Detail" class:empty={!open}>
 	{#if open}
 		<header class="mobile-bar">
-			<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+			<button
+				type="button"
+				class="icon-hit"
+				aria-label="Back"
+				onclick={() => (isPlayer ? closePlayerDetail() : close())}
+			>
 				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 					<path
 						d="M11.5 3.5 6 9l5.5 5.5"
@@ -78,46 +90,69 @@
 				</svg>
 			</button>
 			<span class="type-label">{typeLabel}</span>
-			<div class="menu-wrap">
-				<button
-					type="button"
-					class="icon-hit"
-					aria-label="More"
-					aria-expanded={menuOpen}
-					onclick={() => (menuOpen = !menuOpen)}
-				>
-					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-						<circle cx="9" cy="4" r="1.35" fill="currentColor" />
-						<circle cx="9" cy="9" r="1.35" fill="currentColor" />
-						<circle cx="9" cy="14" r="1.35" fill="currentColor" />
-					</svg>
-				</button>
-				{#if menuOpen}
-					<button type="button" class="menu-scrim" aria-label="Close menu" onclick={() => (menuOpen = false)}
-					></button>
-					<div class="more-menu" role="menu">
-						<button type="button" role="menuitem" onclick={editCurrent}>Edit</button>
-						<button type="button" role="menuitem" onclick={close}>Close</button>
-					</div>
-				{/if}
-			</div>
+			{#if !isPlayer}
+				<div class="menu-wrap">
+					<button
+						type="button"
+						class="icon-hit"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={() => (menuOpen = !menuOpen)}
+					>
+						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+							<circle cx="9" cy="4" r="1.35" fill="currentColor" />
+							<circle cx="9" cy="9" r="1.35" fill="currentColor" />
+							<circle cx="9" cy="14" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+					{#if menuOpen}
+						<button type="button" class="menu-scrim" aria-label="Close menu" onclick={() => (menuOpen = false)}
+						></button>
+						<div class="more-menu" role="menu">
+							<button type="button" role="menuitem" onclick={editCurrent}>Edit</button>
+							<button type="button" role="menuitem" onclick={close}>Close</button>
+						</div>
+					{/if}
+				</div>
+			{:else}
+				<span class="icon-hit" aria-hidden="true"></span>
+			{/if}
 		</header>
 	{/if}
 
-	{#if task}
-		<header class="head desktop-head">
-			<div class="head-main">
-				<TaskBox state={task.status} size={22} />
-				<h2 class="title">{task.title}</h2>
-				<PriorityBox priority={task.priority} size={20} />
-			</div>
-			<div class="head-actions">
-				<button type="button" class="ghost" onclick={editCurrent}>Edit</button>
-				<button type="button" class="ghost" onclick={close} aria-label="Close">Close</button>
+	{#if isPlayer}
+		<div class="player-slot desktop-player">
+			<PlayerDetail />
+		</div>
+	{:else if task}
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Task</span>
+			<div class="detail-top-actions">
+				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
 			</div>
 		</header>
 		<div class="body">
-			<div class="mobile-title-row">
+			<div class="title-row">
 				<TaskBox state={task.status} size={22} />
 				<h2 class="title">{task.title}</h2>
 				<PriorityBox priority={task.priority} size={20} />
@@ -151,18 +186,34 @@
 			{/if}
 		</div>
 	{:else if project}
-		<header class="head desktop-head">
-			<div class="head-main">
-				<StatusBox state={project.status} size={22} />
-				<h2 class="title">{project.title}</h2>
-			</div>
-			<div class="head-actions">
-				<button type="button" class="ghost" onclick={editCurrent}>Edit</button>
-				<button type="button" class="ghost" onclick={close} aria-label="Close">Close</button>
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Project</span>
+			<div class="detail-top-actions">
+				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
 			</div>
 		</header>
 		<div class="body">
-			<div class="mobile-title-row">
+			<div class="title-row">
 				<StatusBox state={project.status} size={22} />
 				<h2 class="title">{project.title}</h2>
 			</div>
@@ -176,17 +227,34 @@
 			{/if}
 		</div>
 	{:else if note}
-		<header class="head desktop-head">
-			<div class="head-main">
-				<h2 class="title">{note.title}</h2>
-			</div>
-			<div class="head-actions">
-				<button type="button" class="ghost" onclick={editCurrent}>Edit</button>
-				<button type="button" class="ghost" onclick={close} aria-label="Close">Close</button>
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Note</span>
+			<div class="detail-top-actions">
+				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
 			</div>
 		</header>
 		<div class="body">
-			<div class="mobile-title-row">
+			<div class="title-row">
 				<h2 class="title">{note.title}</h2>
 			</div>
 			{#key note.id}
@@ -212,20 +280,63 @@
 		overflow: hidden;
 	}
 
+	.player-slot {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
 	.mobile-bar {
 		display: none;
 	}
 
-	.head {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		padding: 14px 16px 12px;
-		border-bottom: 1px solid var(--shell-border);
+	/* Matches AppShell .list-top (40px) */
+	.detail-top {
 		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		height: 40px;
+		padding: 0 8px 0 16px;
+		border-bottom: 1px solid var(--hairline);
+		box-sizing: border-box;
 	}
 
-	.head-main {
+	.detail-top-label {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--white33);
+	}
+
+	.detail-top-actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+
+	.icon-hit {
+		width: 30px;
+		height: 30px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--white33);
+		padding: 0;
+		cursor: pointer;
+	}
+
+	.icon-hit:hover {
+		color: var(--white);
+		background: var(--white4);
+	}
+
+	.title-row {
 		display: flex;
 		align-items: center;
 		gap: 10px;
@@ -242,30 +353,6 @@
 		letter-spacing: -0.02em;
 		line-height: 1.25;
 		color: var(--white);
-	}
-
-	.head-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 6px;
-	}
-
-	.ghost {
-		height: 28px;
-		padding: 0 10px;
-		border: 1px solid var(--hairline);
-		border-radius: 8px;
-		background: transparent;
-		color: var(--white66);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	.ghost:hover {
-		color: var(--white);
-		background: var(--white4);
 	}
 
 	.body {
@@ -460,13 +547,6 @@
 		.desktop-head,
 		.desktop-empty {
 			display: none;
-		}
-
-		.mobile-title-row {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			min-width: 0;
 		}
 
 		.body {

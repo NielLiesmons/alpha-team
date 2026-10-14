@@ -19,6 +19,16 @@ import {
  * @typedef {{ url: string, token: string, rootKey: string }} DriveSession
  */
 
+/** @type {{ key: string, tip: string, dir: any } | null} */
+let rootDirCache = null;
+
+/**
+ * @param {DriveSession} session
+ */
+function sessionCacheKey(session) {
+	return `${session.url}\0${session.rootKey}`;
+}
+
 /**
  * @param {string} path
  */
@@ -35,14 +45,16 @@ function normalizePath(path) {
  * @param {string} path
  * @param {BodyInit} [body]
  * @param {string} [contentType]
+ * @param {AbortSignal} [signal]
  */
-async function api(session, method, path, body, contentType) {
+async function api(session, method, path, body, contentType, signal) {
 	const headers = { Authorization: `Bearer ${session.token}` };
 	if (contentType) headers['Content-Type'] = contentType;
 	const res = await fetch(`${session.url.replace(/\/$/, '')}${path}`, {
 		method,
 		headers,
-		body
+		body,
+		signal
 	});
 	if (!res.ok) {
 		throw new Error(`${method} ${path}: ${res.status}`);
@@ -52,9 +64,10 @@ async function api(session, method, path, body, contentType) {
 
 /**
  * @param {DriveSession} session
+ * @param {AbortSignal} [signal]
  */
-export async function getTip(session) {
-	const res = await api(session, 'GET', '/v1/tip');
+export async function getTip(session, signal) {
+	const res = await api(session, 'GET', '/v1/tip', undefined, undefined, signal);
 	const body = await res.json();
 	return body.root_hash ?? '';
 }
@@ -79,27 +92,80 @@ export async function putBlock(session, hash, ciphertext) {
 /**
  * @param {DriveSession} session
  * @param {string} hash
+ * @param {AbortSignal} [signal]
  */
-export async function getBlock(session, hash) {
-	const res = await api(session, 'GET', `/v1/blocks/${hash}`);
+export async function getBlock(session, hash, signal) {
+	const res = await api(session, 'GET', `/v1/blocks/${hash}`, undefined, undefined, signal);
 	return new Uint8Array(await res.arrayBuffer());
 }
 
 /**
+ * @param {any} dir
+ * @param {string} tip
  * @param {DriveSession} session
  */
-export async function loadRootDir(session) {
+function rememberRootDir(dir, tip, session) {
+	rootDirCache = {
+		key: sessionCacheKey(session),
+		tip,
+		dir: structuredClone(dir)
+	};
+}
+
+/**
+ * Load tip + decrypted root dir once per tip (cached in memory).
+ * @param {DriveSession} session
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<{ tip: string, dir: any }>}
+ */
+export async function loadRootDirWithTip(session, signal) {
 	const root = parseRootKey(session.rootKey);
 	let tip;
 	try {
-		tip = await getTip(session);
-	} catch {
-		return { schema: 'alpha.dir/1', children: {} };
+		tip = await getTip(session, signal);
+	} catch (e) {
+		if (e?.name === 'AbortError') throw e;
+		return { tip: '', dir: { schema: 'alpha.dir/1', children: {} } };
 	}
-	if (!tip) return { schema: 'alpha.dir/1', children: {} };
-	const ct = await getBlock(session, tip);
+	if (!tip) return { tip: '', dir: { schema: 'alpha.dir/1', children: {} } };
+
+	const cacheKey = sessionCacheKey(session);
+	if (rootDirCache && rootDirCache.key === cacheKey && rootDirCache.tip === tip) {
+		return { tip, dir: structuredClone(rootDirCache.dir) };
+	}
+
+	const ct = await getBlock(session, tip, signal);
 	const pt = await decrypt(root, '', ct);
-	return JSON.parse(new TextDecoder().decode(pt));
+	const dir = JSON.parse(new TextDecoder().decode(pt));
+	rememberRootDir(dir, tip, session);
+	return { tip, dir: structuredClone(dir) };
+}
+
+/**
+ * @param {DriveSession} session
+ * @param {AbortSignal} [signal]
+ */
+export async function loadRootDir(session, signal) {
+	const { dir } = await loadRootDirWithTip(session, signal);
+	return dir;
+}
+
+/**
+ * Decrypt a path using an already-loaded root dir (no tip round-trip).
+ * @param {DriveSession} session
+ * @param {any} dir
+ * @param {string} logicalPath
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<{ bytes: Uint8Array, fileKeyHex: string }>}
+ */
+export async function getPathFromDir(session, dir, logicalPath, signal) {
+	const name = normalizePath(logicalPath);
+	const child = dir.children?.[name];
+	if (!child) throw new Error(`path not found: ${logicalPath}`);
+	const ciphertext = await getBlock(session, child.hash, signal);
+	if (!child.wrapped_key) throw new Error('missing wrapped_key on entry');
+	const bytes = await decryptWithKey(hexToBytes(child.wrapped_key), ciphertext);
+	return { bytes, fileKeyHex: child.wrapped_key };
 }
 
 /**
@@ -128,32 +194,29 @@ export async function putPath(session, logicalPath, kind, plaintext) {
 	const dirHash = await sha256Hex(dirCt);
 	await putBlock(session, dirHash, dirCt);
 	await putTip(session, dirHash);
+	rememberRootDir(dir, dirHash, session);
 	return hash;
 }
 
 /**
  * @param {DriveSession} session
  * @param {string} logicalPath
+ * @param {AbortSignal} [signal]
  */
-export async function getPath(session, logicalPath) {
-	const { bytes } = await getPathWithKey(session, logicalPath);
+export async function getPath(session, logicalPath, signal) {
+	const { bytes } = await getPathWithKey(session, logicalPath, signal);
 	return bytes;
 }
 
 /**
  * @param {DriveSession} session
  * @param {string} logicalPath
+ * @param {AbortSignal} [signal]
  * @returns {Promise<{ bytes: Uint8Array, fileKeyHex: string }>}
  */
-export async function getPathWithKey(session, logicalPath) {
-	const dir = await loadRootDir(session);
-	const name = normalizePath(logicalPath);
-	const child = dir.children?.[name];
-	if (!child) throw new Error(`path not found: ${logicalPath}`);
-	const ciphertext = await getBlock(session, child.hash);
-	if (!child.wrapped_key) throw new Error('missing wrapped_key on entry');
-	const bytes = await decryptWithKey(hexToBytes(child.wrapped_key), ciphertext);
-	return { bytes, fileKeyHex: child.wrapped_key };
+export async function getPathWithKey(session, logicalPath, signal) {
+	const dir = await loadRootDir(session, signal);
+	return getPathFromDir(session, dir, logicalPath, signal);
 }
 
 /**
@@ -188,6 +251,7 @@ export async function putPathWithKey(session, logicalPath, kind, plaintext, file
 	const dirHash = await sha256Hex(dirCt);
 	await putBlock(session, dirHash, dirCt);
 	await putTip(session, dirHash);
+	rememberRootDir(dir, dirHash, session);
 	return hash;
 }
 

@@ -1,6 +1,7 @@
 /** Project / Task / Note / Track helpers over the browser Drive client. */
 
-import { getPath, loadRootDir, putPath } from './client.js';
+import { parseAudioFilename, readAudioTags } from './audio-meta.js';
+import { getPath, getPathFromDir, loadRootDir, loadRootDirWithTip, putPath } from './client.js';
 import { putMediaBlob } from './media.js';
 
 function nowRfc3339() {
@@ -310,15 +311,57 @@ export function fromUiNote(ui) {
 	};
 }
 
+export { parseAudioFilename };
+
+const TRACK_CACHE_PREFIX = 'alpha.player.tracks:';
+const LIST_CONCURRENCY = 8;
+
 /**
- * Guess title/artist from a filename like "Artist - Title.mp3".
- * @param {string} filename
+ * @param {import('./client.js').DriveSession} session
  */
-export function parseAudioFilename(filename) {
-	const base = filename.replace(/\.[^.]+$/, '').trim() || 'Untitled';
-	const m = base.match(/^(.+?)\s*[-–—]\s*(.+)$/);
-	if (m) return { artists: [m[1].trim()], title: m[2].trim(), album: '' };
-	return { artists: ['Unknown'], title: base, album: '' };
+function trackCacheKey(session) {
+	return `${TRACK_CACHE_PREFIX}${session.url}`;
+}
+
+/**
+ * @param {any[]} out
+ */
+function sortTracks(out) {
+	out.sort((a, b) => {
+		const aa = String(a.artists?.[0] ?? '');
+		const ba = String(b.artists?.[0] ?? '');
+		if (aa !== ba) return aa.localeCompare(ba);
+		const al = String(a.album ?? '');
+		const bl = String(b.album ?? '');
+		if (al !== bl) return al.localeCompare(bl);
+		return String(a.title).localeCompare(String(b.title));
+	});
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any[]} tracks
+ * @param {string} tip
+ */
+function writeTrackCache(session, tracks, tip) {
+	try {
+		sessionStorage.setItem(trackCacheKey(session), JSON.stringify({ tip, tracks }));
+	} catch {
+		/* quota / private mode */
+	}
+}
+
+/**
+ * Invalidate tip-keyed library cache after upload.
+ * @param {import('./client.js').DriveSession} session
+ */
+export function invalidateTrackCache(session) {
+	try {
+		sessionStorage.removeItem(trackCacheKey(session));
+	} catch {
+		/* ignore */
+	}
 }
 
 /**
@@ -329,7 +372,7 @@ export function parseAudioFilename(filename) {
  */
 export async function uploadTrack(session, file, opts = {}) {
 	const id = newId();
-	const meta = parseAudioFilename(file.name);
+	const meta = await readAudioTags(file);
 	const contentType = file.type || 'audio/mpeg';
 	const bytes = new Uint8Array(await file.arrayBuffer());
 	const mediaPath = `media/audio/tracks/${id}/media.json`;
@@ -357,6 +400,7 @@ export async function uploadTrack(session, file, opts = {}) {
 	};
 	opts.onProgress?.('index', 1, 1);
 	await putPath(session, trackPath, 'track', JSON.stringify(track, null, 2));
+	invalidateTrackCache(session);
 	return track;
 }
 
@@ -364,32 +408,80 @@ export async function uploadTrack(session, file, opts = {}) {
  * @param {import('./client.js').DriveSession} session
  */
 export async function listTracks(session) {
-	const dir = await loadRootDir(session);
+	const { tip, dir } = await loadRootDirWithTip(session);
+
+	try {
+		const raw = sessionStorage.getItem(trackCacheKey(session));
+		if (raw) {
+			const cached = JSON.parse(raw);
+			if (cached?.tip === tip && Array.isArray(cached.tracks)) {
+				return cached.tracks;
+			}
+		}
+	} catch {
+		/* ignore */
+	}
+
+	const paths = Object.entries(dir.children ?? {})
+		.filter(([path, child]) => child.kind === 'track' || path.endsWith('/track.json'))
+		.map(([path]) => path);
+
+	/** @type {(any | null)[]} */
+	const slots = new Array(paths.length).fill(null);
+	let next = 0;
+	const workers = Array.from(
+		{ length: Math.min(LIST_CONCURRENCY, Math.max(paths.length, 1)) },
+		async () => {
+			while (next < paths.length) {
+				const i = next++;
+				const path = paths[i];
+				try {
+					const { bytes } = await getPathFromDir(session, dir, path);
+					const t = JSON.parse(new TextDecoder().decode(bytes));
+					t.schema = 'alpha.track/1';
+					t.artists = Array.isArray(t.artists) && t.artists.length ? t.artists : ['Unknown'];
+					t.album = t.album ?? '';
+					slots[i] = t;
+				} catch {
+					/* skip broken entry */
+				}
+			}
+		}
+	);
+	await Promise.all(workers);
+
+	const out = sortTracks(slots.filter(Boolean));
+	writeTrackCache(session, out, tip);
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listPlaylists(session) {
+	const { dir } = await loadRootDirWithTip(session);
+	const paths = Object.entries(dir.children ?? {})
+		.filter(
+			([path, child]) => child.kind === 'playlist' || path.endsWith('/playlist.json')
+		)
+		.map(([path]) => path);
+
 	/** @type {any[]} */
 	const out = [];
-	for (const [path, child] of Object.entries(dir.children ?? {})) {
-		if (child.kind === 'track' || path.endsWith('/track.json')) {
+	await Promise.all(
+		paths.map(async (path) => {
 			try {
-				const bytes = await getPath(session, path);
-				const t = JSON.parse(new TextDecoder().decode(bytes));
-				t.schema = 'alpha.track/1';
-				t.artists = Array.isArray(t.artists) && t.artists.length ? t.artists : ['Unknown'];
-				t.album = t.album ?? '';
-				out.push(t);
+				const { bytes } = await getPathFromDir(session, dir, path);
+				const p = JSON.parse(new TextDecoder().decode(bytes));
+				p.schema = 'alpha.playlist/1';
+				p.items = Array.isArray(p.items) ? p.items : [];
+				out.push(p);
 			} catch {
 				/* skip */
 			}
-		}
-	}
-	out.sort((a, b) => {
-		const aa = String(a.artists?.[0] ?? '');
-		const ba = String(b.artists?.[0] ?? '');
-		if (aa !== ba) return aa.localeCompare(ba);
-		const al = String(a.album ?? '');
-		const bl = String(b.album ?? '');
-		if (al !== bl) return al.localeCompare(bl);
-		return String(a.title).localeCompare(String(b.title));
-	});
+		})
+	);
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
 	return out;
 }
 

@@ -22,7 +22,8 @@
 	 * Drive/Mail/Chat keep native shapes — stroke looks equal across viewBoxes.
 	 */
 	--icon-stroke: 1.4;
-	--task-box-stroke: 1.4;
+	/* Must include unit — used in CSS border shorthand (unitless is invalid). */
+	--task-box-stroke: 1.4px;
 	--task-check-stroke: calc(var(--task-box-stroke) * 1.35);
 	--font-display: 'Ovo', 'Times New Roman', Georgia, serif;
 	/*

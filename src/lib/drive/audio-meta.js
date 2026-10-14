@@ -1,0 +1,238 @@
+/**
+ * Lightweight tag readers for Player upload (ID3v2 + iTunes/MP4 atoms).
+ * Falls back to filename heuristics when tags are missing/stripped.
+ */
+
+/**
+ * @param {string} filename
+ */
+export function parseAudioFilename(filename) {
+	const base = filename.replace(/\.[^.]+$/, '').trim() || 'Untitled';
+	const m = base.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+	if (m) return { artists: [m[1].trim()], title: m[2].trim(), album: '' };
+	return { artists: ['Unknown'], title: base, album: '' };
+}
+
+/**
+ * @param {File} file
+ * @returns {Promise<{ title: string, artists: string[], album: string }>}
+ */
+export async function readAudioTags(file) {
+	const fromName = parseAudioFilename(file.name);
+	try {
+		const head = new Uint8Array(await file.slice(0, Math.min(file.size, 2 * 1024 * 1024)).arrayBuffer());
+		const tagged = readId3v2(head) || readMp4Tags(head);
+		if (!tagged) return fromName;
+		return {
+			title: tagged.title || fromName.title,
+			artists:
+				tagged.artists?.length && tagged.artists[0] !== 'Unknown'
+					? tagged.artists
+					: fromName.artists,
+			album: tagged.album || fromName.album
+		};
+	} catch {
+		return fromName;
+	}
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @returns {{ title?: string, artists?: string[], album?: string } | null}
+ */
+function readId3v2(bytes) {
+	if (bytes.length < 10) return null;
+	if (bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return null; // ID3
+	const ver = bytes[3];
+	if (ver < 2 || ver > 4) return null;
+	const tagSize = synchsafe32(bytes, 6);
+	const end = Math.min(bytes.length, 10 + tagSize);
+	/** @type {Record<string, string>} */
+	const frames = {};
+	let off = 10;
+	// skip extended header if present (v3/v4)
+	if (bytes[5] & 0x40) {
+		if (ver >= 4) {
+			const size = synchsafe32(bytes, off);
+			off += size;
+		} else {
+			const size = u32(bytes, off);
+			off += 4 + size;
+		}
+	}
+	while (off + 10 <= end) {
+		let id;
+		let size;
+		let header = 10;
+		if (ver === 2) {
+			id = ascii(bytes, off, 3);
+			size = (bytes[off + 3] << 16) | (bytes[off + 4] << 8) | bytes[off + 5];
+			header = 6;
+			if (!/^[A-Z0-9]{3}$/.test(id) || size <= 0) break;
+		} else {
+			id = ascii(bytes, off, 4);
+			size = ver === 4 ? synchsafe32(bytes, off + 4) : u32(bytes, off + 4);
+			header = 10;
+			if (!/^[A-Z0-9]{4}$/.test(id) || size <= 0) break;
+		}
+		const dataStart = off + header;
+		const dataEnd = dataStart + size;
+		if (dataEnd > end) break;
+		const text = decodeId3Text(bytes.subarray(dataStart, dataEnd), ver);
+		if (text) frames[id] = text;
+		off = dataEnd;
+	}
+
+	const title = frames.TIT2 || frames.TT2;
+	const artist = frames.TPE1 || frames.TP1 || frames.TPE2 || frames.TP2;
+	const album = frames.TALB || frames.TAL;
+	if (!title && !artist && !album) return null;
+	return {
+		title: title || undefined,
+		artists: artist ? splitArtists(artist) : undefined,
+		album: album || undefined
+	};
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} ver
+ */
+function decodeId3Text(bytes, _ver) {
+	if (!bytes.length) return '';
+	const encoding = bytes[0];
+	const raw = bytes.subarray(1);
+	if (encoding === 1 || encoding === 2) {
+		const dec = new TextDecoder(encoding === 2 ? 'utf-16be' : 'utf-16');
+		return cleanText(dec.decode(raw));
+	}
+	if (encoding === 3) return cleanText(new TextDecoder('utf-8').decode(raw));
+	return cleanText(new TextDecoder('latin1').decode(raw));
+}
+
+/**
+ * Best-effort MP4/M4A iTunes tags from a prefix of the file.
+ * @param {Uint8Array} bytes
+ */
+function readMp4Tags(bytes) {
+	const atoms = findAtomPath(bytes, ['moov', 'udta', 'meta', 'ilst']);
+	if (!atoms) return null;
+	const ilst = atoms;
+	/** @type {Record<string, string>} */
+	const tags = {};
+	let off = 0;
+	while (off + 8 <= ilst.length) {
+		const size = u32(ilst, off);
+		if (size < 8 || off + size > ilst.length) break;
+		const typ = ascii(ilst, off + 4, 4);
+		const payload = ilst.subarray(off + 8, off + size);
+		const text = readMp4DataAtom(payload);
+		if (text) tags[typ] = text;
+		off += size;
+	}
+	const title = tags['©nam'] || tags.name;
+	const artist = tags['©ART'] || tags.aART || tags['©art'];
+	const album = tags['©alb'];
+	if (!title && !artist && !album) return null;
+	return {
+		title: title || undefined,
+		artists: artist ? splitArtists(artist) : undefined,
+		album: album || undefined
+	};
+}
+
+/**
+ * Walk nested atoms; for `meta`, skip 4-byte version/flags after header.
+ * @param {Uint8Array} bytes
+ * @param {string[]} path
+ */
+function findAtomPath(bytes, path) {
+	let cur = bytes;
+	for (let i = 0; i < path.length; i++) {
+		const name = path[i];
+		const found = findAtom(cur, name);
+		if (!found) return null;
+		// meta has version/flags
+		cur = name === 'meta' ? found.subarray(4) : found;
+	}
+	return cur;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {string} type
+ */
+function findAtom(bytes, type) {
+	let off = 0;
+	while (off + 8 <= bytes.length) {
+		let size = u32(bytes, off);
+		const typ = ascii(bytes, off + 4, 4);
+		let header = 8;
+		if (size === 1 && off + 16 <= bytes.length) {
+			// 64-bit size — treat as too large for our prefix slice
+			return null;
+		}
+		if (size === 0) size = bytes.length - off;
+		if (size < 8 || off + size > bytes.length) break;
+		if (typ === type) return bytes.subarray(off + header, off + size);
+		off += size;
+	}
+	return null;
+}
+
+/**
+ * @param {Uint8Array} payload
+ */
+function readMp4DataAtom(payload) {
+	const data = findAtom(payload, 'data');
+	if (!data || data.length < 8) return null;
+	// type indicator (4) + locale (4) + value
+	const type = u32(data, 0);
+	const value = data.subarray(8);
+	if (type === 1 || type === 0) return cleanText(new TextDecoder('utf-8').decode(value));
+	return null;
+}
+
+/**
+ * @param {string} s
+ */
+function splitArtists(s) {
+	return s
+		.split(/\s*(?:\/|,|&|;|\band\b)\s*/i)
+		.map((x) => x.trim())
+		.filter(Boolean);
+}
+
+/**
+ * @param {string} s
+ */
+function cleanText(s) {
+	return s.replace(/\0+/g, '').trim();
+}
+
+/**
+ * @param {Uint8Array} b
+ * @param {number} o
+ */
+function u32(b, o) {
+	return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+}
+
+/**
+ * @param {Uint8Array} b
+ * @param {number} o
+ */
+function synchsafe32(b, o) {
+	return ((b[o] & 0x7f) << 21) | ((b[o + 1] & 0x7f) << 14) | ((b[o + 2] & 0x7f) << 7) | (b[o + 3] & 0x7f);
+}
+
+/**
+ * @param {Uint8Array} b
+ * @param {number} o
+ * @param {number} n
+ */
+function ascii(b, o, n) {
+	let s = '';
+	for (let i = 0; i < n; i++) s += String.fromCharCode(b[o + i]);
+	return s;
+}
