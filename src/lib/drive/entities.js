@@ -1,4 +1,4 @@
-/** Project / Task helpers over the browser Drive client. */
+/** Project / Task / Note helpers over the browser Drive client. */
 
 import { getPath, loadRootDir, putPath } from './client.js';
 
@@ -201,6 +201,112 @@ export async function listTasks(session, projectId) {
 	}
 	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
 	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {{ title: string, body?: string, project_ids?: string[], labels?: string[] }} input
+ */
+export async function createNote(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const note = {
+		schema: 'alpha.note/1',
+		id,
+		project_ids: input.project_ids ?? [],
+		title: input.title,
+		body: input.body ?? '',
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(session, `notes/${id}/note.json`, 'note', JSON.stringify(note, null, 2));
+	return note;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} note
+ */
+export async function putNote(session, note) {
+	const n = {
+		schema: 'alpha.note/1',
+		id: note.id,
+		project_ids: Array.isArray(note.project_ids) ? note.project_ids : [],
+		title: note.title,
+		body: note.body ?? '',
+		labels: Array.isArray(note.labels) ? note.labels : [],
+		created_at: note.created_at ?? nowRfc3339(),
+		updated_at: nowRfc3339()
+	};
+	await putPath(session, `notes/${n.id}/note.json`, 'note', JSON.stringify(n, null, 2));
+	return n;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} [projectId]
+ */
+export async function listNotes(session, projectId) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'note' || path.endsWith('/note.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				const n = JSON.parse(new TextDecoder().decode(bytes));
+				n.schema = 'alpha.note/1';
+				n.project_ids = Array.isArray(n.project_ids) ? n.project_ids : [];
+				n.labels = Array.isArray(n.labels) ? n.labels : [];
+				n.body = n.body ?? '';
+				if (!projectId || n.project_ids.includes(projectId)) out.push(n);
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return out;
+}
+
+/**
+ * Map Drive note → Admin UI row.
+ * @param {any} n
+ * @param {any[]} projectList
+ */
+export function toUiNote(n, projectList) {
+	const byId = new Map(projectList.map((p) => [p.id, p]));
+	const createdMs = n.created_at ? Date.parse(n.created_at) : 0;
+	return {
+		id: n.id,
+		title: n.title,
+		body: n.body ?? '',
+		labels: n.labels ?? [],
+		targets: (n.project_ids ?? []).map((id) => ({
+			id,
+			label: byId.get(id)?.title ?? id
+		})),
+		project_ids: n.project_ids ?? [],
+		createdAt: Number.isFinite(createdMs) ? createdMs : 0,
+		_drive: n
+	};
+}
+
+/**
+ * @param {any} ui
+ */
+export function fromUiNote(ui) {
+	return {
+		schema: 'alpha.note/1',
+		id: ui.id,
+		project_ids: ui.project_ids ?? (ui.targets ?? []).map((t) => t.id),
+		title: ui.title,
+		body: ui.body ?? '',
+		labels: ui.labels ?? [],
+		created_at: ui._drive?.created_at ?? nowRfc3339(),
+		updated_at: nowRfc3339()
+	};
 }
 
 /**

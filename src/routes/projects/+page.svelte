@@ -98,6 +98,6 @@
 	.meta {
 		font-size: 11px;
 		color: var(--white33);
-		font-family: ui-monospace, monospace;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 	}
 </style>

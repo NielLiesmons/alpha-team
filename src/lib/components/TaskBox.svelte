@@ -98,7 +98,7 @@
 	}
 
 	.state-open {
-		background: var(--black33);
+		background: var(--white8);
 		border: var(--task-box-stroke) solid var(--white33);
 	}
 
@@ -108,12 +108,12 @@
 	}
 
 	.state-inProgress {
-		background: var(--black33);
+		background: color-mix(in srgb, var(--accent-progress) 20%, var(--black));
 		border: var(--task-box-stroke) solid var(--accent-progress-66);
 	}
 
 	.state-inReview {
-		background: var(--black33);
+		background: color-mix(in srgb, var(--accent-success) 20%, var(--black));
 		border: var(--task-box-stroke) solid var(--accent-success-66);
 	}
 

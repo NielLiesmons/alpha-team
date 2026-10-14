@@ -157,26 +157,30 @@
 					<button type="button" class="nav-item" onclick={() => go(item.href)}>
 						<span class="icon-wrap"><NavIcon name={item.icon} size={18} /></span>
 						<span class="nav-label">{item.label}</span>
-						{#if count != null}
-							<span class="count" style="font-family: Inter, system-ui, sans-serif">{count}</span>
-						{/if}
 					</button>
-					{#if item.createKind}
-						<button
-							type="button"
-							class="row-plus"
-							aria-label="New {item.createKind}"
-							onclick={() => openComposer(/** @type {'task' | 'project' | 'note'} */ (item.createKind))}
-						>
-							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-								<path
-									d="M6 1.5v9M1.5 6h9"
-									stroke="currentColor"
-									stroke-width="1.6"
-									stroke-linecap="round"
-								/>
-							</svg>
-						</button>
+					{#if item.createKind || count != null}
+						<span class="row-end">
+							{#if count != null}
+								<span class="count">{count}</span>
+							{/if}
+							{#if item.createKind}
+								<button
+									type="button"
+									class="row-plus"
+									aria-label="New {item.createKind}"
+									onclick={() => openComposer(/** @type {'task' | 'project' | 'note'} */ (item.createKind))}
+								>
+									<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+										<path
+											d="M6 1.5v9M1.5 6h9"
+											stroke="currentColor"
+											stroke-width="1.6"
+											stroke-linecap="round"
+										/>
+									</svg>
+								</button>
+							{/if}
+						</span>
 					{/if}
 				</div>
 			{/each}
@@ -323,7 +327,7 @@
 	.sidebar {
 		width: var(--side);
 		flex-shrink: 0;
-		padding: 20px 16px 12px;
+		padding: 17px 16px 12px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
@@ -514,8 +518,9 @@
 		cursor: pointer;
 	}
 
-	.nav-row.creatable .nav-item {
-		padding-right: 8px;
+	.nav-row.creatable .nav-item,
+	.nav-row:has(.row-end) .nav-item {
+		padding-right: 36px;
 	}
 
 	.icon-wrap {
@@ -536,35 +541,49 @@
 		white-space: nowrap;
 	}
 
-	.count {
-		flex-shrink: 0;
-		min-width: 1.25rem;
-		padding: 0 2px;
-		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-		font-size: 12px;
-		font-weight: 600;
-		font-style: normal;
-		line-height: 1.2;
-		letter-spacing: 0;
-		color: var(--accent-66);
-		text-align: right;
-		font-variant-numeric: tabular-nums;
-		font-feature-settings: 'tnum' 1;
-		font-synthesis: none;
-		transition:
-			opacity 0.22s var(--ease),
-			transform 0.22s var(--ease),
-			color 0.15s ease;
-	}
-
-	.nav-row.active .count {
-		color: var(--accent);
-	}
-
-	.row-plus {
+	.row-end {
 		position: absolute;
 		right: 6px;
 		top: 50%;
+		width: 24px;
+		height: 24px;
+		transform: translateY(-50%);
+		display: grid;
+		place-items: center;
+		pointer-events: none;
+	}
+
+	.count,
+	.row-plus {
+		grid-area: 1 / 1;
+	}
+
+	.count {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		margin: 0;
+		padding: 0;
+		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+		font-size: 12px;
+		font-weight: 500;
+		font-style: normal;
+		line-height: 1;
+		letter-spacing: 0;
+		color: var(--white33);
+		text-align: center;
+		font-synthesis: none;
+		font-variant-numeric: normal;
+		font-feature-settings: normal;
+		transition: opacity 0.22s var(--ease);
+	}
+
+	.nav-row.active .count {
+		color: var(--white66);
+	}
+
+	.row-plus {
 		width: 24px;
 		height: 24px;
 		display: grid;
@@ -577,12 +596,10 @@
 		cursor: pointer;
 		flex-shrink: 0;
 		opacity: 0;
-		transform: translate(10px, -50%);
 		pointer-events: none;
 		box-sizing: border-box;
 		transition:
 			opacity 0.22s var(--ease),
-			transform 0.22s var(--ease),
 			color 0.15s ease,
 			background 0.15s ease;
 	}
@@ -590,13 +607,11 @@
 	.nav-row.creatable:hover .count,
 	.nav-row.creatable:focus-within .count {
 		opacity: 0;
-		transform: translateX(-6px);
 	}
 
 	.nav-row.creatable:hover .row-plus,
 	.nav-row.creatable:focus-within .row-plus {
 		opacity: 1;
-		transform: translate(0, -50%);
 		pointer-events: auto;
 	}
 

@@ -1,4 +1,5 @@
 <script>
+	import { notePlainText } from '$lib/note-text.js';
 	import { notes, selectEntity, ui } from '$lib/workspace.svelte.js';
 </script>
 
@@ -16,7 +17,7 @@
 				onclick={() => selectEntity('note', note.id)}
 			>
 				<span class="title">{note.title}</span>
-				<span class="preview">{note.body.replace(/\s+/g, ' ').trim().slice(0, 120)}</span>
+				<span class="preview">{notePlainText(note.body).slice(0, 140)}</span>
 			</button>
 		{/each}
 	{/if}
@@ -38,8 +39,8 @@
 	.row {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
-		gap: 0.25rem;
+		align-items: stretch;
+		gap: 0.2rem;
 		width: 100%;
 		padding: 0.9rem 1rem;
 		border: 0;
@@ -58,19 +59,32 @@
 		background: var(--white8);
 	}
 
+	.title,
+	.preview {
+		display: block;
+		width: 100%;
+		margin: 0;
+		padding: 0;
+		text-align: left;
+	}
+
 	.title {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 15px;
 		font-weight: 600;
 		color: var(--white);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.preview {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		line-height: 1.4;
 		color: var(--white33);
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
 		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 </style>

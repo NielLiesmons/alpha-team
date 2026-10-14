@@ -4,6 +4,7 @@
 	import StatusBox from './StatusBox.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
 	import LabelStack from './LabelStack.svelte';
+	import NoteEditor from './NoteEditor.svelte';
 	import {
 		clearSelection,
 		notes,
@@ -188,7 +189,9 @@
 			<div class="mobile-title-row">
 				<h2 class="title">{note.title}</h2>
 			</div>
-			<pre class="note-body">{note.body}</pre>
+			{#key note.id}
+				<NoteEditor value={note.body ?? ''} editable={false} />
+			{/key}
 		</div>
 	{:else}
 		<div class="empty desktop-empty">

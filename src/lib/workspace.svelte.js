@@ -1,16 +1,21 @@
 /**
- * Workspace state. When Drive is connected, Tasks/Projects load from ciphertext.
+ * Workspace state. When Drive is connected, Tasks/Projects/Notes load from ciphertext.
  * Otherwise sample fixtures (demo).
  */
 
 import {
+	createNote as driveCreateNote,
 	createProject as driveCreateProject,
 	createTask as driveCreateTask,
 	ensureSpace,
+	fromUiNote,
 	fromUiTask,
+	listNotes,
 	listProjects,
 	listTasks,
+	putNote,
 	putTask,
+	toUiNote,
 	toUiTask
 } from './drive/entities.js';
 import { activeSession, driveSession, loadSessionFromStorage } from './drive/session.svelte.js';
@@ -109,23 +114,33 @@ const demoProjects = [
 	}
 ];
 
-/** @type {any[]} */
-export const tasks = $state([...demoTasks]);
-/** @type {any[]} */
-export const projects = $state([...demoProjects]);
-
-export const notes = $state([
+const demoNotes = [
 	{
 		id: 'n1',
 		title: 'Drop-off planning',
-		body: `## This week\n\n- Wednesday: Guingamp\n- Thursday: Saint-Brieuc\n- Saturday: at the farm, by appointment\n`
+		body: `## This week\n\n- Wednesday: Guingamp\n- Thursday: Saint-Brieuc\n- Saturday: at the farm, by appointment\n`,
+		labels: [],
+		targets: [{ id: 'p1', label: 'Spring CSA' }],
+		project_ids: ['p1'],
+		createdAt: 2
 	},
 	{
 		id: 'n2',
 		title: 'Pasture notes',
-		body: `Hens follow the sheep.\n\nThe logs for mushrooms stay on the north edge.\n`
+		body: `Hens follow the sheep.\n\nThe logs for mushrooms stay on the north edge.\n`,
+		labels: [],
+		targets: [{ id: 'p2', label: 'Egg mobile' }],
+		project_ids: ['p2'],
+		createdAt: 1
 	}
-]);
+];
+
+/** @type {any[]} */
+export const tasks = $state([...demoTasks]);
+/** @type {any[]} */
+export const projects = $state([...demoProjects]);
+/** @type {any[]} */
+export const notes = $state([...demoNotes]);
 
 export const ui = $state({
 	/** @type {string | null} */
@@ -178,6 +193,7 @@ export async function refreshFromDrive() {
 	if (!session) {
 		replaceArray(tasks, demoTasks);
 		replaceArray(projects, demoProjects);
+		replaceArray(notes, demoNotes);
 		ui.source = 'demo';
 		return;
 	}
@@ -185,7 +201,11 @@ export async function refreshFromDrive() {
 	driveSession.error = null;
 	try {
 		await ensureSpace(session, 'Bley Family');
-		const [plist, tlist] = await Promise.all([listProjects(session), listTasks(session)]);
+		const [plist, tlist, nlist] = await Promise.all([
+			listProjects(session),
+			listTasks(session),
+			listNotes(session)
+		]);
 		replaceArray(
 			projects,
 			plist.map((p) => ({
@@ -201,6 +221,10 @@ export async function refreshFromDrive() {
 		replaceArray(
 			tasks,
 			tlist.map((t) => toUiTask(t, plist))
+		);
+		replaceArray(
+			notes,
+			nlist.map((n) => toUiNote(n, plist))
 		);
 		ui.source = 'drive';
 	} catch (e) {
@@ -256,6 +280,60 @@ export async function saveTask(draft, isNew) {
 		const uiTask = toUiTask(saved, plist);
 		if (idx >= 0) Object.assign(tasks[idx], uiTask);
 		else tasks.unshift(uiTask);
+	}
+}
+
+/**
+ * Persist a new or edited note. Drive when connected; otherwise local only.
+ * @param {any} draft
+ * @param {boolean} isNew
+ */
+export async function saveNote(draft, isNew) {
+	const session = activeSession();
+	if (!session) {
+		if (isNew) {
+			const id = draft.id || crypto.randomUUID();
+			notes.unshift({
+				...draft,
+				id,
+				createdAt: Date.now(),
+				targets: draft.targets ?? [],
+				project_ids: draft.project_ids ?? [],
+				labels: draft.labels ?? []
+			});
+			ui.noteId = id;
+			ui.selection = { kind: 'note', id };
+		} else {
+			const idx = notes.findIndex((n) => n.id === draft.id);
+			if (idx >= 0) Object.assign(notes[idx], draft);
+			ui.noteId = draft.id;
+			ui.selection = { kind: 'note', id: draft.id };
+		}
+		return;
+	}
+
+	if (isNew) {
+		const created = await driveCreateNote(session, {
+			title: draft.title,
+			body: draft.body,
+			labels: draft.labels,
+			project_ids: draft.project_ids ?? []
+		});
+		const plist = projects.map((p) => p._drive ?? p);
+		const uiNote = toUiNote(created, plist);
+		notes.unshift(uiNote);
+		ui.noteId = uiNote.id;
+		ui.selection = { kind: 'note', id: uiNote.id };
+	} else {
+		const entity = fromUiNote(draft);
+		const saved = await putNote(session, entity);
+		const idx = notes.findIndex((n) => n.id === saved.id);
+		const plist = projects.map((p) => p._drive ?? p);
+		const uiNote = toUiNote(saved, plist);
+		if (idx >= 0) Object.assign(notes[idx], uiNote);
+		else notes.unshift(uiNote);
+		ui.noteId = uiNote.id;
+		ui.selection = { kind: 'note', id: uiNote.id };
 	}
 }
 
