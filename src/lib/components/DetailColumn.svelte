@@ -582,8 +582,8 @@
 	}
 
 	.note-editor-pad {
-		/* Tight under meta pills — match task .prose horizontal inset */
-		padding: 0 16px 16px;
+		/* Match task .prose — 4px under meta pills */
+		padding: 4px 16px 16px;
 		flex: 1;
 		min-height: 0;
 	}
@@ -685,7 +685,7 @@
 	.prose,
 	.summary {
 		margin: 0;
-		padding-top: 0;
+		padding-top: 4px;
 		padding-bottom: 8px;
 		font-size: 15px;
 		line-height: 1.55;

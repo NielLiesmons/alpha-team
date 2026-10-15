@@ -348,7 +348,7 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 8px;
-		padding: 0 16px 6px;
+		padding: 0 16px 10px;
 		box-sizing: border-box;
 	}
 
