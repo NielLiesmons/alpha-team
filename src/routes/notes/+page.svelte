@@ -1,6 +1,20 @@
 <script>
 	import { notePlainText } from '$lib/note-text.js';
 	import { notes, selectEntity, ui } from '$lib/workspace.svelte.js';
+
+	/** @param {number | undefined} ts */
+	function formatNoteTime(ts) {
+		if (!ts) return '';
+		const d = new Date(ts);
+		if (Number.isNaN(d.getTime())) return '';
+		const now = new Date();
+		const sameYear = d.getFullYear() === now.getFullYear();
+		return d.toLocaleDateString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			...(sameYear ? {} : { year: 'numeric' })
+		});
+	}
 </script>
 
 <svelte:head><title>Notes</title></svelte:head>
@@ -17,7 +31,12 @@
 					class:on={ui.selection?.kind === 'note' && ui.selection.id === note.id}
 					onclick={() => selectEntity('note', note.id)}
 				>
-					<span class="title">{note.title}</span>
+					<span class="title-row">
+						<span class="title">{note.title}</span>
+						{#if note.createdAt}
+							<span class="time">{formatNoteTime(note.createdAt)}</span>
+						{/if}
+					</span>
 					<span class="preview">{notePlainText(note.body).slice(0, 140)}</span>
 				</button>
 			{/each}
@@ -53,7 +72,7 @@
 		align-items: stretch;
 		gap: 0.2rem;
 		width: 100%;
-		padding: 0.85rem 0.9rem;
+		padding: calc(0.85rem - 4px) 0.9rem;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -71,16 +90,26 @@
 		background: var(--selection);
 	}
 
+	.title-row {
+		display: flex;
+		flex-direction: row;
+		align-items: baseline;
+		gap: 8px;
+		width: 100%;
+		min-width: 0;
+	}
+
 	.title,
 	.preview {
 		display: block;
-		width: 100%;
 		margin: 0;
 		padding: 0;
 		text-align: left;
 	}
 
 	.title {
+		flex: 1;
+		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 15px;
 		font-weight: 600;
@@ -90,7 +119,18 @@
 		white-space: nowrap;
 	}
 
+	.time {
+		flex-shrink: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--fg-33);
+		letter-spacing: 0.01em;
+		white-space: nowrap;
+	}
+
 	.preview {
+		width: 100%;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		line-height: 1.4;

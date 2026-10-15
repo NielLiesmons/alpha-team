@@ -1,12 +1,11 @@
 <script>
 	import { page } from '$app/stores';
-	import TaskBox from './TaskBox.svelte';
-	import PriorityBox from './PriorityBox.svelte';
 	import StatusBox from './StatusBox.svelte';
-	import ProfilePicStack from './ProfilePicStack.svelte';
-	import LabelStack from './LabelStack.svelte';
+	import ProfilePic from './ProfilePic.svelte';
+	import LabelPill from './LabelPill.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import PlayerDetail from './PlayerDetail.svelte';
+	import TaskFieldPicker from './TaskFieldPicker.svelte';
 	import {
 		closePlayerDetail,
 		playerBrowse,
@@ -21,6 +20,7 @@
 		notes,
 		openComposer,
 		projects,
+		saveNote,
 		tasks,
 		ui
 	} from '$lib/workspace.svelte.js';
@@ -55,6 +55,12 @@
 		selection?.kind === 'note' ? notes.find((n) => n.id === selection.id) : null
 	);
 
+	const detailAuthor = $derived.by(() => {
+		if (task?.author?.name) return task.author;
+		if (note) return note.author?.name ? note.author : { name: 'You', pubkey: 'local' };
+		return null;
+	});
+
 	const typeLabel = $derived.by(() => {
 		if (isPlayer) return 'Player';
 		if (task) return 'Task';
@@ -81,16 +87,68 @@
 
 	let menuOpen = $state(false);
 
+	/** Inline note editor state */
+	let noteDraftId = $state(/** @type {string | null} */ (null));
+	let noteTitle = $state('');
+	let noteBody = $state('');
+	/** @type {ReturnType<typeof setTimeout> | undefined} */
+	let noteSaveTimer;
+	let noteSaving = $state(false);
+
+	$effect(() => {
+		const id = note?.id ?? null;
+		if (!id || !note) {
+			noteDraftId = null;
+			return;
+		}
+		if (noteDraftId === id) return;
+		noteDraftId = id;
+		noteTitle = note.title ?? '';
+		noteBody = note.body ?? '';
+	});
+
+	function scheduleNoteSave() {
+		if (!note) return;
+		clearTimeout(noteSaveTimer);
+		noteSaveTimer = setTimeout(() => {
+			void persistNote();
+		}, 450);
+	}
+
+	async function persistNote() {
+		if (!note) return;
+		const title = noteTitle.trim() || 'Untitled';
+		if (title === (note.title ?? '') && noteBody === (note.body ?? '')) return;
+		noteSaving = true;
+		try {
+			await saveNote({ ...note, title, body: noteBody }, false);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : String(err));
+		} finally {
+			noteSaving = false;
+		}
+	}
+
+	/** @param {string} html */
+	function onNoteBodyChange(html) {
+		noteBody = html;
+		scheduleNoteSave();
+	}
+
 	function editCurrent() {
 		menuOpen = false;
 		if (!selection) return;
-		if (selection.kind === 'task' || selection.kind === 'project' || selection.kind === 'note') {
+		if (selection.kind === 'task' || selection.kind === 'project') {
 			openComposer(selection.kind, selection.id);
 		}
 	}
 
 	function close() {
 		menuOpen = false;
+		if (note) {
+			clearTimeout(noteSaveTimer);
+			void persistNote();
+		}
 		clearSelection();
 	}
 </script>
@@ -114,7 +172,14 @@
 					/>
 				</svg>
 			</button>
-			<span class="type-label">{typeLabel}</span>
+			{#if detailAuthor}
+				<div class="author-chip center">
+					<ProfilePic name={detailAuthor.name} size={22} />
+					<span class="author-name">{detailAuthor.name}</span>
+				</div>
+			{:else}
+				<span class="type-label">{typeLabel}</span>
+			{/if}
 			{#if !isPlayer}
 				<div class="menu-wrap">
 					<button
@@ -134,7 +199,9 @@
 						<button type="button" class="menu-scrim" aria-label="Close menu" onclick={() => (menuOpen = false)}
 						></button>
 						<div class="more-menu" role="menu">
-							<button type="button" role="menuitem" onclick={editCurrent}>Edit</button>
+							{#if task || project}
+								<button type="button" role="menuitem" onclick={editCurrent}>Edit</button>
+							{/if}
 							<button type="button" role="menuitem" onclick={close}>Close</button>
 						</div>
 					{/if}
@@ -201,7 +268,14 @@
 		</div>
 	{:else if task}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Task</span>
+			{#if detailAuthor}
+				<div class="author-chip">
+					<ProfilePic name={detailAuthor.name} size={22} />
+					<span class="author-name">{detailAuthor.name}</span>
+				</div>
+			{:else}
+				<span class="detail-top-label">Task</span>
+			{/if}
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -228,36 +302,46 @@
 		</header>
 		<div class="body">
 			<div class="title-row">
-				<TaskBox state={task.status} size={22} />
 				<h2 class="title">{task.title}</h2>
-				<PriorityBox priority={task.priority} size={20} />
+			</div>
+			<div class="meta-row" role="list">
+				<div class="meta-item" role="listitem">
+					<TaskFieldPicker
+						taskId={task.id}
+						field="status"
+						value={task.status}
+						size={18}
+						variant="pill"
+					/>
+				</div>
+				<div class="meta-item" role="listitem">
+					<TaskFieldPicker
+						taskId={task.id}
+						field="priority"
+						value={task.priority}
+						size={18}
+						variant="pill"
+					/>
+				</div>
+				{#each task.assignees ?? [] as person (person.pubkey ?? person.name)}
+					<div class="meta-pill person" role="listitem">
+						<ProfilePic name={person.name ?? ''} size={18} />
+						<span>{person.name}</span>
+					</div>
+				{/each}
+				{#each task.targets ?? [] as target (target.id)}
+					<span class="meta-pill" role="listitem">{target.label}</span>
+				{/each}
+				{#each task.labels ?? [] as labelText (labelText)}
+					<span class="meta-label" role="listitem">
+						<LabelPill text={labelText} size="small" />
+					</span>
+				{/each}
 			</div>
 			{#if task.body}
 				<p class="prose">{task.body}</p>
 			{:else}
 				<p class="muted">No description.</p>
-			{/if}
-			{#if task.labels?.length}
-				<div class="block">
-					<span class="label">Labels</span>
-					<LabelStack labels={task.labels} />
-				</div>
-			{/if}
-			{#if task.assignees?.length || task.author}
-				<div class="block">
-					<span class="label">People</span>
-					<ProfilePicStack
-						profiles={[task.author, ...(task.assignees ?? [])].filter(Boolean)}
-						text=""
-						size="sm"
-					/>
-				</div>
-			{/if}
-			{#if task.targets?.length}
-				<div class="block">
-					<span class="label">Projects</span>
-					<p class="prose">{task.targets.map((t) => t.label).join(', ')}</p>
-				</div>
 			{/if}
 		</div>
 	{:else if project}
@@ -303,19 +387,18 @@
 		</div>
 	{:else if note}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Note</span>
+			{#if detailAuthor}
+				<div class="author-chip">
+					<ProfilePic name={detailAuthor.name} size={22} />
+					<span class="author-name">{detailAuthor.name}</span>
+				</div>
+			{:else}
+				<span class="detail-top-label">Note</span>
+			{/if}
 			<div class="detail-top-actions">
-				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-				</button>
+				{#if noteSaving}
+					<span class="save-hint">Saving…</span>
+				{/if}
 				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
@@ -328,12 +411,32 @@
 				</button>
 			</div>
 		</header>
-		<div class="body">
+		<div class="body note-body-wrap">
 			<div class="title-row">
-				<h2 class="title">{note.title}</h2>
+				<input
+					class="title-input"
+					bind:value={noteTitle}
+					aria-label="Note title"
+					placeholder="Untitled"
+					oninput={scheduleNoteSave}
+				/>
 			</div>
+			{#if (note.targets?.length ?? 0) > 0 || (note.labels?.length ?? 0) > 0}
+				<div class="meta-row" role="list">
+					{#each note.targets ?? [] as target (target.id)}
+						<span class="meta-pill" role="listitem">{target.label}</span>
+					{/each}
+					{#each note.labels ?? [] as labelText (labelText)}
+						<span class="meta-label" role="listitem">
+							<LabelPill text={labelText} size="small" />
+						</span>
+					{/each}
+				</div>
+			{/if}
 			{#key note.id}
-				<NoteEditor value={note.body ?? ''} editable={false} />
+				<div class="note-editor-pad">
+					<NoteEditor value={noteBody} editable={true} onChange={onNoteBodyChange} />
+				</div>
 			{/key}
 		</div>
 	{:else}
@@ -392,6 +495,102 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.author-chip {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.author-chip.center {
+		justify-content: center;
+	}
+
+	.author-name {
+		min-width: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.save-hint {
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--fg-33);
+		padding-right: 4px;
+	}
+
+	.meta-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		padding: 0 16px 12px;
+		box-sizing: border-box;
+	}
+
+	.meta-item {
+		flex-shrink: 0;
+	}
+
+	.meta-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 28px;
+		padding: 0 10px;
+		border-radius: 9999px;
+		background: var(--fg-8);
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-66);
+		white-space: nowrap;
+		flex-shrink: 0;
+		box-sizing: border-box;
+	}
+
+	.meta-pill.person {
+		padding-left: 6px;
+	}
+
+	.meta-label {
+		display: inline-flex;
+		flex-shrink: 0;
+	}
+
+	.title-input {
+		flex: 1;
+		min-width: 0;
+		width: 100%;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		outline: none;
+		background: transparent;
+		font-family: var(--font);
+		font-size: 1.15rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		line-height: 1.25;
+		color: var(--fg);
+	}
+
+	.title-input::placeholder {
+		color: var(--fg-33);
+		font-weight: 600;
+	}
+
+	.note-editor-pad {
+		padding: 0 8px 24px 12px;
+		flex: 1;
+		min-height: 0;
 	}
 
 	.sr-only {
@@ -457,6 +656,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
+	}
+
+	.note-body-wrap {
+		overflow: auto;
 	}
 
 	.title-row,
@@ -639,6 +842,25 @@
 			font-size: 15px;
 			font-weight: 650;
 			color: var(--white);
+		}
+
+		.author-chip.center .author-name {
+			font-size: 15px;
+			font-weight: 650;
+			color: var(--fg);
+		}
+
+		.meta-row {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overflow-y: hidden;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: none;
+			padding-bottom: 14px;
+		}
+
+		.meta-row::-webkit-scrollbar {
+			display: none;
 		}
 
 		.icon-hit {

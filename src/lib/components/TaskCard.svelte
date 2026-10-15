@@ -1,15 +1,16 @@
 <script>
 	/**
-	 * Feed row copied from Chateau TaskCard.
-	 * Row 1: status | title | priority
+	 * Feed row: status picker | title | priority picker
 	 * Row 2: L connector, people, labels
 	 */
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
+	import TaskFieldPicker from './TaskFieldPicker.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
 	import LabelStack from './LabelStack.svelte';
 
 	let {
+		id = '',
 		title = '',
 		status = 'open',
 		priority = 'none',
@@ -62,12 +63,20 @@
 >
 	<div class="row-main">
 		<div class="taskbox-col">
-			<TaskBox state={status} size={24} />
+			{#if id}
+				<TaskFieldPicker taskId={id} field="status" value={status} size={24} />
+			{:else}
+				<TaskBox state={status} size={24} />
+			{/if}
 		</div>
 		<span class="task-title" class:task-title-closed={status === 'closed'}>{title}</span>
 		{#if status !== 'closed'}
 			<div class="priority-col">
-				<PriorityBox {priority} size={22} />
+				{#if id}
+					<TaskFieldPicker taskId={id} field="priority" value={priority} size={22} align="right" />
+				{:else}
+					<PriorityBox {priority} size={22} />
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -105,7 +114,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 12px 12px;
+		padding: 12px 12px 10px;
 		border: 0;
 		background: transparent;
 		border-radius: 12px;

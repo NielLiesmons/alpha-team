@@ -43,7 +43,7 @@
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	/* Selected list/card fill — quieter than --fg-8 */
-	--selection: color-mix(in srgb, var(--fg) 5%, transparent);
+	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
 	--surface: color-mix(in srgb, var(--fg) 6%, var(--bg));
 	--popover: color-mix(in srgb, var(--fg) 8%, var(--bg));
@@ -52,8 +52,8 @@
 	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
 	--glass-blur: 14px;
 
-	/* Chrome behind nav + workspace gutter */
-	--shell: color-mix(in srgb, var(--fg-raw) 94%, #000);
+	/* Chrome behind nav + workspace gutter — darker than --bg (~#090909) */
+	--shell: hsl(from var(--accent) h 10% 3.5%);
 	--shell-border: var(--hairline);
 
 	/*
@@ -111,13 +111,13 @@
 	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
-	--selection: color-mix(in srgb, var(--fg) 5%, transparent);
+	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 6%, var(--bg));
 	--popover: color-mix(in srgb, var(--fg) 8%, var(--bg));
 	--modal-bg: var(--popover);
 	--hairline: var(--fg-11);
 	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
-	--shell: color-mix(in srgb, var(--fg-raw) 94%, #000);
+	--shell: hsl(from var(--accent) h 10% 3.5%);
 	--shell-border: var(--hairline);
 	--ink: var(--fg);
 	--ink66: var(--fg-66);
@@ -144,7 +144,7 @@
 	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
-	--selection: color-mix(in srgb, var(--fg) 5.5%, transparent);
+	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
 	--popover: color-mix(in srgb, var(--fg) 5%, var(--bg));
 	--modal-bg: var(--popover);

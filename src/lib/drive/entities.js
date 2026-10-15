@@ -290,6 +290,7 @@ export function toUiNote(n, projectList) {
 			label: byId.get(id)?.title ?? id
 		})),
 		project_ids: n.project_ids ?? [],
+		author: { pubkey: 'local', name: 'You' },
 		createdAt: Number.isFinite(createdMs) ? createdMs : 0,
 		_drive: n
 	};

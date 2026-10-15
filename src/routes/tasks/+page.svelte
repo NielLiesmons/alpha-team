@@ -64,6 +64,7 @@
 			<div class="card-stack">
 				{#each group.items as task (task.id)}
 					<TaskCard
+						id={task.id}
 						title={task.title}
 						status={task.status}
 						priority={task.priority}

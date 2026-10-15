@@ -119,18 +119,20 @@ const demoNotes = [
 		id: 'n1',
 		title: 'Drop-off planning',
 		body: `## This week\n\n- Wednesday: Guingamp\n- Thursday: Saint-Brieuc\n- Saturday: at the farm, by appointment\n`,
-		labels: [],
+		labels: ['Logistics'],
 		targets: [{ id: 'p1', label: 'Spring CSA' }],
 		project_ids: ['p1'],
+		author: niel,
 		createdAt: 2
 	},
 	{
 		id: 'n2',
 		title: 'Pasture notes',
 		body: `Hens follow the sheep.\n\nThe logs for mushrooms stay on the north edge.\n`,
-		labels: [],
+		labels: ['Farm'],
 		targets: [{ id: 'p2', label: 'Egg mobile' }],
 		project_ids: ['p2'],
+		author: lea,
 		createdAt: 1
 	}
 ];
@@ -236,6 +238,17 @@ export async function refreshFromDrive() {
 }
 
 /**
+ * Quick status/priority patch from cards or detail (persists via saveTask).
+ * @param {string} id
+ * @param {{ status?: string, priority?: string }} patch
+ */
+export async function patchTask(id, patch) {
+	const t = tasks.find((x) => x.id === id);
+	if (!t) return;
+	await saveTask({ ...t, ...patch }, false);
+}
+
+/**
  * Persist a new or edited task. Drive when connected; otherwise local only.
  * @param {any} draft
  * @param {boolean} isNew
@@ -299,7 +312,8 @@ export async function saveNote(draft, isNew) {
 				createdAt: Date.now(),
 				targets: draft.targets ?? [],
 				project_ids: draft.project_ids ?? [],
-				labels: draft.labels ?? []
+				labels: draft.labels ?? [],
+				author: draft.author ?? { pubkey: 'local', name: 'You' }
 			});
 			ui.noteId = id;
 			ui.selection = { kind: 'note', id };
