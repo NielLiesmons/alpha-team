@@ -1,4 +1,5 @@
 <script>
+	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import { closeComposer, notes, projects, saveNote, ui } from '$lib/workspace.svelte.js';
@@ -9,6 +10,8 @@
 	let projectIds = $state([]);
 	/** @type {string | null} */
 	let seededFor = $state(null);
+	/** @type {HTMLInputElement | undefined} */
+	let titleInput = $state();
 
 	const editing = $derived(
 		ui.composer?.kind === 'note' && ui.composer.id
@@ -29,6 +32,7 @@
 		title = editing?.title ?? '';
 		body = editing?.body ?? '';
 		projectIds = [...(editing?.project_ids ?? [])];
+		tick().then(() => titleInput?.focus());
 	});
 
 	/** @param {string} id */
@@ -63,7 +67,7 @@
 
 <CreateSheet {open} label={editing ? 'Edit note' : 'New note'} onclose={closeComposer}>
 	<div class="sheet-title-row">
-		<input class="sheet-input" placeholder="Note title" bind:value={title} />
+		<input bind:this={titleInput} class="sheet-input" placeholder="Note title" bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
 	{#key editorKey}

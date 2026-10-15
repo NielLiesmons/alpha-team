@@ -89,7 +89,7 @@
 		box-shadow: 0 16px 48px var(--shadow-strong);
 		overflow: auto;
 		/* Pad lives on the sheet so it can’t be clipped under the last row */
-		padding: 0 0 calc(12px + env(safe-area-inset-bottom, 0px));
+		padding: 0 0 calc(14px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 	}
 
@@ -106,7 +106,7 @@
 			max-height: min(720px, 90svh);
 			border-radius: calc(var(--radius-hero) - 2px);
 			border-bottom: 1px solid var(--hairline);
-			padding: 0 0 12px;
+			padding: 0 0 14px;
 		}
 	}
 </style>

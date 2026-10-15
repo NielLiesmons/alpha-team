@@ -1,4 +1,5 @@
 <script>
+	import { tick } from 'svelte';
 	import {
 		closeTrackEdit,
 		editingTrack,
@@ -14,6 +15,8 @@
 	let year = $state('');
 	let genres = $state('');
 	let saving = $state(false);
+	/** @type {HTMLInputElement | undefined} */
+	let titleInput = $state();
 
 	const track = $derived(editingTrack());
 	const open = $derived(Boolean(playerUi.editingId && track));
@@ -27,6 +30,7 @@
 		year = track.year != null && track.year !== '' ? String(track.year) : '';
 		genres = Array.isArray(track.genres) ? track.genres.join(', ') : '';
 		saving = false;
+		tick().then(() => titleInput?.focus());
 	});
 
 	/** @param {string} raw */
@@ -62,7 +66,13 @@
 
 <CreateSheet {open} label="Edit track" onclose={closeTrackEdit}>
 	<div class="sheet-title-row">
-		<input class="sheet-input" placeholder="Song title" bind:value={title} aria-label="Song title" />
+		<input
+			bind:this={titleInput}
+			class="sheet-input"
+			placeholder="Song title"
+			bind:value={title}
+			aria-label="Song title"
+		/>
 	</div>
 	<div class="form-divider"></div>
 	<label class="field">

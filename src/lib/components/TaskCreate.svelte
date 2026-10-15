@@ -1,4 +1,5 @@
 <script>
+	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
@@ -37,6 +38,8 @@
 	/** @type {null | 'assignees' | 'projects' | 'labels'} */
 	let bottomMenu = $state(null);
 	let labelDraft = $state('');
+	/** @type {HTMLInputElement | undefined} */
+	let titleInput = $state();
 
 	const editing = $derived(ui.composer?.kind === 'task' ? tasks.find((item) => item.id === ui.composer.id) : null);
 	const open = $derived(ui.composer?.kind === 'task');
@@ -54,6 +57,7 @@
 		priorityOpen = false;
 		bottomMenu = null;
 		labelDraft = '';
+		tick().then(() => titleInput?.focus());
 	});
 
 	/** @param {string} id */
@@ -144,7 +148,13 @@
 			{/if}
 		</div>
 
-		<input class="task-title-input" placeholder="Title of Task" bind:value={title} aria-label="Task title" />
+		<input
+			bind:this={titleInput}
+			class="task-title-input"
+			placeholder="Title of Task"
+			bind:value={title}
+			aria-label="Task title"
+		/>
 
 		<div class="priority-wrapper">
 			<button
@@ -506,7 +516,7 @@
 	.post-action-row {
 		display: flex;
 		align-items: center;
-		padding: 0 16px 6px;
+		padding: 0 16px 10px;
 	}
 
 	.action-buttons-left {
@@ -541,7 +551,7 @@
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		padding: 8px 16px 0;
+		padding: 12px 16px 0;
 		gap: 8px;
 	}
 

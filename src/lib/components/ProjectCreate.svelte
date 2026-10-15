@@ -1,4 +1,5 @@
 <script>
+	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
 	import StatusBox from './StatusBox.svelte';
 	import { closeComposer, projects, saveProject, ui } from '$lib/workspace.svelte.js';
@@ -15,6 +16,8 @@
 	let body = $state('');
 	let status = $state('planned');
 	let statusOpen = $state(false);
+	/** @type {HTMLInputElement | undefined} */
+	let titleInput = $state();
 
 	const editing = $derived(
 		ui.composer?.kind === 'project' ? projects.find((item) => item.id === ui.composer.id) : null
@@ -28,6 +31,7 @@
 		body = editing?.body ?? '';
 		status = editing?.status ?? 'planned';
 		statusOpen = false;
+		tick().then(() => titleInput?.focus());
 	});
 
 	async function save() {
@@ -68,7 +72,7 @@
 				</div>
 			{/if}
 		</div>
-		<input class="sheet-input" placeholder="Project title" bind:value={title} />
+		<input bind:this={titleInput} class="sheet-input" placeholder="Project title" bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
 	<input class="summary" placeholder="Short summary" bind:value={summary} />
