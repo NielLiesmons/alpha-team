@@ -7,6 +7,7 @@
 	import DetailMetaPills from './DetailMetaPills.svelte';
 	import {
 		closePlayerDetail,
+		currentTrack,
 		playerBrowse,
 		playerHeading,
 		playerUi,
@@ -169,7 +170,14 @@
 	}
 </script>
 
-<aside class="detail" class:open aria-label="Detail" class:empty={!open}>
+<aside
+	class="detail"
+	class:open
+	class:empty={!open}
+	class:player-mode={isPlayer}
+	class:has-mini={isPlayer && Boolean(currentTrack())}
+	aria-label="Detail"
+>
 	{#if open}
 		<header class="mobile-bar">
 			<button
@@ -424,6 +432,7 @@
 		flex: 1 1 auto;
 		min-width: 0;
 		min-height: 0;
+		width: 100%;
 		display: flex;
 		flex-direction: column;
 		background: transparent;
@@ -451,6 +460,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
+		width: 100%;
 		height: 40px;
 		padding: 0 8px 0 16px;
 		border-bottom: 1px solid var(--hairline);
@@ -746,6 +756,16 @@
 			transform: translateX(100%);
 			transition: transform 0.32s var(--ease);
 			pointer-events: none;
+		}
+
+		/* Songs / Artists list stays above the bottom nav + mini player */
+		.detail.player-mode {
+			z-index: 35;
+			bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+		}
+
+		.detail.player-mode.has-mini {
+			bottom: calc(72px + 8px + 52px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.detail.open {

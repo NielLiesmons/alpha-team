@@ -220,6 +220,38 @@ export async function getPathWithKey(session, logicalPath, signal) {
 }
 
 /**
+ * Remove logical paths from the root dir tip (orphan ciphertext may remain).
+ * @param {DriveSession} session
+ * @param {string | string[]} logicalPaths
+ */
+export async function deletePaths(session, logicalPaths) {
+	const list = (Array.isArray(logicalPaths) ? logicalPaths : [logicalPaths])
+		.map((p) => normalizePath(p))
+		.filter(Boolean);
+	if (!list.length) return;
+
+	const root = parseRootKey(session.rootKey);
+	const dir = await loadRootDir(session);
+	dir.schema = 'alpha.dir/1';
+	dir.children = dir.children ?? {};
+	let removed = 0;
+	for (const name of list) {
+		if (dir.children[name]) {
+			delete dir.children[name];
+			removed += 1;
+		}
+	}
+	if (!removed) return;
+
+	const dirBytes = new TextEncoder().encode(JSON.stringify(dir));
+	const dirCt = await encryptWithRoot(root, '', dirBytes);
+	const dirHash = await sha256Hex(dirCt);
+	await putBlock(session, dirHash, dirCt);
+	await putTip(session, dirHash);
+	rememberRootDir(dir, dirHash, session);
+}
+
+/**
  * Encrypt under a caller-supplied file key (media manifest shares key with chunks).
  * @param {DriveSession} session
  * @param {string} logicalPath

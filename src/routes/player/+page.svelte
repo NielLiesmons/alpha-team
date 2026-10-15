@@ -102,12 +102,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 4px 8px 8px;
+		padding: 4px 8px 10px;
 		box-sizing: border-box;
 	}
 
 	.card-stack.top {
-		padding-top: 8px;
+		padding-top: 4px;
 	}
 
 	.row {

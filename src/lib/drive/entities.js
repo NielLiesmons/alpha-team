@@ -1,7 +1,14 @@
 /** Project / Task / Note / Track helpers over the browser Drive client. */
 
 import { parseAudioFilename, readAudioTags } from './audio-meta.js';
-import { getPath, getPathFromDir, loadRootDir, loadRootDirWithTip, putPath } from './client.js';
+import {
+	deletePaths,
+	getPath,
+	getPathFromDir,
+	loadRootDir,
+	loadRootDirWithTip,
+	putPath
+} from './client.js';
 import { putMediaBlob } from './media.js';
 
 function nowRfc3339() {
@@ -492,6 +499,101 @@ export async function putTrackMeta(session, track, patch) {
 	await putPath(session, trackPath, 'track', JSON.stringify(next, null, 2));
 	invalidateTrackCache(session);
 	return next;
+}
+
+/**
+ * Partial metadata patch — only provided keys are applied. Title is never cleared.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} track
+ * @param {{
+ *   title?: string,
+ *   artists?: string[],
+ *   album?: string | null,
+ *   album_artist?: string | null,
+ *   year?: number | null,
+ *   genres?: string[]
+ * }} patch
+ */
+export async function patchTrackFields(session, track, patch) {
+	const title =
+		patch.title !== undefined ? String(patch.title).trim() : String(track.title ?? '').trim();
+	if (!title) throw new Error('Title is required');
+
+	let artists = Array.isArray(track.artists) ? [...track.artists] : ['Unknown'];
+	if (patch.artists !== undefined) {
+		artists = patch.artists.map((a) => String(a).trim()).filter(Boolean);
+		if (!artists.length) throw new Error('At least one artist is required');
+	}
+
+	const album =
+		patch.album !== undefined
+			? String(patch.album ?? '').trim()
+			: String(track.album ?? '').trim();
+	const albumArtist =
+		patch.album_artist !== undefined
+			? String(patch.album_artist ?? '').trim()
+			: String(track.album_artist ?? '').trim();
+	const genres =
+		patch.genres !== undefined
+			? patch.genres.map((g) => String(g).trim()).filter(Boolean)
+			: Array.isArray(track.genres)
+				? track.genres
+				: [];
+	const year =
+		patch.year !== undefined
+			? patch.year == null || patch.year === ''
+				? null
+				: Number.isFinite(Number(patch.year))
+					? Math.trunc(Number(patch.year))
+					: null
+			: (track.year ?? null);
+
+	return putTrackMeta(session, track, {
+		title,
+		artists,
+		album,
+		album_artist: albumArtist,
+		year,
+		genres
+	});
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any[]} trackList
+ * @param {{
+ *   artists?: string[],
+ *   album?: string | null,
+ *   album_artist?: string | null,
+ *   year?: number | null,
+ *   genres?: string[]
+ * }} patch
+ */
+export async function patchTracks(session, trackList, patch) {
+	/** @type {any[]} */
+	const out = [];
+	for (const track of trackList) {
+		out.push(await patchTrackFields(session, track, patch));
+	}
+	return out;
+}
+
+/**
+ * Remove track.json (+ media manifest path). Chunk blocks may remain orphaned.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any | any[]} trackOrTracks
+ */
+export async function deleteTracks(session, trackOrTracks) {
+	const list = Array.isArray(trackOrTracks) ? trackOrTracks : [trackOrTracks];
+	/** @type {string[]} */
+	const paths = [];
+	for (const t of list) {
+		if (!t?.id) continue;
+		paths.push(`media/audio/tracks/${t.id}/track.json`);
+		if (t.media_path) paths.push(t.media_path);
+	}
+	await deletePaths(session, paths);
+	invalidateTrackCache(session);
 }
 
 /**

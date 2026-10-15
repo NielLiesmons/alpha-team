@@ -2,7 +2,14 @@
  * Player library + now-playing state (Drive-backed when connected).
  */
 
-import { listPlaylists, listTracks, putTrackMeta, uploadTrack } from './drive/entities.js';
+import {
+	deleteTracks as deleteTracksOnDrive,
+	listPlaylists,
+	listTracks,
+	patchTracks,
+	putTrackMeta,
+	uploadTrack
+} from './drive/entities.js';
 import { loadMediaManifest, mseMimeForContentType, streamMediaChunks } from './drive/media.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 
@@ -37,14 +44,20 @@ export const playerUi = $state({
 	/** Reliable full-track duration (0 while unknown / first-chunk-only) */
 	duration: 0,
 	playing: false,
-	/** Mobile full-screen now-playing */
+	/** Mobile now-playing bottom sheet */
 	nowPlayingOpen: false,
-	/** @type {string | null} track id open in edit modal */
-	editingId: null,
+	/** @type {string[]} track ids open in edit modal (1 = single, many = bulk) */
+	editingIds: [],
+	/** @type {string[]} multi-select in Songs / playlist lists */
+	selectedIds: [],
 	error: '',
 	uploading: false,
 	uploadLabel: ''
 });
+
+function isMobileViewport() {
+	return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+}
 
 /** Bumps on every play/stop so stale fetches never win. */
 let playGeneration = 0;
@@ -133,6 +146,7 @@ export function setPlayerBrowse(mode, opts = {}) {
 	playerBrowse.playlistId = opts.playlistId ?? null;
 	playerBrowse.artist = opts.artist ?? null;
 	playerBrowse.detailOpen = true;
+	playerUi.selectedIds = [];
 }
 
 export function closePlayerDetail() {
@@ -292,6 +306,8 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 	}
 
 	let started = false;
+	let chunksAppended = 0;
+	const startAfter = Math.min(2, Math.max(1, manifest.chunks?.length ?? 1));
 	/** @type {((v?: undefined) => void) | null} */
 	let resolveStart = null;
 	/** @type {((e: Error) => void) | null} */
@@ -300,6 +316,19 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 		resolveStart = resolve;
 		rejectStart = reject;
 	});
+
+	const tryStart = () => {
+		if (started || generation !== playGeneration) return;
+		started = true;
+		playerUi.status = 'ready';
+		const playAttempt = boundAudio?.play();
+		if (playAttempt) {
+			playAttempt.catch(() => {
+				/* autoplay / not-yet-enough-buffer */
+			});
+		}
+		resolveStart?.();
+	};
 
 	bufferTail = streamMediaChunks(session, track.media_path, {
 		signal,
@@ -312,18 +341,9 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 		onChunk: async (_i, bytes) => {
 			if (generation !== playGeneration) return;
 			await appendBuffer(sb, bytes, signal);
-			if (!started && generation === playGeneration) {
-				started = true;
-				playerUi.status = 'ready';
-				attachAudioSrc(url);
-				const playAttempt = boundAudio?.play();
-				if (playAttempt) {
-					playAttempt.catch(() => {
-						/* autoplay / not-yet-enough-buffer — canplay handler below */
-					});
-				}
-				resolveStart?.();
-			}
+			chunksAppended += 1;
+			// Wait for a couple chunks so the decoder has a clean MPEG frame run.
+			if (chunksAppended >= startAfter) tryStart();
 		}
 	})
 		.then(() => {
@@ -336,12 +356,7 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 				}
 			}
 			playerUi.bufferRatio = 1;
-			if (!started) {
-				started = true;
-				playerUi.status = 'ready';
-				boundAudio?.play().catch(() => {});
-				resolveStart?.();
-			}
+			tryStart();
 		})
 		.catch((e) => {
 			if (generation !== playGeneration || e?.name === 'AbortError') return;
@@ -357,8 +372,8 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 }
 
 /**
- * Fallback when MSE is unavailable: start on the first chunk, then swap in the
- * full file when the rest arrives (preserves playhead).
+ * Fallback when MSE is unavailable: wait for the full file, then play once.
+ * Early first-chunk blobs caused an audible jump when swapping to the full file.
  * @param {import('./drive/client.js').DriveSession} session
  * @param {any} track
  * @param {any} manifest
@@ -370,19 +385,8 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 	const type = manifest.content_type || 'audio/mpeg';
 	/** @type {Uint8Array[]} */
 	const parts = [];
-	let started = false;
-	/** @type {string | null} */
-	let earlyUrl = null;
-	/** @type {((v?: undefined) => void) | null} */
-	let resolveStart = null;
-	/** @type {((e: Error) => void) | null} */
-	let rejectStart = null;
-	const startedGate = new Promise((resolve, reject) => {
-		resolveStart = resolve;
-		rejectStart = reject;
-	});
 
-	bufferTail = streamMediaChunks(session, track.media_path, {
+	await streamMediaChunks(session, track.media_path, {
 		signal,
 		manifest,
 		fileKeyHex,
@@ -393,62 +397,26 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		onChunk: async (_i, bytes) => {
 			if (generation !== playGeneration) return;
 			parts.push(bytes);
-			if (!started) {
-				started = true;
-				const blob = new Blob([bytes], { type });
-				earlyUrl = URL.createObjectURL(blob);
-				playerUi.objectUrl = earlyUrl;
-				attachAudioSrc(earlyUrl);
-				playerUi.status = 'ready';
-				boundAudio?.play().catch(() => {});
-				resolveStart?.();
-			}
 		}
-	})
-		.then(() => {
-			if (generation !== playGeneration) return;
-			let total = 0;
-			for (const p of parts) total += p.length;
-			const out = new Uint8Array(total);
-			let off = 0;
-			for (const p of parts) {
-				out.set(p, off);
-				off += p.length;
-			}
-			const t = boundAudio?.currentTime ?? 0;
-			const fullUrl = URL.createObjectURL(new Blob([out], { type }));
-			if (earlyUrl) URL.revokeObjectURL(earlyUrl);
-			playerUi.objectUrl = fullUrl;
-			attachAudioSrc(fullUrl);
-			if (boundAudio) {
-				const resume = () => {
-					try {
-						boundAudio.currentTime = t;
-					} catch {
-						/* ignore */
-					}
-					boundAudio.play().catch(() => {});
-				};
-				if (boundAudio.readyState >= 1) resume();
-				else boundAudio.addEventListener('loadedmetadata', resume, { once: true });
-			}
-			playerUi.bufferRatio = 1;
-			if (!started) {
-				started = true;
-				playerUi.status = 'ready';
-				resolveStart?.();
-			}
-		})
-		.catch((e) => {
-			if (generation !== playGeneration || e?.name === 'AbortError') return;
-			if (!started) {
-				rejectStart?.(e instanceof Error ? e : new Error(String(e)));
-			}
-		});
+	});
 
-	await startedGate;
 	if (generation !== playGeneration) return null;
-	return playerUi.objectUrl;
+
+	let total = 0;
+	for (const p of parts) total += p.length;
+	const out = new Uint8Array(total);
+	let off = 0;
+	for (const p of parts) {
+		out.set(p, off);
+		off += p.length;
+	}
+	const fullUrl = URL.createObjectURL(new Blob([out], { type }));
+	playerUi.objectUrl = fullUrl;
+	attachAudioSrc(fullUrl);
+	playerUi.bufferRatio = 1;
+	playerUi.status = 'ready';
+	boundAudio?.play().catch(() => {});
+	return fullUrl;
 }
 
 /**
@@ -516,7 +484,10 @@ export async function playTrack(track) {
 		} else {
 			url = await playViaBlob(session, track, manifest, fileKeyHex, generation, ac.signal);
 		}
-		if (generation === playGeneration) playAbort = null;
+		if (generation === playGeneration) {
+			playAbort = null;
+			if (isMobileViewport()) playerUi.nowPlayingOpen = true;
+		}
 		return url;
 	} catch (e) {
 		if (e?.name === 'AbortError' || generation !== playGeneration) {
@@ -551,26 +522,57 @@ export function closeNowPlaying() {
 }
 
 /**
- * @param {string | { id: string }} trackOrId
+ * @param {string | { id: string } | Array<string | { id: string }>} trackOrIds
  */
-export function openTrackEdit(trackOrId) {
-	const id = typeof trackOrId === 'string' ? trackOrId : trackOrId?.id;
-	if (!id) return;
-	playerUi.editingId = id;
+export function openTrackEdit(trackOrIds) {
+	const list = Array.isArray(trackOrIds) ? trackOrIds : [trackOrIds];
+	const ids = list
+		.map((t) => (typeof t === 'string' ? t : t?.id))
+		.filter(Boolean);
+	if (!ids.length) return;
+	playerUi.editingIds = ids;
+}
+
+export function openBulkTrackEdit() {
+	if (!playerUi.selectedIds.length) return;
+	playerUi.editingIds = [...playerUi.selectedIds];
 }
 
 export function closeTrackEdit() {
-	playerUi.editingId = null;
+	playerUi.editingIds = [];
+}
+
+export function editingTracks() {
+	const set = new Set(playerUi.editingIds);
+	return tracks.filter((t) => set.has(t.id));
 }
 
 export function editingTrack() {
-	return tracks.find((t) => t.id === playerUi.editingId) ?? null;
+	return editingTracks()[0] ?? null;
+}
+
+/**
+ * @param {any} next
+ */
+function applyTrackLocal(next) {
+	const idx = tracks.findIndex((t) => t.id === next.id);
+	const merged = {
+		...(idx >= 0 ? tracks[idx] : {}),
+		...next,
+		artists: next.artists,
+		album: next.album ?? '',
+		album_artist: next.album_artist ?? '',
+		year: next.year ?? null,
+		genres: next.genres ?? []
+	};
+	if (idx >= 0) tracks[idx] = merged;
+	else tracks.push(merged);
 }
 
 /**
  * @param {{
- *   title: string,
- *   artists: string[],
+ *   title?: string,
+ *   artists?: string[],
  *   album?: string,
  *   album_artist?: string,
  *   year?: number | null,
@@ -580,25 +582,77 @@ export function editingTrack() {
 export async function saveTrackEdit(patch) {
 	const session = activeSession();
 	if (!session) throw new Error('Connect Drive in Settings first');
-	const track = editingTrack();
-	if (!track) throw new Error('No track selected');
-	const next = await putTrackMeta(session, track, patch);
-	const idx = tracks.findIndex((t) => t.id === next.id);
-	if (idx >= 0) {
-		tracks[idx] = {
-			...tracks[idx],
-			...next,
-			artists: next.artists,
-			album: next.album ?? '',
-			album_artist: next.album_artist ?? '',
-			year: next.year ?? null,
-			genres: next.genres ?? []
-		};
+	const list = editingTracks();
+	if (!list.length) throw new Error('No track selected');
+
+	if (list.length === 1) {
+		const next = await putTrackMeta(session, list[0], {
+			title: patch.title ?? list[0].title,
+			artists: patch.artists ?? list[0].artists,
+			album: patch.album ?? list[0].album ?? '',
+			album_artist: patch.album_artist ?? list[0].album_artist ?? '',
+			year: patch.year !== undefined ? patch.year : (list[0].year ?? null),
+			genres: patch.genres ?? list[0].genres ?? []
+		});
+		applyTrackLocal(next);
 	} else {
-		tracks.push(next);
+		/** @type {{ artists?: string[], album?: string | null, album_artist?: string | null, year?: number | null, genres?: string[] }} */
+		const bulk = {};
+		if (patch.artists) bulk.artists = patch.artists;
+		if (patch.album !== undefined) bulk.album = patch.album;
+		if (patch.album_artist !== undefined) bulk.album_artist = patch.album_artist;
+		if (patch.year !== undefined) bulk.year = patch.year;
+		if (patch.genres) bulk.genres = patch.genres;
+		const updated = await patchTracks(session, list, bulk);
+		for (const next of updated) applyTrackLocal(next);
 	}
-	playerUi.editingId = null;
-	return next;
+	playerUi.editingIds = [];
+	playerUi.selectedIds = [];
+}
+
+/**
+ * @param {string} id
+ */
+export function toggleTrackSelected(id) {
+	const i = playerUi.selectedIds.indexOf(id);
+	if (i >= 0) playerUi.selectedIds = playerUi.selectedIds.filter((x) => x !== id);
+	else playerUi.selectedIds = [...playerUi.selectedIds, id];
+}
+
+export function clearTrackSelection() {
+	playerUi.selectedIds = [];
+}
+
+/**
+ * @param {string[]} ids
+ */
+export function setTrackSelection(ids) {
+	playerUi.selectedIds = [...ids];
+}
+
+/**
+ * @param {string | string[] | null} [ids]
+ */
+export async function removeTracks(ids) {
+	const session = activeSession();
+	if (!session) throw new Error('Connect Drive in Settings first');
+	const idList = ids
+		? Array.isArray(ids)
+			? ids
+			: [ids]
+		: [...playerUi.selectedIds];
+	if (!idList.length) return;
+	const list = tracks.filter((t) => idList.includes(t.id));
+	if (!list.length) return;
+
+	const playing = playerUi.currentId && idList.includes(playerUi.currentId);
+	await deleteTracksOnDrive(session, list);
+	const remove = new Set(idList);
+	const next = tracks.filter((t) => !remove.has(t.id));
+	tracks.splice(0, tracks.length, ...next);
+	playerUi.selectedIds = playerUi.selectedIds.filter((id) => !remove.has(id));
+	playerUi.editingIds = playerUi.editingIds.filter((id) => !remove.has(id));
+	if (playing) stopPlayback();
 }
 
 /**

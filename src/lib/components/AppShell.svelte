@@ -731,7 +731,8 @@
 		}
 
 		.shell.has-mini-player {
-			padding-bottom: calc(72px + 60px + env(safe-area-inset-bottom, 0px));
+			/* nav + 8px gap + mini player */
+			padding-bottom: calc(72px + 8px + 52px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.sidebar {

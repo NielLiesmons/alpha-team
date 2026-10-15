@@ -65,11 +65,12 @@
 		.mobile-player-slot {
 			display: block;
 			position: fixed;
-			z-index: 41;
+			z-index: 42;
 			left: 0;
 			right: 0;
-			bottom: calc(62px + env(safe-area-inset-bottom, 0px));
-			padding: 0 12px 8px;
+			/* 8px gap above the bottom nav pill */
+			bottom: calc(62px + 8px + env(safe-area-inset-bottom, 0px));
+			padding: 0 12px;
 			pointer-events: none;
 		}
 

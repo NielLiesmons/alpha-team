@@ -1,6 +1,7 @@
 <script>
 	import {
 		bindPlayerAudio,
+		playAdjacent,
 		playerUi,
 		reliableDuration
 	} from '$lib/player.svelte.js';
@@ -33,7 +34,7 @@
 		if (audioEl.src !== url) {
 			audioEl.src = url;
 		}
-		if (playerUi.status === 'ready') {
+		if (playerUi.status === 'ready' && audioEl.paused) {
 			audioEl.play().catch(() => {});
 		}
 	});
@@ -52,6 +53,11 @@
 			playerUi.duration = reliableDuration(audioEl, playerUi.bufferRatio);
 		}
 	});
+
+	function onEnded() {
+		syncClock();
+		playAdjacent(1).catch(() => {});
+	}
 </script>
 
 <audio
@@ -63,7 +69,7 @@
 	ondurationchange={syncClock}
 	onplay={syncClock}
 	onpause={syncClock}
-	onended={syncClock}
+	onended={onEnded}
 	oncanplay={syncClock}
 ></audio>
 
