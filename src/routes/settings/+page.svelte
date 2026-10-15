@@ -15,11 +15,6 @@
 		{ id: 'dark', label: 'Dark' }
 	];
 
-	const fonts = [
-		{ id: 'Ovo', label: 'Ovo' },
-		{ id: 'Georgia', label: 'Georgia' }
-	];
-
 	let url = $state(driveSession.url);
 	let token = $state(driveSession.token);
 	let rootKey = $state(driveSession.rootKey);
@@ -120,20 +115,9 @@
 		/>
 		<code>{brand.accent}</code>
 	</label>
-	<label class="row">
-		<span>Brand panel font</span>
-		<select
-			value={brand.fontDisplay}
-			onchange={(e) => setBrand({ fontDisplay: e.currentTarget.value })}
-		>
-			{#each fonts as font}
-				<option value={font.id}>{font.label}</option>
-			{/each}
-		</select>
-	</label>
-	<p class="hint">Admin UI stays Inter. Display font only appears on the sidebar Bley panel.</p>
-	<p class="sample" style="font-family: var(--font-display)">
-		Bley · accents
+	<p class="hint">Admin stays Inter only — no display/serif face. Public sites may use Ovo separately.</p>
+	<p class="sample">
+		Accents
 		<span class="swatch" style="background: var(--accent)" title="accent"></span>
 		<span class="swatch" style="background: var(--accent-2)" title="accent-2"></span>
 	</p>

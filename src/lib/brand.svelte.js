@@ -1,18 +1,18 @@
 /**
  * Per-Space brand knobs (fixture for now → later meta/brand.json on Drive).
- * Operator UIs: #121212 / #1A1A1A bases + a whisper of accent hue (not public Bley poles).
+ * Operator UIs: near-grayscale fg/bg poles + accent hue (shared model with Bley).
+ * Admin never sets a display / serif face.
  */
 
 import { isWarmAccent } from './color-roles.js';
 
 const KEY = 'alpha-admin-brand';
 
-/** @typedef {{ accent: string, fontDisplay: string }} Brand */
+/** @typedef {{ accent: string }} Brand */
 
 /** @type {Brand} */
 const BLEY_DEFAULT = {
-	accent: '#dd8f87',
-	fontDisplay: 'Ovo'
+	accent: '#dd8f87'
 };
 
 export const brand = $state(/** @type {Brand} */ ({ ...BLEY_DEFAULT }));
@@ -21,21 +21,17 @@ export const brand = $state(/** @type {Brand} */ ({ ...BLEY_DEFAULT }));
 export function applyBrand(next = brand) {
 	const root = document.documentElement;
 	root.style.setProperty('--accent', next.accent);
-	root.style.setProperty(
-		'--font-display',
-		`'${next.fontDisplay}', 'Times New Roman', Georgia, serif`
-	);
-	/* Hue only — fixed L/C so accent never lifts #121212 / #1A1A1A brightness */
-	root.style.setProperty('--page-raw', 'oklch(from var(--accent) 0.182 0.0025 h)');
-	root.style.setProperty('--popover-raw', 'oklch(from var(--accent) 0.218 0.002 h)');
-	root.style.setProperty('--type-raw', 'oklch(from var(--accent) 0.97 0.002 h)');
-	root.style.setProperty('--page-raw-light', 'oklch(from var(--accent) 0.975 0.002 h)');
-	root.style.setProperty('--popover-raw-light', 'oklch(from var(--accent) 0.99 0.0015 h)');
-	root.style.setProperty('--type-raw-light', 'oklch(from var(--accent) 0.22 0.0025 h)');
-	root.style.setProperty('--scrim', 'color-mix(in srgb, #000000 55%, transparent)');
-	root.style.setProperty('--shadow-strong', 'color-mix(in srgb, #000000 40%, transparent)');
 
-	/* Warm accent (pink/red/orange) → success uses complementary; else accent is success */
+	/* Poles — low saturation for Admin (Bley site raises S on the public surface). */
+	root.style.setProperty('--fg-raw', 'hsl(from var(--accent) h 8% 8%)');
+	root.style.setProperty('--bg-raw', 'hsl(from var(--accent) h 4% 97%)');
+	root.style.setProperty('--ink-raw', 'var(--fg-raw)');
+
+	/* Scrim/shadow always from dark pole — never theme-dependent pure black % */
+	root.style.setProperty('--scrim', 'color-mix(in srgb, var(--fg-raw) 48%, transparent)');
+	root.style.setProperty('--shadow', 'color-mix(in srgb, var(--fg-raw) 22%, transparent)');
+	root.style.setProperty('--shadow-strong', 'color-mix(in srgb, var(--fg-raw) 32%, transparent)');
+
 	const warm = isWarmAccent(next.accent);
 	root.dataset.accentWarm = warm ? '1' : '0';
 	if (warm) {
@@ -58,7 +54,7 @@ export function applyBrand(next = brand) {
 /** @param {Partial<Brand>} patch */
 export function setBrand(patch) {
 	Object.assign(brand, patch);
-	localStorage.setItem(KEY, JSON.stringify({ accent: brand.accent, fontDisplay: brand.fontDisplay }));
+	localStorage.setItem(KEY, JSON.stringify({ accent: brand.accent }));
 	applyBrand(brand);
 }
 
@@ -68,7 +64,6 @@ export function initBrand() {
 		if (raw) {
 			const parsed = JSON.parse(raw);
 			if (typeof parsed.accent === 'string') brand.accent = parsed.accent;
-			if (typeof parsed.fontDisplay === 'string') brand.fontDisplay = parsed.fontDisplay;
 		}
 	} catch {
 		/* ignore */

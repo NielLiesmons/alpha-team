@@ -1,6 +1,6 @@
 /**
  * Primary nav IA. Icons live in alpha-ui/icons (shared design system).
- * Desktop order: Dashboard first. Mobile pill order centers Dashboard.
+ * Desktop + mobile IA for Admin.
  */
 
 /**
@@ -15,7 +15,6 @@
 
 /** @type {NavItem[]} */
 export const primaryNav = [
-	{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
 	{ href: '/drive', label: 'Drive', icon: 'drive' },
 	{ href: '/player', label: 'Player', icon: 'player' },
 	{ href: '/mail', label: 'Mail', icon: 'mail' },
@@ -29,8 +28,8 @@ export const primaryNav = [
 ];
 
 /**
- * Horizontal mobile pill: prominent items nearest Dashboard; selection stays centered.
- * Left ← … Mail, Drive, Tasks | Dashboard | Projects, Chat, Notes … → Right
+ * Horizontal mobile pill — selection stays centered on the active item.
+ * Left ← … Mail, Drive | Tasks | Projects, Chat, Notes … → Right
  */
 export const mobileNav = [
 	{ href: '/publications', label: 'Publications', icon: 'publications' },
@@ -42,7 +41,6 @@ export const mobileNav = [
 	{ href: '/player', label: 'Player', icon: 'player' },
 	{ href: '/drive', label: 'Drive', icon: 'drive' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },
-	{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
 	{ href: '/projects', label: 'Projects', icon: 'projects' }
 ];
 

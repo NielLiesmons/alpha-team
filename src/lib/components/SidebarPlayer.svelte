@@ -230,10 +230,10 @@
 	}
 
 	.cover-fallback {
-		font-family: var(--font-display);
-		font-size: 48px;
-		font-weight: 700;
-		color: var(--white33);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 40px;
+		font-weight: 650;
+		color: var(--fg-33);
 		line-height: 1;
 	}
 

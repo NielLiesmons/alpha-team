@@ -1,9 +1,14 @@
-@import url('https://fonts.bunny.net/css?family=inter:400,500,600,700|ovo:400&display=swap');
+@import url('https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap');
 
 /*
- * Alpha Admin — Zapstore shell layout + Bley-aligned brand knobs.
- * --accent / --font-display set from brand.svelte.js (Space settings).
- * Shell still uses --black (bg) / --white (ink) names from Zapstore.
+ * Alpha Admin — shared token model with Bley (DESIGN_SYSTEM).
+ *
+ * Canonical: --bg / --fg (+ --fg-66…--fg-4). Same pole-flip as Bley.
+ * Operator UIs stay near-grayscale (low S). Public sites (Bley) raise S
+ * and may set --font-display to Ovo — Admin never uses a display face.
+ *
+ * Legacy --white* / --black / --ink* alias the fg/bg scales so older
+ * component CSS keeps working while we migrate call sites.
  */
 
 :root {
@@ -12,107 +17,154 @@
 	--accent-2: oklch(from var(--accent) calc(l * 0.9) calc(c * 0.88) calc(h + 152));
 	--accent-66: color-mix(in srgb, var(--accent) 66%, transparent);
 	--accent-2-66: color-mix(in srgb, var(--accent-2) 66%, transparent);
-	/* Roles — brand.svelte.js may swap for warm accents (Bley pink → green success) */
 	--accent-success: var(--accent-2);
 	--accent-progress: var(--accent);
 	--accent-success-66: color-mix(in srgb, var(--accent-success) 66%, transparent);
 	--accent-progress-66: color-mix(in srgb, var(--accent-progress) 66%, transparent);
-	/*
-	 * Tune nav/outline icon weight here (screen px; non-scaling-stroke).
-	 * Drive/Mail/Chat keep native shapes — stroke looks equal across viewBoxes.
-	 */
+
 	--icon-stroke: 1.4;
-	/* Must include unit — used in CSS border shorthand (unitless is invalid). */
 	--task-box-stroke: 1.4px;
 	--task-check-stroke: calc(var(--task-box-stroke) * 1.35);
-	--font-display: 'Ovo', 'Times New Roman', Georgia, serif;
+
 	/*
-	 * Operator UIs — lock #121212 / #1A1A1A lightness; only borrow accent hue
-	 * via tiny chroma (oklch). Never color-mix bright accent into the base.
-	 * #121212 ≈ oklch(0.182 …); #1A1A1A ≈ oklch(0.218 …)
+	 * Two poles only (like Bley). Admin: whisper of accent hue, near gray.
+	 * --fg-raw = dark pole · --bg-raw = light pole. Themes flip the pair.
 	 */
-	--shell: #090909;
-	--page-raw: oklch(from var(--accent) 0.182 0.0025 h);
-	--popover-raw: oklch(from var(--accent) 0.218 0.002 h);
-	--type-raw: oklch(from var(--accent) 0.97 0.002 h);
-	/* Light mirrors: soft page / slightly elevated panel / dark type */
-	--shell-light: #f6f6f6;
-	--page-raw-light: oklch(from var(--accent) 0.975 0.002 h);
-	--popover-raw-light: oklch(from var(--accent) 0.99 0.0015 h);
-	--type-raw-light: oklch(from var(--accent) 0.22 0.0025 h);
-	--scrim: color-mix(in srgb, #000000 55%, transparent);
-	--shadow-strong: color-mix(in srgb, #000000 40%, transparent);
-	--radius-hero: 32px;
+	--fg-raw: hsl(from var(--accent) h 8% 8%);
+	--bg-raw: hsl(from var(--accent) h 4% 97%);
+
+	/* Active pair — Admin defaults dark (operators); light flips below */
+	--bg: var(--fg-raw);
+	--fg: var(--bg-raw);
+	--fg-66: color-mix(in srgb, var(--fg) 66%, transparent);
+	--fg-33: color-mix(in srgb, var(--fg) 33%, transparent);
+	--fg-16: color-mix(in srgb, var(--fg) 16%, transparent);
+	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
+	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
+	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
+
+	--surface: color-mix(in srgb, var(--fg) 6%, var(--bg));
+	--popover: color-mix(in srgb, var(--fg) 8%, var(--bg));
+	--modal-bg: var(--popover);
+	--hairline: var(--fg-11);
+	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
+	--glass-blur: 14px;
+
+	/* Chrome behind nav + workspace gutter */
+	--shell: color-mix(in srgb, var(--fg-raw) 94%, #000);
+	--shell-border: var(--hairline);
+
+	/*
+	 * Scrim/shadow always from the dark pole — same recipe light & dark
+	 * (matches Bley; never pure #000 with a different %).
+	 */
+	--scrim: color-mix(in srgb, var(--fg-raw) 48%, transparent);
+	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
+	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 
 	--font: 'Inter', system-ui, -apple-system, sans-serif;
 	--side: 260px;
-	/* List column ≈ golden-ratio wider than nav */
 	--list: calc(var(--side) * 1.618);
 	--radius-16: 16px;
+	--radius-hero: 32px;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-	/* Accent aliases (shell still uses Zapstore --black/--white names) */
+	/* Bley-compatible aliases */
+	--ink: var(--fg);
+	--ink-raw: var(--fg-raw);
+	--ink66: var(--fg-66);
+	--ink33: var(--fg-33);
+
+	/* Legacy Zapstore aliases → migrate call sites to --fg / --bg */
+	--white: var(--fg);
+	--white66: var(--fg-66);
+	--white33: var(--fg-33);
+	--white16: var(--fg-16);
+	--white11: var(--fg-11);
+	--white8: var(--fg-8);
+	--white4: var(--fg-4);
+	--black: var(--bg);
+	--black33: color-mix(in srgb, var(--fg-raw) 33%, transparent);
+	--black66: color-mix(in srgb, var(--fg-raw) 66%, transparent);
+	--whiteEnforced: #ffffff;
+
+	--nav-plus-bg: color-mix(in srgb, var(--fg) 3.5%, transparent);
+	--nav-plus-fg: color-mix(in srgb, var(--fg) 48%, transparent);
+
 	--blurpleColor: var(--accent);
 	--blurpleColor66: var(--accent-66);
 	--goldColor: var(--accent-2);
 	--goldColor66: var(--accent-2-66);
-	--destructive: var(--white33);
-	--black66: color-mix(in srgb, #000000 66%, transparent);
-	--whiteEnforced: #ffffff;
-}
+	--destructive: var(--fg-33);
 
-/* Dark — page ≈ #121212, popover/modals ≈ #1A1A1A (hue only); chrome #090909 */
-:root,
-:root[data-theme='dark'] {
-	--shell: #090909;
-	--black: var(--page-raw);
-	--white: var(--type-raw);
-	--bg: var(--black);
-	--ink: var(--white);
-	--surface: color-mix(in srgb, var(--white) 5%, var(--black));
-	--glass: color-mix(in srgb, var(--black) 88%, transparent);
-	--glass-blur: 14px;
-	--popover: var(--popover-raw);
-	--modal-bg: var(--popover);
-	--hairline: color-mix(in srgb, var(--white) 12%, transparent);
-	--white66: color-mix(in srgb, var(--white) 66%, transparent);
-	--white33: color-mix(in srgb, var(--white) 33%, transparent);
-	--white16: color-mix(in srgb, var(--white) 16%, transparent);
-	--white11: var(--hairline);
-	--white8: color-mix(in srgb, var(--white) 8%, transparent);
-	--white4: color-mix(in srgb, var(--white) 4%, transparent);
-	--black33: color-mix(in srgb, #000000 33%, transparent);
-	--shell-border: var(--hairline);
-	--nav-plus-bg: color-mix(in srgb, #ffffff 3.5%, transparent);
-	--nav-plus-fg: color-mix(in srgb, #ffffff 48%, transparent);
 	color-scheme: dark;
 }
 
-/* Light — mirrored: soft page, elevated panel, #f6f6f6 chrome */
-:root[data-theme='light'] {
-	--shell: var(--shell-light);
-	--black: var(--page-raw-light);
-	--white: var(--type-raw-light);
-	--bg: var(--black);
-	--ink: var(--white);
-	--surface: color-mix(in srgb, var(--white) 4%, var(--black));
-	--glass: color-mix(in srgb, var(--black) 88%, transparent);
-	--glass-blur: 14px;
-	--popover: var(--popover-raw-light);
+:root[data-theme='dark'] {
+	--bg: var(--fg-raw);
+	--fg: var(--bg-raw);
+	--fg-66: color-mix(in srgb, var(--fg) 66%, transparent);
+	--fg-33: color-mix(in srgb, var(--fg) 33%, transparent);
+	--fg-16: color-mix(in srgb, var(--fg) 16%, transparent);
+	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
+	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
+	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
+	--surface: color-mix(in srgb, var(--fg) 6%, var(--bg));
+	--popover: color-mix(in srgb, var(--fg) 8%, var(--bg));
 	--modal-bg: var(--popover);
-	--hairline: color-mix(in srgb, var(--white) 12%, transparent);
-	--white66: color-mix(in srgb, var(--white) 66%, transparent);
-	--white33: color-mix(in srgb, var(--white) 33%, transparent);
-	--white16: color-mix(in srgb, var(--white) 16%, transparent);
-	--white11: var(--hairline);
-	--white8: color-mix(in srgb, var(--white) 8%, transparent);
-	--white4: color-mix(in srgb, var(--white) 4%, transparent);
-	--black33: color-mix(in srgb, var(--page-raw-light) 54%, transparent);
+	--hairline: var(--fg-11);
+	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
+	--shell: color-mix(in srgb, var(--fg-raw) 94%, #000);
 	--shell-border: var(--hairline);
-	--nav-plus-bg: color-mix(in srgb, #000000 3.5%, transparent);
-	--nav-plus-fg: color-mix(in srgb, #000000 42%, transparent);
-	--scrim: color-mix(in srgb, #000000 35%, transparent);
-	--shadow-strong: color-mix(in srgb, #000000 18%, transparent);
+	--ink: var(--fg);
+	--ink66: var(--fg-66);
+	--ink33: var(--fg-33);
+	--white: var(--fg);
+	--white66: var(--fg-66);
+	--white33: var(--fg-33);
+	--white16: var(--fg-16);
+	--white11: var(--fg-11);
+	--white8: var(--fg-8);
+	--white4: var(--fg-4);
+	--black: var(--bg);
+	--nav-plus-bg: color-mix(in srgb, var(--fg) 3.5%, transparent);
+	--nav-plus-fg: color-mix(in srgb, var(--fg) 48%, transparent);
+	color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+	--bg: var(--bg-raw);
+	--fg: var(--fg-raw);
+	--fg-66: color-mix(in srgb, var(--fg) 66%, transparent);
+	--fg-33: color-mix(in srgb, var(--fg) 33%, transparent);
+	--fg-16: color-mix(in srgb, var(--fg) 16%, transparent);
+	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
+	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
+	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
+	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
+	--popover: color-mix(in srgb, var(--fg) 5%, var(--bg));
+	--modal-bg: var(--popover);
+	--hairline: var(--fg-11);
+	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
+	--shell: hsl(from var(--accent) h 3% 96%);
+	--shell-border: var(--hairline);
+	--ink: var(--fg);
+	--ink66: var(--fg-66);
+	--ink33: var(--fg-33);
+	--white: var(--fg);
+	--white66: var(--fg-66);
+	--white33: var(--fg-33);
+	--white16: var(--fg-16);
+	--white11: var(--fg-11);
+	--white8: var(--fg-8);
+	--white4: var(--fg-4);
+	--black: var(--bg);
+	--nav-plus-bg: color-mix(in srgb, var(--fg) 3.5%, transparent);
+	--nav-plus-fg: color-mix(in srgb, var(--fg) 42%, transparent);
+	/* Scrim stays on dark pole — do not lighten with theme */
+	--scrim: color-mix(in srgb, var(--fg-raw) 48%, transparent);
+	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
+	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 	color-scheme: light;
 }
 
@@ -129,7 +181,7 @@ body {
 	overflow: hidden;
 	/* Chrome behind nav + card gutter (#090909 dark / #f6f6f6 light) */
 	background: var(--shell);
-	color: var(--white);
+	color: var(--fg);
 	font-family: var(--font);
 	font-size: 16px;
 	line-height: 1.45;
