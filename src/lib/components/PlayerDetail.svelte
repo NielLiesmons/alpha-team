@@ -2,6 +2,7 @@
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
 	import {
 		artistNames,
+		openTrackEdit,
 		playTrack,
 		playerBrowse,
 		playerUi,
@@ -61,7 +62,7 @@
 		{:else}
 			<ul class="list">
 				{#each list as track (track.id)}
-					<li>
+					<li class="row-wrap">
 						<button
 							type="button"
 							class="row"
@@ -70,6 +71,21 @@
 						>
 							<span class="row-title">{track.title}</span>
 							<span class="row-meta">{track.artists?.join(', ')}</span>
+						</button>
+						<button
+							type="button"
+							class="edit-btn"
+							aria-label="Edit {track.title}"
+							onclick={() => openTrackEdit(track)}
+						>
+							<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+								<path
+									d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
+									stroke="currentColor"
+									stroke-width="1.4"
+									stroke-linejoin="round"
+								/>
+							</svg>
 						</button>
 					</li>
 				{/each}
@@ -125,13 +141,30 @@
 		box-sizing: border-box;
 	}
 
+	.row-wrap {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		border-radius: 12px;
+		min-width: 0;
+	}
+
+	.row-wrap:hover {
+		background: var(--fg-4);
+	}
+
+	.row-wrap:has(.row.on) {
+		background: var(--selection);
+	}
+
 	.row {
 		display: flex;
 		flex-direction: row;
 		align-items: baseline;
 		gap: 10px;
-		width: 100%;
-		padding: 0.85rem 0.9rem;
+		flex: 1;
+		min-width: 0;
+		padding: 0.85rem 0.5rem 0.85rem 0.9rem;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -142,12 +175,26 @@
 		box-sizing: border-box;
 	}
 
-	.row:hover {
-		background: var(--fg-4);
+	.edit-btn {
+		flex-shrink: 0;
+		width: 32px;
+		height: 32px;
+		margin-right: 6px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--fg-33);
+		padding: 0;
+		cursor: pointer;
+		opacity: 0.7;
 	}
 
-	.row.on {
-		background: var(--selection);
+	.edit-btn:hover {
+		color: var(--fg);
+		background: var(--fg-8);
+		opacity: 1;
 	}
 
 	.row-title {

@@ -22,6 +22,7 @@
 	import ProjectCreate from './ProjectCreate.svelte';
 	import SidebarPlayer from './SidebarPlayer.svelte';
 	import TaskCreate from './TaskCreate.svelte';
+	import TrackEdit from './TrackEdit.svelte';
 
 	let { children } = $props();
 
@@ -288,6 +289,7 @@
 	<TaskCreate />
 	<ProjectCreate />
 	<NoteCreate />
+	<TrackEdit />
 
 	<MobilePlayerPill />
 	<NowPlayingScreen />

@@ -436,6 +436,65 @@ export async function uploadTrack(session, file, opts = {}) {
 }
 
 /**
+ * Update track metadata (title, artists, album, …). Does not touch media blobs.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} track
+ * @param {{
+ *   title: string,
+ *   artists: string[],
+ *   album?: string,
+ *   album_artist?: string,
+ *   year?: number | null,
+ *   genres?: string[]
+ * }} patch
+ */
+export async function putTrackMeta(session, track, patch) {
+	const title = String(patch.title ?? '').trim();
+	if (!title) throw new Error('Title is required');
+	const artists = (patch.artists ?? [])
+		.map((a) => String(a).trim())
+		.filter(Boolean);
+	if (!artists.length) throw new Error('At least one artist is required');
+
+	const album = String(patch.album ?? '').trim();
+	const albumArtist = String(patch.album_artist ?? '').trim();
+	const genres = (patch.genres ?? [])
+		.map((g) => String(g).trim())
+		.filter(Boolean);
+	const year =
+		patch.year == null || patch.year === ''
+			? null
+			: Number.isFinite(Number(patch.year))
+				? Math.trunc(Number(patch.year))
+				: null;
+
+	const next = {
+		schema: 'alpha.track/1',
+		id: track.id,
+		title,
+		artists,
+		...(album ? { album } : {}),
+		...(albumArtist ? { album_artist: albumArtist } : {}),
+		track_no: track.track_no ?? null,
+		disc_no: track.disc_no ?? null,
+		duration_ms: track.duration_ms ?? null,
+		year,
+		genres,
+		media_path: track.media_path,
+		cover_path: track.cover_path ?? null,
+		project_ids: Array.isArray(track.project_ids) ? track.project_ids : [],
+		labels: Array.isArray(track.labels) ? track.labels : [],
+		created_at: track.created_at ?? nowRfc3339(),
+		updated_at: nowRfc3339()
+	};
+
+	const trackPath = `media/audio/tracks/${track.id}/track.json`;
+	await putPath(session, trackPath, 'track', JSON.stringify(next, null, 2));
+	invalidateTrackCache(session);
+	return next;
+}
+
+/**
  * @param {import('./client.js').DriveSession} session
  */
 export async function listTracks(session) {

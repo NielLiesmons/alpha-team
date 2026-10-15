@@ -2,7 +2,7 @@
  * Player library + now-playing state (Drive-backed when connected).
  */
 
-import { listPlaylists, listTracks, uploadTrack } from './drive/entities.js';
+import { listPlaylists, listTracks, putTrackMeta, uploadTrack } from './drive/entities.js';
 import { loadMediaManifest, mseMimeForContentType, streamMediaChunks } from './drive/media.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 
@@ -39,6 +39,8 @@ export const playerUi = $state({
 	playing: false,
 	/** Mobile full-screen now-playing */
 	nowPlayingOpen: false,
+	/** @type {string | null} track id open in edit modal */
+	editingId: null,
 	error: '',
 	uploading: false,
 	uploadLabel: ''
@@ -546,6 +548,57 @@ export function openNowPlaying() {
 
 export function closeNowPlaying() {
 	playerUi.nowPlayingOpen = false;
+}
+
+/**
+ * @param {string | { id: string }} trackOrId
+ */
+export function openTrackEdit(trackOrId) {
+	const id = typeof trackOrId === 'string' ? trackOrId : trackOrId?.id;
+	if (!id) return;
+	playerUi.editingId = id;
+}
+
+export function closeTrackEdit() {
+	playerUi.editingId = null;
+}
+
+export function editingTrack() {
+	return tracks.find((t) => t.id === playerUi.editingId) ?? null;
+}
+
+/**
+ * @param {{
+ *   title: string,
+ *   artists: string[],
+ *   album?: string,
+ *   album_artist?: string,
+ *   year?: number | null,
+ *   genres?: string[]
+ * }} patch
+ */
+export async function saveTrackEdit(patch) {
+	const session = activeSession();
+	if (!session) throw new Error('Connect Drive in Settings first');
+	const track = editingTrack();
+	if (!track) throw new Error('No track selected');
+	const next = await putTrackMeta(session, track, patch);
+	const idx = tracks.findIndex((t) => t.id === next.id);
+	if (idx >= 0) {
+		tracks[idx] = {
+			...tracks[idx],
+			...next,
+			artists: next.artists,
+			album: next.album ?? '',
+			album_artist: next.album_artist ?? '',
+			year: next.year ?? null,
+			genres: next.genres ?? []
+		};
+	} else {
+		tracks.push(next);
+	}
+	playerUi.editingId = null;
+	return next;
 }
 
 /**
