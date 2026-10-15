@@ -422,6 +422,8 @@ export async function uploadTrack(session, file, opts = {}) {
 		err.name = 'AbortError';
 		throw err;
 	}
+	// Stamp when the user started adding to Drive — Recently Added sorts on this.
+	const addedAt = nowRfc3339();
 	const id = newId();
 	const meta = await readAudioTags(file);
 	const contentType = file.type || 'audio/mpeg';
@@ -446,7 +448,6 @@ export async function uploadTrack(session, file, opts = {}) {
 		throw err;
 	}
 
-	const created = nowRfc3339();
 	const track = {
 		schema: 'alpha.track/1',
 		id,
@@ -460,8 +461,8 @@ export async function uploadTrack(session, file, opts = {}) {
 		genres: [],
 		project_ids: [],
 		labels: [],
-		created_at: created,
-		updated_at: created
+		created_at: addedAt,
+		updated_at: nowRfc3339()
 	};
 	opts.onProgress?.('index', 1, 1);
 	await putPath(session, trackPath, 'track', JSON.stringify(track, null, 2));
@@ -518,6 +519,9 @@ export function buildTrackDoc(track, patch = {}) {
 	const coverPath =
 		patch.cover_path !== undefined ? patch.cover_path : (track.cover_path ?? null);
 
+	// Never rewrite created_at on edit — that is the Drive add / upload time for Recently Added.
+	const createdAt = track.created_at || track.updated_at || nowRfc3339();
+
 	return {
 		schema: 'alpha.track/1',
 		id: track.id,
@@ -534,7 +538,7 @@ export function buildTrackDoc(track, patch = {}) {
 		cover_path: coverPath,
 		project_ids: Array.isArray(track.project_ids) ? track.project_ids : [],
 		labels: Array.isArray(track.labels) ? track.labels : [],
-		created_at: track.created_at ?? nowRfc3339(),
+		created_at: createdAt,
 		updated_at: nowRfc3339()
 	};
 }

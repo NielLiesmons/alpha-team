@@ -1069,10 +1069,11 @@ function compareTracks(a, b) {
 }
 
 /**
+ * Drive add time for Recently Added — created_at only (not updated_at from edits).
  * @param {any} t
  */
-function trackCreatedMs(t) {
-	const raw = t.created_at ?? t.updated_at;
+function trackAddedMs(t) {
+	const raw = t.created_at;
 	const ms = raw ? Date.parse(raw) : 0;
 	return Number.isFinite(ms) ? ms : 0;
 }
@@ -1106,7 +1107,7 @@ export function visibleTracks() {
 		return [];
 	}
 	if (playerBrowse.mode === 'recent') {
-		return [...tracks].sort((a, b) => trackCreatedMs(b) - trackCreatedMs(a) || compareTracks(a, b));
+		return [...tracks].sort((a, b) => trackAddedMs(b) - trackAddedMs(a) || compareTracks(a, b));
 	}
 	return [...tracks].sort(compareTracks);
 }
