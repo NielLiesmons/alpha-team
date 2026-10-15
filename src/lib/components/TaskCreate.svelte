@@ -541,7 +541,7 @@
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		padding: 8px 16px 0;
+		padding: 8px 16px 4px;
 		gap: 8px;
 	}
 
