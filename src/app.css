@@ -645,20 +645,27 @@ table.data tr.selected td {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 10px 16px 4px;
+	padding: 8px 16px 0;
 }
 
 .publish-btn {
 	margin-left: auto;
-	height: 32px;
-	padding: 0 16px;
+	height: 36px;
+	min-height: 36px;
+	max-height: 36px;
+	padding: 0 18px;
 	border: 0;
 	border-radius: 9999px;
 	background: var(--white);
 	color: var(--black);
-	font-size: 15px;
+	font-size: 14px;
 	font-weight: 500;
+	line-height: 1;
 	cursor: pointer;
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .publish-btn:disabled {

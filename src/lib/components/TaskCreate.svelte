@@ -242,7 +242,7 @@
 					{:else}
 						{#each assignees.slice(0, 2) as person, i (person.email ?? person.name ?? i)}
 							<span class="stack-pic" style:margin-left={i > 0 ? '-6px' : '0'}>
-								<ProfilePic name={person.name ?? ''} size={20} />
+								<ProfilePic name={person.name ?? ''} size={22} />
 							</span>
 						{/each}
 						<span class="pill-names">{assignees.map((a) => a.name).filter(Boolean).join(', ')}</span>
@@ -316,7 +316,7 @@
 						<span class="trigger-count">{labels.length}</span>
 						<span class="trigger-text">Label{labels.length === 1 ? '' : 's'}</span>
 					</span>
-					<svg class="labels-trigger-tip" width="24" height="32" viewBox="0 0 24 32" fill="none" aria-hidden="true">
+					<svg class="labels-trigger-tip" width="27" height="36" viewBox="0 0 24 32" fill="none" aria-hidden="true">
 						<path
 							d="M0 0 L4 0 Q9 2 14 6 Q19 10 23 14 Q23.5 16 23 18 Q19 22 14 26 Q9 30 4 32 L0 32 Z"
 							fill="var(--trigger-bg)"
@@ -506,7 +506,7 @@
 	.post-action-row {
 		display: flex;
 		align-items: center;
-		padding: 0 16px 8px;
+		padding: 0 16px 6px;
 	}
 
 	.action-buttons-left {
@@ -517,17 +517,18 @@
 	}
 
 	.action-btn {
-		width: 32px;
-		height: 32px;
+		width: 36px;
+		height: 36px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		background: var(--fg-8);
 		border: none;
-		border-radius: 8px;
+		border-radius: 10px;
 		padding: 0;
 		cursor: pointer;
 		color: var(--fg-33);
+		box-sizing: border-box;
 	}
 
 	.action-btn:hover {
@@ -536,10 +537,11 @@
 	}
 
 	.task-bottom-row {
+		--ctrl-h: 36px;
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		padding: 10px 16px 4px;
+		padding: 8px 16px 0;
 		gap: 8px;
 	}
 
@@ -556,19 +558,25 @@
 	.pill-wrap {
 		position: relative;
 		flex-shrink: 0;
+		height: var(--ctrl-h);
+		display: flex;
+		align-items: center;
 	}
 
 	.meta-pill {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		height: 32px;
-		padding: 0 12px 0 8px;
+		height: var(--ctrl-h);
+		min-height: var(--ctrl-h);
+		max-height: var(--ctrl-h);
+		padding: 0 14px 0 10px;
 		border: 0;
 		border-radius: 9999px;
 		background: var(--fg-4);
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 500;
+		line-height: 1;
 		color: var(--fg-66);
 		white-space: nowrap;
 		cursor: pointer;
@@ -578,7 +586,7 @@
 
 	.meta-pill.empty {
 		color: var(--fg-33);
-		padding-left: 10px;
+		padding-left: 12px;
 	}
 
 	.meta-pill:hover {
@@ -586,8 +594,8 @@
 	}
 
 	.empty-avatar {
-		width: 20px;
-		height: 20px;
+		width: 22px;
+		height: 22px;
 		border-radius: 50%;
 		border: 1px dashed var(--fg-16);
 		box-sizing: border-box;
@@ -610,13 +618,16 @@
 		display: inline-flex;
 		flex-direction: row;
 		align-items: center;
-		height: 32px;
+		height: var(--ctrl-h);
+		min-height: var(--ctrl-h);
+		max-height: var(--ctrl-h);
 		background: none;
 		border: none;
 		padding: 0;
 		cursor: pointer;
 		flex-shrink: 0;
 		--trigger-bg: var(--fg-4);
+		box-sizing: border-box;
 	}
 
 	.labels-trigger.has-labels {
@@ -628,16 +639,21 @@
 		flex-direction: row;
 		align-items: center;
 		gap: 6px;
-		height: 32px;
-		padding: 0 2px 0 12px;
+		height: var(--ctrl-h);
+		min-height: var(--ctrl-h);
+		max-height: var(--ctrl-h);
+		padding: 0 2px 0 14px;
 		background: var(--trigger-bg);
-		border-radius: 12px 0 0 12px;
+		border-radius: 14px 0 0 14px;
 		white-space: nowrap;
+		line-height: 1;
+		box-sizing: border-box;
 	}
 
 	.trigger-count {
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 600;
+		line-height: 1;
 		color: var(--fg-16);
 	}
 
@@ -646,8 +662,9 @@
 	}
 
 	.trigger-text {
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 500;
+		line-height: 1;
 		color: var(--fg-33);
 	}
 
@@ -658,8 +675,8 @@
 	.labels-trigger-tip {
 		flex-shrink: 0;
 		display: block;
-		width: 24px;
-		height: 32px;
+		width: 27px;
+		height: var(--ctrl-h);
 	}
 
 	.labels-menu {
@@ -713,20 +730,24 @@
 	}
 
 	.publish-btn {
-		height: 32px;
-		padding: 0 16px;
-		display: flex;
+		height: var(--ctrl-h);
+		min-height: var(--ctrl-h);
+		max-height: var(--ctrl-h);
+		padding: 0 18px;
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		background: var(--fg);
 		border: none;
 		border-radius: 9999px;
 		color: var(--bg);
-		font-size: 15px;
+		font-size: 14px;
 		font-weight: 500;
+		line-height: 1;
 		cursor: pointer;
 		flex-shrink: 0;
 		margin-left: auto;
+		box-sizing: border-box;
 	}
 
 	.publish-btn:disabled {
