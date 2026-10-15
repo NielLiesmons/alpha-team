@@ -86,7 +86,12 @@ async function putTip(session, hash) {
  * @param {Uint8Array} ciphertext
  */
 export async function putBlock(session, hash, ciphertext) {
-	await api(session, 'PUT', `/v1/blocks/${hash}`, ciphertext);
+	// Blob body is more reliable than raw Uint8Array across browsers/servers.
+	const body =
+		ciphertext instanceof Uint8Array
+			? new Blob([ciphertext])
+			: ciphertext;
+	await api(session, 'PUT', `/v1/blocks/${hash}`, body);
 }
 
 /**

@@ -154,7 +154,7 @@
 		if (saving) return;
 		saving = true;
 		saveError = '';
-		saveStatus = coverFile ? 'Uploading artwork…' : 'Saving…';
+		saveStatus = coverFile ? 'Preparing artwork…' : 'Saving…';
 		try {
 			if (!bulk) {
 				const nextTitle = title.trim();
@@ -209,7 +209,11 @@
 				}
 				await saveTrackEdit(patch);
 			}
-			saveStatus = 'Saved';
+			saveStatus = coverFile || clearCover ? 'Artwork saved' : 'Saved';
+			// Let the status paint before closing the sheet
+			await new Promise((r) => setTimeout(r, 700));
+			playerUi.selectedIds = [];
+			closeTrackEdit();
 		} catch (e) {
 			saveError = e instanceof Error ? e.message : String(e);
 			saveStatus = '';

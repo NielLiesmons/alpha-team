@@ -31,7 +31,9 @@
 			return;
 		}
 		// Do not call load() — it resets MediaSource progressive streams.
-		if (audioEl.src !== url) {
+		// Compare pathname-style: audioEl.src is absolute, object URLs may differ by resolution.
+		const current = audioEl.getAttribute('src') || '';
+		if (current !== url && audioEl.src !== url) {
 			audioEl.src = url;
 		}
 		if (playerUi.status === 'ready' && audioEl.paused) {

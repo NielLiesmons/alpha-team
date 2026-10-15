@@ -588,16 +588,63 @@ export async function patchTrackFields(session, track, patch) {
 }
 
 /**
+ * Decode any browser-readable image and re-encode as JPEG (max edge 1400).
+ * Rejects HEIC/unsupported types with a clear error instead of a silent fail.
+ * @param {File | Blob} file
+ * @returns {Promise<Uint8Array>}
+ */
+async function encodeCoverJpeg(file) {
+	const type = (file.type || '').toLowerCase();
+	if (type.includes('heic') || type.includes('heif')) {
+		throw new Error('HEIC photos aren’t supported — export as JPEG or PNG first');
+	}
+	if (type && !type.startsWith('image/')) {
+		throw new Error('Cover must be an image (JPEG, PNG, or WebP)');
+	}
+	if (file.size > 20 * 1024 * 1024) {
+		throw new Error('Cover image is too large (max 20MB)');
+	}
+
+	let bitmap;
+	try {
+		bitmap = await createImageBitmap(file);
+	} catch {
+		throw new Error('Couldn’t read that image — try JPEG or PNG');
+	}
+
+	const maxEdge = 1400;
+	const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height, 1));
+	const w = Math.max(1, Math.round(bitmap.width * scale));
+	const h = Math.max(1, Math.round(bitmap.height * scale));
+	const canvas = document.createElement('canvas');
+	canvas.width = w;
+	canvas.height = h;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) {
+		bitmap.close();
+		throw new Error('Couldn’t process cover image');
+	}
+	ctx.drawImage(bitmap, 0, 0, w, h);
+	bitmap.close();
+
+	const blob = await new Promise((resolve, reject) => {
+		canvas.toBlob(
+			(b) => (b ? resolve(b) : reject(new Error('Couldn’t encode cover JPEG'))),
+			'image/jpeg',
+			0.88
+		);
+	});
+	return new Uint8Array(await blob.arrayBuffer());
+}
+
+/**
  * Prepare cover image bytes + content-addressed path (does not write yet).
  * @param {File | Blob} file
  * @returns {Promise<{ path: string, bytes: Uint8Array }>}
  */
 export async function prepareCoverImage(file) {
-	const type = file.type || 'image/jpeg';
-	if (!type.startsWith('image/')) throw new Error('Cover must be an image');
-	const bytes = new Uint8Array(await file.arrayBuffer());
+	const bytes = await encodeCoverJpeg(file);
 	if (!bytes.length) throw new Error('Empty cover image');
-	if (bytes.length > 12 * 1024 * 1024) throw new Error('Cover image is too large (max 12MB)');
 	const hash = await sha256Hex(bytes);
 	return { path: `media/audio/covers/${hash}`, bytes };
 }

@@ -387,7 +387,7 @@ function appendBuffer(sb, data, signal) {
 }
 
 /**
- * Attach MediaSource URL to the bound <audio> immediately (don't wait for Svelte effects).
+ * Attach object URL to the bound <audio> immediately (don't wait for Svelte effects).
  * @param {string} url
  */
 function attachAudioSrc(url) {
@@ -396,6 +396,29 @@ function attachAudioSrc(url) {
 	if (boundAudio.src !== url) {
 		boundAudio.src = url;
 	}
+}
+
+/**
+ * @param {number} ms
+ * @param {AbortSignal} signal
+ */
+function sleep(ms, signal) {
+	return new Promise((resolve, reject) => {
+		if (signal.aborted) {
+			const err = new Error('Aborted');
+			err.name = 'AbortError';
+			reject(err);
+			return;
+		}
+		const t = setTimeout(resolve, ms);
+		const onAbort = () => {
+			clearTimeout(t);
+			const err = new Error('Aborted');
+			err.name = 'AbortError';
+			reject(err);
+		};
+		signal.addEventListener('abort', onAbort, { once: true });
+	});
 }
 
 /**
@@ -412,6 +435,11 @@ function attachAudioSrc(url) {
 async function playViaMse(session, track, mime, manifest, fileKeyHex, generation, signal) {
 	const MS = mediaSourceCtor();
 	if (!MS) throw new Error('MediaSource unavailable');
+
+	// Wait a frame so PlayerEngine has bound the <audio> element.
+	if (!boundAudio) {
+		await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+	}
 
 	const ms = new MS();
 	activeMediaSource = ms;
@@ -430,9 +458,14 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 			err.name = 'AbortError';
 			reject(err);
 		};
+		const onTimeout = () => {
+			cleanup();
+			reject(new Error('MediaSource open timed out'));
+		};
 		const cleanup = () => {
 			ms.removeEventListener('sourceopen', onOpen);
 			signal.removeEventListener('abort', onAbort);
+			clearTimeout(timer);
 		};
 		if (ms.readyState === 'open') {
 			cleanup();
@@ -446,6 +479,7 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 		ms.addEventListener('sourceopen', onOpen, { once: true });
 		signal.addEventListener('abort', onAbort);
 		attachAudioSrc(url);
+		const timer = setTimeout(onTimeout, 4000);
 	});
 
 	await sourceOpen;
@@ -469,8 +503,6 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 
 	let started = false;
 	let chunksAppended = 0;
-	/** Start after the first chunk so audio begins ASAP (~256KB). */
-	const startAfter = 1;
 	/** @type {((v?: undefined) => void) | null} */
 	let resolveStart = null;
 	/** @type {((e: Error) => void) | null} */
@@ -484,12 +516,7 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 		if (started || generation !== playGeneration) return;
 		started = true;
 		playerUi.status = 'ready';
-		const playAttempt = boundAudio?.play();
-		if (playAttempt) {
-			playAttempt.catch(() => {
-				/* autoplay / not-yet-enough-buffer — PlayerEngine retries on ready */
-			});
-		}
+		boundAudio?.play()?.catch(() => {});
 		resolveStart?.();
 	};
 
@@ -506,9 +533,10 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 			if (ms.readyState !== 'open') {
 				throw new Error('MediaSource closed during append');
 			}
-			await appendBuffer(sb, bytes, signal);
+			// Copy — some engines detach the underlying ArrayBuffer after append.
+			await appendBuffer(sb, bytes.slice(), signal);
 			chunksAppended += 1;
-			if (chunksAppended >= startAfter) tryStart();
+			if (chunksAppended >= 1) tryStart();
 		}
 	})
 		.then(() => {
@@ -528,7 +556,6 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 			if (!started) {
 				rejectStart?.(e instanceof Error ? e : new Error(String(e)));
 			}
-			/* After start: keep playing buffered audio; ignore late chunk errors. */
 		});
 
 	await startedGate;
@@ -537,8 +564,24 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 }
 
 /**
- * Fallback when MSE is unavailable: wait for the full file, then play once.
- * Early first-chunk blobs caused an audible jump when swapping to the full file.
+ * Concatenate chunk parts into one Uint8Array.
+ * @param {Uint8Array[]} parts
+ */
+function concatParts(parts) {
+	let total = 0;
+	for (const p of parts) total += p.length;
+	const out = new Uint8Array(total);
+	let off = 0;
+	for (const p of parts) {
+		out.set(p, off);
+		off += p.length;
+	}
+	return out;
+}
+
+/**
+ * Fallback when MSE can't append MP3 (e.g. Safari): start after the first chunk,
+ * keep downloading, then quietly swap to the full file once ready.
  * @param {import('./drive/client.js').DriveSession} session
  * @param {any} track
  * @param {any} manifest
@@ -550,8 +593,31 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 	const type = manifest.content_type || 'audio/mpeg';
 	/** @type {Uint8Array[]} */
 	const parts = [];
+	let started = false;
+	let earlyUrl = /** @type {string | null} */ (null);
 
-	await streamMediaChunks(session, track.media_path, {
+	/** @type {((v?: undefined) => void) | null} */
+	let resolveStart = null;
+	/** @type {((e: Error) => void) | null} */
+	let rejectStart = null;
+	const startedGate = new Promise((resolve, reject) => {
+		resolveStart = resolve;
+		rejectStart = reject;
+	});
+
+	const startEarly = () => {
+		if (started || generation !== playGeneration || !parts.length) return;
+		started = true;
+		const early = concatParts(parts);
+		earlyUrl = URL.createObjectURL(new Blob([early], { type }));
+		playerUi.objectUrl = earlyUrl;
+		attachAudioSrc(earlyUrl);
+		playerUi.status = 'ready';
+		boundAudio?.play()?.catch(() => {});
+		resolveStart?.();
+	};
+
+	bufferTail = streamMediaChunks(session, track.media_path, {
 		signal,
 		manifest,
 		fileKeyHex,
@@ -562,26 +628,58 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		onChunk: async (_i, bytes) => {
 			if (generation !== playGeneration) return;
 			parts.push(bytes);
+			// First chunk (~256KB) is enough to begin decoding MP3.
+			if (parts.length === 1) startEarly();
+		}
+	})
+		.then(async () => {
+			if (generation !== playGeneration) return;
+			playerUi.bufferRatio = 1;
+			const full = concatParts(parts);
+			const fullUrl = URL.createObjectURL(new Blob([full], { type }));
+			if (!started) {
+				earlyUrl = fullUrl;
+				playerUi.objectUrl = fullUrl;
+				attachAudioSrc(fullUrl);
+				playerUi.status = 'ready';
+				boundAudio?.play()?.catch(() => {});
+				resolveStart?.();
+				return;
+			}
+			// Soft-swap to the complete file — keep playhead.
+			const t = boundAudio?.currentTime ?? 0;
+			const wasPlaying = boundAudio ? !boundAudio.paused : true;
+			playerUi.objectUrl = fullUrl;
+			attachAudioSrc(fullUrl);
+			if (boundAudio) {
+				try {
+					boundAudio.currentTime = t;
+				} catch {
+					/* ignore */
+				}
+				if (wasPlaying) boundAudio.play()?.catch(() => {});
+			}
+			if (earlyUrl && earlyUrl !== fullUrl) URL.revokeObjectURL(earlyUrl);
+			earlyUrl = fullUrl;
+		})
+		.catch((e) => {
+			if (generation !== playGeneration || e?.name === 'AbortError') return;
+			if (!started) {
+				rejectStart?.(e instanceof Error ? e : new Error(String(e)));
+			}
+		});
+
+	// Don't hang forever if chunk 0 is slow — wait with abort.
+	const timeout = sleep(30000, signal).then(() => {
+		if (!started) {
+			rejectStart?.(new Error('Timed out waiting for audio'));
 		}
 	});
+	void timeout;
 
+	await startedGate;
 	if (generation !== playGeneration) return null;
-
-	let total = 0;
-	for (const p of parts) total += p.length;
-	const out = new Uint8Array(total);
-	let off = 0;
-	for (const p of parts) {
-		out.set(p, off);
-		off += p.length;
-	}
-	const fullUrl = URL.createObjectURL(new Blob([out], { type }));
-	playerUi.objectUrl = fullUrl;
-	attachAudioSrc(fullUrl);
-	playerUi.bufferRatio = 1;
-	playerUi.status = 'ready';
-	boundAudio?.play().catch(() => {});
-	return fullUrl;
+	return playerUi.objectUrl;
 }
 
 /**
@@ -633,7 +731,7 @@ export async function playTrack(track) {
 				);
 			} catch (e) {
 				if (e?.name === 'AbortError' || generation !== playGeneration) throw e;
-				// MSE rejected before start — only then wait for the full file.
+				// MSE rejected before start — progressive blob (still starts on first chunk).
 				cancelInFlightPlay();
 				revokeUrl();
 				const gen2 = playGeneration;
@@ -647,9 +745,10 @@ export async function playTrack(track) {
 		} else {
 			url = await playViaBlob(session, track, manifest, fileKeyHex, generation, ac.signal);
 		}
-		if (generation === playGeneration) {
+		const liveGen = playGeneration;
+		// generation may have been bumped by MSE→blob fallback; treat either as ok if we have a url
+		if (url && (generation === liveGen || playerUi.currentId === track.id)) {
 			playAbort = null;
-			// Manual play replaces any pending Play Next
 			if (playerUi.upNextId === track.id) playerUi.upNextId = null;
 			if (isMobileViewport()) playerUi.nowPlayingOpen = true;
 		}
@@ -847,9 +946,8 @@ export async function saveTrackEdit(patch) {
 	}
 	for (const next of updated) applyTrackLocal(next);
 	onProgress?.('Saved');
-
-	playerUi.editingIds = [];
-	playerUi.selectedIds = [];
+	// Caller closes the sheet after showing status — don't yank the UI away mid-feedback.
+	return updated;
 }
 
 /**
