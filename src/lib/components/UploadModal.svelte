@@ -7,7 +7,6 @@
 	} from '$lib/player.svelte.js';
 	import CreateSheet from './CreateSheet.svelte';
 
-	const open = $derived(uploadUi.open);
 	const done = $derived(uploadUi.items.filter((i) => i.status === 'done').length);
 	const total = $derived(uploadUi.items.length);
 	const failed = $derived(uploadUi.items.filter((i) => i.status === 'error').length);
@@ -20,10 +19,6 @@
 					: `Uploaded ${done}/${total}`
 				: 'Upload'
 	);
-
-	function onclose() {
-		closeUploadModal();
-	}
 </script>
 
 {#if uploadUi.active && !uploadUi.open}
@@ -36,7 +31,7 @@
 	</button>
 {/if}
 
-<CreateSheet {open} label="Upload audio" {onclose}>
+<CreateSheet open={uploadUi.open} label="Upload audio" onclose={closeUploadModal}>
 	<div class="sheet-title-row">
 		<p class="heading">{heading}</p>
 	</div>
@@ -75,7 +70,7 @@
 		{#if uploadUi.active}
 			<button type="button" class="cancel-btn" onclick={cancelUploadJob}>Cancel all</button>
 		{/if}
-		<button type="button" class="publish-btn" onclick={onclose}>
+		<button type="button" class="publish-btn" onclick={closeUploadModal}>
 			{uploadUi.active ? 'Hide' : 'Done'}
 		</button>
 	</div>

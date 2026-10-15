@@ -295,7 +295,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 8px 8px 10px;
+		/* Flush with detail column — no outer frame (match Task/Note body inset via row pad) */
+		padding: 0 0 8px;
 		width: 100%;
 		box-sizing: border-box;
 	}
@@ -307,13 +308,14 @@
 		gap: 4px;
 		width: 100%;
 		min-width: 0;
-		border-radius: 12px;
+		border-radius: 0;
 		box-sizing: border-box;
 	}
 
 	.artist-row {
-		padding: 0.85rem 0.9rem;
+		padding: 0.85rem 16px;
 		border: 0;
+		border-radius: 0;
 		background: transparent;
 		color: inherit;
 		text-align: left;
@@ -369,9 +371,9 @@
 		flex-direction: column;
 		align-items: stretch;
 		gap: 2px;
-		padding: 0.75rem 0.4rem 0.75rem 0.75rem;
+		padding: 0.75rem 0.4rem 0.75rem 16px;
 		border: 0;
-		border-radius: 12px;
+		border-radius: 0;
 		background: transparent;
 		color: inherit;
 		text-align: left;
@@ -439,7 +441,7 @@
 	.menu-wrap {
 		position: relative;
 		flex-shrink: 0;
-		margin-right: 4px;
+		margin-right: 8px;
 	}
 
 	.more-btn {
@@ -504,10 +506,6 @@
 	}
 
 	@media (min-width: 768px) {
-		.card-stack {
-			padding: 8px 12px 12px;
-		}
-
 		/* Desktop: title | artist | album columns */
 		.line-secondary {
 			display: none;
@@ -543,7 +541,11 @@
 		}
 
 		.main {
-			padding: 0.7rem 0.5rem 0.7rem 0.85rem;
+			padding: 0.7rem 0.5rem 0.7rem 16px;
+		}
+
+		.menu-wrap {
+			margin-right: 10px;
 		}
 	}
 </style>

@@ -40,14 +40,16 @@
 		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
 		const files = input.files;
 		if (!files?.length) return;
+		// Copy FileList before clearing input — upload is async
+		const list = [...files];
+		input.value = '';
+		openUploadModal();
 		try {
-			openUploadModal();
-			await uploadAudioFiles(files);
+			await uploadAudioFiles(list);
 		} catch (err) {
 			playerUi.error = err instanceof Error ? err.message : String(err);
-			if (!uploadUi.open) openUploadModal();
+			openUploadModal();
 		}
-		input.value = '';
 	}
 
 	const task = $derived(
@@ -251,20 +253,18 @@
 					</div>
 				{/if}
 			</div>
-			{#if isPlayer}
-				<input
-					bind:this={playerFileInput}
-					class="sr-only"
-					type="file"
-					accept="audio/*,.mp3,.m4a,.flac,.ogg,.wav"
-					multiple
-					onchange={onPlayerFiles}
-				/>
-			{/if}
 		</header>
 	{/if}
 
 	{#if isPlayer}
+		<input
+			bind:this={playerFileInput}
+			class="sr-only"
+			type="file"
+			accept="audio/*,.mp3,.m4a,.flac,.ogg,.wav"
+			multiple
+			onchange={onPlayerFiles}
+		/>
 		<header class="detail-top desktop-head">
 			{#if playerBrowse.mode === 'artists' && playerBrowse.artist}
 				<button

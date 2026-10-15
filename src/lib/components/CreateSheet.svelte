@@ -7,14 +7,14 @@
 	 * Mobile: bottom sheet. Desktop: large centered card. No chrome X (Escape / scrim).
 	 */
 	let {
-		open = $bindable(false),
+		open = false,
 		label = 'Create',
 		onclose = () => {},
 		children
 	} = $props();
 
 	function close() {
-		open = false;
+		// Parent owns `open` — only notify (avoids bindable desync that blocks reopen)
 		onclose();
 	}
 
