@@ -3,6 +3,7 @@
 	 * Feed row: status picker | title | priority picker
 	 * Row 2: L connector, people, labels
 	 */
+	import { asPerson } from '$lib/actor.svelte.js';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import TaskFieldPicker from './TaskFieldPicker.svelte';
@@ -25,10 +26,11 @@
 
 	const allStackPeople = $derived.by(() => {
 		const seen = new Set();
-		/** @type {{ pubkey?: string, name?: string }[]} */
+		/** @type {{ email: string, name: string }[]} */
 		const merged = [];
-		for (const person of [author, ...assignees, ...commenters]) {
-			const key = person?.pubkey || person?.name;
+		for (const raw of [author, ...assignees, ...commenters]) {
+			const person = asPerson(raw);
+			const key = person?.email;
 			if (person && key && !seen.has(key)) {
 				seen.add(key);
 				merged.push(person);

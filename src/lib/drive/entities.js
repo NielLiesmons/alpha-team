@@ -145,16 +145,27 @@ export function normalizeTask(raw) {
 	t.schema = 'alpha.task/2';
 	t.labels = Array.isArray(t.labels) ? t.labels : [];
 	t.priority = t.priority ?? 'none';
+	if (typeof t.author === 'string') t.author = t.author.trim().toLowerCase();
+	else if (t.author && typeof t.author === 'object') {
+		t.author = String(t.author.email || t.author.pubkey || '')
+			.trim()
+			.toLowerCase();
+		if (!t.author) delete t.author;
+	}
 	return t;
 }
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {{ title: string, project_ids?: string[], description?: string, status?: string, priority?: string, labels?: string[] }} input
+ * @param {{ title: string, project_ids?: string[], description?: string, status?: string, priority?: string, labels?: string[], author?: string }} input
  */
 export async function createTask(session, input) {
 	const id = newId();
 	const created = nowRfc3339();
+	const author =
+		typeof input.author === 'string' && input.author.trim()
+			? input.author.trim().toLowerCase()
+			: undefined;
 	const task = {
 		schema: 'alpha.task/2',
 		id,
@@ -164,6 +175,7 @@ export async function createTask(session, input) {
 		status: input.status ?? 'open',
 		priority: input.priority ?? 'none',
 		labels: input.labels ?? [],
+		...(author ? { author } : {}),
 		created_at: created,
 		updated_at: created
 	};
@@ -207,11 +219,15 @@ export async function listTasks(session, projectId) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {{ title: string, body?: string, project_ids?: string[], labels?: string[] }} input
+ * @param {{ title: string, body?: string, project_ids?: string[], labels?: string[], author?: string }} input
  */
 export async function createNote(session, input) {
 	const id = newId();
 	const created = nowRfc3339();
+	const author =
+		typeof input.author === 'string' && input.author.trim()
+			? input.author.trim().toLowerCase()
+			: undefined;
 	const note = {
 		schema: 'alpha.note/1',
 		id,
@@ -219,6 +235,7 @@ export async function createNote(session, input) {
 		title: input.title,
 		body: input.body ?? '',
 		labels: input.labels ?? [],
+		...(author ? { author } : {}),
 		created_at: created,
 		updated_at: created
 	};
@@ -231,6 +248,10 @@ export async function createNote(session, input) {
  * @param {any} note
  */
 export async function putNote(session, note) {
+	const author =
+		typeof note.author === 'string' && note.author.trim()
+			? note.author.trim().toLowerCase()
+			: undefined;
 	const n = {
 		schema: 'alpha.note/1',
 		id: note.id,
@@ -238,6 +259,7 @@ export async function putNote(session, note) {
 		title: note.title,
 		body: note.body ?? '',
 		labels: Array.isArray(note.labels) ? note.labels : [],
+		...(author ? { author } : {}),
 		created_at: note.created_at ?? nowRfc3339(),
 		updated_at: nowRfc3339()
 	};
@@ -280,6 +302,8 @@ export async function listNotes(session, projectId) {
 export function toUiNote(n, projectList) {
 	const byId = new Map(projectList.map((p) => [p.id, p]));
 	const createdMs = n.created_at ? Date.parse(n.created_at) : 0;
+	const authorEmail =
+		typeof n.author === 'string' ? n.author : n.author?.email || n.author?.pubkey || '';
 	return {
 		id: n.id,
 		title: n.title,
@@ -290,7 +314,8 @@ export function toUiNote(n, projectList) {
 			label: byId.get(id)?.title ?? id
 		})),
 		project_ids: n.project_ids ?? [],
-		author: { pubkey: 'local', name: 'You' },
+		author: authorEmail || null,
+		assignees: [],
 		createdAt: Number.isFinite(createdMs) ? createdMs : 0,
 		_drive: n
 	};
@@ -300,6 +325,10 @@ export function toUiNote(n, projectList) {
  * @param {any} ui
  */
 export function fromUiNote(ui) {
+	const author =
+		typeof ui.author === 'string'
+			? ui.author
+			: ui.author?.email || ui._drive?.author || undefined;
 	return {
 		schema: 'alpha.note/1',
 		id: ui.id,
@@ -307,6 +336,7 @@ export function fromUiNote(ui) {
 		title: ui.title,
 		body: ui.body ?? '',
 		labels: ui.labels ?? [],
+		...(author ? { author: String(author).toLowerCase() } : {}),
 		created_at: ui._drive?.created_at ?? nowRfc3339(),
 		updated_at: nowRfc3339()
 	};
@@ -494,6 +524,8 @@ export async function listPlaylists(session) {
 export function toUiTask(t, projectList) {
 	const byId = new Map(projectList.map((p) => [p.id, p]));
 	const createdMs = t.created_at ? Date.parse(t.created_at) : 0;
+	const authorEmail =
+		typeof t.author === 'string' ? t.author : t.author?.email || t.author?.pubkey || '';
 	return {
 		id: t.id,
 		title: t.title,
@@ -506,7 +538,7 @@ export function toUiTask(t, projectList) {
 			label: byId.get(id)?.title ?? id
 		})),
 		project_ids: t.project_ids ?? [],
-		author: { pubkey: 'local', name: 'You' },
+		author: authorEmail || null,
 		assignees: [],
 		commenters: [],
 		createdAt: Number.isFinite(createdMs) ? createdMs : 0,
@@ -518,6 +550,10 @@ export function toUiTask(t, projectList) {
  * @param {any} ui
  */
 export function fromUiTask(ui) {
+	const author =
+		typeof ui.author === 'string'
+			? ui.author
+			: ui.author?.email || ui._drive?.author || undefined;
 	return {
 		schema: 'alpha.task/2',
 		id: ui.id,
@@ -527,6 +563,7 @@ export function fromUiTask(ui) {
 		status: ui.status,
 		priority: ui.priority ?? 'none',
 		labels: ui.labels ?? [],
+		...(author ? { author: String(author).toLowerCase() } : {}),
 		created_at: ui._drive?.created_at ?? nowRfc3339(),
 		updated_at: nowRfc3339()
 	};

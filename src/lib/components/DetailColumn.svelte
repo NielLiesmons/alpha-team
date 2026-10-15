@@ -2,10 +2,9 @@
 	import { page } from '$app/stores';
 	import StatusBox from './StatusBox.svelte';
 	import ProfilePic from './ProfilePic.svelte';
-	import LabelPill from './LabelPill.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import PlayerDetail from './PlayerDetail.svelte';
-	import TaskDetailMeta from './TaskDetailMeta.svelte';
+	import DetailMetaPills from './DetailMetaPills.svelte';
 	import {
 		closePlayerDetail,
 		playerBrowse,
@@ -14,6 +13,7 @@
 		setPlayerBrowse,
 		uploadAudioFiles
 	} from '$lib/player.svelte.js';
+	import { asPerson } from '$lib/actor.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import {
 		clearSelection,
@@ -56,8 +56,9 @@
 	);
 
 	const detailAuthor = $derived.by(() => {
-		if (task?.author?.name) return task.author;
-		if (note) return note.author?.name ? note.author : { name: 'You', pubkey: 'local' };
+		if (task?.author) return asPerson(task.author);
+		if (note?.author) return asPerson(note.author);
+		if (note) return asPerson('you@local');
 		return null;
 	});
 
@@ -304,7 +305,7 @@
 			<div class="title-row">
 				<h2 class="title">{task.title}</h2>
 			</div>
-			<TaskDetailMeta {task} />
+			<DetailMetaPills entity={task} kind="task" />
 			{#if task.body}
 				<p class="prose">{task.body}</p>
 			{:else}
@@ -388,18 +389,7 @@
 					oninput={scheduleNoteSave}
 				/>
 			</div>
-			{#if (note.targets?.length ?? 0) > 0 || (note.labels?.length ?? 0) > 0}
-				<div class="note-meta-row" role="list">
-					{#each note.targets ?? [] as target (target.id)}
-						<span class="note-meta-pill" role="listitem">{target.label}</span>
-					{/each}
-					{#each note.labels ?? [] as labelText (labelText)}
-						<span class="note-meta-label" role="listitem">
-							<LabelPill text={labelText} size="small" />
-						</span>
-					{/each}
-				</div>
-			{/if}
+			<DetailMetaPills entity={note} kind="note" />
 			{#key note.id}
 				<div class="note-editor-pad">
 					<NoteEditor value={noteBody} editable={true} onChange={onNoteBodyChange} />
@@ -492,33 +482,6 @@
 		font-weight: 500;
 		color: var(--fg-33);
 		padding-right: 4px;
-	}
-
-	.note-meta-row {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 8px;
-		padding: 0 16px 12px;
-		box-sizing: border-box;
-	}
-
-	.note-meta-pill {
-		display: inline-flex;
-		align-items: center;
-		height: 28px;
-		padding: 0 10px;
-		border-radius: 9999px;
-		background: var(--fg-4);
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--fg-66);
-		white-space: nowrap;
-	}
-
-	.note-meta-label {
-		display: inline-flex;
-		flex-shrink: 0;
 	}
 
 	.title-input {

@@ -18,14 +18,15 @@ import {
 	toUiNote,
 	toUiTask
 } from './drive/entities.js';
+import { activePerson, members } from './actor.svelte.js';
 import { activeSession, driveSession, loadSessionFromStorage } from './drive/session.svelte.js';
 
-const niel = { pubkey: 'niel', name: 'Niel' };
-const lea = { pubkey: 'lea', name: 'Léa' };
-const marc = { pubkey: 'marc', name: 'Marc' };
+const niel = members[0];
+const sarah = members[1];
+const marc = { email: 'marc@bley.farm', name: 'Marc' };
 
-/** People available for assignee pickers (demo + local). */
-export const people = [niel, lea, marc];
+/** People available for assignee pickers (demo + local). Email = account id. */
+export const people = [niel, sarah, marc];
 
 const demoTasks = [
 	{
@@ -37,8 +38,8 @@ const demoTasks = [
 		labels: ['Farm', 'Urgent'],
 		targets: [{ id: 'p1', label: 'Spring CSA' }],
 		project_ids: ['p1'],
-		author: niel,
-		assignees: [lea],
+		author: niel.email,
+		assignees: [sarah],
 		commenters: [marc],
 		createdAt: 4
 	},
@@ -51,7 +52,7 @@ const demoTasks = [
 		labels: ['Shop'],
 		targets: [],
 		project_ids: [],
-		author: lea,
+		author: sarah.email,
 		assignees: [marc],
 		commenters: [],
 		createdAt: 3
@@ -65,7 +66,7 @@ const demoTasks = [
 		labels: ['Farm', 'Drop-off'],
 		targets: [{ id: 'p2', label: 'Egg mobile' }],
 		project_ids: ['p2'],
-		author: niel,
+		author: niel.email,
 		assignees: [marc],
 		commenters: [],
 		createdAt: 2
@@ -79,7 +80,7 @@ const demoTasks = [
 		labels: ['Shop'],
 		targets: [],
 		project_ids: [],
-		author: marc,
+		author: marc.email,
 		assignees: [],
 		commenters: [],
 		createdAt: 1
@@ -93,7 +94,7 @@ const demoTasks = [
 		labels: ['News'],
 		targets: [],
 		project_ids: [],
-		author: niel,
+		author: niel.email,
 		assignees: [],
 		commenters: [],
 		createdAt: 0
@@ -125,7 +126,8 @@ const demoNotes = [
 		labels: ['Logistics'],
 		targets: [{ id: 'p1', label: 'Spring CSA' }],
 		project_ids: ['p1'],
-		author: niel,
+		author: niel.email,
+		assignees: [sarah],
 		createdAt: 2
 	},
 	{
@@ -135,7 +137,8 @@ const demoNotes = [
 		labels: ['Farm'],
 		targets: [{ id: 'p2', label: 'Egg mobile' }],
 		project_ids: ['p2'],
-		author: lea,
+		author: sarah.email,
+		assignees: [],
 		createdAt: 1
 	}
 ];
@@ -241,14 +244,25 @@ export async function refreshFromDrive() {
 }
 
 /**
- * Quick status/priority patch from cards or detail (persists via saveTask).
+ * Quick field patch from cards or detail (persists via saveTask).
  * @param {string} id
- * @param {{ status?: string, priority?: string }} patch
+ * @param {Record<string, unknown>} patch
  */
 export async function patchTask(id, patch) {
 	const t = tasks.find((x) => x.id === id);
 	if (!t) return;
 	await saveTask({ ...t, ...patch }, false);
+}
+
+/**
+ * Quick field patch for notes (projects, labels, assignees, …).
+ * @param {string} id
+ * @param {Record<string, unknown>} patch
+ */
+export async function patchNote(id, patch) {
+	const n = notes.find((x) => x.id === id);
+	if (!n) return;
+	await saveNote({ ...n, ...patch }, false);
 }
 
 /**
@@ -264,7 +278,7 @@ export async function saveTask(draft, isNew) {
 				...draft,
 				id: draft.id || crypto.randomUUID(),
 				createdAt: Date.now(),
-				author: draft.author ?? { pubkey: 'niel', name: 'Niel' },
+				author: draft.author ?? activePerson().email,
 				assignees: draft.assignees ?? [],
 				commenters: draft.commenters ?? [],
 				targets: draft.targets ?? [],
@@ -284,19 +298,23 @@ export async function saveTask(draft, isNew) {
 			status: draft.status,
 			priority: draft.priority,
 			labels: draft.labels,
-			project_ids: draft.project_ids ?? []
+			project_ids: draft.project_ids ?? [],
+			author: draft.author ?? activePerson().email
 		});
 		const plist = projects.map((p) => p._drive ?? p);
 		tasks.unshift(toUiTask(created, plist));
 	} else {
-		const entity = fromUiTask(draft);
+		const entity = fromUiTask({
+			...draft,
+			author: draft.author ?? activePerson().email
+		});
 		const saved = await putTask(session, entity);
 		const idx = tasks.findIndex((t) => t.id === saved.id);
 		const plist = projects.map((p) => p._drive ?? p);
 		const uiTask = {
 			...toUiTask(saved, plist),
 			/* Assignees not on Drive schema yet — keep UI-side picks */
-			author: draft.author ?? (idx >= 0 ? tasks[idx].author : undefined),
+			author: draft.author ?? (idx >= 0 ? tasks[idx].author : undefined) ?? activePerson().email,
 			assignees: draft.assignees ?? (idx >= 0 ? tasks[idx].assignees : []) ?? [],
 			commenters: draft.commenters ?? (idx >= 0 ? tasks[idx].commenters : []) ?? []
 		};
@@ -322,7 +340,8 @@ export async function saveNote(draft, isNew) {
 				targets: draft.targets ?? [],
 				project_ids: draft.project_ids ?? [],
 				labels: draft.labels ?? [],
-				author: draft.author ?? { pubkey: 'local', name: 'You' }
+				assignees: draft.assignees ?? [],
+				author: draft.author ?? activePerson().email
 			});
 			ui.noteId = id;
 			ui.selection = { kind: 'note', id };
@@ -340,19 +359,31 @@ export async function saveNote(draft, isNew) {
 			title: draft.title,
 			body: draft.body,
 			labels: draft.labels,
-			project_ids: draft.project_ids ?? []
+			project_ids: draft.project_ids ?? [],
+			author: draft.author ?? activePerson().email
 		});
 		const plist = projects.map((p) => p._drive ?? p);
-		const uiNote = toUiNote(created, plist);
+		const uiNote = {
+			...toUiNote(created, plist),
+			assignees: draft.assignees ?? [],
+			author: draft.author ?? activePerson().email
+		};
 		notes.unshift(uiNote);
 		ui.noteId = uiNote.id;
 		ui.selection = { kind: 'note', id: uiNote.id };
 	} else {
-		const entity = fromUiNote(draft);
+		const entity = fromUiNote({
+			...draft,
+			author: draft.author ?? activePerson().email
+		});
 		const saved = await putNote(session, entity);
 		const idx = notes.findIndex((n) => n.id === saved.id);
 		const plist = projects.map((p) => p._drive ?? p);
-		const uiNote = toUiNote(saved, plist);
+		const uiNote = {
+			...toUiNote(saved, plist),
+			assignees: draft.assignees ?? (idx >= 0 ? notes[idx].assignees : []) ?? [],
+			author: draft.author ?? (idx >= 0 ? notes[idx].author : undefined) ?? activePerson().email
+		};
 		if (idx >= 0) Object.assign(notes[idx], uiNote);
 		else notes.unshift(uiNote);
 		ui.noteId = uiNote.id;

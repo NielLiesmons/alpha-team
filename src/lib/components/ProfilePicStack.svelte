@@ -15,7 +15,7 @@
 <div class="profile-pic-stack">
 	{#if displayed.length > 0}
 		<div class="pics">
-			{#each displayed as profile, i (profile.pubkey ?? profile.name ?? i)}
+			{#each displayed as profile, i (profile.email ?? profile.name ?? i)}
 				<div class="pic" style:z-index={displayed.length - i} style:margin-left={i === 0 ? '0' : `-${metrics.overlap}px`}>
 					<ProfilePic name={profile.name ?? ''} size={metrics.pic} />
 				</div>

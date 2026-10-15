@@ -1,5 +1,6 @@
 <script>
 	import { brand, setBrand } from '$lib/brand.svelte.js';
+	import DriveInvite from '$lib/components/DriveInvite.svelte';
 	import { health } from '$lib/drive/client.js';
 	import {
 		clearSession,
@@ -20,6 +21,7 @@
 	let rootKey = $state(driveSession.rootKey);
 	let busy = $state(false);
 	let msg = $state('');
+	let advancedOpen = $state(false);
 
 	async function connect() {
 		busy = true;
@@ -60,40 +62,56 @@
 <header class="page-head">
 	<div>
 		<h1>Settings</h1>
-		<p>Brand, appearance, and Drive credentials for this browser only.</p>
+		<p>Who you are, Drive invite for family devices, brand, and appearance.</p>
 	</div>
 </header>
 
+<DriveInvite />
+
 <section class="block">
-	<p class="field-label">Drive</p>
+	<p class="field-label">Drive (advanced)</p>
 	<p class="hint">
-		Bearer token + family root key stay in localStorage on this device. The server only ever sees
-		ciphertext. Default URL is production.
+		Manual credentials if you are not using an invite. Token + root key stay in localStorage on this
+		device only.
 	</p>
-	<label class="row stack">
-		<span>URL</span>
-		<input type="url" bind:value={url} autocomplete="off" spellcheck="false" />
-	</label>
-	<label class="row stack">
-		<span>API token</span>
-		<input type="password" bind:value={token} autocomplete="off" spellcheck="false" />
-	</label>
-	<label class="row stack">
-		<span>Root key</span>
-		<input type="password" bind:value={rootKey} autocomplete="off" spellcheck="false" />
-	</label>
-	<div class="actions">
-		<button type="button" class="btn" disabled={busy || !token.trim() || !rootKey.trim()} onclick={connect}>
-			{busy ? 'Connecting…' : driveSession.connected ? 'Reconnect' : 'Connect'}
-		</button>
-		{#if driveSession.connected}
+	<button type="button" class="btn ghost" onclick={() => (advancedOpen = !advancedOpen)}>
+		{advancedOpen ? 'Hide' : 'Show'} manual fields
+	</button>
+	{#if advancedOpen}
+		<label class="row stack">
+			<span>URL</span>
+			<input type="url" bind:value={url} autocomplete="off" spellcheck="false" />
+		</label>
+		<label class="row stack">
+			<span>API token</span>
+			<input type="password" bind:value={token} autocomplete="off" spellcheck="false" />
+		</label>
+		<label class="row stack">
+			<span>Root key</span>
+			<input type="password" bind:value={rootKey} autocomplete="off" spellcheck="false" />
+		</label>
+		<div class="actions">
+			<button
+				type="button"
+				class="btn"
+				disabled={busy || !token.trim() || !rootKey.trim()}
+				onclick={connect}
+			>
+				{busy ? 'Connecting…' : driveSession.connected ? 'Reconnect' : 'Connect'}
+			</button>
+			{#if driveSession.connected}
+				<button type="button" class="btn ghost" disabled={busy} onclick={disconnect}>Disconnect</button>
+			{/if}
+		</div>
+	{:else if driveSession.connected}
+		<div class="actions">
 			<button type="button" class="btn ghost" disabled={busy} onclick={disconnect}>Disconnect</button>
-		{/if}
-	</div>
+		</div>
+	{/if}
 	{#if driveSession.connected}
 		<p class="status on">Connected to {driveSession.url}</p>
 	{:else}
-		<p class="status">Demo mode (sample Tasks)</p>
+		<p class="status">Demo mode (sample Tasks) — import an invite or connect manually.</p>
 	{/if}
 	{#if msg}
 		<p class="status">{msg}</p>
