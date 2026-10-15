@@ -1,17 +1,36 @@
 <script>
 	import ProfilePic from './ProfilePic.svelte';
 	import LabelPill from './LabelPill.svelte';
-	import TaskFieldPicker from './TaskFieldPicker.svelte';
+	import TaskBox from './TaskBox.svelte';
+	import PriorityBox from './PriorityBox.svelte';
 	import { patchNote, patchTask, people, projects } from '$lib/workspace.svelte.js';
+
+	const STATUSES = [
+		{ value: 'backlog', label: 'Backlog' },
+		{ value: 'open', label: 'Open' },
+		{ value: 'inProgress', label: 'In progress' },
+		{ value: 'inReview', label: 'In review' },
+		{ value: 'closed', label: 'Closed' },
+		{ value: 'canceled', label: 'Canceled' }
+	];
+
+	const PRIORITIES = [
+		{ value: 'none', label: 'None' },
+		{ value: 'low', label: 'Low' },
+		{ value: 'medium', label: 'Medium' },
+		{ value: 'high', label: 'High' },
+		{ value: 'urgent', label: 'Urgent' }
+	];
 
 	/**
 	 * Shared property pills for opened Task / Note detail.
 	 * Tasks also show status + priority; notes skip those.
+	 * Status/priority use the same `.meta-pill` chrome as projects — never a nested picker plate.
 	 * @type {{ entity: any, kind: 'task' | 'note' }}
 	 */
 	let { entity, kind } = $props();
 
-	/** @type {null | 'assignees' | 'projects' | 'labels'} */
+	/** @type {null | 'status' | 'priority' | 'assignees' | 'projects' | 'labels'} */
 	let menu = $state(null);
 	let labelDraft = $state('');
 	let saving = $state(false);
@@ -22,9 +41,15 @@
 	const targets = $derived(entity?.targets ?? []);
 	const labels = $derived(entity?.labels ?? []);
 	const projectIds = $derived(entity?.project_ids ?? targets.map((/** @type {any} */ t) => t.id));
+	const statusLabel = $derived(
+		STATUSES.find((s) => s.value === entity?.status)?.label ?? entity?.status ?? 'Open'
+	);
+	const priorityLabel = $derived(
+		PRIORITIES.find((p) => p.value === entity?.priority)?.label ?? entity?.priority ?? 'None'
+	);
 
 	/**
-	 * @param {null | 'assignees' | 'projects' | 'labels'} next
+	 * @param {null | 'status' | 'priority' | 'assignees' | 'projects' | 'labels'} next
 	 * @param {MouseEvent} [e]
 	 */
 	function toggleMenu(next, e) {
@@ -54,6 +79,28 @@
 		} finally {
 			saving = false;
 		}
+	}
+
+	/**
+	 * @param {string} value
+	 * @param {MouseEvent} e
+	 */
+	async function pickStatus(value, e) {
+		e.stopPropagation();
+		menu = null;
+		if (value === entity?.status) return;
+		await apply({ status: value });
+	}
+
+	/**
+	 * @param {string} value
+	 * @param {MouseEvent} e
+	 */
+	async function pickPriority(value, e) {
+		e.stopPropagation();
+		menu = null;
+		if (value === entity?.priority) return;
+		await apply({ priority: value });
 	}
 
 	/**
@@ -112,22 +159,60 @@
 <div class="meta-row" role="list">
 	{#if showStatusPriority}
 		<div class="meta-item" role="listitem">
-			<TaskFieldPicker
-				taskId={entity.id}
-				field="status"
-				value={entity.status}
-				size={18}
-				variant="pill"
-			/>
+			<button
+				type="button"
+				class="meta-pill"
+				aria-label="Status"
+				aria-expanded={menu === 'status'}
+				onclick={(e) => toggleMenu('status', e)}
+			>
+				<TaskBox state={entity.status} size={14} embedded />
+				<span>{statusLabel}</span>
+			</button>
+			{#if menu === 'status'}
+				<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
+				<div class="menu" role="listbox">
+					{#each STATUSES as opt (opt.value)}
+						<button
+							type="button"
+							class="option"
+							class:active={entity.status === opt.value}
+							onclick={(e) => pickStatus(opt.value, e)}
+						>
+							<TaskBox state={opt.value} size={18} />
+							<span>{opt.label}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 		<div class="meta-item" role="listitem">
-			<TaskFieldPicker
-				taskId={entity.id}
-				field="priority"
-				value={entity.priority}
-				size={18}
-				variant="pill"
-			/>
+			<button
+				type="button"
+				class="meta-pill"
+				aria-label="Priority"
+				aria-expanded={menu === 'priority'}
+				onclick={(e) => toggleMenu('priority', e)}
+			>
+				<PriorityBox priority={entity.priority} size={14} />
+				<span>{priorityLabel}</span>
+			</button>
+			{#if menu === 'priority'}
+				<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
+				<div class="menu" role="listbox">
+					{#each PRIORITIES as opt (opt.value)}
+						<button
+							type="button"
+							class="option"
+							class:active={entity.priority === opt.value}
+							onclick={(e) => pickPriority(opt.value, e)}
+						>
+							<PriorityBox priority={opt.value} size={18} />
+							<span>{opt.label}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/if}
 

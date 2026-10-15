@@ -39,7 +39,17 @@ export function setActiveEmail(email) {
  */
 export function displayNameFromEmail(email = actor.email) {
 	const e = (email || '').trim().toLowerCase();
-	if (!e) return 'You';
+	const isAnon = !e || e === 'you@local' || e === 'local' || e === 'you';
+	if (isAnon) {
+		const signedIn = (actor.email || '').trim().toLowerCase();
+		if (signedIn && signedIn !== e && !['you@local', 'local', 'you'].includes(signedIn)) {
+			const known = members.find((m) => m.email === signedIn);
+			if (known) return known.name;
+			const local = signedIn.split('@')[0] || signedIn;
+			return local.charAt(0).toUpperCase() + local.slice(1);
+		}
+		return 'You';
+	}
 	const known = members.find((m) => m.email === e);
 	if (known) return known.name;
 	const local = e.split('@')[0] || e;
@@ -48,7 +58,8 @@ export function displayNameFromEmail(email = actor.email) {
 
 /** Person object for UI stacks — always keyed by email. */
 export function activePerson() {
-	const email = actor.email || 'you@local';
+	const email = (actor.email || '').trim().toLowerCase();
+	if (!email) return { email: '', name: 'You' };
 	return { email, name: displayNameFromEmail(email) };
 }
 

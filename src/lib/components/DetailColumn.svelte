@@ -13,7 +13,7 @@
 		setPlayerBrowse,
 		uploadAudioFiles
 	} from '$lib/player.svelte.js';
-	import { asPerson } from '$lib/actor.svelte.js';
+	import { activePerson, actor, asPerson } from '$lib/actor.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import {
 		clearSelection,
@@ -55,10 +55,25 @@
 		selection?.kind === 'note' ? notes.find((n) => n.id === selection.id) : null
 	);
 
+	/**
+	 * Prefer entity author; fall back to signed-in actor (never legacy "You").
+	 * @param {unknown} raw
+	 */
+	function resolveAuthor(raw) {
+		const me = activePerson();
+		const p = asPerson(raw);
+		if (!p) return me;
+		const e = (p.email || '').toLowerCase();
+		if (!e || e === 'you@local' || e === 'local' || e === 'you') return me;
+		// Re-resolve through member directory so niel@… shows as Niel
+		return asPerson(e) ?? p;
+	}
+
 	const detailAuthor = $derived.by(() => {
-		if (task?.author) return asPerson(task.author);
-		if (note?.author) return asPerson(note.author);
-		if (note) return asPerson('you@local');
+		// Depend on actor.email so the chip updates when Settings changes signed-in user
+		actor.email;
+		if (task) return resolveAuthor(task.author);
+		if (note) return resolveAuthor(note.author);
 		return null;
 	});
 
