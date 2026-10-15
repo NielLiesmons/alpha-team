@@ -11,12 +11,16 @@
 		tasks
 	} from '$lib/workspace.svelte.js';
 	import { tick } from 'svelte';
+	import { currentTrack } from '$lib/player.svelte.js';
 	import DetailColumn from './DetailColumn.svelte';
+	import MobilePlayerPill from './MobilePlayerPill.svelte';
 	import NavIcon from './NavIcon.svelte';
-	import ProfilePic from './ProfilePic.svelte';
-	import SidebarPlayer from './SidebarPlayer.svelte';
 	import NoteCreate from './NoteCreate.svelte';
+	import NowPlayingScreen from './NowPlayingScreen.svelte';
+	import PlayerEngine from './PlayerEngine.svelte';
+	import ProfilePic from './ProfilePic.svelte';
 	import ProjectCreate from './ProjectCreate.svelte';
+	import SidebarPlayer from './SidebarPlayer.svelte';
 	import TaskCreate from './TaskCreate.svelte';
 
 	let { children } = $props();
@@ -104,9 +108,12 @@
 			centerActivePill();
 		}
 	});
+
+	const hasMiniPlayer = $derived(Boolean(currentTrack()));
 </script>
 
-<div class="shell">
+<div class="shell" class:has-mini-player={hasMiniPlayer}>
+	<PlayerEngine />
 	<aside class="sidebar">
 		<header class="side-top">
 			<button type="button" class="pfp-btn" aria-label="Settings" onclick={() => go('/settings')}>
@@ -197,6 +204,23 @@
 				<header class="list-top">
 					<h1 class="list-title">{activeItem.label}</h1>
 					<div class="list-actions">
+						{#if createKind}
+							<button
+								type="button"
+								class="filter-btn list-plus"
+								aria-label="New {createKind}"
+								onclick={onListPlus}
+							>
+								<svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+									<path
+										d="M6 1.5v9M1.5 6h9"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linecap="round"
+									/>
+								</svg>
+							</button>
+						{/if}
 						<div class="filter-wrap">
 							<button
 								type="button"
@@ -265,11 +289,8 @@
 	<ProjectCreate />
 	<NoteCreate />
 
-	<button type="button" class="mobile-fab" aria-label="Create" onclick={onListPlus}>
-		<svg width="22" height="22" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-			<path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-		</svg>
-	</button>
+	<MobilePlayerPill />
+	<NowPlayingScreen />
 
 	<nav class="bottom-pill" aria-label="Sections">
 		<div class="pill-inner">
@@ -397,10 +418,6 @@
 	.top-plus:hover {
 		color: var(--white);
 		background: var(--white8);
-	}
-
-	.mobile-fab {
-		display: none;
 	}
 
 	.menu-scrim {
@@ -711,6 +728,10 @@
 			background: var(--bg);
 		}
 
+		.shell.has-mini-player {
+			padding-bottom: calc(72px + 60px + env(safe-area-inset-bottom, 0px));
+		}
+
 		.sidebar {
 			display: none;
 		}
@@ -730,28 +751,6 @@
 			max-width: none;
 			min-width: 0;
 			border-right: 0;
-		}
-
-		.mobile-fab {
-			display: grid;
-			place-items: center;
-			position: fixed;
-			z-index: 45;
-			right: 16px;
-			bottom: calc(78px + env(safe-area-inset-bottom, 0px));
-			width: 56px;
-			height: 56px;
-			padding: 0;
-			border: 0;
-			border-radius: 999px;
-			background: var(--accent);
-			color: #fff;
-			box-shadow: 0 10px 28px var(--shadow-strong);
-			cursor: pointer;
-		}
-
-		.mobile-fab:hover {
-			filter: brightness(1.06);
 		}
 
 		.bottom-pill {

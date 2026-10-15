@@ -30,8 +30,15 @@ export const playerUi = $state({
 	currentId: null,
 	/** @type {string | null} object URL for <audio> */
 	objectUrl: null,
-	/** 0..1 download buffer (drives scrubber buffer lane — never shown as text) */
+	/** 0..1 bytes downloaded / total — only source for the loaded scrubber lane */
 	bufferRatio: 0,
+	/** Playback clock (seconds), owned by PlayerEngine */
+	currentTime: 0,
+	/** Reliable full-track duration (0 while unknown / first-chunk-only) */
+	duration: 0,
+	playing: false,
+	/** Mobile full-screen now-playing */
+	nowPlayingOpen: false,
 	error: '',
 	uploading: false,
 	uploadLabel: ''
@@ -460,6 +467,9 @@ export async function playTrack(track) {
 	playerUi.currentId = track.id;
 	playerUi.status = 'loading';
 	playerUi.bufferRatio = 0;
+	playerUi.currentTime = 0;
+	playerUi.duration = 0;
+	playerUi.playing = false;
 	playerUi.error = '';
 
 	try {
@@ -523,6 +533,56 @@ export function stopPlayback() {
 	playerUi.currentId = null;
 	playerUi.status = 'idle';
 	playerUi.bufferRatio = 0;
+	playerUi.currentTime = 0;
+	playerUi.duration = 0;
+	playerUi.playing = false;
+	playerUi.nowPlayingOpen = false;
+}
+
+export function openNowPlaying() {
+	if (!playerUi.currentId) return;
+	playerUi.nowPlayingOpen = true;
+}
+
+export function closeNowPlaying() {
+	playerUi.nowPlayingOpen = false;
+}
+
+/**
+ * Reliable duration while progressive chunks load.
+ * First-chunk-only sources report duration ≈ buffered end — treat that as unknown.
+ * @param {HTMLAudioElement | null} audio
+ * @param {number} bufferRatio
+ */
+export function reliableDuration(audio, bufferRatio) {
+	if (!audio) return 0;
+	const d = audio.duration;
+	if (!Number.isFinite(d) || d <= 0) return 0;
+	if (bufferRatio >= 0.999) return d;
+	if (!audio.buffered.length) return 0;
+	const end = audio.buffered.end(audio.buffered.length - 1);
+	if (end >= d - 0.35) return 0;
+	return d;
+}
+
+/**
+ * Seek by 0..1 ratio of reliable duration. Clamped to buffered range while loading.
+ * @param {number} ratio
+ */
+export function seekPlayback(ratio) {
+	if (!boundAudio || playerUi.duration <= 0) return;
+	const r = Math.min(1, Math.max(0, ratio));
+	let t = r * playerUi.duration;
+	if (playerUi.bufferRatio < 0.999 && boundAudio.buffered.length > 0) {
+		const end = boundAudio.buffered.end(boundAudio.buffered.length - 1);
+		t = Math.min(t, Math.max(0, end - 0.05));
+	}
+	try {
+		boundAudio.currentTime = t;
+		playerUi.currentTime = t;
+	} catch {
+		/* ignore */
+	}
 }
 
 export function currentTrack() {
