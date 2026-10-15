@@ -544,7 +544,7 @@
 		padding: 0;
 		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
 		font-size: 12px;
-		font-weight: 500;
+		font-weight: 700;
 		font-style: normal;
 		line-height: 1;
 		letter-spacing: 0;
