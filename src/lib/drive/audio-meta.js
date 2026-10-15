@@ -8,14 +8,36 @@
  */
 export function parseAudioFilename(filename) {
 	const base = filename.replace(/\.[^.]+$/, '').trim() || 'Untitled';
-	const m = base.match(/^(.+?)\s*[-–—]\s*(.+)$/);
-	if (m) return { artists: [m[1].trim()], title: m[2].trim(), album: '' };
-	return { artists: ['Unknown'], title: base, album: '' };
+	/** @type {number | null} */
+	let track_no = null;
+	let rest = base;
+	const num = base.match(/^(\d{1,3})[\s.\-_]+(.+)$/);
+	if (num) {
+		track_no = Math.max(1, parseInt(num[1], 10));
+		rest = num[2].trim();
+	}
+	const m = rest.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+	if (m) {
+		return { artists: [m[1].trim()], title: m[2].trim(), album: '', track_no, disc_no: null };
+	}
+	return { artists: ['Unknown'], title: rest, album: '', track_no, disc_no: null };
+}
+
+/**
+ * @param {string | undefined} raw
+ * @returns {number | null}
+ */
+function parseTrackPart(raw) {
+	if (!raw) return null;
+	const m = String(raw).match(/(\d+)/);
+	if (!m) return null;
+	const n = parseInt(m[1], 10);
+	return Number.isFinite(n) && n >= 1 ? n : null;
 }
 
 /**
  * @param {File} file
- * @returns {Promise<{ title: string, artists: string[], album: string }>}
+ * @returns {Promise<{ title: string, artists: string[], album: string, track_no: number | null, disc_no: number | null }>}
  */
 export async function readAudioTags(file) {
 	const fromName = parseAudioFilename(file.name);
@@ -29,7 +51,9 @@ export async function readAudioTags(file) {
 				tagged.artists?.length && tagged.artists[0] !== 'Unknown'
 					? tagged.artists
 					: fromName.artists,
-			album: tagged.album || fromName.album
+			album: tagged.album || fromName.album,
+			track_no: tagged.track_no ?? fromName.track_no,
+			disc_no: tagged.disc_no ?? fromName.disc_no
 		};
 	} catch {
 		return fromName;
@@ -38,7 +62,7 @@ export async function readAudioTags(file) {
 
 /**
  * @param {Uint8Array} bytes
- * @returns {{ title?: string, artists?: string[], album?: string } | null}
+ * @returns {{ title?: string, artists?: string[], album?: string, track_no?: number | null, disc_no?: number | null } | null}
  */
 function readId3v2(bytes) {
 	if (bytes.length < 10) return null;
@@ -86,11 +110,15 @@ function readId3v2(bytes) {
 	const title = frames.TIT2 || frames.TT2;
 	const artist = frames.TPE1 || frames.TP1 || frames.TPE2 || frames.TP2;
 	const album = frames.TALB || frames.TAL;
-	if (!title && !artist && !album) return null;
+	const track_no = parseTrackPart(frames.TRCK || frames.TRK);
+	const disc_no = parseTrackPart(frames.TPOS || frames.TPA);
+	if (!title && !artist && !album && track_no == null) return null;
 	return {
 		title: title || undefined,
 		artists: artist ? splitArtists(artist) : undefined,
-		album: album || undefined
+		album: album || undefined,
+		track_no,
+		disc_no
 	};
 }
 
@@ -120,25 +148,54 @@ function readMp4Tags(bytes) {
 	const ilst = atoms;
 	/** @type {Record<string, string>} */
 	const tags = {};
+	/** @type {number | null} */
+	let track_no = null;
+	/** @type {number | null} */
+	let disc_no = null;
 	let off = 0;
 	while (off + 8 <= ilst.length) {
 		const size = u32(ilst, off);
 		if (size < 8 || off + size > ilst.length) break;
 		const typ = ascii(ilst, off + 4, 4);
 		const payload = ilst.subarray(off + 8, off + size);
-		const text = readMp4DataAtom(payload);
-		if (text) tags[typ] = text;
+		if (typ === 'trkn') {
+			track_no = readMp4IntPair(payload);
+		} else if (typ === 'disk') {
+			disc_no = readMp4IntPair(payload);
+		} else {
+			const text = readMp4DataAtom(payload);
+			if (text) tags[typ] = text;
+		}
 		off += size;
 	}
 	const title = tags['©nam'] || tags.name;
 	const artist = tags['©ART'] || tags.aART || tags['©art'];
 	const album = tags['©alb'];
-	if (!title && !artist && !album) return null;
+	if (!title && !artist && !album && track_no == null) return null;
 	return {
 		title: title || undefined,
 		artists: artist ? splitArtists(artist) : undefined,
-		album: album || undefined
+		album: album || undefined,
+		track_no,
+		disc_no
 	};
+}
+
+/**
+ * iTunes trkn/disk: data atom with binary uint16 track (+ optional total).
+ * @param {Uint8Array} payload
+ * @returns {number | null}
+ */
+function readMp4IntPair(payload) {
+	const data = findAtom(payload, 'data');
+	if (!data || data.length < 16) return null;
+	const value = data.subarray(8);
+	// Common layout: 2 pad, uint16 number, uint16 of, 2 pad
+	if (value.length >= 6) {
+		const n = (value[2] << 8) | value[3];
+		return n >= 1 ? n : null;
+	}
+	return null;
 }
 
 /**

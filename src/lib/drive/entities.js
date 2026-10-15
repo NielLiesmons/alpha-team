@@ -366,12 +366,18 @@ function trackCacheKey(session) {
  */
 function sortTracks(out) {
 	out.sort((a, b) => {
-		const aa = String(a.artists?.[0] ?? '');
-		const ba = String(b.artists?.[0] ?? '');
-		if (aa !== ba) return aa.localeCompare(ba);
 		const al = String(a.album ?? '');
 		const bl = String(b.album ?? '');
 		if (al !== bl) return al.localeCompare(bl);
+		const ad = Number(a.disc_no) || 0;
+		const bd = Number(b.disc_no) || 0;
+		if (ad !== bd) return ad - bd;
+		const at = Number(a.track_no) || 0;
+		const bt = Number(b.track_no) || 0;
+		if (at !== bt) return at - bt;
+		const aa = String(a.artists?.[0] ?? '');
+		const ba = String(b.artists?.[0] ?? '');
+		if (aa !== ba) return aa.localeCompare(ba);
 		return String(a.title).localeCompare(String(b.title));
 	});
 	return out;
@@ -406,20 +412,37 @@ export function invalidateTrackCache(session) {
  * Upload an audio File as chunked media + alpha.track/1.
  * @param {import('./client.js').DriveSession} session
  * @param {File} file
- * @param {{ onProgress?: (phase: string, done: number, total: number) => void }} [opts]
+ * @param {{ onProgress?: (phase: string, done: number, total: number) => void, signal?: AbortSignal }} [opts]
  */
 export async function uploadTrack(session, file, opts = {}) {
+	if (opts.signal?.aborted) {
+		const err = new Error('Aborted');
+		err.name = 'AbortError';
+		throw err;
+	}
 	const id = newId();
 	const meta = await readAudioTags(file);
 	const contentType = file.type || 'audio/mpeg';
 	const bytes = new Uint8Array(await file.arrayBuffer());
+	if (opts.signal?.aborted) {
+		const err = new Error('Aborted');
+		err.name = 'AbortError';
+		throw err;
+	}
 	const mediaPath = `media/audio/tracks/${id}/media.json`;
 	const trackPath = `media/audio/tracks/${id}/track.json`;
 
 	opts.onProgress?.('upload', 0, 1);
 	await putMediaBlob(session, mediaPath, contentType, bytes, {
-		onProgress: (done, total) => opts.onProgress?.('upload', done, total)
+		onProgress: (done, total) => opts.onProgress?.('upload', done, total),
+		signal: opts.signal
 	});
+
+	if (opts.signal?.aborted) {
+		const err = new Error('Aborted');
+		err.name = 'AbortError';
+		throw err;
+	}
 
 	const created = nowRfc3339();
 	const track = {
@@ -428,6 +451,8 @@ export async function uploadTrack(session, file, opts = {}) {
 		title: meta.title,
 		artists: meta.artists,
 		album: meta.album || undefined,
+		track_no: meta.track_no ?? null,
+		disc_no: meta.disc_no ?? null,
 		media_path: mediaPath,
 		duration_ms: null,
 		genres: [],
@@ -633,6 +658,8 @@ export async function listTracks(session) {
 					t.schema = 'alpha.track/1';
 					t.artists = Array.isArray(t.artists) && t.artists.length ? t.artists : ['Unknown'];
 					t.album = t.album ?? '';
+					t.track_no = t.track_no ?? null;
+					t.disc_no = t.disc_no ?? null;
 					slots[i] = t;
 				} catch {
 					/* skip broken entry */

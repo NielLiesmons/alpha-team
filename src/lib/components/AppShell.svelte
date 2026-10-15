@@ -23,6 +23,7 @@
 	import SidebarPlayer from './SidebarPlayer.svelte';
 	import TaskCreate from './TaskCreate.svelte';
 	import TrackEdit from './TrackEdit.svelte';
+	import UploadModal from './UploadModal.svelte';
 
 	let { children } = $props();
 
@@ -290,6 +291,7 @@
 	<ProjectCreate />
 	<NoteCreate />
 	<TrackEdit />
+	<UploadModal />
 
 	<MobilePlayerPill />
 	<NowPlayingScreen />

@@ -85,9 +85,6 @@
 </script>
 
 <div class="player-detail">
-	{#if playerUi.uploadLabel}
-		<p class="banner">{playerUi.uploadLabel}</p>
-	{/if}
 	{#if playerUi.error}
 		<p class="banner err">{playerUi.error}</p>
 	{/if}
@@ -164,10 +161,10 @@
 						<button type="button" class="main" onclick={() => onRowClick(track)}>
 							<span class="line-primary">
 								<span class="col title">{track.title}</span>
-								<span class="col artist desktop-hide">{artist}</span>
-								<span class="col album desktop-hide">{album}</span>
+								<span class="col artist">{artist}</span>
+								<span class="col album">{album}</span>
 							</span>
-							<span class="line-secondary mobile-hide">
+							<span class="line-secondary">
 								<span class="sub">{artist}</span>
 								{#if album && album !== '—'}
 									<span class="dot" aria-hidden="true">·</span>
@@ -392,15 +389,15 @@
 	}
 
 	.line-secondary {
-		display: none;
 		align-items: center;
 		gap: 6px;
 		min-width: 0;
 	}
 
+	/* Mobile: title + stacked artist/album */
 	.col.title {
-		flex: 0 0 42%;
-		max-width: 42%;
+		flex: 1 1 auto;
+		max-width: 100%;
 		font-size: 15px;
 		font-weight: 600;
 		color: var(--fg);
@@ -409,27 +406,20 @@
 		white-space: nowrap;
 	}
 
-	.col.artist {
-		flex: 0 0 28%;
-		max-width: 28%;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--fg-33);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	.col.artist,
+	.col.album {
+		display: none;
 	}
 
-	.col.album,
 	.col.meta {
-		flex: 1 1 auto;
-		min-width: 0;
+		flex: 0 0 auto;
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--fg-33);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	}
+
+	.line-secondary {
+		display: flex;
 	}
 
 	.sub {
@@ -513,27 +503,43 @@
 		color: var(--fg);
 	}
 
-	.mobile-hide {
-		display: none;
-	}
-
 	@media (min-width: 768px) {
 		.card-stack {
 			padding: 8px 12px 12px;
 		}
 
-		.desktop-hide {
+		/* Desktop: title | artist | album columns */
+		.line-secondary {
 			display: none;
 		}
 
-		.mobile-hide,
-		.line-secondary {
-			display: flex;
+		.col.title {
+			flex: 0 0 42%;
+			max-width: 42%;
 		}
 
-		.col.title {
+		.col.artist {
+			display: block;
+			flex: 0 0 28%;
+			max-width: 28%;
+			font-size: 13px;
+			font-weight: 500;
+			color: var(--fg-33);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.col.album {
+			display: block;
 			flex: 1 1 auto;
-			max-width: none;
+			min-width: 0;
+			font-size: 13px;
+			font-weight: 500;
+			color: var(--fg-33);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 
 		.main {

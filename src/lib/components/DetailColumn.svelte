@@ -8,11 +8,13 @@
 	import {
 		closePlayerDetail,
 		currentTrack,
+		openUploadModal,
 		playerBrowse,
 		playerHeading,
 		playerUi,
 		setPlayerBrowse,
-		uploadAudioFiles
+		uploadAudioFiles,
+		uploadUi
 	} from '$lib/player.svelte.js';
 	import { activePerson, actor, asPerson } from '$lib/actor.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
@@ -39,9 +41,11 @@
 		const files = input.files;
 		if (!files?.length) return;
 		try {
+			openUploadModal();
 			await uploadAudioFiles(files);
 		} catch (err) {
 			playerUi.error = err instanceof Error ? err.message : String(err);
+			if (!uploadUi.open) openUploadModal();
 		}
 		input.value = '';
 	}
@@ -226,11 +230,11 @@
 							<button
 								type="button"
 								role="menuitem"
-								disabled={playerUi.uploading}
 								onclick={() => {
 									menuOpen = false;
-									playerFileInput?.click();
-								}}>Upload</button
+									if (uploadUi.active) openUploadModal();
+									else playerFileInput?.click();
+								}}>{uploadUi.active ? 'Uploads' : 'Upload'}</button
 							>
 						{/if}
 						{#if task || project}
@@ -287,8 +291,10 @@
 						type="button"
 						class="icon-hit"
 						aria-label="Upload audio"
-						disabled={playerUi.uploading}
-						onclick={() => playerFileInput?.click()}
+						onclick={() => {
+							if (uploadUi.active) openUploadModal();
+							else playerFileInput?.click();
+						}}
 					>
 						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 							<path

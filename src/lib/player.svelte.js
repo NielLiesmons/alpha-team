@@ -58,6 +58,17 @@ export const playerUi = $state({
 	uploadLabel: ''
 });
 
+/** Upload job UI — modal can close while work continues. */
+export const uploadUi = $state({
+	open: false,
+	active: false,
+	/** @type {{ id: string, name: string, status: 'queued' | 'uploading' | 'done' | 'error' | 'canceled', progress: number, error?: string }[]} */
+	items: []
+});
+
+/** @type {AbortController | null} */
+let uploadAbort = null;
+
 function isMobileViewport() {
 	return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
 }
@@ -156,6 +167,24 @@ export function closePlayerDetail() {
 	playerBrowse.detailOpen = false;
 }
 
+export function openUploadModal() {
+	uploadUi.open = true;
+}
+
+export function closeUploadModal() {
+	uploadUi.open = false;
+}
+
+/** Cancel the whole upload batch (in-flight + queued). */
+export function cancelUploadJob() {
+	uploadAbort?.abort();
+	for (const item of uploadUi.items) {
+		if (item.status === 'queued' || item.status === 'uploading') {
+			item.status = 'canceled';
+		}
+	}
+}
+
 /**
  * @param {FileList | File[]} files
  */
@@ -164,25 +193,67 @@ export async function uploadAudioFiles(files) {
 	if (!session) throw new Error('Connect Drive in Settings first');
 	const list = [...files];
 	if (!list.length) return;
+
+	// Don't start a second batch while one is running
+	if (uploadUi.active) throw new Error('An upload is already in progress');
+
+	uploadAbort = new AbortController();
+	const signal = uploadAbort.signal;
+	const stamp = Date.now();
+	uploadUi.items = list.map((file, i) => ({
+		id: `${stamp}-${i}`,
+		name: file.name,
+		status: /** @type {'queued'} */ ('queued'),
+		progress: 0
+	}));
+	uploadUi.open = true;
+	uploadUi.active = true;
 	playerUi.uploading = true;
 	playerUi.error = '';
+	playerUi.uploadLabel = '';
+
 	try {
 		for (let i = 0; i < list.length; i++) {
+			if (signal.aborted) break;
+			const item = uploadUi.items[i];
 			const file = list[i];
-			playerUi.uploadLabel = `Uploading ${i + 1}/${list.length}…`;
-			await uploadTrack(session, file, {
-				onProgress: (phase, done, total) => {
-					if (phase === 'upload' && total > 0) {
-						const pct = Math.min(100, Math.round((done / total) * 100));
-						playerUi.uploadLabel = `Uploading ${i + 1}/${list.length} — ${pct}%`;
+			item.status = 'uploading';
+			item.progress = 0;
+			try {
+				await uploadTrack(session, file, {
+					signal,
+					onProgress: (phase, done, total) => {
+						if (phase === 'upload' && total > 0) {
+							item.progress = Math.min(100, Math.round((done / total) * 100));
+						} else if (phase === 'index') {
+							item.progress = 100;
+						}
 					}
+				});
+				if (signal.aborted) {
+					item.status = 'canceled';
+					break;
 				}
-			});
+				item.status = 'done';
+				item.progress = 100;
+			} catch (e) {
+				if (e?.name === 'AbortError' || signal.aborted) {
+					item.status = 'canceled';
+					break;
+				}
+				item.status = 'error';
+				item.error = e instanceof Error ? e.message : String(e);
+			}
 		}
 		await refreshTracks();
 	} finally {
+		uploadUi.active = false;
 		playerUi.uploading = false;
 		playerUi.uploadLabel = '';
+		uploadAbort = null;
+		for (const item of uploadUi.items) {
+			if (item.status === 'queued') item.status = 'canceled';
+		}
 	}
 }
 
@@ -706,7 +777,7 @@ export function currentTrack() {
 export function playQueue() {
 	const vis = visibleTracks();
 	if (vis.length) return vis;
-	return [...tracks].sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return [...tracks].sort(compareTracks);
 }
 
 /**
@@ -791,6 +862,24 @@ export function artistNames() {
 	return [...set].sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Album → disc → track no → title (matches Drive list sort).
+ * @param {any} a
+ * @param {any} b
+ */
+function compareTracks(a, b) {
+	const al = String(a.album ?? '');
+	const bl = String(b.album ?? '');
+	if (al !== bl) return al.localeCompare(bl);
+	const ad = Number(a.disc_no) || 0;
+	const bd = Number(b.disc_no) || 0;
+	if (ad !== bd) return ad - bd;
+	const at = Number(a.track_no) || 0;
+	const bt = Number(b.track_no) || 0;
+	if (at !== bt) return at - bt;
+	return String(a.title).localeCompare(String(b.title));
+}
+
 /** Tracks visible in the detail column for current browse state. */
 export function visibleTracks() {
 	if (playerBrowse.mode === 'playlist' && playerBrowse.playlistId) {
@@ -803,10 +892,12 @@ export function visibleTracks() {
 			.filter(Boolean);
 	}
 	if (playerBrowse.mode === 'artists' && playerBrowse.artist) {
-		return tracks.filter((t) => (t.artists?.[0] || 'Unknown') === playerBrowse.artist);
+		return tracks
+			.filter((t) => (t.artists?.[0] || 'Unknown') === playerBrowse.artist)
+			.sort(compareTracks);
 	}
 	if (playerBrowse.mode === 'artists') {
 		return [];
 	}
-	return [...tracks].sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return [...tracks].sort(compareTracks);
 }
