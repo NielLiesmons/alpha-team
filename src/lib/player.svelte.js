@@ -50,6 +50,9 @@ export const playerUi = $state({
 	editingIds: [],
 	/** @type {string[]} multi-select in Songs / playlist lists */
 	selectedIds: [],
+	/** When set, plays after the current track ends (instead of list-next). */
+	/** @type {string | null} */
+	upNextId: null,
 	error: '',
 	uploading: false,
 	uploadLabel: ''
@@ -486,6 +489,8 @@ export async function playTrack(track) {
 		}
 		if (generation === playGeneration) {
 			playAbort = null;
+			// Manual play replaces any pending Play Next
+			if (playerUi.upNextId === track.id) playerUi.upNextId = null;
 			if (isMobileViewport()) playerUi.nowPlayingOpen = true;
 		}
 		return url;
@@ -510,6 +515,7 @@ export function stopPlayback() {
 	playerUi.duration = 0;
 	playerUi.playing = false;
 	playerUi.nowPlayingOpen = false;
+	playerUi.upNextId = null;
 }
 
 export function openNowPlaying() {
@@ -713,6 +719,29 @@ export async function playAdjacent(delta) {
 	if (idx < 0) idx = delta > 0 ? -1 : 0;
 	idx = (idx + delta + queue.length) % queue.length;
 	await playTrack(queue[idx]);
+}
+
+/**
+ * Queue a track to play when the current one ends.
+ * @param {any} track
+ */
+export function queuePlayNext(track) {
+	if (!track?.id) return;
+	playerUi.upNextId = track.id;
+}
+
+/** Advance: honor Play Next, else next in browse list. */
+export async function playEndedAdvance() {
+	const nextId = playerUi.upNextId;
+	if (nextId) {
+		playerUi.upNextId = null;
+		const t = tracks.find((x) => x.id === nextId);
+		if (t) {
+			await playTrack(t);
+			return;
+		}
+	}
+	await playAdjacent(1);
 }
 
 export function playerHeading() {

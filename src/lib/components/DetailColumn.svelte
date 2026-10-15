@@ -202,36 +202,60 @@
 					<span class="author-name">{detailAuthor.name}</span>
 				</div>
 			{:else}
-				<span class="type-label">{typeLabel}</span>
+				<span class="type-label">{isPlayer ? playerTitle : typeLabel}</span>
 			{/if}
-			{#if !isPlayer}
-				<div class="menu-wrap">
-					<button
-						type="button"
-						class="icon-hit"
-						aria-label="More"
-						aria-expanded={menuOpen}
-						onclick={() => (menuOpen = !menuOpen)}
-					>
-						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-							<circle cx="9" cy="4" r="1.35" fill="currentColor" />
-							<circle cx="9" cy="9" r="1.35" fill="currentColor" />
-							<circle cx="9" cy="14" r="1.35" fill="currentColor" />
-						</svg>
-					</button>
-					{#if menuOpen}
-						<button type="button" class="menu-scrim" aria-label="Close menu" onclick={() => (menuOpen = false)}
-						></button>
-						<div class="more-menu" role="menu">
-							{#if task || project}
-								<button type="button" role="menuitem" onclick={editCurrent}>Edit</button>
-							{/if}
-							<button type="button" role="menuitem" onclick={close}>Close</button>
-						</div>
-					{/if}
-				</div>
-			{:else}
-				<span class="icon-hit" aria-hidden="true"></span>
+			<div class="menu-wrap">
+				<button
+					type="button"
+					class="icon-hit"
+					aria-label="More"
+					aria-expanded={menuOpen}
+					onclick={() => (menuOpen = !menuOpen)}
+				>
+					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+						<circle cx="9" cy="4" r="1.35" fill="currentColor" />
+						<circle cx="9" cy="9" r="1.35" fill="currentColor" />
+						<circle cx="9" cy="14" r="1.35" fill="currentColor" />
+					</svg>
+				</button>
+				{#if menuOpen}
+					<button type="button" class="menu-scrim" aria-label="Close menu" onclick={() => (menuOpen = false)}
+					></button>
+					<div class="more-menu" role="menu">
+						{#if isPlayer && playerConnected}
+							<button
+								type="button"
+								role="menuitem"
+								disabled={playerUi.uploading}
+								onclick={() => {
+									menuOpen = false;
+									playerFileInput?.click();
+								}}>Upload</button
+							>
+						{/if}
+						{#if task || project}
+							<button type="button" role="menuitem" onclick={editCurrent}>Edit</button>
+						{/if}
+						<button
+							type="button"
+							role="menuitem"
+							onclick={() => {
+								menuOpen = false;
+								isPlayer ? closePlayerDetail() : close();
+							}}>Close</button
+						>
+					</div>
+				{/if}
+			</div>
+			{#if isPlayer}
+				<input
+					bind:this={playerFileInput}
+					class="sr-only"
+					type="file"
+					accept="audio/*,.mp3,.m4a,.flac,.ogg,.wav"
+					multiple
+					onchange={onPlayerFiles}
+				/>
 			{/if}
 		</header>
 	{/if}
@@ -276,18 +300,20 @@
 							/>
 						</svg>
 					</button>
-					<input
-						bind:this={playerFileInput}
-						class="sr-only"
-						type="file"
-						accept="audio/*,.mp3,.m4a,.flac,.ogg,.wav"
-						multiple
-						onchange={onPlayerFiles}
-					/>
 				{/if}
+				<button type="button" class="icon-hit" aria-label="Close" onclick={closePlayerDetail}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
 			</div>
 		</header>
-		<div class="player-slot">
+		<div class="body player-body">
 			<PlayerDetail />
 		</div>
 	{:else if task}
@@ -436,16 +462,6 @@
 		display: flex;
 		flex-direction: column;
 		background: transparent;
-		overflow: hidden;
-	}
-
-	.player-slot {
-		flex: 1;
-		min-width: 0;
-		min-height: 0;
-		width: 100%;
-		display: flex;
-		flex-direction: column;
 		overflow: hidden;
 	}
 
@@ -601,6 +617,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
+	}
+
+	.body.player-body {
+		/* Match Task/Note column chrome; list scrolls inside PlayerDetail */
+		overflow: hidden;
+		width: 100%;
 	}
 
 	.note-body-wrap {

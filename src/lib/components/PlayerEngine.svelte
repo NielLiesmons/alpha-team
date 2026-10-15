@@ -1,7 +1,7 @@
 <script>
 	import {
 		bindPlayerAudio,
-		playAdjacent,
+		playEndedAdvance,
 		playerUi,
 		reliableDuration
 	} from '$lib/player.svelte.js';
@@ -56,7 +56,7 @@
 
 	function onEnded() {
 		syncClock();
-		playAdjacent(1).catch(() => {});
+		playEndedAdvance().catch(() => {});
 	}
 </script>
 

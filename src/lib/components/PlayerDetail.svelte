@@ -8,6 +8,7 @@
 		playTrack,
 		playerBrowse,
 		playerUi,
+		queuePlayNext,
 		removeTracks,
 		setPlayerBrowse,
 		toggleTrackSelected,
@@ -20,11 +21,17 @@
 	const list = $derived(visibleTracks());
 	const artists = $derived(artistNames());
 	const selectedCount = $derived(playerUi.selectedIds.length);
-	const allSelected = $derived(list.length > 0 && list.every((t) => playerUi.selectedIds.includes(t.id)));
+	const selecting = $derived(selectedCount > 0);
+	const allSelected = $derived(
+		list.length > 0 && list.every((t) => playerUi.selectedIds.includes(t.id))
+	);
+
+	/** @type {string | null} */
+	let menuFor = $state(null);
 
 	/** @param {any} track */
 	function onRowClick(track) {
-		if (selectedCount > 0) {
+		if (selecting) {
 			toggleTrackSelected(track.id);
 			return;
 		}
@@ -36,7 +43,36 @@
 		else playerUi.selectedIds = list.map((t) => t.id);
 	}
 
-	async function onDelete() {
+	/** @param {string} id */
+	function openMenu(id) {
+		menuFor = menuFor === id ? null : id;
+	}
+
+	function closeMenu() {
+		menuFor = null;
+	}
+
+	/**
+	 * @param {any} track
+	 * @param {'play' | 'next' | 'select' | 'edit' | 'delete'} action
+	 */
+	async function onMenu(track, action) {
+		closeMenu();
+		try {
+			if (action === 'play') await playTrack(track);
+			else if (action === 'next') queuePlayNext(track);
+			else if (action === 'select') toggleTrackSelected(track.id);
+			else if (action === 'edit') openTrackEdit(track);
+			else if (action === 'delete') {
+				if (!confirm(`Delete “${track.title}”?`)) return;
+				await removeTracks([track.id]);
+			}
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
+		}
+	}
+
+	async function onBulkDelete() {
 		const n = selectedCount;
 		if (!n) return;
 		if (!confirm(`Delete ${n} track${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
@@ -56,19 +92,19 @@
 		<p class="banner err">{playerUi.error}</p>
 	{/if}
 
-	{#if selectedCount > 0 && !(playerBrowse.mode === 'artists' && !playerBrowse.artist)}
+	{#if selecting && !(playerBrowse.mode === 'artists' && !playerBrowse.artist)}
 		<div class="select-bar">
 			<button type="button" class="bar-btn" onclick={toggleSelectAll}>
 				{allSelected ? 'Clear' : 'All'}
 			</button>
 			<span class="bar-count">{selectedCount} selected</span>
 			<button type="button" class="bar-btn" onclick={openBulkTrackEdit}>Edit</button>
-			<button type="button" class="bar-btn danger" onclick={onDelete}>Delete</button>
+			<button type="button" class="bar-btn" onclick={onBulkDelete}>Delete</button>
 			<button type="button" class="bar-btn" onclick={clearTrackSelection}>Done</button>
 		</div>
 	{/if}
 
-	<div class="body">
+	<div class="feed">
 		{#if !connected}
 			<p class="empty">Connect Drive in Settings to use the Player.</p>
 		{:else if driveSession.loading && tracks.length === 0}
@@ -81,11 +117,11 @@
 					{#each artists as name (name)}
 						<button
 							type="button"
-							class="row"
+							class="artist-row"
 							onclick={() => setPlayerBrowse('artists', { artist: name })}
 						>
-							<span class="row-title">{name}</span>
-							<span class="row-meta"
+							<span class="col title">{name}</span>
+							<span class="col meta"
 								>{tracks.filter((t) => (t.artists?.[0] || 'Unknown') === name).length}</span
 							>
 						</button>
@@ -104,36 +140,78 @@
 			<div class="card-stack">
 				{#each list as track (track.id)}
 					{@const selected = playerUi.selectedIds.includes(track.id)}
-					<div class="row-wrap" class:on={playerUi.currentId === track.id} class:selected>
-						<button
-							type="button"
-							class="check"
-							class:on={selected}
-							aria-label={selected ? 'Deselect' : 'Select'}
-							aria-pressed={selected}
-							onclick={() => toggleTrackSelected(track.id)}
-						>
-							<span class="check-dot"></span>
+					{@const artist = track.artists?.join(', ') || '—'}
+					{@const album = track.album || '—'}
+					<div
+						class="track-row"
+						class:on={playerUi.currentId === track.id}
+						class:selected
+						class:selecting
+					>
+						{#if selecting}
+							<button
+								type="button"
+								class="check"
+								class:on={selected}
+								aria-label={selected ? 'Deselect' : 'Select'}
+								aria-pressed={selected}
+								onclick={() => toggleTrackSelected(track.id)}
+							>
+								<span class="check-dot"></span>
+							</button>
+						{/if}
+
+						<button type="button" class="main" onclick={() => onRowClick(track)}>
+							<span class="line-primary">
+								<span class="col title">{track.title}</span>
+								<span class="col artist desktop-hide">{artist}</span>
+								<span class="col album desktop-hide">{album}</span>
+							</span>
+							<span class="line-secondary mobile-hide">
+								<span class="sub">{artist}</span>
+								{#if album && album !== '—'}
+									<span class="dot" aria-hidden="true">·</span>
+									<span class="sub">{album}</span>
+								{/if}
+							</span>
 						</button>
-						<button type="button" class="row" onclick={() => onRowClick(track)}>
-							<span class="row-title">{track.title}</span>
-							<span class="row-meta">{track.artists?.join(', ')}</span>
-						</button>
-						<button
-							type="button"
-							class="edit-btn"
-							aria-label="Edit {track.title}"
-							onclick={() => openTrackEdit(track)}
-						>
-							<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<path
-									d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
-									stroke="currentColor"
-									stroke-width="1.4"
-									stroke-linejoin="round"
-								/>
-							</svg>
-						</button>
+
+						<div class="menu-wrap">
+							<button
+								type="button"
+								class="more-btn"
+								aria-label="More for {track.title}"
+								aria-expanded={menuFor === track.id}
+								onclick={() => openMenu(track.id)}
+							>
+								<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+									<circle cx="9" cy="4" r="1.35" fill="currentColor" />
+									<circle cx="9" cy="9" r="1.35" fill="currentColor" />
+									<circle cx="9" cy="14" r="1.35" fill="currentColor" />
+								</svg>
+							</button>
+							{#if menuFor === track.id}
+								<button type="button" class="menu-scrim" aria-label="Close menu" onclick={closeMenu}
+								></button>
+								<div class="more-menu" role="menu">
+									<button type="button" role="menuitem" onclick={() => onMenu(track, 'play')}
+										>Play</button
+									>
+									<button type="button" role="menuitem" onclick={() => onMenu(track, 'next')}
+										>Play next</button
+									>
+									<button type="button" role="menuitem" onclick={() => onMenu(track, 'select')}
+										>Select</button
+									>
+									<button type="button" role="menuitem" onclick={() => onMenu(track, 'edit')}
+										>Edit</button
+									>
+									<button type="button" role="menuitem" onclick={() => onMenu(track, 'delete')}
+										>Delete</button
+									>
+								</div>
+							{/if}
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -169,10 +247,11 @@
 		align-items: center;
 		gap: 4px;
 		height: 40px;
-		padding: 0 8px 0 12px;
+		padding: 0 8px 0 16px;
 		border-bottom: 1px solid var(--hairline);
 		box-sizing: border-box;
 		background: var(--fg-4);
+		width: 100%;
 	}
 
 	.bar-count {
@@ -201,15 +280,7 @@
 		color: var(--fg);
 	}
 
-	.bar-btn.danger {
-		color: var(--fg-66);
-	}
-
-	.bar-btn.danger:hover {
-		color: var(--fg);
-	}
-
-	.body {
+	.feed {
 		flex: 1;
 		min-height: 0;
 		width: 100%;
@@ -227,30 +298,42 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 4px 8px 10px;
+		padding: 8px 8px 10px;
 		width: 100%;
 		box-sizing: border-box;
 	}
 
-	.row-wrap {
+	.artist-row,
+	.track-row {
 		display: flex;
 		align-items: center;
-		gap: 2px;
-		border-radius: 12px;
-		min-width: 0;
+		gap: 4px;
 		width: 100%;
+		min-width: 0;
+		border-radius: 12px;
 		box-sizing: border-box;
 	}
 
-	.row-wrap:hover {
+	.artist-row {
+		padding: 0.85rem 0.9rem;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+	}
+
+	.artist-row:hover,
+	.track-row:hover {
 		background: var(--fg-4);
 	}
 
-	.row-wrap.on {
+	.track-row.on {
 		background: var(--selection);
 	}
 
-	.row-wrap.selected {
+	.track-row.selected {
 		background: var(--fg-8);
 	}
 
@@ -258,7 +341,7 @@
 		flex-shrink: 0;
 		width: 36px;
 		height: 36px;
-		margin-left: 2px;
+		margin-left: 4px;
 		display: grid;
 		place-items: center;
 		border: 0;
@@ -274,7 +357,6 @@
 		border-radius: 6px;
 		border: 1.5px solid var(--fg-33);
 		box-sizing: border-box;
-		background: transparent;
 	}
 
 	.check.on .check-dot {
@@ -283,14 +365,14 @@
 		box-shadow: inset 0 0 0 3px var(--bg);
 	}
 
-	.row {
-		display: flex;
-		flex-direction: row;
-		align-items: baseline;
-		gap: 10px;
+	.main {
 		flex: 1;
 		min-width: 0;
-		padding: 0.85rem 0.5rem 0.85rem 0.4rem;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+		padding: 0.75rem 0.4rem 0.75rem 0.75rem;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -301,33 +383,24 @@
 		box-sizing: border-box;
 	}
 
-	.edit-btn {
-		flex-shrink: 0;
-		width: 32px;
-		height: 32px;
-		margin-right: 4px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--fg-33);
-		padding: 0;
-		cursor: pointer;
-		opacity: 0.7;
-	}
-
-	.edit-btn:hover {
-		color: var(--fg);
-		background: var(--fg-8);
-		opacity: 1;
-	}
-
-	.row-title {
-		flex: 0 1 auto;
+	.line-primary {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
 		min-width: 0;
-		max-width: 62%;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		width: 100%;
+	}
+
+	.line-secondary {
+		display: none;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.col.title {
+		flex: 0 0 42%;
+		max-width: 42%;
 		font-size: 15px;
 		font-weight: 600;
 		color: var(--fg);
@@ -336,15 +409,135 @@
 		white-space: nowrap;
 	}
 
-	.row-meta {
-		flex: 1 1 auto;
-		min-width: 0;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
+	.col.artist {
+		flex: 0 0 28%;
+		max-width: 28%;
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.col.album,
+	.col.meta {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.sub {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.dot {
+		flex-shrink: 0;
+		color: var(--fg-16);
+	}
+
+	.menu-wrap {
+		position: relative;
+		flex-shrink: 0;
+		margin-right: 4px;
+	}
+
+	.more-btn {
+		width: 32px;
+		height: 32px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--fg-33);
+		padding: 0;
+		cursor: pointer;
+	}
+
+	.more-btn:hover,
+	.more-btn[aria-expanded='true'] {
+		color: var(--fg);
+		background: var(--fg-8);
+	}
+
+	.menu-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		border: 0;
+		background: transparent;
+		cursor: default;
+	}
+
+	.more-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		z-index: 50;
+		min-width: 148px;
+		padding: 4px;
+		background: var(--popover);
+		border: 1px solid var(--hairline);
+		border-radius: 12px;
+		box-shadow: 0 12px 32px var(--shadow-strong);
+	}
+
+	.more-menu button {
+		display: block;
+		width: 100%;
+		padding: 8px 10px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 14px;
+		font-weight: 500;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.more-menu button:hover {
+		background: var(--fg-8);
+		color: var(--fg);
+	}
+
+	.mobile-hide {
+		display: none;
+	}
+
+	@media (min-width: 768px) {
+		.card-stack {
+			padding: 8px 12px 12px;
+		}
+
+		.desktop-hide {
+			display: none;
+		}
+
+		.mobile-hide,
+		.line-secondary {
+			display: flex;
+		}
+
+		.col.title {
+			flex: 1 1 auto;
+			max-width: none;
+		}
+
+		.main {
+			padding: 0.7rem 0.5rem 0.7rem 0.85rem;
+		}
 	}
 </style>
