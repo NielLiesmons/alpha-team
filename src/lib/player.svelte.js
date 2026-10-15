@@ -10,11 +10,14 @@ import {
 	listPlaylists,
 	listTracks,
 	patchTracks,
-	putTrackMeta,
-	setTracksCover,
 	uploadTrack
 } from './drive/entities.js';
-import { loadMediaManifest, mseMimeForContentType, streamMediaChunks } from './drive/media.js';
+import {
+	loadMediaManifest,
+	mediaSourceCtor,
+	mseMimeForContentType,
+	streamMediaChunks
+} from './drive/media.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 
 /** @type {Map<string, string>} cover_path → object URL */
@@ -407,7 +410,10 @@ function attachAudioSrc(url) {
  * @param {AbortSignal} signal
  */
 async function playViaMse(session, track, mime, manifest, fileKeyHex, generation, signal) {
-	const ms = new MediaSource();
+	const MS = mediaSourceCtor();
+	if (!MS) throw new Error('MediaSource unavailable');
+
+	const ms = new MS();
 	activeMediaSource = ms;
 	const url = URL.createObjectURL(ms);
 	playerUi.objectUrl = url;
@@ -445,16 +451,26 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 	await sourceOpen;
 	if (generation !== playGeneration) return null;
 
-	const sb = ms.addSourceBuffer(mime);
+	let sb;
+	try {
+		sb = ms.addSourceBuffer(mime);
+	} catch (e) {
+		URL.revokeObjectURL(url);
+		if (playerUi.objectUrl === url) playerUi.objectUrl = null;
+		activeMediaSource = null;
+		throw e instanceof Error ? e : new Error(String(e));
+	}
+	// Raw MP3 is a contiguous bitstream — sequence mode concatenates chunks cleanly.
 	try {
 		sb.mode = 'sequence';
 	} catch {
-		/* some browsers reject mode after first append */
+		/* ignore */
 	}
 
 	let started = false;
 	let chunksAppended = 0;
-	const startAfter = Math.min(2, Math.max(1, manifest.chunks?.length ?? 1));
+	/** Start after the first chunk so audio begins ASAP (~256KB). */
+	const startAfter = 1;
 	/** @type {((v?: undefined) => void) | null} */
 	let resolveStart = null;
 	/** @type {((e: Error) => void) | null} */
@@ -471,7 +487,7 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 		const playAttempt = boundAudio?.play();
 		if (playAttempt) {
 			playAttempt.catch(() => {
-				/* autoplay / not-yet-enough-buffer */
+				/* autoplay / not-yet-enough-buffer — PlayerEngine retries on ready */
 			});
 		}
 		resolveStart?.();
@@ -486,10 +502,12 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 			playerUi.bufferRatio = total > 0 ? done / total : 0;
 		},
 		onChunk: async (_i, bytes) => {
-			if (generation !== playGeneration) return;
+			if (generation !== playGeneration || signal.aborted) return;
+			if (ms.readyState !== 'open') {
+				throw new Error('MediaSource closed during append');
+			}
 			await appendBuffer(sb, bytes, signal);
 			chunksAppended += 1;
-			// Wait for a couple chunks so the decoder has a clean MPEG frame run.
 			if (chunksAppended >= startAfter) tryStart();
 		}
 	})
@@ -510,7 +528,7 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 			if (!started) {
 				rejectStart?.(e instanceof Error ? e : new Error(String(e)));
 			}
-			/* After start: keep playing what we have; don't tear down for a late chunk error. */
+			/* After start: keep playing buffered audio; ignore late chunk errors. */
 		});
 
 	await startedGate;
@@ -599,14 +617,10 @@ export async function playTrack(track) {
 		if (generation !== playGeneration) return null;
 
 		const ct = manifest.content_type || 'audio/mpeg';
-		let mime = mseMimeForContentType(ct);
-		// Prefer progressive MSE for mp3 even when isTypeSupported is conservative.
-		if (!mime && /mpeg|mp3/i.test(ct) && typeof MediaSource !== 'undefined') {
-			mime = 'audio/mpeg';
-		}
+		const mime = mseMimeForContentType(ct);
 
 		let url;
-		if (mime) {
+		if (mime && mediaSourceCtor()) {
 			try {
 				url = await playViaMse(
 					session,
@@ -619,15 +633,16 @@ export async function playTrack(track) {
 				);
 			} catch (e) {
 				if (e?.name === 'AbortError' || generation !== playGeneration) throw e;
-				// Safari / picky MSE — fall back to full blob.
-				url = await playViaBlob(
-					session,
-					track,
-					manifest,
-					fileKeyHex,
-					generation,
-					ac.signal
-				);
+				// MSE rejected before start — only then wait for the full file.
+				cancelInFlightPlay();
+				revokeUrl();
+				const gen2 = playGeneration;
+				const ac2 = new AbortController();
+				playAbort = ac2;
+				playerUi.currentId = track.id;
+				playerUi.status = 'loading';
+				playerUi.bufferRatio = 0;
+				url = await playViaBlob(session, track, manifest, fileKeyHex, gen2, ac2.signal);
 			}
 		} else {
 			url = await playViaBlob(session, track, manifest, fileKeyHex, generation, ac.signal);
@@ -791,7 +806,8 @@ export async function ensureTrackCover(track) {
  *   year?: number | null,
  *   genres?: string[],
  *   coverFile?: File | null,
- *   clearCover?: boolean
+ *   clearCover?: boolean,
+ *   onProgress?: (label: string) => void
  * }} patch
  */
 export async function saveTrackEdit(patch) {
@@ -799,39 +815,38 @@ export async function saveTrackEdit(patch) {
 	if (!session) throw new Error('Connect Drive in Settings first');
 	const list = editingTracks();
 	if (!list.length) throw new Error('No track selected');
-	const ids = list.map((t) => t.id);
+	const onProgress = patch.onProgress;
 
+	/** @type {Record<string, any>} */
+	const fields = {};
 	if (list.length === 1) {
-		const next = await putTrackMeta(session, list[0], {
-			title: patch.title ?? list[0].title,
-			artists: patch.artists ?? list[0].artists,
-			album: patch.album ?? list[0].album ?? '',
-			album_artist: patch.album_artist ?? list[0].album_artist ?? '',
-			year: patch.year !== undefined ? patch.year : (list[0].year ?? null),
-			genres: patch.genres ?? list[0].genres ?? []
-		});
-		applyTrackLocal(next);
+		fields.title = patch.title ?? list[0].title;
+		fields.artists = patch.artists ?? list[0].artists;
+		fields.album = patch.album ?? list[0].album ?? '';
+		fields.album_artist = patch.album_artist ?? list[0].album_artist ?? '';
+		fields.year = patch.year !== undefined ? patch.year : (list[0].year ?? null);
+		fields.genres = patch.genres ?? list[0].genres ?? [];
 	} else {
-		/** @type {{ artists?: string[], album?: string | null, album_artist?: string | null, year?: number | null, genres?: string[] }} */
-		const bulk = {};
-		if (patch.artists) bulk.artists = patch.artists;
-		if (patch.album !== undefined) bulk.album = patch.album;
-		if (patch.album_artist !== undefined) bulk.album_artist = patch.album_artist;
-		if (patch.year !== undefined) bulk.year = patch.year;
-		if (patch.genres) bulk.genres = patch.genres;
-		const updated = await patchTracks(session, list, bulk);
-		for (const next of updated) applyTrackLocal(next);
+		if (patch.artists) fields.artists = patch.artists;
+		if (patch.album !== undefined) fields.album = patch.album;
+		if (patch.album_artist !== undefined) fields.album_artist = patch.album_artist;
+		if (patch.year !== undefined) fields.year = patch.year;
+		if (patch.genres) fields.genres = patch.genres;
 	}
+	if (patch.coverFile) fields.coverFile = patch.coverFile;
+	if (patch.clearCover) fields.clearCover = true;
 
-	if (patch.clearCover || patch.coverFile) {
-		const fresh = tracks.filter((t) => ids.includes(t.id));
-		const withCover = await setTracksCover(
-			session,
-			fresh.length ? fresh : list,
-			patch.clearCover ? null : patch.coverFile
-		);
-		for (const next of withCover) applyTrackLocal(next);
+	onProgress?.(list.length > 1 ? `Updating ${list.length} tracks…` : 'Saving…');
+	const updated = await patchTracks(session, list, fields, { onProgress });
+	// Instant cover preview from the file we just uploaded (avoid waiting on Drive fetch)
+	if (patch.coverFile && updated[0]?.cover_path) {
+		const localUrl = URL.createObjectURL(patch.coverFile);
+		const prev = coverUrlCache.get(updated[0].cover_path);
+		if (prev && prev !== localUrl) URL.revokeObjectURL(prev);
+		coverUrlCache.set(updated[0].cover_path, localUrl);
 	}
+	for (const next of updated) applyTrackLocal(next);
+	onProgress?.('Saved');
 
 	playerUi.editingIds = [];
 	playerUi.selectedIds = [];

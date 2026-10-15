@@ -235,22 +235,58 @@ export async function streamMediaChunks(session, manifestPath, opts) {
 	return { manifest, fileKeyHex };
 }
 
+/** @returns {typeof MediaSource | null} */
+export function mediaSourceCtor() {
+	if (typeof window === 'undefined') return null;
+	// iOS 17.1+ progressive path
+	const managed = /** @type {any} */ (window).ManagedMediaSource;
+	if (managed) return managed;
+	return typeof MediaSource !== 'undefined' ? MediaSource : null;
+}
+
 /**
  * MIME type usable with MediaSource for progressive append, or null.
+ * Prefer trying audio/mpeg for unknown types — raw uploads often lack a real MIME.
  * @param {string} contentType
  */
 export function mseMimeForContentType(contentType) {
+	const MS = mediaSourceCtor();
+	if (!MS) return null;
 	const ct = (contentType || '').toLowerCase();
-	if (ct.includes('mpeg') || ct === 'audio/mp3' || ct.endsWith('/mp3') || ct === '') {
-		// Empty type: treat as mp3 (common for odd uploads).
-		if (typeof MediaSource === 'undefined') return null;
-		if (MediaSource.isTypeSupported('audio/mpeg')) return 'audio/mpeg';
-		// Some Chromium builds lie — still try at call site.
-		return null;
-	}
+
+	/** @param {string} mime */
+	const supported = (mime) => {
+		try {
+			return typeof MS.isTypeSupported === 'function' ? MS.isTypeSupported(mime) : true;
+		} catch {
+			return false;
+		}
+	};
+
 	if (ct.includes('ogg') || ct.includes('opus')) {
 		const mime = ct.includes('opus') ? 'audio/webm; codecs="opus"' : 'audio/ogg';
-		return typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(mime) ? mime : null;
+		return supported(mime) ? mime : null;
+	}
+	if (ct.includes('mp4') || ct.includes('m4a') || ct.includes('aac')) {
+		for (const mime of ['audio/mp4', 'audio/mp4; codecs="mp4a.40.2"']) {
+			if (supported(mime)) return mime;
+		}
+		return null;
+	}
+	// flac / wav: MSE usually unsupported — caller falls back to full blob
+	if (ct.includes('flac') || ct.includes('wav') || ct.includes('x-wav')) return null;
+
+	// mp3 + unknown / octet-stream (most library uploads)
+	if (supported('audio/mpeg')) return 'audio/mpeg';
+	// Some engines report false then still accept addSourceBuffer — try anyway for likely-mp3.
+	if (
+		!ct ||
+		ct.includes('mpeg') ||
+		ct.includes('mp3') ||
+		ct.includes('octet-stream') ||
+		ct === 'application/octet-stream'
+	) {
+		return 'audio/mpeg';
 	}
 	return null;
 }

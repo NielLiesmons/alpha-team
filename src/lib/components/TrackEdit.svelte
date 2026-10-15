@@ -16,6 +16,18 @@
 	let year = $state('');
 	let genres = $state('');
 	let saving = $state(false);
+	let saveStatus = $state('');
+	let saveError = $state('');
+	/** Snapshot of bulk form when sheet opened — only send changed fields */
+	let initialBulk = $state(
+		/** @type {{ artists: string, album: string, albumArtist: string, year: string, genres: string }} */ ({
+			artists: '',
+			album: '',
+			albumArtist: '',
+			year: '',
+			genres: ''
+		})
+	);
 	/** @type {File | null} */
 	let coverFile = $state(null);
 	let clearCover = $state(false);
@@ -87,6 +99,13 @@
 				list.map((t) => (Array.isArray(t.genres) ? t.genres.join(', ') : ''))
 			);
 			genres = g.mixed ? '' : g.value;
+			initialBulk = {
+				artists,
+				album,
+				albumArtist,
+				year,
+				genres
+			};
 			const covers = commonValue(list.map((t) => t.cover_path ?? ''));
 			if (!covers.mixed && covers.value) {
 				const sample = list.find((t) => t.cover_path === covers.value);
@@ -99,6 +118,8 @@
 			}
 		}
 		saving = false;
+		saveStatus = '';
+		saveError = '';
 		tick().then(() => (bulk ? artistsInput : titleInput)?.focus());
 	});
 
@@ -132,11 +153,16 @@
 	async function save() {
 		if (saving) return;
 		saving = true;
+		saveError = '';
+		saveStatus = coverFile ? 'Uploading artwork…' : 'Saving…';
 		try {
 			if (!bulk) {
 				const nextTitle = title.trim();
 				const nextArtists = splitList(artists);
-				if (!nextTitle || !nextArtists.length) return;
+				if (!nextTitle || !nextArtists.length) {
+					saveError = 'Title and artist are required';
+					return;
+				}
 				const yearRaw = year.trim();
 				await saveTrackEdit({
 					title: nextTitle,
@@ -146,26 +172,35 @@
 					year: yearRaw ? Number(yearRaw) : null,
 					genres: splitList(genres),
 					coverFile: coverFile ?? undefined,
-					clearCover: clearCover || undefined
+					clearCover: clearCover || undefined,
+					onProgress: (label) => {
+						saveStatus = label;
+					}
 				});
 			} else {
-				/** @type {{ artists?: string[], album?: string, album_artist?: string, year?: number | null, genres?: string[], coverFile?: File, clearCover?: boolean }} */
-				const patch = {};
+				/** @type {{ artists?: string[], album?: string, album_artist?: string, year?: number | null, genres?: string[], coverFile?: File, clearCover?: boolean, onProgress?: (label: string) => void }} */
+				const patch = {
+					onProgress: (label) => {
+						saveStatus = label;
+					}
+				};
 				const nextArtists = splitList(artists);
-				if (nextArtists.length) patch.artists = nextArtists;
-				patch.album = album.trim();
-				patch.album_artist = albumArtist.trim();
-				const yearRaw = year.trim();
-				patch.year = yearRaw ? Number(yearRaw) : null;
-				patch.genres = splitList(genres);
+				if (nextArtists.length && artists !== initialBulk.artists) patch.artists = nextArtists;
+				if (album !== initialBulk.album) patch.album = album.trim();
+				if (albumArtist !== initialBulk.albumArtist) patch.album_artist = albumArtist.trim();
+				if (year !== initialBulk.year) {
+					const yearRaw = year.trim();
+					patch.year = yearRaw ? Number(yearRaw) : null;
+				}
+				if (genres !== initialBulk.genres) patch.genres = splitList(genres);
 				if (coverFile) patch.coverFile = coverFile;
 				if (clearCover) patch.clearCover = true;
 				if (
 					!patch.artists &&
-					patch.album === '' &&
-					patch.album_artist === '' &&
-					patch.year === null &&
-					!(patch.genres?.length) &&
+					patch.album === undefined &&
+					patch.album_artist === undefined &&
+					patch.year === undefined &&
+					patch.genres === undefined &&
 					!patch.coverFile &&
 					!patch.clearCover
 				) {
@@ -174,8 +209,10 @@
 				}
 				await saveTrackEdit(patch);
 			}
+			saveStatus = 'Saved';
 		} catch (e) {
-			alert(e instanceof Error ? e.message : String(e));
+			saveError = e instanceof Error ? e.message : String(e);
+			saveStatus = '';
 		} finally {
 			saving = false;
 		}
@@ -282,6 +319,11 @@
 		</label>
 	</div>
 	<div class="form-divider"></div>
+	{#if saveError}
+		<p class="save-msg err">{saveError}</p>
+	{:else if saveStatus}
+		<p class="save-msg">{saveStatus}</p>
+	{/if}
 	<div class="sheet-bottom">
 		<button
 			type="button"
@@ -289,7 +331,7 @@
 			disabled={saving || (!bulk && (!title.trim() || !artists.trim()))}
 			onclick={save}
 		>
-			{saving ? 'Saving…' : bulk ? `Save ${list.length}` : 'Save'}
+			{saving ? saveStatus || 'Saving…' : bulk ? `Save ${list.length}` : 'Save'}
 		</button>
 	</div>
 </CreateSheet>
@@ -423,5 +465,17 @@
 	.field-input::placeholder {
 		color: var(--fg-33);
 		font-weight: 500;
+	}
+
+	.save-msg {
+		margin: 0;
+		padding: 0 16px 8px;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	.save-msg.err {
+		color: #e85d5d;
 	}
 </style>

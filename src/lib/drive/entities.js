@@ -7,7 +7,8 @@ import {
 	getPathFromDir,
 	loadRootDir,
 	loadRootDirWithTip,
-	putPath
+	putPath,
+	putPaths
 } from './client.js';
 import { sha256Hex } from './crypto.js';
 import { putMediaBlob } from './media.js';
@@ -469,67 +470,7 @@ export async function uploadTrack(session, file, opts = {}) {
 }
 
 /**
- * Update track metadata (title, artists, album, …). Does not touch media blobs.
- * @param {import('./client.js').DriveSession} session
- * @param {any} track
- * @param {{
- *   title: string,
- *   artists: string[],
- *   album?: string,
- *   album_artist?: string,
- *   year?: number | null,
- *   genres?: string[]
- * }} patch
- */
-export async function putTrackMeta(session, track, patch) {
-	const title = String(patch.title ?? '').trim();
-	if (!title) throw new Error('Title is required');
-	const artists = (patch.artists ?? [])
-		.map((a) => String(a).trim())
-		.filter(Boolean);
-	if (!artists.length) throw new Error('At least one artist is required');
-
-	const album = String(patch.album ?? '').trim();
-	const albumArtist = String(patch.album_artist ?? '').trim();
-	const genres = (patch.genres ?? [])
-		.map((g) => String(g).trim())
-		.filter(Boolean);
-	const year =
-		patch.year == null || patch.year === ''
-			? null
-			: Number.isFinite(Number(patch.year))
-				? Math.trunc(Number(patch.year))
-				: null;
-
-	const next = {
-		schema: 'alpha.track/1',
-		id: track.id,
-		title,
-		artists,
-		...(album ? { album } : {}),
-		...(albumArtist ? { album_artist: albumArtist } : {}),
-		track_no: track.track_no ?? null,
-		disc_no: track.disc_no ?? null,
-		duration_ms: track.duration_ms ?? null,
-		year,
-		genres,
-		media_path: track.media_path,
-		cover_path: track.cover_path ?? null,
-		project_ids: Array.isArray(track.project_ids) ? track.project_ids : [],
-		labels: Array.isArray(track.labels) ? track.labels : [],
-		created_at: track.created_at ?? nowRfc3339(),
-		updated_at: nowRfc3339()
-	};
-
-	const trackPath = `media/audio/tracks/${track.id}/track.json`;
-	await putPath(session, trackPath, 'track', JSON.stringify(next, null, 2));
-	invalidateTrackCache(session);
-	return next;
-}
-
-/**
- * Partial metadata patch — only provided keys are applied. Title is never cleared.
- * @param {import('./client.js').DriveSession} session
+ * Build alpha.track/1 document from existing track + field patch.
  * @param {any} track
  * @param {{
  *   title?: string,
@@ -541,7 +482,7 @@ export async function putTrackMeta(session, track, patch) {
  *   cover_path?: string | null
  * }} patch
  */
-export async function patchTrackFields(session, track, patch) {
+export function buildTrackDoc(track, patch = {}) {
 	const title =
 		patch.title !== undefined ? String(patch.title).trim() : String(track.title ?? '').trim();
 	if (!title) throw new Error('Title is required');
@@ -574,19 +515,87 @@ export async function patchTrackFields(session, track, patch) {
 					? Math.trunc(Number(patch.year))
 					: null
 			: (track.year ?? null);
+	const coverPath =
+		patch.cover_path !== undefined ? patch.cover_path : (track.cover_path ?? null);
 
-	const next = await putTrackMeta(session, track, {
+	return {
+		schema: 'alpha.track/1',
+		id: track.id,
 		title,
 		artists,
-		album,
-		album_artist: albumArtist,
+		...(album ? { album } : {}),
+		...(albumArtist ? { album_artist: albumArtist } : {}),
+		track_no: track.track_no ?? null,
+		disc_no: track.disc_no ?? null,
+		duration_ms: track.duration_ms ?? null,
 		year,
-		genres
-	});
-	if (patch.cover_path !== undefined) {
-		return putTrackCoverPath(session, next, patch.cover_path);
-	}
+		genres,
+		media_path: track.media_path,
+		cover_path: coverPath,
+		project_ids: Array.isArray(track.project_ids) ? track.project_ids : [],
+		labels: Array.isArray(track.labels) ? track.labels : [],
+		created_at: track.created_at ?? nowRfc3339(),
+		updated_at: nowRfc3339()
+	};
+}
+
+/**
+ * Update track metadata (title, artists, album, …). Does not touch media blobs.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} track
+ * @param {{
+ *   title: string,
+ *   artists: string[],
+ *   album?: string,
+ *   album_artist?: string,
+ *   year?: number | null,
+ *   genres?: string[],
+ *   cover_path?: string | null
+ * }} patch
+ */
+export async function putTrackMeta(session, track, patch) {
+	const next = buildTrackDoc(track, patch);
+	const trackPath = `media/audio/tracks/${track.id}/track.json`;
+	await putPath(session, trackPath, 'track', JSON.stringify(next, null, 2));
+	invalidateTrackCache(session);
 	return next;
+}
+
+/**
+ * Partial metadata patch — only provided keys are applied. Title is never cleared.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} track
+ * @param {{
+ *   title?: string,
+ *   artists?: string[],
+ *   album?: string | null,
+ *   album_artist?: string | null,
+ *   year?: number | null,
+ *   genres?: string[],
+ *   cover_path?: string | null
+ * }} patch
+ */
+export async function patchTrackFields(session, track, patch) {
+	const next = buildTrackDoc(track, patch);
+	const trackPath = `media/audio/tracks/${track.id}/track.json`;
+	await putPath(session, trackPath, 'track', JSON.stringify(next, null, 2));
+	invalidateTrackCache(session);
+	return next;
+}
+
+/**
+ * Prepare cover image bytes + content-addressed path (does not write yet).
+ * @param {File | Blob} file
+ * @returns {Promise<{ path: string, bytes: Uint8Array }>}
+ */
+export async function prepareCoverImage(file) {
+	const type = file.type || 'image/jpeg';
+	if (!type.startsWith('image/')) throw new Error('Cover must be an image');
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	if (!bytes.length) throw new Error('Empty cover image');
+	if (bytes.length > 12 * 1024 * 1024) throw new Error('Cover image is too large (max 12MB)');
+	const hash = await sha256Hex(bytes);
+	return { path: `media/audio/covers/${hash}`, bytes };
 }
 
 /**
@@ -595,12 +604,7 @@ export async function patchTrackFields(session, track, patch) {
  * @param {File | Blob} file
  */
 export async function putCoverImage(session, file) {
-	const type = file.type || 'image/jpeg';
-	if (!type.startsWith('image/')) throw new Error('Cover must be an image');
-	const bytes = new Uint8Array(await file.arrayBuffer());
-	if (!bytes.length) throw new Error('Empty cover image');
-	const hash = await sha256Hex(bytes);
-	const path = `media/audio/covers/${hash}`;
+	const { path, bytes } = await prepareCoverImage(file);
 	await putPath(session, path, 'blob', bytes);
 	return path;
 }
@@ -611,25 +615,7 @@ export async function putCoverImage(session, file) {
  * @param {string | null} coverPath
  */
 export async function putTrackCoverPath(session, track, coverPath) {
-	const next = {
-		schema: 'alpha.track/1',
-		id: track.id,
-		title: track.title,
-		artists: Array.isArray(track.artists) ? track.artists : ['Unknown'],
-		...(track.album ? { album: track.album } : {}),
-		...(track.album_artist ? { album_artist: track.album_artist } : {}),
-		track_no: track.track_no ?? null,
-		disc_no: track.disc_no ?? null,
-		duration_ms: track.duration_ms ?? null,
-		year: track.year ?? null,
-		genres: Array.isArray(track.genres) ? track.genres : [],
-		media_path: track.media_path,
-		cover_path: coverPath,
-		project_ids: Array.isArray(track.project_ids) ? track.project_ids : [],
-		labels: Array.isArray(track.labels) ? track.labels : [],
-		created_at: track.created_at ?? nowRfc3339(),
-		updated_at: nowRfc3339()
-	};
+	const next = buildTrackDoc(track, { cover_path: coverPath });
 	const trackPath = `media/audio/tracks/${track.id}/track.json`;
 	await putPath(session, trackPath, 'track', JSON.stringify(next, null, 2));
 	invalidateTrackCache(session);
@@ -637,22 +623,43 @@ export async function putTrackCoverPath(session, track, coverPath) {
 }
 
 /**
- * Apply one cover image to many tracks (shared cover_path).
+ * Apply one cover image to many tracks (shared cover_path) in one tip write.
  * @param {import('./client.js').DriveSession} session
  * @param {any[]} trackList
  * @param {File | Blob | null} file null clears cover
+ * @param {{ onProgress?: (label: string) => void }} [opts]
  */
-export async function setTracksCover(session, trackList, file) {
-	const coverPath = file ? await putCoverImage(session, file) : null;
+export async function setTracksCover(session, trackList, file, opts = {}) {
+	opts.onProgress?.(file ? 'Uploading artwork…' : 'Removing artwork…');
+	/** @type {{ path: string, kind: string, plaintext: string | Uint8Array }[]} */
+	const entries = [];
+	/** @type {string | null} */
+	let coverPath = null;
+	if (file) {
+		const prepared = await prepareCoverImage(file);
+		coverPath = prepared.path;
+		entries.push({ path: prepared.path, kind: 'blob', plaintext: prepared.bytes });
+	}
+
 	/** @type {any[]} */
 	const out = [];
 	for (const track of trackList) {
-		out.push(await putTrackCoverPath(session, track, coverPath));
+		const next = buildTrackDoc(track, { cover_path: coverPath });
+		out.push(next);
+		entries.push({
+			path: `media/audio/tracks/${track.id}/track.json`,
+			kind: 'track',
+			plaintext: JSON.stringify(next, null, 2)
+		});
 	}
+	opts.onProgress?.(`Saving ${trackList.length} track${trackList.length === 1 ? '' : 's'}…`);
+	await putPaths(session, entries);
+	invalidateTrackCache(session);
 	return out;
 }
 
 /**
+ * Batch-patch many tracks (single tip update). Optional cover file applied to all.
  * @param {import('./client.js').DriveSession} session
  * @param {any[]} trackList
  * @param {{
@@ -661,15 +668,43 @@ export async function setTracksCover(session, trackList, file) {
  *   album_artist?: string | null,
  *   year?: number | null,
  *   genres?: string[],
- *   cover_path?: string | null
+ *   cover_path?: string | null,
+ *   coverFile?: File | Blob | null,
+ *   clearCover?: boolean
  * }} patch
+ * @param {{ onProgress?: (label: string) => void }} [opts]
  */
-export async function patchTracks(session, trackList, patch) {
+export async function patchTracks(session, trackList, patch, opts = {}) {
+	/** @type {{ path: string, kind: string, plaintext: string | Uint8Array }[]} */
+	const entries = [];
+	/** @type {string | null | undefined} */
+	let coverPath = patch.cover_path;
+	if (patch.clearCover) coverPath = null;
+	else if (patch.coverFile) {
+		opts.onProgress?.('Uploading artwork…');
+		const prepared = await prepareCoverImage(patch.coverFile);
+		coverPath = prepared.path;
+		entries.push({ path: prepared.path, kind: 'blob', plaintext: prepared.bytes });
+	}
+
 	/** @type {any[]} */
 	const out = [];
 	for (const track of trackList) {
-		out.push(await patchTrackFields(session, track, patch));
+		const fieldPatch = { ...patch };
+		delete fieldPatch.coverFile;
+		delete fieldPatch.clearCover;
+		if (coverPath !== undefined) fieldPatch.cover_path = coverPath;
+		const next = buildTrackDoc(track, fieldPatch);
+		out.push(next);
+		entries.push({
+			path: `media/audio/tracks/${track.id}/track.json`,
+			kind: 'track',
+			plaintext: JSON.stringify(next, null, 2)
+		});
 	}
+	opts.onProgress?.(`Saving ${trackList.length} track${trackList.length === 1 ? '' : 's'}…`);
+	await putPaths(session, entries);
+	invalidateTrackCache(session);
 	return out;
 }
 

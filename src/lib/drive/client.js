@@ -175,19 +175,44 @@ export async function getPathFromDir(session, dir, logicalPath, signal) {
  * @param {Uint8Array | string} plaintext
  */
 export async function putPath(session, logicalPath, kind, plaintext) {
+	await putPaths(session, [{ path: logicalPath, kind, plaintext }]);
+}
+
+/**
+ * Write many logical paths with a single tip update (encrypt + putBlock in parallel).
+ * @param {DriveSession} session
+ * @param {{ path: string, kind: string, plaintext: Uint8Array | string }[]} entries
+ */
+export async function putPaths(session, entries) {
+	if (!entries?.length) return;
 	const root = parseRootKey(session.rootKey);
-	const bytes =
-		typeof plaintext === 'string' ? new TextEncoder().encode(plaintext) : plaintext;
-	const { ciphertext, fileKeyHex } = await encrypt(root, logicalPath, bytes);
-	const hash = await sha256Hex(ciphertext);
-	await putBlock(session, hash, ciphertext);
+
+	/** @type {{ name: string, kind: string, hash: string, wrapped_key: string }[]} */
+	const prepared = await Promise.all(
+		entries.map(async (entry) => {
+			const name = normalizePath(entry.path);
+			if (!name) throw new Error('empty path');
+			const bytes =
+				typeof entry.plaintext === 'string'
+					? new TextEncoder().encode(entry.plaintext)
+					: entry.plaintext;
+			const { ciphertext, fileKeyHex } = await encrypt(root, name, bytes);
+			const hash = await sha256Hex(ciphertext);
+			await putBlock(session, hash, ciphertext);
+			return { name, kind: entry.kind, hash, wrapped_key: fileKeyHex };
+		})
+	);
 
 	const dir = await loadRootDir(session);
-	const name = normalizePath(logicalPath);
-	if (!name) throw new Error('empty path');
 	dir.schema = 'alpha.dir/1';
 	dir.children = dir.children ?? {};
-	dir.children[name] = { hash, kind, wrapped_key: fileKeyHex };
+	for (const row of prepared) {
+		dir.children[row.name] = {
+			hash: row.hash,
+			kind: row.kind,
+			wrapped_key: row.wrapped_key
+		};
+	}
 
 	const dirBytes = new TextEncoder().encode(JSON.stringify(dir));
 	const dirCt = await encryptWithRoot(root, '', dirBytes);
@@ -195,7 +220,6 @@ export async function putPath(session, logicalPath, kind, plaintext) {
 	await putBlock(session, dirHash, dirCt);
 	await putTip(session, dirHash);
 	rememberRootDir(dir, dirHash, session);
-	return hash;
 }
 
 /**
