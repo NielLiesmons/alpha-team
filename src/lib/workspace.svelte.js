@@ -24,6 +24,9 @@ const niel = { pubkey: 'niel', name: 'Niel' };
 const lea = { pubkey: 'lea', name: 'Léa' };
 const marc = { pubkey: 'marc', name: 'Marc' };
 
+/** People available for assignee pickers (demo + local). */
+export const people = [niel, lea, marc];
+
 const demoTasks = [
 	{
 		id: 't4',
@@ -290,7 +293,13 @@ export async function saveTask(draft, isNew) {
 		const saved = await putTask(session, entity);
 		const idx = tasks.findIndex((t) => t.id === saved.id);
 		const plist = projects.map((p) => p._drive ?? p);
-		const uiTask = toUiTask(saved, plist);
+		const uiTask = {
+			...toUiTask(saved, plist),
+			/* Assignees not on Drive schema yet — keep UI-side picks */
+			author: draft.author ?? (idx >= 0 ? tasks[idx].author : undefined),
+			assignees: draft.assignees ?? (idx >= 0 ? tasks[idx].assignees : []) ?? [],
+			commenters: draft.commenters ?? (idx >= 0 ? tasks[idx].commenters : []) ?? []
+		};
 		if (idx >= 0) Object.assign(tasks[idx], uiTask);
 		else tasks.unshift(uiTask);
 	}

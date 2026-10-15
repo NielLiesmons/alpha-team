@@ -27,11 +27,12 @@
 	--task-check-stroke: calc(var(--task-box-stroke) * 1.35);
 
 	/*
-	 * Two poles only (like Bley). Admin: whisper of accent hue, near gray.
-	 * --fg-raw = dark pole · --bg-raw = light pole. Themes flip the pair.
+	 * Two poles only (like Bley). Admin dark pole stays near Material #121212
+	 * (hsl(… 8%) was reading lighter than the old gray). Light pole keeps a
+	 * whisper of accent.
 	 */
-	--fg-raw: hsl(from var(--accent) h 8% 8%);
-	--bg-raw: hsl(from var(--accent) h 4% 97%);
+	--fg-raw: #121212;
+	--bg-raw: color-mix(in srgb, #f8f8f8 97%, var(--accent));
 
 	/* Active pair — Admin defaults dark (operators); light flips below */
 	--bg: var(--fg-raw);
@@ -590,7 +591,7 @@ table.data tr.selected td {
 }
 
 /* Create sheets (Chateau form box, used inside CreateSheet) */
-.title-row {
+.sheet-title-row {
 	display: flex;
 	align-items: center;
 	gap: 12px;

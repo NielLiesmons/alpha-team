@@ -147,11 +147,11 @@
 		height: 28px;
 		padding: 0 10px 0 8px;
 		border-radius: 9999px;
-		background: var(--fg-8);
+		background: var(--fg-4);
 	}
 
 	.pill-hit:hover {
-		background: var(--fg-11);
+		background: var(--fg-8);
 	}
 
 	.pill-text {

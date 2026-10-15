@@ -52,7 +52,7 @@
 </script>
 
 <CreateSheet {open} label={editing ? 'Edit project' : 'New project'} onclose={closeComposer}>
-	<div class="title-row">
+	<div class="sheet-title-row">
 		<div class="menu-anchor">
 			<button type="button" class="bare" aria-label="Status" onclick={() => (statusOpen = !statusOpen)}>
 				<StatusBox state={status} size={24} />

@@ -5,7 +5,7 @@
 	import LabelPill from './LabelPill.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import PlayerDetail from './PlayerDetail.svelte';
-	import TaskFieldPicker from './TaskFieldPicker.svelte';
+	import TaskDetailMeta from './TaskDetailMeta.svelte';
 	import {
 		closePlayerDetail,
 		playerBrowse,
@@ -304,40 +304,7 @@
 			<div class="title-row">
 				<h2 class="title">{task.title}</h2>
 			</div>
-			<div class="meta-row" role="list">
-				<div class="meta-item" role="listitem">
-					<TaskFieldPicker
-						taskId={task.id}
-						field="status"
-						value={task.status}
-						size={18}
-						variant="pill"
-					/>
-				</div>
-				<div class="meta-item" role="listitem">
-					<TaskFieldPicker
-						taskId={task.id}
-						field="priority"
-						value={task.priority}
-						size={18}
-						variant="pill"
-					/>
-				</div>
-				{#each task.assignees ?? [] as person (person.pubkey ?? person.name)}
-					<div class="meta-pill person" role="listitem">
-						<ProfilePic name={person.name ?? ''} size={18} />
-						<span>{person.name}</span>
-					</div>
-				{/each}
-				{#each task.targets ?? [] as target (target.id)}
-					<span class="meta-pill" role="listitem">{target.label}</span>
-				{/each}
-				{#each task.labels ?? [] as labelText (labelText)}
-					<span class="meta-label" role="listitem">
-						<LabelPill text={labelText} size="small" />
-					</span>
-				{/each}
-			</div>
+			<TaskDetailMeta {task} />
 			{#if task.body}
 				<p class="prose">{task.body}</p>
 			{:else}
@@ -422,12 +389,12 @@
 				/>
 			</div>
 			{#if (note.targets?.length ?? 0) > 0 || (note.labels?.length ?? 0) > 0}
-				<div class="meta-row" role="list">
+				<div class="note-meta-row" role="list">
 					{#each note.targets ?? [] as target (target.id)}
-						<span class="meta-pill" role="listitem">{target.label}</span>
+						<span class="note-meta-pill" role="listitem">{target.label}</span>
 					{/each}
 					{#each note.labels ?? [] as labelText (labelText)}
-						<span class="meta-label" role="listitem">
+						<span class="note-meta-label" role="listitem">
 							<LabelPill text={labelText} size="small" />
 						</span>
 					{/each}
@@ -527,7 +494,7 @@
 		padding-right: 4px;
 	}
 
-	.meta-row {
+	.note-meta-row {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -536,31 +503,20 @@
 		box-sizing: border-box;
 	}
 
-	.meta-item {
-		flex-shrink: 0;
-	}
-
-	.meta-pill {
+	.note-meta-pill {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
 		height: 28px;
 		padding: 0 10px;
 		border-radius: 9999px;
-		background: var(--fg-8);
+		background: var(--fg-4);
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--fg-66);
 		white-space: nowrap;
-		flex-shrink: 0;
-		box-sizing: border-box;
 	}
 
-	.meta-pill.person {
-		padding-left: 6px;
-	}
-
-	.meta-label {
+	.note-meta-label {
 		display: inline-flex;
 		flex-shrink: 0;
 	}
@@ -848,19 +804,6 @@
 			font-size: 15px;
 			font-weight: 650;
 			color: var(--fg);
-		}
-
-		.meta-row {
-			flex-wrap: nowrap;
-			overflow-x: auto;
-			overflow-y: hidden;
-			-webkit-overflow-scrolling: touch;
-			scrollbar-width: none;
-			padding-bottom: 14px;
-		}
-
-		.meta-row::-webkit-scrollbar {
-			display: none;
 		}
 
 		.icon-hit {

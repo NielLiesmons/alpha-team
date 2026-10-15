@@ -93,10 +93,12 @@
 	.title-row {
 		display: flex;
 		flex-direction: row;
-		align-items: baseline;
+		align-items: center;
 		gap: 8px;
 		width: 100%;
 		min-width: 0;
+		margin: 0;
+		padding: 0;
 	}
 
 	.title,

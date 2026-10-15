@@ -62,7 +62,7 @@
 </script>
 
 <CreateSheet {open} label={editing ? 'Edit note' : 'New note'} onclose={closeComposer}>
-	<div class="title-row">
+	<div class="sheet-title-row">
 		<input class="sheet-input" placeholder="Note title" bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
