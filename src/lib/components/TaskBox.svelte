@@ -3,7 +3,8 @@
 	 * Status box — --accent-success / --accent-progress.
 	 * Check stroke tracks --task-box-stroke (slightly thicker).
 	 */
-	let { state = 'open', size = 24 } = $props();
+	/** @type {{ state?: string, size?: number, embedded?: boolean }} */
+	let { state = 'open', size = 24, embedded = false } = $props();
 
 	const checkSize = $derived(Math.round(size * 0.62));
 	const iconSize = $derived(Math.round(size * 0.58));
@@ -13,6 +14,7 @@
 
 <div
 	class="task-box state-{state}"
+	class:embedded
 	style="width: {size}px; height: {size}px; border-radius: {size / 3}px;"
 >
 	{#if state === 'closed'}
@@ -120,5 +122,21 @@
 	.state-canceled {
 		background: var(--white8);
 		border: var(--task-box-stroke) solid transparent;
+	}
+
+	/* Inside a meta pill — keep the glyph, drop the second filled plate */
+	.task-box.embedded {
+		background: transparent !important;
+	}
+
+	.task-box.embedded.state-closed,
+	.task-box.embedded.state-inProgress,
+	.task-box.embedded.state-inReview,
+	.task-box.embedded.state-canceled {
+		border-color: transparent;
+	}
+
+	.task-box.embedded.state-closed .check {
+		stroke: var(--accent-success);
 	}
 </style>

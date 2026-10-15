@@ -30,25 +30,26 @@
 
 	$effect(() => {
 		const url = playerUi.objectUrl;
-		if (!audioEl || !url) return;
+		if (!audioEl) return;
+		if (!url) {
+			if (playerUi.status === 'idle') {
+				audioEl.pause();
+				if (audioEl.src) {
+					audioEl.removeAttribute('src');
+					audioEl.load();
+				}
+				currentTime = 0;
+				duration = 0;
+				playing = false;
+			}
+			return;
+		}
+		// Do not call load() here — it resets MediaSource progressive streams.
 		if (audioEl.src !== url) {
 			audioEl.src = url;
-			audioEl.load();
 		}
 		if (playerUi.status === 'ready') {
 			audioEl.play().catch(() => {});
-		}
-	});
-
-	$effect(() => {
-		if (!audioEl) return;
-		if (playerUi.status === 'loading' && !playerUi.objectUrl) {
-			audioEl.pause();
-			audioEl.removeAttribute('src');
-			audioEl.load();
-			currentTime = 0;
-			duration = 0;
-			playing = false;
 		}
 	});
 

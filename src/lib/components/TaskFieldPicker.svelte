@@ -36,7 +36,7 @@
 	const options = $derived(field === 'status' ? STATUSES : PRIORITIES);
 	const ariaLabel = $derived(field === 'status' ? 'Set task status' : 'Set task priority');
 	const valueLabel = $derived(options.find((o) => o.value === value)?.label ?? value);
-	const iconSize = $derived(variant === 'pill' ? Math.min(size, 18) : size);
+	const iconSize = $derived(variant === 'pill' ? 16 : size);
 
 	/**
 	 * @param {MouseEvent} e
@@ -87,7 +87,7 @@
 		onclick={toggle}
 	>
 		{#if field === 'status'}
-			<TaskBox state={value} size={iconSize} />
+			<TaskBox state={value} size={iconSize} embedded={variant === 'pill'} />
 		{:else}
 			<PriorityBox priority={value} size={iconSize} />
 		{/if}
@@ -145,9 +145,10 @@
 	.pill-hit {
 		gap: 6px;
 		height: 28px;
-		padding: 0 10px 0 8px;
+		padding: 0 10px 0 7px;
 		border-radius: 9999px;
 		background: var(--fg-4);
+		box-sizing: border-box;
 	}
 
 	.pill-hit:hover {

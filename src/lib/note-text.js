@@ -4,21 +4,40 @@
  */
 export function notePlainText(raw) {
 	if (!raw) return '';
-	const s = String(raw);
+	let s = String(raw);
 	if (s.includes('<')) {
-		return s
-			.replace(/<br\s*\/?>/gi, ' ')
-			.replace(/<\/p>/gi, ' ')
-			.replace(/<\/h[1-6]>/gi, ' ')
+		s = s
+			.replace(/<br\s*\/?>/gi, '\n')
+			.replace(/<\/p>/gi, '\n')
+			.replace(/<\/h[1-6]>/gi, '\n')
+			.replace(/<li[^>]*>/gi, '• ')
 			.replace(/<[^>]+>/g, '')
 			.replace(/&nbsp;/g, ' ')
 			.replace(/&amp;/g, '&')
 			.replace(/&lt;/g, '<')
 			.replace(/&gt;/g, '>')
-			.replace(/\s+/g, ' ')
-			.trim();
+			.replace(/&quot;/g, '"');
 	}
-	return s.replace(/\s+/g, ' ').trim();
+	return stripMarkdownSyntax(s).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Strip common markdown markers so list previews stay readable.
+ * @param {string} s
+ */
+export function stripMarkdownSyntax(s) {
+	return String(s)
+		.replace(/```[\s\S]*?```/g, ' ')
+		.replace(/`[^`]+`/g, (m) => m.slice(1, -1))
+		.replace(/^#{1,6}\s+/gm, '')
+		.replace(/^\s*>+\s?/gm, '')
+		.replace(/^\s*[-*+]\s+/gm, '')
+		.replace(/^\s*\d+\.\s+/gm, '')
+		.replace(/(\*\*|__)(.*?)\1/g, '$2')
+		.replace(/(\*|_)(.*?)\1/g, '$2')
+		.replace(/~~(.*?)~~/g, '$1')
+		.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+		.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
 }
 
 /** @param {string} raw */

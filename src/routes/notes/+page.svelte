@@ -70,7 +70,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		gap: 0.2rem;
+		gap: calc(0.2rem + 2px);
 		width: 100%;
 		padding: calc(0.85rem - 4px) 0.9rem;
 		border: 0;

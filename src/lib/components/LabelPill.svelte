@@ -1,13 +1,19 @@
 <script>
 	import { stringToColor } from '$lib/color.js';
 
+	/** @type {{ text?: string, size?: 'small' | 'meta' | 'default' }} */
 	let { text = '', size = 'small' } = $props();
 
 	const base = $derived(stringToColor(text || ' '));
 	const bg = $derived(`rgba(${base.r}, ${base.g}, ${base.b}, 0.16)`);
 </script>
 
-<span class="label" class:small={size === 'small'} style:--bg-color={bg}>
+<span
+	class="label"
+	class:small={size === 'small'}
+	class:meta={size === 'meta'}
+	style:--bg-color={bg}
+>
 	<span class="content">{text}</span>
 	<svg class="triangle" viewBox="0 0 24 32" fill="none" aria-hidden="true">
 		<path
@@ -27,6 +33,10 @@
 
 	.label.small {
 		height: 24px;
+	}
+
+	.label.meta {
+		height: 28px;
 	}
 
 	.content {
@@ -55,6 +65,16 @@
 		font-size: 12px;
 	}
 
+	.label.meta .content {
+		height: 28px;
+		padding-left: 10px;
+		padding-right: 2px;
+		border-radius: 10px 0 0 10px;
+		max-width: 160px;
+		font-size: 12px;
+		font-weight: 500;
+	}
+
 	.triangle {
 		flex-shrink: 0;
 		width: 24px;
@@ -64,5 +84,10 @@
 	.label.small .triangle {
 		width: 18px;
 		height: 24px;
+	}
+
+	.label.meta .triangle {
+		width: 21px;
+		height: 28px;
 	}
 </style>
