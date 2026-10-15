@@ -242,7 +242,7 @@
 					{:else}
 						{#each assignees.slice(0, 2) as person, i (person.email ?? person.name ?? i)}
 							<span class="stack-pic" style:margin-left={i > 0 ? '-6px' : '0'}>
-								<ProfilePic name={person.name ?? ''} size={18} />
+								<ProfilePic name={person.name ?? ''} size={20} />
 							</span>
 						{/each}
 						<span class="pill-names">{assignees.map((a) => a.name).filter(Boolean).join(', ')}</span>
@@ -255,7 +255,7 @@
 						{#each people as person (person.email)}
 							{@const on = assignees.some((a) => a.email === person.email)}
 							<button type="button" class="option" class:active={on} onclick={() => toggleAssignee(person)}>
-								<ProfilePic name={person.name} size={18} />
+								<ProfilePic name={person.name} size={20} />
 								<span>{person.name}</span>
 							</button>
 						{/each}
@@ -316,7 +316,7 @@
 						<span class="trigger-count">{labels.length}</span>
 						<span class="trigger-text">Label{labels.length === 1 ? '' : 's'}</span>
 					</span>
-					<svg class="labels-trigger-tip" width="21" height="28" viewBox="0 0 24 32" fill="none" aria-hidden="true">
+					<svg class="labels-trigger-tip" width="24" height="32" viewBox="0 0 24 32" fill="none" aria-hidden="true">
 						<path
 							d="M0 0 L4 0 Q9 2 14 6 Q19 10 23 14 Q23.5 16 23 18 Q19 22 14 26 Q9 30 4 32 L0 32 Z"
 							fill="var(--trigger-bg)"
@@ -506,7 +506,7 @@
 	.post-action-row {
 		display: flex;
 		align-items: center;
-		padding: 0 16px 10px;
+		padding: 0 16px 8px;
 	}
 
 	.action-buttons-left {
@@ -539,8 +539,8 @@
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		padding: 10px 16px;
-		gap: 10px;
+		padding: 10px 16px 4px;
+		gap: 8px;
 	}
 
 	.bottom-pills {
@@ -562,12 +562,12 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		height: 28px;
-		padding: 0 10px;
+		height: 32px;
+		padding: 0 12px 0 8px;
 		border: 0;
 		border-radius: 9999px;
 		background: var(--fg-4);
-		font-size: 12px;
+		font-size: 13px;
 		font-weight: 500;
 		color: var(--fg-66);
 		white-space: nowrap;
@@ -578,6 +578,7 @@
 
 	.meta-pill.empty {
 		color: var(--fg-33);
+		padding-left: 10px;
 	}
 
 	.meta-pill:hover {
@@ -585,8 +586,8 @@
 	}
 
 	.empty-avatar {
-		width: 18px;
-		height: 18px;
+		width: 20px;
+		height: 20px;
 		border-radius: 50%;
 		border: 1px dashed var(--fg-16);
 		box-sizing: border-box;
@@ -609,7 +610,7 @@
 		display: inline-flex;
 		flex-direction: row;
 		align-items: center;
-		height: 28px;
+		height: 32px;
 		background: none;
 		border: none;
 		padding: 0;
@@ -627,15 +628,15 @@
 		flex-direction: row;
 		align-items: center;
 		gap: 6px;
-		height: 28px;
-		padding: 0 2px 0 10px;
+		height: 32px;
+		padding: 0 2px 0 12px;
 		background: var(--trigger-bg);
-		border-radius: 10px 0 0 10px;
+		border-radius: 12px 0 0 12px;
 		white-space: nowrap;
 	}
 
 	.trigger-count {
-		font-size: 12px;
+		font-size: 13px;
 		font-weight: 600;
 		color: var(--fg-16);
 	}
@@ -645,7 +646,7 @@
 	}
 
 	.trigger-text {
-		font-size: 12px;
+		font-size: 13px;
 		font-weight: 500;
 		color: var(--fg-33);
 	}
@@ -657,8 +658,8 @@
 	.labels-trigger-tip {
 		flex-shrink: 0;
 		display: block;
-		width: 21px;
-		height: 28px;
+		width: 24px;
+		height: 32px;
 	}
 
 	.labels-menu {
@@ -719,7 +720,7 @@
 		justify-content: center;
 		background: var(--fg);
 		border: none;
-		border-radius: 8px;
+		border-radius: 9999px;
 		color: var(--bg);
 		font-size: 15px;
 		font-weight: 500;

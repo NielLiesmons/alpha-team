@@ -36,7 +36,7 @@
 	}
 
 	.label.meta {
-		height: 28px;
+		height: 32px;
 	}
 
 	.content {
@@ -66,12 +66,12 @@
 	}
 
 	.label.meta .content {
-		height: 28px;
-		padding-left: 10px;
-		padding-right: 2px;
-		border-radius: 10px 0 0 10px;
+		height: 32px;
+		padding-left: 12px;
+		padding-right: 4px;
+		border-radius: 12px 0 0 12px;
 		max-width: 160px;
-		font-size: 12px;
+		font-size: 13px;
 		font-weight: 500;
 	}
 
@@ -87,7 +87,7 @@
 	}
 
 	.label.meta .triangle {
-		width: 21px;
-		height: 28px;
+		width: 24px;
+		height: 32px;
 	}
 </style>

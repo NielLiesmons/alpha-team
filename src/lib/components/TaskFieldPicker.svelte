@@ -36,7 +36,7 @@
 	const options = $derived(field === 'status' ? STATUSES : PRIORITIES);
 	const ariaLabel = $derived(field === 'status' ? 'Set task status' : 'Set task priority');
 	const valueLabel = $derived(options.find((o) => o.value === value)?.label ?? value);
-	const iconSize = $derived(variant === 'pill' ? 16 : size);
+	const iconSize = $derived(variant === 'pill' ? 20 : size);
 
 	/**
 	 * @param {MouseEvent} e
@@ -87,9 +87,9 @@
 		onclick={toggle}
 	>
 		{#if field === 'status'}
-			<TaskBox state={value} size={iconSize} embedded={variant === 'pill'} />
+			<TaskBox state={value} size={iconSize} />
 		{:else}
-			<PriorityBox priority={value} size={iconSize} />
+			<PriorityBox priority={value} size={variant === 'pill' ? 18 : size} />
 		{/if}
 		{#if variant === 'pill'}
 			<span class="pill-text">{valueLabel}</span>
@@ -142,11 +142,11 @@
 		background: var(--fg-4);
 	}
 
-	/* Match DetailMetaPills .meta-pill exactly — one chrome layer only */
+	/* Match DetailMetaPills .meta-pill — 32px like Publish / action buttons */
 	.pill-hit {
 		gap: 6px;
-		height: 28px;
-		padding: 0 10px;
+		height: 32px;
+		padding: 0 12px 0 8px;
 		border-radius: 9999px;
 		background: var(--fg-4);
 		box-sizing: border-box;

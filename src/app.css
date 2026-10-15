@@ -645,7 +645,7 @@ table.data tr.selected td {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 10px 16px;
+	padding: 10px 16px 4px;
 }
 
 .publish-btn {
@@ -653,7 +653,7 @@ table.data tr.selected td {
 	height: 32px;
 	padding: 0 16px;
 	border: 0;
-	border-radius: 8px;
+	border-radius: 9999px;
 	background: var(--white);
 	color: var(--black);
 	font-size: 15px;

@@ -166,7 +166,7 @@
 				aria-expanded={menu === 'status'}
 				onclick={(e) => toggleMenu('status', e)}
 			>
-				<TaskBox state={entity.status} size={14} embedded />
+				<TaskBox state={entity.status} size={20} />
 				<span>{statusLabel}</span>
 			</button>
 			{#if menu === 'status'}
@@ -179,7 +179,7 @@
 							class:active={entity.status === opt.value}
 							onclick={(e) => pickStatus(opt.value, e)}
 						>
-							<TaskBox state={opt.value} size={18} />
+							<TaskBox state={opt.value} size={20} />
 							<span>{opt.label}</span>
 						</button>
 					{/each}
@@ -194,7 +194,7 @@
 				aria-expanded={menu === 'priority'}
 				onclick={(e) => toggleMenu('priority', e)}
 			>
-				<PriorityBox priority={entity.priority} size={14} />
+				<PriorityBox priority={entity.priority} size={18} />
 				<span>{priorityLabel}</span>
 			</button>
 			{#if menu === 'priority'}
@@ -232,7 +232,7 @@
 				{:else}
 					{#each assignees.slice(0, 3) as person, i (person.email ?? person.name ?? i)}
 						<span class="stack-pic" style:margin-left={i > 0 ? '-6px' : '0'} style:z-index={3 - i}>
-							<ProfilePic name={person.name ?? ''} size={18} />
+							<ProfilePic name={person.name ?? ''} size={20} />
 						</span>
 					{/each}
 					<span class="pill-names">
@@ -251,7 +251,7 @@
 							class:active={on}
 							onclick={(e) => toggleAssignee(person, e)}
 						>
-							<ProfilePic name={person.name} size={18} />
+							<ProfilePic name={person.name} size={20} />
 							<span>{person.name}</span>
 						</button>
 					{/each}
@@ -318,7 +318,7 @@
 			onclick={(e) => toggleMenu('labels', e)}
 		>
 			<span class="label-add-body">Label</span>
-			<svg class="label-add-tip" width="21" height="28" viewBox="0 0 24 32" fill="none" aria-hidden="true">
+			<svg class="label-add-tip" width="24" height="32" viewBox="0 0 24 32" fill="none" aria-hidden="true">
 				<path
 					d="M0 0 L4 0 Q9 2 14 6 Q19 10 23 14 Q23.5 16 23 18 Q19 22 14 26 Q9 30 4 32 L0 32 Z"
 					fill="var(--tip-bg)"
@@ -361,12 +361,12 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		height: 28px;
-		padding: 0 10px;
+		height: 32px;
+		padding: 0 12px 0 8px;
 		border: 0;
 		border-radius: 9999px;
 		background: var(--fg-4);
-		font-size: 12px;
+		font-size: 13px;
 		font-weight: 500;
 		color: var(--fg-66);
 		white-space: nowrap;
@@ -378,6 +378,7 @@
 
 	.meta-pill.empty {
 		color: var(--fg-33);
+		padding-left: 10px;
 	}
 
 	.meta-pill:hover {
@@ -386,8 +387,8 @@
 	}
 
 	.empty-avatar {
-		width: 18px;
-		height: 18px;
+		width: 20px;
+		height: 20px;
 		border-radius: 50%;
 		border: 1px dashed var(--fg-16);
 		box-sizing: border-box;
@@ -422,7 +423,7 @@
 	.label-add {
 		display: inline-flex;
 		align-items: center;
-		height: 28px;
+		height: 32px;
 		padding: 0;
 		border: 0;
 		background: none;
@@ -438,11 +439,11 @@
 	.label-add-body {
 		display: flex;
 		align-items: center;
-		height: 28px;
-		padding: 0 2px 0 10px;
+		height: 32px;
+		padding: 0 2px 0 12px;
 		background: var(--tip-bg);
-		border-radius: 10px 0 0 10px;
-		font-size: 12px;
+		border-radius: 12px 0 0 12px;
+		font-size: 13px;
 		font-weight: 500;
 		color: var(--fg-33);
 		white-space: nowrap;
@@ -451,8 +452,8 @@
 	.label-add-tip {
 		display: block;
 		flex-shrink: 0;
-		width: 21px;
-		height: 28px;
+		width: 24px;
+		height: 32px;
 	}
 
 	.menu-backdrop {
