@@ -20,22 +20,24 @@
 <svelte:head><title>Player</title></svelte:head>
 
 <nav class="feed" aria-label="Library">
-	<button
-		type="button"
-		class="row"
-		class:on={playerBrowse.mode === 'songs'}
-		onclick={() => setPlayerBrowse('songs')}
-	>
-		<span class="title">Songs</span>
-	</button>
-	<button
-		type="button"
-		class="row"
-		class:on={playerBrowse.mode === 'artists'}
-		onclick={() => setPlayerBrowse('artists')}
-	>
-		<span class="title">Artists</span>
-	</button>
+	<div class="card-stack top">
+		<button
+			type="button"
+			class="row"
+			class:on={playerBrowse.mode === 'songs'}
+			onclick={() => setPlayerBrowse('songs')}
+		>
+			<span class="title">Songs</span>
+		</button>
+		<button
+			type="button"
+			class="row"
+			class:on={playerBrowse.mode === 'artists'}
+			onclick={() => setPlayerBrowse('artists')}
+		>
+			<span class="title">Artists</span>
+		</button>
+	</div>
 
 	<div class="group-header">
 		<span class="eyebrow-label-xs">Playlists</span>
@@ -45,16 +47,18 @@
 	{:else if playlists.length === 0}
 		<p class="hint">No playlists yet</p>
 	{:else}
-		{#each playlists as pl (pl.id)}
-			<button
-				type="button"
-				class="row"
-				class:on={playerBrowse.mode === 'playlist' && playerBrowse.playlistId === pl.id}
-				onclick={() => setPlayerBrowse('playlist', { playlistId: pl.id })}
-			>
-				<span class="title">{pl.title}</span>
-			</button>
-		{/each}
+		<div class="card-stack">
+			{#each playlists as pl (pl.id)}
+				<button
+					type="button"
+					class="row"
+					class:on={playerBrowse.mode === 'playlist' && playerBrowse.playlistId === pl.id}
+					onclick={() => setPlayerBrowse('playlist', { playlistId: pl.id })}
+				>
+					<span class="title">{pl.title}</span>
+				</button>
+			{/each}
+		</div>
 	{/if}
 </nav>
 
@@ -64,6 +68,7 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
+		padding-bottom: 8px;
 	}
 
 	.group-header {
@@ -71,9 +76,9 @@
 		align-items: center;
 		gap: 10px;
 		width: 100%;
-		padding: 4px 6px 4px 16px;
-		background: var(--white4);
-		border-bottom: 1.4px solid var(--white11);
+		padding: 6px 8px 4px 16px;
+		background: var(--fg-4);
+		border: 0;
 		box-sizing: border-box;
 	}
 
@@ -83,24 +88,35 @@
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: var(--white33);
+		color: var(--fg-33);
 	}
 
 	.hint {
 		margin: 0;
 		padding: 12px 16px;
 		font-size: 13px;
-		color: var(--white33);
-		border-bottom: 1.4px solid var(--white11);
+		color: var(--fg-33);
+	}
+
+	.card-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 4px 8px 8px;
+		box-sizing: border-box;
+	}
+
+	.card-stack.top {
+		padding-top: 8px;
 	}
 
 	.row {
 		display: flex;
 		align-items: center;
 		width: 100%;
-		padding: 0.85rem 1rem;
+		padding: 0.85rem 0.9rem;
 		border: 0;
-		border-bottom: 1.4px solid var(--white11);
+		border-radius: 12px;
 		background: transparent;
 		color: inherit;
 		text-align: left;
@@ -110,11 +126,11 @@
 	}
 
 	.row:hover {
-		background: var(--white4);
+		background: var(--fg-4);
 	}
 
 	.row.on {
-		background: var(--white8);
+		background: var(--selection);
 	}
 
 	.title {
@@ -124,7 +140,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 15px;
 		font-weight: 600;
-		color: var(--white);
+		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

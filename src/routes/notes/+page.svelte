@@ -9,17 +9,19 @@
 	{#if notes.length === 0}
 		<p class="empty">No notes yet</p>
 	{:else}
-		{#each notes as note (note.id)}
-			<button
-				type="button"
-				class="row"
-				class:on={ui.selection?.kind === 'note' && ui.selection.id === note.id}
-				onclick={() => selectEntity('note', note.id)}
-			>
-				<span class="title">{note.title}</span>
-				<span class="preview">{notePlainText(note.body).slice(0, 140)}</span>
-			</button>
-		{/each}
+		<div class="card-stack">
+			{#each notes as note (note.id)}
+				<button
+					type="button"
+					class="row"
+					class:on={ui.selection?.kind === 'note' && ui.selection.id === note.id}
+					onclick={() => selectEntity('note', note.id)}
+				>
+					<span class="title">{note.title}</span>
+					<span class="preview">{notePlainText(note.body).slice(0, 140)}</span>
+				</button>
+			{/each}
+		</div>
 	{/if}
 </div>
 
@@ -29,11 +31,20 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
+		padding-bottom: 8px;
 	}
 
 	.empty {
 		padding: 48px 16px;
-		color: var(--white66);
+		color: var(--fg-66);
+	}
+
+	.card-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 8px;
+		box-sizing: border-box;
 	}
 
 	.row {
@@ -42,21 +53,22 @@
 		align-items: stretch;
 		gap: 0.2rem;
 		width: 100%;
-		padding: 0.9rem 1rem;
+		padding: 0.85rem 0.9rem;
 		border: 0;
-		border-bottom: 1.4px solid var(--white11);
+		border-radius: 12px;
 		background: transparent;
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
+		box-sizing: border-box;
 	}
 
 	.row:hover {
-		background: var(--white4);
+		background: var(--fg-4);
 	}
 
 	.row.on {
-		background: var(--white8);
+		background: var(--selection);
 	}
 
 	.title,
@@ -72,7 +84,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 15px;
 		font-weight: 600;
-		color: var(--white);
+		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -82,7 +94,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		line-height: 1.4;
-		color: var(--white33);
+		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

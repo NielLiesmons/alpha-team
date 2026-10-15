@@ -1,6 +1,5 @@
 /**
  * Primary nav IA. Icons live in alpha-ui/icons (shared design system).
- * Desktop + mobile IA for Admin.
  */
 
 /**
@@ -15,33 +14,32 @@
 
 /** @type {NavItem[]} */
 export const primaryNav = [
-	{ href: '/drive', label: 'Drive', icon: 'drive' },
-	{ href: '/player', label: 'Player', icon: 'player' },
-	{ href: '/mail', label: 'Mail', icon: 'mail' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
-	{ href: '/website', label: 'Website', icon: 'website' },
-	{ href: '/publications', label: 'Publications', icon: 'publications' },
+	{ href: '/mail', label: 'Mail', icon: 'mail' },
+	{ href: '/drive', label: 'Drive', icon: 'drive' },
 	{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
 	{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
-	{ href: '/calendar', label: 'Calendar', icon: 'calendar' }
+	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
+	{ href: '/website', label: 'Website', icon: 'website' },
+	{ href: '/publications', label: 'Publications', icon: 'publications' },
+	{ href: '/player', label: 'Player', icon: 'player' }
 ];
 
 /**
- * Horizontal mobile pill — selection stays centered on the active item.
- * Left ← … Mail, Drive | Tasks | Projects, Chat, Notes … → Right
+ * Horizontal mobile pill — Chat centered; selection scrolls to active.
  */
 export const mobileNav = [
 	{ href: '/publications', label: 'Publications', icon: 'publications' },
 	{ href: '/website', label: 'Website', icon: 'website' },
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
 	{ href: '/notes', label: 'Notes', icon: 'notes' },
+	{ href: '/projects', label: 'Projects', icon: 'projects' },
+	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/mail', label: 'Mail', icon: 'mail' },
-	{ href: '/player', label: 'Player', icon: 'player' },
 	{ href: '/drive', label: 'Drive', icon: 'drive' },
-	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },
-	{ href: '/projects', label: 'Projects', icon: 'projects' }
+	{ href: '/player', label: 'Player', icon: 'player' }
 ];
 
 export const space = {

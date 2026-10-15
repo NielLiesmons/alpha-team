@@ -61,20 +61,22 @@
 					</svg>
 				</button>
 			</div>
-			{#each group.items as task (task.id)}
-				<TaskCard
-					title={task.title}
-					status={task.status}
-					priority={task.priority}
-					labels={task.labels}
-					targets={task.targets}
-					author={task.author}
-					assignees={task.assignees}
-					commenters={task.commenters}
-					onclick={() => selectEntity('task', task.id)}
-					selected={ui.selection?.kind === 'task' && ui.selection.id === task.id}
-				/>
-			{/each}
+			<div class="card-stack">
+				{#each group.items as task (task.id)}
+					<TaskCard
+						title={task.title}
+						status={task.status}
+						priority={task.priority}
+						labels={task.labels}
+						targets={task.targets}
+						author={task.author}
+						assignees={task.assignees}
+						commenters={task.commenters}
+						onclick={() => selectEntity('task', task.id)}
+						selected={ui.selection?.kind === 'task' && ui.selection.id === task.id}
+					/>
+				{/each}
+			</div>
 		{/each}
 	{/if}
 </div>
@@ -85,28 +87,28 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
+		padding-bottom: 8px;
 	}
 
 	.banner {
 		margin: 0;
 		padding: 10px 16px;
 		font-size: 13px;
-		color: var(--white66);
-		border-bottom: 1.4px solid var(--white11);
+		color: var(--fg-66);
 	}
 
 	.banner a {
-		color: var(--white);
+		color: var(--fg);
 		text-underline-offset: 2px;
 	}
 
 	.banner .err {
-		color: var(--white66);
+		color: var(--fg-66);
 	}
 
 	.empty {
 		padding: 48px 16px;
-		color: var(--white66);
+		color: var(--fg-66);
 	}
 
 	.task-group-header {
@@ -114,15 +116,18 @@
 		align-items: center;
 		gap: 10px;
 		width: 100%;
-		padding: 4px 6px 4px 16px;
-		background: var(--white4);
-		border-bottom: 1.4px solid var(--white11);
+		padding: 6px 8px 4px 16px;
+		background: var(--fg-4);
+		border: 0;
+		box-sizing: border-box;
 	}
 
-	@media (min-width: 768px) {
-		.task-group-header {
-			padding: 5px 6px 5px 16px;
-		}
+	.card-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 4px 8px 10px;
+		box-sizing: border-box;
 	}
 
 	.eyebrow-label-xs {
@@ -130,14 +135,14 @@
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
-		color: var(--white66);
+		color: var(--fg-66);
 	}
 
 	.task-group-count {
 		font-family: 'Inter', system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 500;
-		color: var(--white33);
+		color: var(--fg-33);
 	}
 
 	.task-group-add-btn {
@@ -150,7 +155,7 @@
 		border-radius: 6px;
 		background: transparent;
 		border: none;
-		color: var(--white33);
+		color: var(--fg-33);
 		cursor: pointer;
 		flex-shrink: 0;
 		padding: 0;
@@ -159,6 +164,6 @@
 	.task-group-add-btn:hover,
 	.task-group-add-btn:active {
 		background: transparent;
-		color: var(--white66);
+		color: var(--fg-66);
 	}
 </style>

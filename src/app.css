@@ -42,6 +42,8 @@
 	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
+	/* Selected list/card fill — quieter than --fg-8 */
+	--selection: color-mix(in srgb, var(--fg) 5%, transparent);
 
 	--surface: color-mix(in srgb, var(--fg) 6%, var(--bg));
 	--popover: color-mix(in srgb, var(--fg) 8%, var(--bg));
@@ -109,6 +111,7 @@
 	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
+	--selection: color-mix(in srgb, var(--fg) 5%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 6%, var(--bg));
 	--popover: color-mix(in srgb, var(--fg) 8%, var(--bg));
 	--modal-bg: var(--popover);
@@ -141,6 +144,7 @@
 	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
+	--selection: color-mix(in srgb, var(--fg) 5.5%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
 	--popover: color-mix(in srgb, var(--fg) 5%, var(--bg));
 	--modal-bg: var(--popover);

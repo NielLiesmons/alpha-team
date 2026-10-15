@@ -105,20 +105,24 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 14px 16px;
-		border-bottom: 1.4px solid var(--white11);
+		padding: 12px 12px;
+		border: 0;
 		background: transparent;
-		border-radius: 0;
+		border-radius: 12px;
 		cursor: pointer;
 		outline: none;
 	}
 
+	.task-card:hover {
+		background: var(--fg-4);
+	}
+
 	.task-card:focus-visible {
-		background: var(--white4);
+		background: var(--fg-4);
 	}
 
 	.task-card.selected {
-		background: var(--white8);
+		background: var(--selection);
 	}
 
 	.row-main {

@@ -92,13 +92,12 @@
 		margin: 0;
 		padding: 10px 16px;
 		font-size: 13px;
-		color: var(--white66);
-		border-bottom: 1.4px solid var(--white11);
+		color: var(--fg-66);
 		flex-shrink: 0;
 	}
 
 	.banner.err {
-		color: var(--white);
+		color: var(--fg);
 	}
 
 	.body {
@@ -106,19 +105,24 @@
 		min-height: 0;
 		width: 100%;
 		overflow: auto;
+		padding-bottom: 8px;
 	}
 
 	.empty {
 		padding: 48px 16px;
-		color: var(--white66);
+		color: var(--fg-66);
 		font-size: 14px;
 	}
 
 	.list {
 		list-style: none;
 		margin: 0;
-		padding: 0;
+		padding: 8px;
 		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		box-sizing: border-box;
 	}
 
 	.row {
@@ -127,9 +131,9 @@
 		align-items: baseline;
 		gap: 10px;
 		width: 100%;
-		padding: 0.85rem 1rem;
+		padding: 0.85rem 0.9rem;
 		border: 0;
-		border-bottom: 1.4px solid var(--white11);
+		border-radius: 12px;
 		background: transparent;
 		color: inherit;
 		text-align: left;
@@ -139,11 +143,11 @@
 	}
 
 	.row:hover {
-		background: var(--white4);
+		background: var(--fg-4);
 	}
 
 	.row.on {
-		background: var(--white8);
+		background: var(--selection);
 	}
 
 	.row-title {
@@ -153,7 +157,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 15px;
 		font-weight: 600;
-		color: var(--white);
+		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -165,7 +169,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
-		color: var(--white33);
+		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
