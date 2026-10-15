@@ -46,10 +46,10 @@
 	/* Selected list/card fill — quieter than --fg-8 */
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
-	--surface: #161616;
-	/* Panels / modals — fixed near Material elevated (#1A1A1A), not fg-mix */
-	--popover: #1a1a1a;
-	--modal-bg: #1a1a1a;
+	/* Panels / modals — ~#1A1A1A with a whisper of accent */
+	--surface: color-mix(in srgb, #161616 96%, var(--accent));
+	--popover: color-mix(in srgb, #1a1a1a 96%, var(--accent));
+	--modal-bg: var(--popover);
 	--hairline: var(--fg-11);
 	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
 	--glass-blur: 14px;
@@ -114,9 +114,9 @@
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
-	--surface: #161616;
-	--popover: #1a1a1a;
-	--modal-bg: #1a1a1a;
+	--surface: color-mix(in srgb, #161616 96%, var(--accent));
+	--popover: color-mix(in srgb, #1a1a1a 96%, var(--accent));
+	--modal-bg: var(--popover);
 	--hairline: var(--fg-11);
 	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
 	--shell: hsl(from var(--accent) h 10% 3.5%);
@@ -596,7 +596,7 @@ table.data tr.selected td {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: 10px 12px;
+	padding: 16px;
 }
 
 .sheet-input {
@@ -645,7 +645,7 @@ table.data tr.selected td {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 10px 12px;
+	padding: 10px 16px;
 }
 
 .publish-btn {

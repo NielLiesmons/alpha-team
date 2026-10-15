@@ -80,6 +80,7 @@
 		display: flex;
 		flex-direction: column;
 		width: 100%;
+		height: auto;
 		max-height: min(92svh, 880px);
 		background: var(--modal-bg);
 		border: 1px solid var(--hairline);
@@ -87,7 +88,7 @@
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
 		box-shadow: 0 16px 48px var(--shadow-strong);
 		overflow: auto;
-		padding: 4px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+		padding: 0 0 calc(12px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 	}
 
@@ -100,11 +101,11 @@
 		.sheet {
 			width: min(640px, calc(100vw - 7.5rem));
 			max-width: min(640px, calc(100vw - 7.5rem));
-			height: min(720px, 90svh);
+			height: auto;
 			max-height: min(720px, 90svh);
 			border-radius: calc(var(--radius-hero) - 2px);
 			border-bottom: 1px solid var(--hairline);
-			padding: 4px 0 12px;
+			padding: 0 0 12px;
 		}
 	}
 </style>

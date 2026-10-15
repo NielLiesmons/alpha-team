@@ -17,6 +17,7 @@
 	let saving = $state(false);
 
 	const showStatusPriority = $derived(kind === 'task');
+	const showAssignees = $derived(kind === 'task');
 	const assignees = $derived(entity?.assignees ?? []);
 	const targets = $derived(entity?.targets ?? []);
 	const labels = $derived(entity?.labels ?? []);
@@ -130,42 +131,49 @@
 		</div>
 	{/if}
 
-	<div class="meta-item" role="listitem">
-		<button
-			type="button"
-			class="meta-pill"
-			class:empty={assignees.length === 0}
-			aria-label="Assignees"
-			aria-expanded={menu === 'assignees'}
-			onclick={(e) => toggleMenu('assignees', e)}
-		>
-			{#if assignees.length === 0}
-				<span class="empty-avatar" aria-hidden="true"></span>
-				<span>Assignee</span>
-			{:else}
-				{#each assignees.slice(0, 3) as person, i (person.email ?? person.name ?? i)}
-					<span class="stack-pic" style:margin-left={i > 0 ? '-6px' : '0'} style:z-index={3 - i}>
-						<ProfilePic name={person.name ?? ''} size={18} />
+	{#if showAssignees}
+		<div class="meta-item" role="listitem">
+			<button
+				type="button"
+				class="meta-pill"
+				class:empty={assignees.length === 0}
+				aria-label="Assignees"
+				aria-expanded={menu === 'assignees'}
+				onclick={(e) => toggleMenu('assignees', e)}
+			>
+				{#if assignees.length === 0}
+					<span class="empty-avatar" aria-hidden="true"></span>
+					<span>Assignee</span>
+				{:else}
+					{#each assignees.slice(0, 3) as person, i (person.email ?? person.name ?? i)}
+						<span class="stack-pic" style:margin-left={i > 0 ? '-6px' : '0'} style:z-index={3 - i}>
+							<ProfilePic name={person.name ?? ''} size={18} />
+						</span>
+					{/each}
+					<span class="pill-names">
+						{assignees.map((/** @type {any} */ a) => a.name).filter(Boolean).join(', ')}
 					</span>
-				{/each}
-				<span class="pill-names">
-					{assignees.map((/** @type {any} */ a) => a.name).filter(Boolean).join(', ')}
-				</span>
+				{/if}
+			</button>
+			{#if menu === 'assignees'}
+				<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
+				<div class="menu" role="listbox">
+					{#each people as person (person.email)}
+						{@const on = assignees.some((/** @type {any} */ a) => a.email === person.email)}
+						<button
+							type="button"
+							class="option"
+							class:active={on}
+							onclick={(e) => toggleAssignee(person, e)}
+						>
+							<ProfilePic name={person.name} size={18} />
+							<span>{person.name}</span>
+						</button>
+					{/each}
+				</div>
 			{/if}
-		</button>
-		{#if menu === 'assignees'}
-			<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
-			<div class="menu" role="listbox">
-				{#each people as person (person.email)}
-					{@const on = assignees.some((/** @type {any} */ a) => a.email === person.email)}
-					<button type="button" class="option" class:active={on} onclick={(e) => toggleAssignee(person, e)}>
-						<ProfilePic name={person.name} size={18} />
-						<span>{person.name}</span>
-					</button>
-				{/each}
-			</div>
-		{/if}
-	</div>
+		</div>
+	{/if}
 
 	<div class="meta-item" role="listitem">
 		<button

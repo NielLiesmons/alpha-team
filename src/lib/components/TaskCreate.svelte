@@ -32,7 +32,7 @@
 	let labels = $state([]);
 	/** @type {string[]} */
 	let projectIds = $state([]);
-	/** @type {{ pubkey?: string, name?: string }[]} */
+	/** @type {{ email?: string, name?: string }[]} */
 	let assignees = $state([]);
 	/** @type {null | 'assignees' | 'projects' | 'labels'} */
 	let bottomMenu = $state(null);
@@ -62,12 +62,12 @@
 		else projectIds = [...projectIds, id];
 	}
 
-	/** @param {{ pubkey?: string, name?: string }} person */
+	/** @param {{ email?: string, name?: string }} person */
 	function toggleAssignee(person) {
-		const key = person.pubkey || person.name;
-		const has = assignees.some((a) => (a.pubkey || a.name) === key);
+		const key = person.email || person.name;
+		const has = assignees.some((a) => (a.email || a.name) === key);
 		assignees = has
-			? assignees.filter((a) => (a.pubkey || a.name) !== key)
+			? assignees.filter((a) => (a.email || a.name) !== key)
 			: [...assignees, person];
 	}
 
@@ -240,7 +240,7 @@
 						<span class="empty-avatar" aria-hidden="true"></span>
 						<span>Assignee</span>
 					{:else}
-						{#each assignees.slice(0, 2) as person, i (person.pubkey ?? person.name ?? i)}
+						{#each assignees.slice(0, 2) as person, i (person.email ?? person.name ?? i)}
 							<span class="stack-pic" style:margin-left={i > 0 ? '-6px' : '0'}>
 								<ProfilePic name={person.name ?? ''} size={18} />
 							</span>
@@ -252,8 +252,8 @@
 					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
 					></button>
 					<div class="bottom-menu" role="listbox">
-						{#each people as person (person.pubkey)}
-							{@const on = assignees.some((a) => a.pubkey === person.pubkey)}
+						{#each people as person (person.email)}
+							{@const on = assignees.some((a) => a.email === person.email)}
 							<button type="button" class="option" class:active={on} onclick={() => toggleAssignee(person)}>
 								<ProfilePic name={person.name} size={18} />
 								<span>{person.name}</span>
@@ -354,8 +354,8 @@
 		flex-direction: row;
 		align-items: center;
 		gap: 10px;
-		/* Even pad around TaskBox: top ≈ left; +4px horizontal vs old 12 */
-		padding: 6px 16px;
+		/* Match left pad on top/bottom around the TaskBox row */
+		padding: 16px;
 		position: relative;
 		z-index: 2;
 	}

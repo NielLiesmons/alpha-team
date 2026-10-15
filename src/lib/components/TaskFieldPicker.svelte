@@ -142,10 +142,11 @@
 		background: var(--fg-4);
 	}
 
+	/* Match DetailMetaPills .meta-pill exactly — one chrome layer only */
 	.pill-hit {
 		gap: 6px;
 		height: 28px;
-		padding: 0 10px 0 7px;
+		padding: 0 10px;
 		border-radius: 9999px;
 		background: var(--fg-4);
 		box-sizing: border-box;

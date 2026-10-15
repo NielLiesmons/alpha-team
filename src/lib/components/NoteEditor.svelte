@@ -94,7 +94,7 @@
 <style>
 	.note-editor {
 		width: 100%;
-		min-height: 12rem;
+		min-height: 8rem;
 	}
 
 	.note-editor.readonly {
@@ -109,13 +109,13 @@
 	.note-editor :global(.tiptap),
 	.note-editor :global(.ProseMirror) {
 		outline: none;
-		min-height: 12rem;
-		padding: 12px 14px;
+		min-height: 8rem;
+		padding: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 15px;
 		line-height: 1.55;
-		color: var(--white);
-		caret-color: var(--white);
+		color: var(--fg-66);
+		caret-color: var(--fg);
 	}
 
 	.note-editor.readonly :global(.tiptap),

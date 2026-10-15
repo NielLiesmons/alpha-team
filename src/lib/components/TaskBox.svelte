@@ -1,7 +1,7 @@
 <script>
 	/**
 	 * Status box — --accent-success / --accent-progress.
-	 * Check stroke tracks --task-box-stroke (slightly thicker).
+	 * `embedded`: glyph only (no plate) for use inside meta pills.
 	 */
 	/** @type {{ state?: string, size?: number, embedded?: boolean }} */
 	let { state = 'open', size = 24, embedded = false } = $props();
@@ -10,6 +10,7 @@
 	const iconSize = $derived(Math.round(size * 0.58));
 	const crossSize = $derived(Math.round(size * 0.4));
 	const progressPadding = $derived(Math.round(size * 0.25));
+	const ring = $derived(Math.max(10, Math.round(size * 0.72)));
 </script>
 
 <div
@@ -24,7 +25,7 @@
 			height={checkSize * (12 / 18)}
 			viewBox="-1 -1 20 14"
 			fill="none"
-			stroke="var(--white)"
+			stroke={embedded ? 'var(--accent-success)' : 'var(--white)'}
 			stroke-linecap="round"
 			stroke-linejoin="round"
 			aria-hidden="true"
@@ -32,7 +33,7 @@
 			<path d="M6.2 11.2 0.7 5.7 6.2 10.95 16.7 0.7 6.2 11.2Z" />
 		</svg>
 	{:else if state === 'inProgress'}
-		<div class="icon-slot" style:padding-left="{progressPadding}px">
+		<div class="icon-slot" style:padding-left={embedded ? '0' : `${progressPadding}px`}>
 			<svg width={iconSize} height={iconSize} viewBox="0 0 11 22" aria-hidden="true">
 				<path
 					fill="var(--accent-progress)"
@@ -61,8 +62,19 @@
 			stroke-linejoin="round"
 			aria-hidden="true"
 		>
-			<path d="M12.7001 0.699299L6.70025 6.69916M6.70025 6.69916L0.700195 12.6992M6.70025 6.69916L12.7002 12.6991M6.70025 6.69916L0.700308 0.699219" />
+			<path
+				d="M12.7001 0.699299L6.70025 6.69916M6.70025 6.69916L0.700195 12.6992M6.70025 6.69916L12.7002 12.6991M6.70025 6.69916L0.700308 0.699219"
+			/>
 		</svg>
+	{:else if embedded}
+		<!-- Open / backlog: tiny ring only — never a second plate inside the pill -->
+		<span
+			class="bare-ring"
+			class:dashed={state === 'backlog'}
+			style:width="{ring}px"
+			style:height="{ring}px"
+			style:border-radius="{Math.round(ring / 3)}px"
+		></span>
 	{/if}
 </div>
 
@@ -124,19 +136,20 @@
 		border: var(--task-box-stroke) solid transparent;
 	}
 
-	/* Inside a meta pill — keep the glyph, drop the second filled plate */
+	/* Glyph-only inside meta pills — zero plate chrome */
 	.task-box.embedded {
 		background: transparent !important;
+		border: none !important;
 	}
 
-	.task-box.embedded.state-closed,
-	.task-box.embedded.state-inProgress,
-	.task-box.embedded.state-inReview,
-	.task-box.embedded.state-canceled {
-		border-color: transparent;
+	.bare-ring {
+		display: block;
+		box-sizing: border-box;
+		border: var(--task-box-stroke) solid var(--fg-33);
+		flex-shrink: 0;
 	}
 
-	.task-box.embedded.state-closed .check {
-		stroke: var(--accent-success);
+	.bare-ring.dashed {
+		border-style: dashed;
 	}
 </style>

@@ -507,7 +507,8 @@
 	}
 
 	.note-editor-pad {
-		padding: 0 8px 24px 12px;
+		/* Match task .prose horizontal inset — no extra nested pad */
+		padding: 4px 16px 16px;
 		flex: 1;
 		min-height: 0;
 	}
