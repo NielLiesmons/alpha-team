@@ -1,7 +1,9 @@
 <script>
+	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
 	import { actor, displayNameFromEmail, setActiveEmail } from '$lib/actor.svelte.js';
 	import { health } from '$lib/drive/client.js';
-	import { decodeInvite } from '$lib/drive/invite.js';
+	import { decodeInvite, invitePayloadFromLocation } from '$lib/drive/invite.js';
 	import { driveSession, saveSession } from '$lib/drive/session.svelte.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
 
@@ -10,14 +12,38 @@
 	let email = $state(actor.email || '');
 	let invitePayload = $state('');
 	let invitePass = $state('');
+	let fromLink = $state(false);
 	let url = $state(driveSession.url || 'https://drive.bley.farm');
 	let token = $state('');
 	let rootKey = $state('');
 	let busy = $state(false);
 	let error = $state('');
 
+	/** @type {HTMLInputElement | undefined} */
+	let passInput = $state();
+
 	const needsDrive = $derived(!driveSession.connected);
 	const needsIdentity = $derived(driveSession.connected && !actor.email);
+
+	function absorbInviteFromUrl() {
+		const found =
+			invitePayloadFromLocation($page.url) ||
+			(typeof location !== 'undefined' ? invitePayloadFromLocation(location.href) : null);
+		if (!found) return;
+		invitePayload = found;
+		fromLink = true;
+		mode = 'invite';
+	}
+
+	onMount(() => {
+		absorbInviteFromUrl();
+		queueMicrotask(() => passInput?.focus());
+	});
+
+	$effect(() => {
+		$page.url.href;
+		absorbInviteFromUrl();
+	});
 
 	async function connectSession(session) {
 		const ok = await health(session);
@@ -25,6 +51,12 @@
 		saveSession(session);
 		await refreshFromDrive();
 		if (driveSession.error) throw new Error(driveSession.error);
+		/* Drop invite from the address bar so a refresh does not re-offer it */
+		if (typeof history !== 'undefined' && $page.url.pathname === '/join') {
+			history.replaceState({}, '', '/');
+		} else if (typeof history !== 'undefined' && $page.url.searchParams.has('i')) {
+			history.replaceState({}, '', $page.url.pathname || '/');
+		}
 	}
 
 	function commitEmail() {
@@ -96,6 +128,43 @@
 			<button type="button" class="primary" disabled={busy || !email.trim()} onclick={submitIdentityOnly}>
 				{busy ? 'Saving…' : `Continue as ${displayNameFromEmail(email.trim() || 'you')}`}
 			</button>
+		{:else if fromLink && needsDrive}
+			<h1>Join Drive</h1>
+			<p class="lead">
+				Invite loaded from your link. Enter your email and the passphrase you were told — nothing
+				else to paste.
+			</p>
+			<label class="field">
+				<span>Your email</span>
+				<input
+					type="email"
+					bind:value={email}
+					autocomplete="username"
+					spellcheck="false"
+					placeholder="you@bley.farm"
+				/>
+			</label>
+			<label class="field">
+				<span>Passphrase</span>
+				<input
+					bind:this={passInput}
+					type="password"
+					bind:value={invitePass}
+					autocomplete="off"
+				/>
+			</label>
+			{#if error}
+				<p class="err" role="alert">{error}</p>
+			{/if}
+			<button
+				type="button"
+				class="primary"
+				disabled={busy || !email.trim() || !invitePass.trim()}
+				onclick={submitInvite}
+			>
+				{busy ? 'Connecting…' : 'Connect'}
+			</button>
+			<p class="foot">Wrong link? Ask for a new Share Drive link from Settings.</p>
 		{:else}
 			<h1>Welcome</h1>
 			<p class="lead">
@@ -139,12 +208,12 @@
 
 			{#if mode === 'invite'}
 				<label class="field">
-					<span>Invite</span>
+					<span>Invite link or code</span>
 					<textarea
 						rows="3"
 						bind:value={invitePayload}
 						spellcheck="false"
-						placeholder="Paste alpha-drive-invite:v1:…"
+						placeholder="Paste the join link…"
 					></textarea>
 				</label>
 				<label class="field">
@@ -189,7 +258,7 @@
 			{/if}
 
 			{#if needsDrive}
-				<p class="foot">Already set up elsewhere? Ask for a Share Drive invite from Settings.</p>
+				<p class="foot">Already set up elsewhere? Ask for a Share Drive link from Settings.</p>
 			{/if}
 		{/if}
 	</div>

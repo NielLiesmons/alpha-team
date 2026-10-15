@@ -1,9 +1,13 @@
 /**
- * Passphrase-wrapped Drive session invite (QR / paste).
+ * Passphrase-wrapped Drive session invite (QR / share link).
  * Schema: alpha.drive.invite/1 — see ADR-identity-chat-drive-comments.
+ *
+ * Share as a URL: https://admin…/join?i=<payload>
+ * Opener only needs the passphrase (+ their email).
  */
 
-const PREFIX = 'alpha-drive-invite:v1:';
+export const INVITE_PREFIX = 'alpha-drive-invite:v1:';
+const PREFIX = INVITE_PREFIX;
 const PBKDF2_ITERS = 210_000;
 
 /**
@@ -81,13 +85,96 @@ export async function encodeInvite(session, passphrase) {
 }
 
 /**
- * @param {string} payload
+ * Pull invite payload from a raw token, paste blob, or share URL.
+ * @param {string} input
+ * @returns {string} canonical `alpha-drive-invite:v1:…` payload
+ */
+export function extractInvitePayload(input) {
+	const text = String(input ?? '').trim();
+	if (!text) throw new Error('No invite');
+
+	const compact = text.replace(/\s+/g, '');
+	if (compact.startsWith(PREFIX)) return compact;
+
+	/** @param {string} value */
+	function fromParam(value) {
+		const v = decodeURIComponent(String(value ?? '').trim()).replace(/\s+/g, '');
+		if (!v) return null;
+		if (v.startsWith(PREFIX)) return v;
+		/* bare ciphertext from ?i= */
+		if (/^[A-Za-z0-9_-]+$/.test(v) && v.length >= 48) return PREFIX + v;
+		return null;
+	}
+
+	try {
+		const u = new URL(text);
+		const q =
+			fromParam(u.searchParams.get('i') || '') ||
+			fromParam(u.searchParams.get('invite') || '');
+		if (q) return q;
+
+		const hash = u.hash.replace(/^#/, '');
+		if (hash.startsWith(PREFIX)) return hash.replace(/\s+/g, '');
+		if (hash.includes('=')) {
+			const hp = new URLSearchParams(hash);
+			const h =
+				fromParam(hp.get('i') || '') || fromParam(hp.get('invite') || '');
+			if (h) return h;
+		} else {
+			const bare = fromParam(hash);
+			if (bare) return bare;
+		}
+	} catch {
+		/* not a URL — try bare token */
+	}
+
+	const bare = fromParam(compact);
+	if (bare) return bare;
+	throw new Error('Not an Alpha Drive invite link or code');
+}
+
+/**
+ * Build a one-tap share URL (passphrase still required on open).
+ * @param {string} payload canonical invite payload
+ * @param {string} [origin]
+ */
+export function inviteShareUrl(payload, origin) {
+	const raw = extractInvitePayload(payload);
+	const token = raw.startsWith(PREFIX) ? raw.slice(PREFIX.length) : raw;
+	const base =
+		(origin || (typeof location !== 'undefined' ? location.origin : '') || 'https://admin.bley.farm').replace(
+			/\/$/,
+			''
+		);
+	return `${base}/join?i=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Read invite from the current page URL (query or hash), if any.
+ * @param {URL | Location | string} [href]
+ * @returns {string | null}
+ */
+export function invitePayloadFromLocation(href) {
+	try {
+		const u =
+			typeof href === 'string'
+				? new URL(href, typeof location !== 'undefined' ? location.origin : 'https://admin.bley.farm')
+				: href instanceof URL
+					? href
+					: new URL(String(href?.href || location.href));
+		return extractInvitePayload(u.href);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * @param {string} payloadOrUrl
  * @param {string} passphrase
  * @returns {Promise<{ url: string, token: string, rootKey: string }>}
  */
-export async function decodeInvite(payload, passphrase) {
-	const raw = payload.trim().replace(/\s+/g, '');
-	if (!raw.startsWith(PREFIX)) throw new Error('Not an Alpha Drive invite');
+export async function decodeInvite(payloadOrUrl, passphrase) {
+	const raw = extractInvitePayload(payloadOrUrl);
 	const pass = passphrase.trim();
 	if (!pass) throw new Error('Enter the passphrase');
 
@@ -113,8 +200,10 @@ export async function decodeInvite(payload, passphrase) {
 }
 
 export function isInvitePayload(text) {
-	return String(text ?? '')
-		.trim()
-		.replace(/\s+/g, '')
-		.startsWith(PREFIX);
+	try {
+		extractInvitePayload(text);
+		return true;
+	} catch {
+		return false;
+	}
 }

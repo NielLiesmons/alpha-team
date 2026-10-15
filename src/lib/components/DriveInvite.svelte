@@ -1,7 +1,7 @@
 <script>
 	import QRCode from 'qrcode';
 	import { activePerson, actor, setActiveEmail } from '$lib/actor.svelte.js';
-	import { decodeInvite, encodeInvite } from '$lib/drive/invite.js';
+	import { decodeInvite, encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { health } from '$lib/drive/client.js';
 	import { driveSession, saveSession } from '$lib/drive/session.svelte.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
@@ -9,7 +9,7 @@
 	let sharePass = $state('');
 	let sharePass2 = $state('');
 	let qrDataUrl = $state('');
-	let inviteText = $state('');
+	let inviteLink = $state('');
 	let shareBusy = $state(false);
 	let shareMsg = $state('');
 
@@ -27,7 +27,7 @@
 	async function makeInvite() {
 		shareMsg = '';
 		qrDataUrl = '';
-		inviteText = '';
+		inviteLink = '';
 		if (sharePass !== sharePass2) {
 			shareMsg = 'Passphrases do not match.';
 			return;
@@ -40,14 +40,15 @@
 				rootKey: driveSession.rootKey
 			};
 			const payload = await encodeInvite(session, sharePass);
-			inviteText = payload;
-			qrDataUrl = await QRCode.toDataURL(payload, {
-				errorCorrectionLevel: 'M',
-				margin: 2,
+			inviteLink = inviteShareUrl(payload);
+			qrDataUrl = await QRCode.toDataURL(inviteLink, {
+				errorCorrectionLevel: 'L',
+				margin: 1,
 				width: 280,
 				color: { dark: '#111111', light: '#ffffff' }
 			});
-			shareMsg = 'Show this QR to her phone. Tell her the passphrase out of band (or whisper it).';
+			shareMsg =
+				'Copy the link (or show the QR). She opens it, enters her email + the passphrase you whispered.';
 		} catch (e) {
 			shareMsg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -56,12 +57,12 @@
 	}
 
 	async function copyInvite() {
-		if (!inviteText) return;
+		if (!inviteLink) return;
 		try {
-			await navigator.clipboard.writeText(inviteText);
-			shareMsg = 'Invite copied. Still needs the passphrase to open.';
+			await navigator.clipboard.writeText(inviteLink);
+			shareMsg = 'Link copied — send it, then tell her the passphrase separately.';
 		} catch {
-			shareMsg = 'Could not copy — select the invite text manually.';
+			shareMsg = 'Could not copy — select the link text manually.';
 		}
 	}
 
@@ -82,7 +83,7 @@
 			sharePass = '';
 			sharePass2 = '';
 			qrDataUrl = '';
-			inviteText = '';
+			inviteLink = '';
 		} catch (e) {
 			importMsg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -125,8 +126,8 @@
 	<section class="block">
 		<p class="field-label">Share Drive</p>
 		<p class="hint">
-			Creates a passphrase-wrapped QR of this device’s Drive session (URL + token + root key). She
-			scans or pastes it on her phone, enters the same passphrase, then sets her own email above.
+			Builds a one-tap join link (and QR) with the Drive session encrypted inside. She opens the
+			link, types her email and the passphrase — nothing to paste.
 		</p>
 		<label class="row stack">
 			<span>Passphrase</span>
@@ -143,12 +144,15 @@
 				disabled={shareBusy || sharePass.trim().length < 6}
 				onclick={makeInvite}
 			>
-				{shareBusy ? 'Encrypting…' : 'Make QR'}
+				{shareBusy ? 'Encrypting…' : 'Make link'}
 			</button>
-			{#if inviteText}
-				<button type="button" class="btn ghost" onclick={copyInvite}>Copy invite</button>
+			{#if inviteLink}
+				<button type="button" class="btn ghost" onclick={copyInvite}>Copy link</button>
 			{/if}
 		</div>
+		{#if inviteLink}
+			<p class="link-out">{inviteLink}</p>
+		{/if}
 		{#if qrDataUrl}
 			<figure class="qr-wrap">
 				<img src={qrDataUrl} alt="Drive invite QR code" width="280" height="280" />
@@ -163,11 +167,11 @@
 <section class="block">
 	<p class="field-label">Join Drive</p>
 	<p class="hint">
-		On a new device: paste the invite (or the text from “Copy invite”), enter the passphrase, connect.
+		On a new device you can also paste a join link here, then enter the passphrase.
 	</p>
 	<label class="row stack">
-		<span>Invite</span>
-		<textarea rows="3" bind:value={importPayload} spellcheck="false" placeholder="alpha-drive-invite:v1:…"
+		<span>Invite link</span>
+		<textarea rows="3" bind:value={importPayload} spellcheck="false" placeholder="https://admin…/join?i=…"
 		></textarea>
 	</label>
 	<label class="row stack">
@@ -300,5 +304,17 @@
 	.qr-wrap img {
 		display: block;
 		border-radius: 4px;
+	}
+
+	.link-out {
+		margin: 0.35rem 0 0.75rem;
+		padding: 0.55rem 0.65rem;
+		border-radius: 10px;
+		border: 1px solid var(--white11);
+		background: var(--surface);
+		font-size: 12px;
+		line-height: 1.4;
+		word-break: break-all;
+		color: var(--white66);
 	}
 </style>
