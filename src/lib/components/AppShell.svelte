@@ -1,7 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { mobileNav, primaryNav, space } from '$lib/sections.js';
+	import { mobileNav, primaryNav } from '$lib/sections.js';
 	import {
 		clearSelection,
 		notes,
@@ -13,6 +13,7 @@
 	import DetailColumn from './DetailColumn.svelte';
 	import NavIcon from './NavIcon.svelte';
 	import ProfilePic from './ProfilePic.svelte';
+	import SidebarPlayer from './SidebarPlayer.svelte';
 	import NoteCreate from './NoteCreate.svelte';
 	import ProjectCreate from './ProjectCreate.svelte';
 	import TaskCreate from './TaskCreate.svelte';
@@ -186,35 +187,11 @@
 			{/each}
 		</nav>
 
-		<div class="brand-panel">
-			<div class="brand-media" aria-hidden="true">
-				<picture>
-					<source srcset="/space-cover.webp" type="image/webp" />
-					<img src="/space-cover.jpg" alt="" width="800" height="800" />
-				</picture>
-			</div>
-			<div class="brand-scrim" aria-hidden="true"></div>
-			<div class="brand-copy">
-				<p class="brand-name">{space.name}</p>
-				<p class="brand-desc">{space.description}</p>
-				<a class="brand-open" href={space.siteUrl} target="_blank" rel="noopener noreferrer">
-					Website
-					<svg class="brand-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-						<path
-							d="M3.5 8.5 8.5 3.5M4.25 3.5H8.5V7.75"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-				</a>
-			</div>
-		</div>
+		<SidebarPlayer />
 	</aside>
 
 	<div class="workspace-wrap">
-		<div class="workspace" class:player-layout={active( '/player')}>
+		<div class="workspace">
 			<section class="list-col" aria-label={activeItem.label}>
 				<header class="list-top">
 					<h1 class="list-title">{activeItem.label}</h1>
@@ -620,105 +597,6 @@
 		background: var(--white8);
 	}
 
-	.brand-panel {
-		position: relative;
-		isolation: isolate;
-		flex-shrink: 0;
-		margin-top: auto;
-		min-height: 132px;
-		padding: 14px;
-		border: 1px solid color-mix(in srgb, #fff 12%, transparent);
-		border-radius: 16px;
-		overflow: hidden;
-		display: flex;
-		flex-direction: column;
-		justify-content: flex-end;
-		gap: 0.35rem;
-	}
-
-	.brand-media {
-		position: absolute;
-		inset: 0;
-		z-index: 0;
-		opacity: 0.42;
-	}
-
-	.brand-media picture,
-	.brand-media img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		object-position: center 35%;
-		filter: blur(6px) saturate(0.85) brightness(0.72);
-		transform: scale(1.06);
-	}
-
-	.brand-scrim {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		background: linear-gradient(
-			to top,
-			color-mix(in srgb, #000 92%, transparent) 0%,
-			color-mix(in srgb, #000 72%, transparent) 48%,
-			color-mix(in srgb, #000 55%, transparent) 100%
-		);
-	}
-
-	.brand-copy {
-		position: relative;
-		z-index: 2;
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
-	.brand-name {
-		margin: 0;
-		font-family: var(--font-display);
-		font-size: 18px;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		color: #fff;
-	}
-
-	.brand-desc {
-		margin: 0;
-		font-size: 12px;
-		line-height: 1.45;
-		color: color-mix(in srgb, #fff 66%, transparent);
-	}
-
-	.brand-open {
-		margin-top: 0.35rem;
-		align-self: flex-start;
-		height: 30px;
-		padding: 0 12px;
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border-radius: 999px;
-		border: 1px solid color-mix(in srgb, #fff 18%, transparent);
-		background: color-mix(in srgb, #fff 8%, transparent);
-		color: #fff;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
-		font-weight: 550;
-		text-decoration: none;
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-	}
-
-	.brand-arrow {
-		display: block;
-		flex-shrink: 0;
-	}
-
-	.brand-open:hover {
-		background: color-mix(in srgb, #fff 14%, transparent);
-	}
-
 	.workspace-wrap {
 		flex: 1;
 		min-width: 0;
@@ -752,13 +630,6 @@
 		flex-direction: column;
 		border-right: 1px solid var(--hairline);
 		overflow: hidden;
-	}
-
-	/* Player: narrow browse rail, wide library + now-playing */
-	.workspace.player-layout .list-col {
-		flex-basis: 220px;
-		width: 220px;
-		min-width: 200px;
 	}
 
 	.list-top {

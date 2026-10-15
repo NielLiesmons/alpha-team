@@ -5,93 +5,18 @@
 		playTrack,
 		playerBrowse,
 		playerUi,
-		playlists,
 		setPlayerBrowse,
 		tracks,
-		uploadAudioFiles,
 		visibleTracks
 	} from '$lib/player.svelte.js';
 	import { ui } from '$lib/workspace.svelte.js';
-	import PlayerNowPlaying from './PlayerNowPlaying.svelte';
-
-	/** @type {HTMLInputElement | undefined} */
-	let fileInput = $state();
 
 	const connected = $derived(Boolean(activeSession()) && ui.source === 'drive');
 	const list = $derived(visibleTracks());
 	const artists = $derived(artistNames());
-	const activePlaylist = $derived(
-		playerBrowse.mode === 'playlist'
-			? playlists.find((p) => p.id === playerBrowse.playlistId) ?? null
-			: null
-	);
-
-	const heading = $derived.by(() => {
-		if (playerBrowse.mode === 'songs') return 'Songs';
-		if (playerBrowse.mode === 'artists' && playerBrowse.artist) return playerBrowse.artist;
-		if (playerBrowse.mode === 'artists') return 'Artists';
-		if (activePlaylist) return activePlaylist.title;
-		return 'Playlist';
-	});
-
-	async function onFiles(/** @type {Event} */ e) {
-		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
-		const files = input.files;
-		if (!files?.length) return;
-		try {
-			await uploadAudioFiles(files);
-		} catch (err) {
-			playerUi.error = err instanceof Error ? err.message : String(err);
-		}
-		input.value = '';
-	}
-
-	/** @param {any} track */
-	async function onPlay(track) {
-		try {
-			await playTrack(track);
-		} catch {
-			/* error on playerUi */
-		}
-	}
 </script>
 
 <div class="player-detail">
-	<header class="head">
-		<div class="head-main">
-			{#if playerBrowse.mode === 'artists' && playerBrowse.artist}
-				<button
-					type="button"
-					class="back"
-					onclick={() => setPlayerBrowse('artists')}
-				>
-					Artists
-				</button>
-			{/if}
-			<h2 class="title">{heading}</h2>
-		</div>
-		<div class="head-actions">
-			{#if connected}
-				<button
-					type="button"
-					class="ghost"
-					disabled={playerUi.uploading}
-					onclick={() => fileInput?.click()}
-				>
-					{playerUi.uploading ? 'Uploading…' : 'Upload'}
-				</button>
-				<input
-					bind:this={fileInput}
-					class="sr-only"
-					type="file"
-					accept="audio/*,.mp3,.m4a,.flac,.ogg,.wav"
-					multiple
-					onchange={onFiles}
-				/>
-			{/if}
-		</div>
-	</header>
-
 	{#if playerUi.uploadLabel}
 		<p class="banner">{playerUi.uploadLabel}</p>
 	{/if}
@@ -118,7 +43,7 @@
 							>
 								<span class="row-title">{name}</span>
 								<span class="row-meta"
-									>{tracks.filter((t) => (t.artists?.[0] || 'Unknown') === name).length} songs</span
+									>{tracks.filter((t) => (t.artists?.[0] || 'Unknown') === name).length}</span
 								>
 							</button>
 						</li>
@@ -141,20 +66,16 @@
 							type="button"
 							class="row"
 							class:on={playerUi.currentId === track.id}
-							onclick={() => onPlay(track)}
+							onclick={() => playTrack(track).catch(() => {})}
 						>
 							<span class="row-title">{track.title}</span>
-							<span class="row-meta"
-								>{track.artists?.join(', ')}{track.album ? ` · ${track.album}` : ''}</span
-							>
+							<span class="row-meta">{track.artists?.join(', ')}</span>
 						</button>
 					</li>
 				{/each}
 			</ul>
 		{/if}
 	</div>
-
-	<PlayerNowPlaying />
 </div>
 
 <style>
@@ -163,89 +84,16 @@
 		flex-direction: column;
 		min-height: 0;
 		height: 100%;
+		width: 100%;
 		overflow: hidden;
-	}
-
-	.head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		height: 40px;
-		padding: 0 8px 0 16px;
-		border-bottom: 1px solid var(--hairline);
-		box-sizing: border-box;
-		flex-shrink: 0;
-	}
-
-	.head-main {
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 10px;
-	}
-
-	.back {
-		margin: 0;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		font: inherit;
-		font-size: 12px;
-		font-weight: 600;
-		color: var(--white33);
-		cursor: pointer;
-		flex-shrink: 0;
-	}
-
-	.back:hover {
-		color: var(--white66);
-	}
-
-	.title {
-		margin: 0;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--white33);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.head-actions {
-		flex-shrink: 0;
-	}
-
-	.ghost {
-		height: 28px;
-		padding: 0 10px;
-		border: 1px solid var(--hairline);
-		border-radius: 8px;
-		background: transparent;
-		color: var(--white66);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	.ghost:hover:not(:disabled) {
-		color: var(--white);
-		background: var(--white4);
-	}
-
-	.ghost:disabled {
-		opacity: 0.55;
-		cursor: default;
 	}
 
 	.banner {
 		margin: 0;
-		padding: 8px 16px;
+		padding: 10px 16px;
 		font-size: 13px;
 		color: var(--white66);
-		border-bottom: 1px solid var(--hairline);
+		border-bottom: 1.4px solid var(--white11);
 		flex-shrink: 0;
 	}
 
@@ -256,6 +104,7 @@
 	.body {
 		flex: 1;
 		min-height: 0;
+		width: 100%;
 		overflow: auto;
 	}
 
@@ -269,22 +118,24 @@
 		list-style: none;
 		margin: 0;
 		padding: 0;
+		width: 100%;
 	}
 
 	.row {
 		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 2px;
+		flex-direction: row;
+		align-items: baseline;
+		gap: 10px;
 		width: 100%;
-		padding: 10px 16px;
+		padding: 0.85rem 1rem;
 		border: 0;
-		border-bottom: 1px solid var(--white11);
+		border-bottom: 1.4px solid var(--white11);
 		background: transparent;
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
 		font: inherit;
+		box-sizing: border-box;
 	}
 
 	.row:hover {
@@ -296,25 +147,27 @@
 	}
 
 	.row-title {
-		font-size: 14px;
+		flex: 0 1 auto;
+		min-width: 0;
+		max-width: 62%;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 15px;
 		font-weight: 600;
 		color: var(--white);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.row-meta {
-		font-size: 12px;
+		flex: 1 1 auto;
+		min-width: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 13px;
+		font-weight: 500;
 		color: var(--white33);
-	}
-
-	.sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
 		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
+		text-overflow: ellipsis;
 		white-space: nowrap;
-		border: 0;
 	}
 </style>

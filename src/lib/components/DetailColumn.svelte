@@ -7,7 +7,15 @@
 	import LabelStack from './LabelStack.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import PlayerDetail from './PlayerDetail.svelte';
-	import { closePlayerDetail, playerBrowse } from '$lib/player.svelte.js';
+	import {
+		closePlayerDetail,
+		playerBrowse,
+		playerHeading,
+		playerUi,
+		setPlayerBrowse,
+		uploadAudioFiles
+	} from '$lib/player.svelte.js';
+	import { activeSession } from '$lib/drive/session.svelte.js';
 	import {
 		clearSelection,
 		notes,
@@ -19,6 +27,23 @@
 
 	const selection = $derived(ui.selection);
 	const isPlayer = $derived($page.url.pathname.startsWith('/player'));
+	const playerTitle = $derived(isPlayer ? playerHeading() : '');
+	const playerConnected = $derived(Boolean(activeSession()) && ui.source === 'drive');
+
+	/** @type {HTMLInputElement | undefined} */
+	let playerFileInput = $state();
+
+	async function onPlayerFiles(/** @type {Event} */ e) {
+		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
+		const files = input.files;
+		if (!files?.length) return;
+		try {
+			await uploadAudioFiles(files);
+		} catch (err) {
+			playerUi.error = err instanceof Error ? err.message : String(err);
+		}
+		input.value = '';
+	}
 
 	const task = $derived(
 		selection?.kind === 'task' ? tasks.find((t) => t.id === selection.id) : null
@@ -121,7 +146,57 @@
 	{/if}
 
 	{#if isPlayer}
-		<div class="player-slot desktop-player">
+		<header class="detail-top desktop-head">
+			{#if playerBrowse.mode === 'artists' && playerBrowse.artist}
+				<button
+					type="button"
+					class="icon-hit"
+					aria-label="Back to artists"
+					onclick={() => setPlayerBrowse('artists')}
+				>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+			{/if}
+			<span class="detail-top-label">{playerTitle}</span>
+			<div class="detail-top-actions">
+				{#if playerConnected}
+					<button
+						type="button"
+						class="icon-hit"
+						aria-label="Upload audio"
+						disabled={playerUi.uploading}
+						onclick={() => playerFileInput?.click()}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M8 2.5v8M4.5 6 8 2.5 11.5 6M3 12.5h10"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</button>
+					<input
+						bind:this={playerFileInput}
+						class="sr-only"
+						type="file"
+						accept="audio/*,.mp3,.m4a,.flac,.ogg,.wav"
+						multiple
+						onchange={onPlayerFiles}
+					/>
+				{/if}
+			</div>
+		</header>
+		<div class="player-slot">
 			<PlayerDetail />
 		</div>
 	{:else if task}
@@ -282,7 +357,9 @@
 
 	.player-slot {
 		flex: 1;
+		min-width: 0;
 		min-height: 0;
+		width: 100%;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -306,10 +383,27 @@
 	}
 
 	.detail-top-label {
+		flex: 1;
+		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--white33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	.detail-top-actions {

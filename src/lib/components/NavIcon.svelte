@@ -71,9 +71,22 @@
 			<path d="M9 1.5v15M1.5 9h15" stroke="currentColor" stroke-linecap="round" />
 		</svg>
 	{:else if name === 'player'}
+		<!-- Bley play glyph — stroke instead of fill -->
+		<svg viewBox="0 0 15 16" fill="none" aria-hidden="true">
+			<path
+				d="M13.439 5.88263C13.8097 6.08696 14.1199 6.39198 14.3361 6.76502C14.5524 7.13805 14.6667 7.56504 14.6667 8.00022C14.6667 8.43541 14.5524 8.8624 14.3361 9.23543C14.1199 9.60847 13.8097 9.91349 13.439 10.1178L3.54868 15.6914C1.95613 16.589 0 15.421 0 13.5746V2.42664C0 0.578645 1.95613 -0.588552 3.54868 0.308245L13.439 5.88263Z"
+				stroke="currentColor"
+				stroke-linejoin="round"
+			/>
+		</svg>
+	{:else if name === 'website'}
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
 			<circle cx="9" cy="9" r="7.5" stroke="currentColor" />
-			<path d="M7.2 5.8v6.4L13 9 7.2 5.8Z" stroke="currentColor" stroke-linejoin="round" />
+			<path
+				d="M1.5 9h15M9 1.5c2.2 2.4 3.3 5 3.3 7.5S11.2 14.1 9 16.5C6.8 14.1 5.7 11.5 5.7 9S6.8 3.9 9 1.5Z"
+				stroke="currentColor"
+				stroke-linejoin="round"
+			/>
 		</svg>
 	{:else if name === 'publications'}
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">

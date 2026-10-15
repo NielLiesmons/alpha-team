@@ -20,6 +20,7 @@ export const primaryNav = [
 	{ href: '/player', label: 'Player', icon: 'player' },
 	{ href: '/mail', label: 'Mail', icon: 'mail' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
+	{ href: '/website', label: 'Website', icon: 'website' },
 	{ href: '/publications', label: 'Publications', icon: 'publications' },
 	{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
@@ -33,6 +34,7 @@ export const primaryNav = [
  */
 export const mobileNav = [
 	{ href: '/publications', label: 'Publications', icon: 'publications' },
+	{ href: '/website', label: 'Website', icon: 'website' },
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
 	{ href: '/notes', label: 'Notes', icon: 'notes' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },

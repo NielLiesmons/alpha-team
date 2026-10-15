@@ -19,25 +19,27 @@
 
 <svelte:head><title>Player</title></svelte:head>
 
-<nav class="browse" aria-label="Library">
+<nav class="feed" aria-label="Library">
 	<button
 		type="button"
-		class="nav-row"
+		class="row"
 		class:on={playerBrowse.mode === 'songs'}
 		onclick={() => setPlayerBrowse('songs')}
 	>
-		Songs
+		<span class="title">Songs</span>
 	</button>
 	<button
 		type="button"
-		class="nav-row"
+		class="row"
 		class:on={playerBrowse.mode === 'artists'}
 		onclick={() => setPlayerBrowse('artists')}
 	>
-		Artists
+		<span class="title">Artists</span>
 	</button>
 
-	<p class="eyebrow">Playlists</p>
+	<div class="group-header">
+		<span class="eyebrow-label-xs">Playlists</span>
+	</div>
 	{#if !connected}
 		<p class="hint">Connect Drive to sync playlists.</p>
 	{:else if playlists.length === 0}
@@ -46,68 +48,85 @@
 		{#each playlists as pl (pl.id)}
 			<button
 				type="button"
-				class="nav-row nest"
+				class="row"
 				class:on={playerBrowse.mode === 'playlist' && playerBrowse.playlistId === pl.id}
 				onclick={() => setPlayerBrowse('playlist', { playlistId: pl.id })}
 			>
-				{pl.title}
+				<span class="title">{pl.title}</span>
 			</button>
 		{/each}
 	{/if}
 </nav>
 
 <style>
-	.browse {
+	.feed {
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		padding: 0 0 24px;
+		overflow: auto;
 	}
 
-	.eyebrow {
-		margin: 18px 0 4px;
-		padding: 0 16px;
+	.group-header {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 4px 6px 4px 16px;
+		background: var(--white4);
+		border-bottom: 1.4px solid var(--white11);
+		box-sizing: border-box;
+	}
+
+	.eyebrow-label-xs {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 600;
-		letter-spacing: 0.1em;
+		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		color: var(--white33);
 	}
 
 	.hint {
 		margin: 0;
-		padding: 8px 16px;
+		padding: 12px 16px;
 		font-size: 13px;
 		color: var(--white33);
+		border-bottom: 1.4px solid var(--white11);
 	}
 
-	.nav-row {
-		display: block;
+	.row {
+		display: flex;
+		align-items: center;
 		width: 100%;
-		padding: 10px 16px;
+		padding: 0.85rem 1rem;
 		border: 0;
-		border-bottom: 1px solid var(--white11);
+		border-bottom: 1.4px solid var(--white11);
 		background: transparent;
-		color: var(--white);
-		font: inherit;
-		font-size: 15px;
-		font-weight: 600;
+		color: inherit;
 		text-align: left;
 		cursor: pointer;
+		font: inherit;
+		box-sizing: border-box;
 	}
 
-	.nav-row.nest {
-		font-weight: 500;
-		font-size: 14px;
-		color: var(--white66);
-	}
-
-	.nav-row:hover {
+	.row:hover {
 		background: var(--white4);
 	}
 
-	.nav-row.on {
+	.row.on {
 		background: var(--white8);
+	}
+
+	.title {
+		display: block;
+		width: 100%;
+		margin: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 15px;
+		font-weight: 600;
 		color: var(--white);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 </style>

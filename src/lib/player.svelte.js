@@ -432,6 +432,45 @@ export function stopPlayback() {
 	playerUi.bufferRatio = 0;
 }
 
+export function currentTrack() {
+	return tracks.find((t) => t.id === playerUi.currentId) ?? null;
+}
+
+/** Queue for skip — current browse list, or full library. */
+export function playQueue() {
+	const vis = visibleTracks();
+	if (vis.length) return vis;
+	return [...tracks].sort((a, b) => String(a.title).localeCompare(String(b.title)));
+}
+
+/**
+ * @param {-1 | 1} delta
+ */
+export async function playAdjacent(delta) {
+	const queue = playQueue();
+	if (!queue.length) return;
+	let idx = queue.findIndex((t) => t.id === playerUi.currentId);
+	if (idx < 0) idx = delta > 0 ? -1 : 0;
+	idx = (idx + delta + queue.length) % queue.length;
+	await playTrack(queue[idx]);
+}
+
+export function playerHeading() {
+	if (playerBrowse.mode === 'songs') return 'Songs';
+	if (playerBrowse.mode === 'artists' && playerBrowse.artist) return playerBrowse.artist;
+	if (playerBrowse.mode === 'artists') return 'Artists';
+	if (playerBrowse.mode === 'playlist' && playerBrowse.playlistId) {
+		return playlists.find((p) => p.id === playerBrowse.playlistId)?.title ?? 'Playlist';
+	}
+	return 'Player';
+}
+
+export function togglePlayPause() {
+	if (!boundAudio || playerUi.status !== 'ready') return;
+	if (boundAudio.paused) boundAudio.play().catch(() => {});
+	else boundAudio.pause();
+}
+
 /** Group tracks for library browse. */
 export function tracksByArtist() {
 	/** @type {Map<string, Map<string, any[]>>} */
