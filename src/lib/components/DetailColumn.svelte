@@ -266,25 +266,44 @@
 			onchange={onPlayerFiles}
 		/>
 		<header class="detail-top desktop-head">
-			{#if playerBrowse.mode === 'artists' && playerBrowse.artist}
-				<button
-					type="button"
-					class="icon-hit"
-					aria-label="Back to artists"
-					onclick={() => setPlayerBrowse('artists')}
-				>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M10 3.5 5.5 8 10 12.5"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-				</button>
-			{/if}
-			<span class="detail-top-label">{playerTitle}</span>
+			<div class="detail-top-start">
+				{#if playerBrowse.mode === 'artists' && playerBrowse.artist}
+					<button
+						type="button"
+						class="icon-hit"
+						aria-label="Back to artists"
+						onclick={() => setPlayerBrowse('artists')}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M10 3.5 5.5 8 10 12.5"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</button>
+				{:else if playerBrowse.mode === 'albums' && playerBrowse.album}
+					<button
+						type="button"
+						class="icon-hit"
+						aria-label="Back to albums"
+						onclick={() => setPlayerBrowse('albums')}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M10 3.5 5.5 8 10 12.5"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</button>
+				{/if}
+				<span class="detail-top-label">{playerTitle}</span>
+			</div>
 			<div class="detail-top-actions">
 				{#if playerConnected}
 					<button
@@ -489,12 +508,21 @@
 		box-sizing: border-box;
 	}
 
+	.detail-top-start {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
 	.detail-top-label {
 		flex: 1;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
+		letter-spacing: 0;
 		color: var(--white33);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -554,8 +582,8 @@
 	}
 
 	.note-editor-pad {
-		/* Match task .prose horizontal inset — no extra nested pad */
-		padding: 4px 16px 16px;
+		/* Tight under meta pills — match task .prose horizontal inset */
+		padding: 0 16px 16px;
 		flex: 1;
 		min-height: 0;
 	}
@@ -657,7 +685,7 @@
 	.prose,
 	.summary {
 		margin: 0;
-		padding-top: 4px;
+		padding-top: 0;
 		padding-bottom: 8px;
 		font-size: 15px;
 		line-height: 1.55;

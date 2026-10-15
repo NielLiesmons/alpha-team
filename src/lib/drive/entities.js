@@ -9,6 +9,7 @@ import {
 	loadRootDirWithTip,
 	putPath
 } from './client.js';
+import { sha256Hex } from './crypto.js';
 import { putMediaBlob } from './media.js';
 
 function nowRfc3339() {
@@ -536,7 +537,8 @@ export async function putTrackMeta(session, track, patch) {
  *   album?: string | null,
  *   album_artist?: string | null,
  *   year?: number | null,
- *   genres?: string[]
+ *   genres?: string[],
+ *   cover_path?: string | null
  * }} patch
  */
 export async function patchTrackFields(session, track, patch) {
@@ -573,7 +575,7 @@ export async function patchTrackFields(session, track, patch) {
 					: null
 			: (track.year ?? null);
 
-	return putTrackMeta(session, track, {
+	const next = await putTrackMeta(session, track, {
 		title,
 		artists,
 		album,
@@ -581,6 +583,73 @@ export async function patchTrackFields(session, track, patch) {
 		year,
 		genres
 	});
+	if (patch.cover_path !== undefined) {
+		return putTrackCoverPath(session, next, patch.cover_path);
+	}
+	return next;
+}
+
+/**
+ * Store album art once (content-addressed) and return its Drive path.
+ * @param {import('./client.js').DriveSession} session
+ * @param {File | Blob} file
+ */
+export async function putCoverImage(session, file) {
+	const type = file.type || 'image/jpeg';
+	if (!type.startsWith('image/')) throw new Error('Cover must be an image');
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	if (!bytes.length) throw new Error('Empty cover image');
+	const hash = await sha256Hex(bytes);
+	const path = `media/audio/covers/${hash}`;
+	await putPath(session, path, 'blob', bytes);
+	return path;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} track
+ * @param {string | null} coverPath
+ */
+export async function putTrackCoverPath(session, track, coverPath) {
+	const next = {
+		schema: 'alpha.track/1',
+		id: track.id,
+		title: track.title,
+		artists: Array.isArray(track.artists) ? track.artists : ['Unknown'],
+		...(track.album ? { album: track.album } : {}),
+		...(track.album_artist ? { album_artist: track.album_artist } : {}),
+		track_no: track.track_no ?? null,
+		disc_no: track.disc_no ?? null,
+		duration_ms: track.duration_ms ?? null,
+		year: track.year ?? null,
+		genres: Array.isArray(track.genres) ? track.genres : [],
+		media_path: track.media_path,
+		cover_path: coverPath,
+		project_ids: Array.isArray(track.project_ids) ? track.project_ids : [],
+		labels: Array.isArray(track.labels) ? track.labels : [],
+		created_at: track.created_at ?? nowRfc3339(),
+		updated_at: nowRfc3339()
+	};
+	const trackPath = `media/audio/tracks/${track.id}/track.json`;
+	await putPath(session, trackPath, 'track', JSON.stringify(next, null, 2));
+	invalidateTrackCache(session);
+	return next;
+}
+
+/**
+ * Apply one cover image to many tracks (shared cover_path).
+ * @param {import('./client.js').DriveSession} session
+ * @param {any[]} trackList
+ * @param {File | Blob | null} file null clears cover
+ */
+export async function setTracksCover(session, trackList, file) {
+	const coverPath = file ? await putCoverImage(session, file) : null;
+	/** @type {any[]} */
+	const out = [];
+	for (const track of trackList) {
+		out.push(await putTrackCoverPath(session, track, coverPath));
+	}
+	return out;
 }
 
 /**
@@ -591,7 +660,8 @@ export async function patchTrackFields(session, track, patch) {
  *   album?: string | null,
  *   album_artist?: string | null,
  *   year?: number | null,
- *   genres?: string[]
+ *   genres?: string[],
+ *   cover_path?: string | null
  * }} patch
  */
 export async function patchTracks(session, trackList, patch) {
@@ -702,6 +772,68 @@ export async function listPlaylists(session) {
 	);
 	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
 	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {{ title: string }} input
+ */
+export async function createPlaylist(session, input) {
+	const title = String(input.title ?? '').trim();
+	if (!title) throw new Error('Playlist title is required');
+	const id = newId();
+	const created = nowRfc3339();
+	const playlist = {
+		schema: 'alpha.playlist/1',
+		id,
+		title,
+		items: [],
+		created_at: created,
+		updated_at: created
+	};
+	const path = `media/audio/playlists/${id}/playlist.json`;
+	await putPath(session, path, 'playlist', JSON.stringify(playlist, null, 2));
+	return playlist;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} playlist
+ */
+export async function putPlaylist(session, playlist) {
+	const id = playlist?.id;
+	if (!id) throw new Error('Playlist id is required');
+	const title = String(playlist.title ?? '').trim();
+	if (!title) throw new Error('Playlist title is required');
+	const next = {
+		schema: 'alpha.playlist/1',
+		id,
+		title,
+		items: Array.isArray(playlist.items) ? playlist.items : [],
+		created_at: playlist.created_at ?? nowRfc3339(),
+		updated_at: nowRfc3339()
+	};
+	const path = `media/audio/playlists/${id}/playlist.json`;
+	await putPath(session, path, 'playlist', JSON.stringify(next, null, 2));
+	return next;
+}
+
+/**
+ * Append tracks to a playlist (skips duplicates).
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} playlist
+ * @param {string | string[]} trackIds
+ */
+export async function addTracksToPlaylist(session, playlist, trackIds) {
+	const ids = (Array.isArray(trackIds) ? trackIds : [trackIds]).filter(Boolean);
+	const items = Array.isArray(playlist.items) ? [...playlist.items] : [];
+	const have = new Set(items.filter((i) => i?.kind === 'track').map((i) => i.id));
+	for (const id of ids) {
+		if (have.has(id)) continue;
+		items.push({ kind: 'track', id });
+		have.add(id);
+	}
+	return putPlaylist(session, { ...playlist, items });
 }
 
 /**

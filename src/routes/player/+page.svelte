@@ -1,6 +1,7 @@
 <script>
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
 	import {
+		openPlaylistCreate,
 		playerBrowse,
 		playlists,
 		refreshTracks,
@@ -27,6 +28,19 @@
 			class:on={playerBrowse.mode === 'songs'}
 			onclick={() => setPlayerBrowse('songs')}
 		>
+			<span class="row-icon" aria-hidden="true">
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+					<path
+						d="M6 12.5V4.2l7-1.4v8.2"
+						stroke="currentColor"
+						stroke-width="1.4"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+					<circle cx="4.5" cy="12.5" r="1.5" stroke="currentColor" stroke-width="1.4" />
+					<circle cx="11.5" cy="11" r="1.5" stroke="currentColor" stroke-width="1.4" />
+				</svg>
+			</span>
 			<span class="title">Songs</span>
 		</button>
 		<button
@@ -35,12 +49,70 @@
 			class:on={playerBrowse.mode === 'artists'}
 			onclick={() => setPlayerBrowse('artists')}
 		>
+			<span class="row-icon" aria-hidden="true">
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+					<circle cx="8" cy="5" r="2.25" stroke="currentColor" stroke-width="1.4" />
+					<path
+						d="M3.5 13c.6-2.2 2.2-3.5 4.5-3.5s3.9 1.3 4.5 3.5"
+						stroke="currentColor"
+						stroke-width="1.4"
+						stroke-linecap="round"
+					/>
+				</svg>
+			</span>
 			<span class="title">Artists</span>
+		</button>
+		<button
+			type="button"
+			class="row"
+			class:on={playerBrowse.mode === 'albums'}
+			onclick={() => setPlayerBrowse('albums')}
+		>
+			<span class="row-icon" aria-hidden="true">
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+					<circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4" />
+					<circle cx="8" cy="8" r="1.6" stroke="currentColor" stroke-width="1.4" />
+				</svg>
+			</span>
+			<span class="title">Albums</span>
+		</button>
+		<button
+			type="button"
+			class="row"
+			class:on={playerBrowse.mode === 'recent'}
+			onclick={() => setPlayerBrowse('recent')}
+		>
+			<span class="row-icon" aria-hidden="true">
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+					<circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4" />
+					<path
+						d="M8 5v3.2l2 1.3"
+						stroke="currentColor"
+						stroke-width="1.4"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</span>
+			<span class="title">Recently Added</span>
 		</button>
 	</div>
 
 	<div class="group-header">
 		<span class="eyebrow-label-xs">Playlists</span>
+		<span class="group-count">{playlists.length}</span>
+		{#if connected}
+			<button
+				type="button"
+				class="group-add-btn"
+				aria-label="New playlist"
+				onclick={openPlaylistCreate}
+			>
+				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+					<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+				</svg>
+			</button>
+		{/if}
 	</div>
 	{#if !connected}
 		<p class="hint">Connect Drive to sync playlists.</p>
@@ -83,12 +155,39 @@
 	}
 
 	.eyebrow-label-xs {
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
-		font-weight: 600;
-		letter-spacing: 0.08em;
+		font-size: 10px;
+		font-weight: 500;
 		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--fg-66);
+	}
+
+	.group-count {
+		font-family: 'Inter', system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 500;
 		color: var(--fg-33);
+	}
+
+	.group-add-btn {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 6px;
+		background: transparent;
+		border: none;
+		color: var(--fg-33);
+		cursor: pointer;
+		flex-shrink: 0;
+		padding: 0;
+	}
+
+	.group-add-btn:hover {
+		color: var(--fg);
+		background: var(--fg-8);
 	}
 
 	.hint {
@@ -113,8 +212,9 @@
 	.row {
 		display: flex;
 		align-items: center;
+		gap: 10px;
 		width: 100%;
-		padding: 0.85rem 0.9rem;
+		padding: 0.75rem 0.9rem;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -133,13 +233,27 @@
 		background: var(--selection);
 	}
 
+	.row-icon {
+		flex-shrink: 0;
+		width: 16px;
+		height: 16px;
+		display: grid;
+		place-items: center;
+		color: var(--fg-33);
+	}
+
+	.row.on .row-icon {
+		color: var(--fg);
+	}
+
 	.title {
 		display: block;
-		width: 100%;
+		min-width: 0;
+		flex: 1;
 		margin: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 15px;
-		font-weight: 600;
+		font-size: 14px;
+		font-weight: 500;
 		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;

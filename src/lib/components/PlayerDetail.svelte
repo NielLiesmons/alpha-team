@@ -1,12 +1,16 @@
 <script>
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
 	import {
+		addTracksToPlaylist,
+		albumRows,
 		artistNames,
 		clearTrackSelection,
 		openBulkTrackEdit,
+		openPlaylistCreate,
 		openTrackEdit,
 		playTrack,
 		playerBrowse,
+		playlists,
 		playerUi,
 		queuePlayNext,
 		removeTracks,
@@ -20,6 +24,11 @@
 	const connected = $derived(Boolean(activeSession()) && ui.source === 'drive');
 	const list = $derived(visibleTracks());
 	const artists = $derived(artistNames());
+	const albums = $derived(albumRows());
+	const browsingIndex = $derived(
+		(playerBrowse.mode === 'artists' && !playerBrowse.artist) ||
+			(playerBrowse.mode === 'albums' && !playerBrowse.album)
+	);
 	const selectedCount = $derived(playerUi.selectedIds.length);
 	const selecting = $derived(selectedCount > 0);
 	const allSelected = $derived(
@@ -28,6 +37,8 @@
 
 	/** @type {string | null} */
 	let menuFor = $state(null);
+	/** @type {'root' | 'playlists'} */
+	let menuPanel = $state('root');
 
 	/** @param {any} track */
 	function onRowClick(track) {
@@ -45,20 +56,30 @@
 
 	/** @param {string} id */
 	function openMenu(id) {
-		menuFor = menuFor === id ? null : id;
+		if (menuFor === id) {
+			closeMenu();
+			return;
+		}
+		menuFor = id;
+		menuPanel = 'root';
 	}
 
 	function closeMenu() {
 		menuFor = null;
+		menuPanel = 'root';
 	}
 
 	/**
 	 * @param {any} track
-	 * @param {'play' | 'next' | 'select' | 'edit' | 'delete'} action
+	 * @param {'play' | 'next' | 'select' | 'edit' | 'delete' | 'add'} action
 	 */
 	async function onMenu(track, action) {
-		closeMenu();
 		try {
+			if (action === 'add') {
+				menuPanel = 'playlists';
+				return;
+			}
+			closeMenu();
 			if (action === 'play') await playTrack(track);
 			else if (action === 'next') queuePlayNext(track);
 			else if (action === 'select') toggleTrackSelected(track.id);
@@ -70,6 +91,25 @@
 		} catch (e) {
 			alert(e instanceof Error ? e.message : String(e));
 		}
+	}
+
+	/**
+	 * @param {any} track
+	 * @param {string} playlistId
+	 */
+	async function onAddToPlaylist(track, playlistId) {
+		closeMenu();
+		try {
+			await addTracksToPlaylist(playlistId, track.id);
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
+		}
+	}
+
+	/** @param {any} track */
+	function onAddToNewPlaylist(track) {
+		closeMenu();
+		openPlaylistCreate(track.id);
 	}
 
 	async function onBulkDelete() {
@@ -89,7 +129,7 @@
 		<p class="banner err">{playerUi.error}</p>
 	{/if}
 
-	{#if selecting && !(playerBrowse.mode === 'artists' && !playerBrowse.artist)}
+	{#if selecting && !browsingIndex}
 		<div class="select-bar">
 			<button type="button" class="bar-btn" onclick={toggleSelectAll}>
 				{allSelected ? 'Clear' : 'All'}
@@ -121,6 +161,28 @@
 							<span class="col meta"
 								>{tracks.filter((t) => (t.artists?.[0] || 'Unknown') === name).length}</span
 							>
+						</button>
+					{/each}
+				</div>
+			{/if}
+		{:else if playerBrowse.mode === 'albums' && !playerBrowse.album}
+			{#if albums.length === 0}
+				<p class="empty">No albums yet. Upload audio to build your library.</p>
+			{:else}
+				<div class="card-stack">
+					{#each albums as row (row.album)}
+						<button
+							type="button"
+							class="artist-row album-row"
+							onclick={() => setPlayerBrowse('albums', { album: row.album })}
+						>
+							<span class="line-primary">
+								<span class="col title">{row.album}</span>
+								<span class="col meta">{row.count}</span>
+							</span>
+							<span class="line-secondary">
+								<span class="sub">{row.artist}</span>
+							</span>
 						</button>
 					{/each}
 				</div>
@@ -191,21 +253,49 @@
 								<button type="button" class="menu-scrim" aria-label="Close menu" onclick={closeMenu}
 								></button>
 								<div class="more-menu" role="menu">
-									<button type="button" role="menuitem" onclick={() => onMenu(track, 'play')}
-										>Play</button
-									>
-									<button type="button" role="menuitem" onclick={() => onMenu(track, 'next')}
-										>Play next</button
-									>
-									<button type="button" role="menuitem" onclick={() => onMenu(track, 'select')}
-										>Select</button
-									>
-									<button type="button" role="menuitem" onclick={() => onMenu(track, 'edit')}
-										>Edit</button
-									>
-									<button type="button" role="menuitem" onclick={() => onMenu(track, 'delete')}
-										>Delete</button
-									>
+									{#if menuPanel === 'playlists'}
+										<button
+											type="button"
+											role="menuitem"
+											class="menu-back"
+											onclick={() => (menuPanel = 'root')}>← Back</button
+										>
+										{#if playlists.length === 0}
+											<p class="menu-empty">No playlists yet</p>
+										{:else}
+											{#each playlists as pl (pl.id)}
+												<button
+													type="button"
+													role="menuitem"
+													onclick={() => onAddToPlaylist(track, pl.id)}>{pl.title}</button
+												>
+											{/each}
+										{/if}
+										<button
+											type="button"
+											role="menuitem"
+											onclick={() => onAddToNewPlaylist(track)}>New playlist…</button
+										>
+									{:else}
+										<button type="button" role="menuitem" onclick={() => onMenu(track, 'play')}
+											>Play</button
+										>
+										<button type="button" role="menuitem" onclick={() => onMenu(track, 'next')}
+											>Play next</button
+										>
+										<button type="button" role="menuitem" onclick={() => onMenu(track, 'add')}
+											>Add to playlist</button
+										>
+										<button type="button" role="menuitem" onclick={() => onMenu(track, 'select')}
+											>Select</button
+										>
+										<button type="button" role="menuitem" onclick={() => onMenu(track, 'edit')}
+											>Edit</button
+										>
+										<button type="button" role="menuitem" onclick={() => onMenu(track, 'delete')}
+											>Delete</button
+										>
+									{/if}
 								</div>
 							{/if}
 						</div>
@@ -321,6 +411,28 @@
 		font: inherit;
 	}
 
+	.album-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+		padding: 0.7rem 0.9rem;
+	}
+
+	.album-row .line-primary {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+		width: 100%;
+	}
+
+	.album-row .line-secondary {
+		display: flex;
+	}
+
+	.album-row .col.meta {
+		display: block;
+	}
+
 	.artist-row:hover,
 	.track-row:hover {
 		background: var(--fg-4);
@@ -398,8 +510,8 @@
 	.col.title {
 		flex: 1 1 auto;
 		max-width: 100%;
-		font-size: 15px;
-		font-weight: 600;
+		font-size: 14px;
+		font-weight: 500;
 		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -501,6 +613,20 @@
 	.more-menu button:hover {
 		background: var(--fg-8);
 		color: var(--fg);
+	}
+
+	.more-menu .menu-back {
+		color: var(--fg-33);
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.menu-empty {
+		margin: 0;
+		padding: 8px 10px;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-33);
 	}
 
 	@media (min-width: 768px) {

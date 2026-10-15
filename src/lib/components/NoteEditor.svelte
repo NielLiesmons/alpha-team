@@ -143,12 +143,19 @@
 	.note-editor :global(.note-prose h1),
 	.note-editor :global(.note-prose h2),
 	.note-editor :global(.note-prose h3) {
-		margin: 1em 0 0.4em;
+		margin: 0.85em 0 0.35em;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		line-height: 1.25;
 		color: var(--white);
+	}
+
+	.note-editor :global(.note-prose > h1:first-child),
+	.note-editor :global(.note-prose > h2:first-child),
+	.note-editor :global(.note-prose > h3:first-child),
+	.note-editor :global(.note-prose > p:first-child) {
+		margin-top: 0;
 	}
 
 	.note-editor :global(.note-prose h1) {

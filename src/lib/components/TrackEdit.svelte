@@ -3,6 +3,7 @@
 	import {
 		closeTrackEdit,
 		editingTracks,
+		ensureTrackCover,
 		playerUi,
 		saveTrackEdit
 	} from '$lib/player.svelte.js';
@@ -15,10 +16,17 @@
 	let year = $state('');
 	let genres = $state('');
 	let saving = $state(false);
+	/** @type {File | null} */
+	let coverFile = $state(null);
+	let clearCover = $state(false);
+	/** Preview URL (local file or existing cover) */
+	let coverPreview = $state(/** @type {string | null} */ (null));
 	/** @type {HTMLInputElement | undefined} */
 	let titleInput = $state();
 	/** @type {HTMLInputElement | undefined} */
 	let artistsInput = $state();
+	/** @type {HTMLInputElement | undefined} */
+	let coverInput = $state();
 
 	const list = $derived(editingTracks());
 	const bulk = $derived(list.length > 1);
@@ -40,6 +48,13 @@
 
 	$effect(() => {
 		if (!open || !list.length) return;
+		coverFile = null;
+		clearCover = false;
+		if (coverPreview?.startsWith('blob:') && !list.some((t) => t.cover_url === coverPreview)) {
+			URL.revokeObjectURL(coverPreview);
+		}
+		coverPreview = null;
+
 		if (!bulk) {
 			const track = list[0];
 			title = track.title ?? '';
@@ -48,10 +63,16 @@
 			albumArtist = track.album_artist ?? '';
 			year = track.year != null && track.year !== '' ? String(track.year) : '';
 			genres = Array.isArray(track.genres) ? track.genres.join(', ') : '';
+			coverPreview = track.cover_url ?? null;
+			if (track.cover_path && !coverPreview) {
+				ensureTrackCover(track).then((url) => {
+					if (open && !coverFile && !clearCover) coverPreview = url;
+				});
+			}
 		} else {
 			title = '';
 			const a = commonValue(
-				list.map((t) => (Array.isArray(t.artists) ? t.artists.join(', ') : '')),
+				list.map((t) => (Array.isArray(t.artists) ? t.artists.join(', ') : ''))
 			);
 			artists = a.mixed ? '' : a.value;
 			const al = commonValue(list.map((t) => t.album ?? ''));
@@ -66,6 +87,16 @@
 				list.map((t) => (Array.isArray(t.genres) ? t.genres.join(', ') : ''))
 			);
 			genres = g.mixed ? '' : g.value;
+			const covers = commonValue(list.map((t) => t.cover_path ?? ''));
+			if (!covers.mixed && covers.value) {
+				const sample = list.find((t) => t.cover_path === covers.value);
+				coverPreview = sample?.cover_url ?? null;
+				if (sample && !coverPreview) {
+					ensureTrackCover(sample).then((url) => {
+						if (open && !coverFile && !clearCover) coverPreview = url;
+					});
+				}
+			}
 		}
 		saving = false;
 		tick().then(() => (bulk ? artistsInput : titleInput)?.focus());
@@ -77,6 +108,25 @@
 			.split(',')
 			.map((s) => s.trim())
 			.filter(Boolean);
+	}
+
+	/** @param {Event} e */
+	function onCoverPick(e) {
+		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
+		const file = input.files?.[0] ?? null;
+		input.value = '';
+		if (!file) return;
+		if (coverPreview?.startsWith('blob:') && coverFile) URL.revokeObjectURL(coverPreview);
+		coverFile = file;
+		clearCover = false;
+		coverPreview = URL.createObjectURL(file);
+	}
+
+	function onClearCover() {
+		if (coverPreview?.startsWith('blob:') && coverFile) URL.revokeObjectURL(coverPreview);
+		coverFile = null;
+		clearCover = true;
+		coverPreview = null;
 	}
 
 	async function save() {
@@ -94,28 +144,31 @@
 					album: album.trim(),
 					album_artist: albumArtist.trim(),
 					year: yearRaw ? Number(yearRaw) : null,
-					genres: splitList(genres)
+					genres: splitList(genres),
+					coverFile: coverFile ?? undefined,
+					clearCover: clearCover || undefined
 				});
 			} else {
-				/** @type {{ artists?: string[], album?: string, album_artist?: string, year?: number | null, genres?: string[] }} */
+				/** @type {{ artists?: string[], album?: string, album_artist?: string, year?: number | null, genres?: string[], coverFile?: File, clearCover?: boolean }} */
 				const patch = {};
 				const nextArtists = splitList(artists);
 				if (nextArtists.length) patch.artists = nextArtists;
-				// Always apply album / album artist / year / genres from fields (empty clears)
 				patch.album = album.trim();
 				patch.album_artist = albumArtist.trim();
 				const yearRaw = year.trim();
 				patch.year = yearRaw ? Number(yearRaw) : null;
 				patch.genres = splitList(genres);
+				if (coverFile) patch.coverFile = coverFile;
+				if (clearCover) patch.clearCover = true;
 				if (
 					!patch.artists &&
 					patch.album === '' &&
 					patch.album_artist === '' &&
 					patch.year === null &&
-					!(patch.genres?.length)
+					!(patch.genres?.length) &&
+					!patch.coverFile &&
+					!patch.clearCover
 				) {
-					// Allow clearing album fields; still need at least one intentional field.
-					// Empty form = no-op close.
 					closeTrackEdit();
 					return;
 				}
@@ -146,9 +199,41 @@
 		</div>
 		<div class="form-divider"></div>
 	{:else}
-		<p class="bulk-hint">Shared fields only — song titles stay as they are. Leave a field blank to keep mixed values unchanged for artists; album/year/genres apply to all.</p>
+		<p class="bulk-hint">Shared fields only — song titles stay as they are. Leave a field blank to keep mixed values unchanged for artists; album/year/genres/artwork apply to all.</p>
 		<div class="form-divider"></div>
 	{/if}
+
+	<div class="art-row">
+		<button
+			type="button"
+			class="art-btn"
+			aria-label="Choose album artwork"
+			onclick={() => coverInput?.click()}
+		>
+			{#if coverPreview}
+				<img src={coverPreview} alt="" />
+			{:else}
+				<span class="art-placeholder">{clearCover ? 'No art' : 'Add art'}</span>
+			{/if}
+		</button>
+		<div class="art-actions">
+			<button type="button" class="art-link" onclick={() => coverInput?.click()}>
+				{coverPreview ? 'Change artwork' : 'Upload artwork'}
+			</button>
+			{#if coverPreview || (!clearCover && list.some((t) => t.cover_path))}
+				<button type="button" class="art-link muted" onclick={onClearCover}>Remove</button>
+			{/if}
+		</div>
+		<input
+			bind:this={coverInput}
+			class="sr-only"
+			type="file"
+			accept="image/jpeg,image/png,image/webp,image/*"
+			onchange={onCoverPick}
+		/>
+	</div>
+	<div class="form-divider"></div>
+
 	<label class="field">
 		<span class="field-label">Artist</span>
 		<input
@@ -217,6 +302,82 @@
 		font-weight: 500;
 		line-height: 1.4;
 		color: var(--fg-33);
+	}
+
+	.art-row {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		padding: 12px 16px;
+	}
+
+	.art-btn {
+		flex-shrink: 0;
+		width: 72px;
+		height: 72px;
+		padding: 0;
+		border: 1px solid var(--hairline);
+		border-radius: 12px;
+		background: var(--fg-4);
+		overflow: hidden;
+		cursor: pointer;
+	}
+
+	.art-btn img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	.art-placeholder {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		height: 100%;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--fg-33);
+	}
+
+	.art-actions {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.art-link {
+		padding: 0;
+		border: 0;
+		background: transparent;
+		font: inherit;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--fg);
+		cursor: pointer;
+	}
+
+	.art-link.muted {
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	.art-link:hover {
+		color: var(--fg);
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	.field {

@@ -348,7 +348,7 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 8px;
-		padding: 0 16px 12px;
+		padding: 0 16px 6px;
 		box-sizing: border-box;
 	}
 
@@ -566,7 +566,7 @@
 			overflow-y: hidden;
 			-webkit-overflow-scrolling: touch;
 			scrollbar-width: none;
-			padding-bottom: 14px;
+			padding-bottom: 8px;
 		}
 
 		.meta-row::-webkit-scrollbar {

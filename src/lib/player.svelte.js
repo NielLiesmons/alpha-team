@@ -2,16 +2,23 @@
  * Player library + now-playing state (Drive-backed when connected).
  */
 
+import { getPath } from './drive/client.js';
 import {
+	addTracksToPlaylist as addTracksToPlaylistOnDrive,
+	createPlaylist as createPlaylistOnDrive,
 	deleteTracks as deleteTracksOnDrive,
 	listPlaylists,
 	listTracks,
 	patchTracks,
 	putTrackMeta,
+	setTracksCover,
 	uploadTrack
 } from './drive/entities.js';
 import { loadMediaManifest, mseMimeForContentType, streamMediaChunks } from './drive/media.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
+
+/** @type {Map<string, string>} cover_path → object URL */
+const coverUrlCache = new Map();
 
 /** @type {any[]} */
 export const tracks = $state([]);
@@ -20,12 +27,14 @@ export const playlists = $state([]);
 
 /** Browse selection for list column → detail column. */
 export const playerBrowse = $state({
-	/** @type {'songs' | 'artists' | 'playlist'} */
+	/** @type {'songs' | 'artists' | 'albums' | 'recent' | 'playlist'} */
 	mode: 'songs',
 	/** @type {string | null} */
 	playlistId: null,
 	/** @type {string | null} artist name when drilling in from Artists */
 	artist: null,
+	/** @type {string | null} album title when drilling in from Albums */
+	album: null,
 	/** Mobile: slide detail over the browse list. Desktop always shows detail. */
 	detailOpen: false
 });
@@ -53,6 +62,11 @@ export const playerUi = $state({
 	/** When set, plays after the current track ends (instead of list-next). */
 	/** @type {string | null} */
 	upNextId: null,
+	/** New playlist create sheet */
+	playlistCreateOpen: false,
+	/** Track ids to add after creating a playlist from the ⋯ menu */
+	/** @type {string[]} */
+	pendingAddTrackIds: [],
 	error: '',
 	uploading: false,
 	uploadLabel: ''
@@ -144,6 +158,10 @@ export async function refreshTracks() {
 		const [list, pls] = await Promise.all([listTracks(session), listPlaylists(session)]);
 		replaceTracks(list);
 		replacePlaylists(pls);
+		// Hydrate covers for tracks that already have art (lazy per path)
+		for (const t of tracks) {
+			if (t.cover_path && !t.cover_url) void hydrateCoverUrl(t.id, t.cover_path);
+		}
 	} catch (e) {
 		playerUi.error = e instanceof Error ? e.message : String(e);
 	} finally {
@@ -152,19 +170,74 @@ export async function refreshTracks() {
 }
 
 /**
- * @param {'songs' | 'artists' | 'playlist'} mode
- * @param {{ playlistId?: string | null, artist?: string | null }} [opts]
+ * @param {'songs' | 'artists' | 'albums' | 'recent' | 'playlist'} mode
+ * @param {{ playlistId?: string | null, artist?: string | null, album?: string | null }} [opts]
  */
 export function setPlayerBrowse(mode, opts = {}) {
 	playerBrowse.mode = mode;
 	playerBrowse.playlistId = opts.playlistId ?? null;
 	playerBrowse.artist = opts.artist ?? null;
+	playerBrowse.album = opts.album ?? null;
 	playerBrowse.detailOpen = true;
 	playerUi.selectedIds = [];
 }
 
 export function closePlayerDetail() {
 	playerBrowse.detailOpen = false;
+}
+
+/**
+ * @param {string | string[]} [trackIds] optional tracks to add after create
+ */
+export function openPlaylistCreate(trackIds) {
+	playerUi.pendingAddTrackIds = trackIds
+		? Array.isArray(trackIds)
+			? [...trackIds]
+			: [trackIds]
+		: [];
+	playerUi.playlistCreateOpen = true;
+}
+
+export function closePlaylistCreate() {
+	playerUi.playlistCreateOpen = false;
+	playerUi.pendingAddTrackIds = [];
+}
+
+/**
+ * @param {string} title
+ */
+export async function createPlaylist(title) {
+	const session = activeSession();
+	if (!session) throw new Error('Connect Drive in Settings first');
+	let pl = await createPlaylistOnDrive(session, { title });
+	const pending = [...playerUi.pendingAddTrackIds];
+	playerUi.pendingAddTrackIds = [];
+	if (pending.length) {
+		pl = await addTracksToPlaylistOnDrive(session, pl, pending);
+	}
+	const idx = playlists.findIndex((p) => p.id === pl.id);
+	if (idx >= 0) playlists[idx] = pl;
+	else playlists.push(pl);
+	playlists.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	playerUi.playlistCreateOpen = false;
+	setPlayerBrowse('playlist', { playlistId: pl.id });
+	return pl;
+}
+
+/**
+ * @param {string} playlistId
+ * @param {string | string[]} trackIds
+ */
+export async function addTracksToPlaylist(playlistId, trackIds) {
+	const session = activeSession();
+	if (!session) throw new Error('Connect Drive in Settings first');
+	const pl = playlists.find((p) => p.id === playlistId);
+	if (!pl) throw new Error('Playlist not found');
+	const next = await addTracksToPlaylistOnDrive(session, pl, trackIds);
+	const idx = playlists.findIndex((p) => p.id === playlistId);
+	if (idx >= 0) playlists[idx] = next;
+	else playlists.push(next);
+	return next;
 }
 
 export function openUploadModal() {
@@ -515,6 +588,7 @@ export async function playTrack(track) {
 	playerUi.duration = 0;
 	playerUi.playing = false;
 	playerUi.error = '';
+	if (track.cover_path) void ensureTrackCover(track);
 
 	try {
 		const { manifest, fileKeyHex } = await loadMediaManifest(
@@ -633,17 +707,79 @@ export function editingTrack() {
  */
 function applyTrackLocal(next) {
 	const idx = tracks.findIndex((t) => t.id === next.id);
+	const prev = idx >= 0 ? tracks[idx] : null;
+	const coverPath = next.cover_path ?? null;
+	const cachedUrl = coverPath ? coverUrlCache.get(coverPath) : null;
 	const merged = {
-		...(idx >= 0 ? tracks[idx] : {}),
+		...(prev ?? {}),
 		...next,
 		artists: next.artists,
 		album: next.album ?? '',
 		album_artist: next.album_artist ?? '',
 		year: next.year ?? null,
-		genres: next.genres ?? []
+		genres: next.genres ?? [],
+		cover_path: coverPath,
+		cover_url: cachedUrl ?? (coverPath && prev?.cover_path === coverPath ? prev.cover_url : null)
 	};
 	if (idx >= 0) tracks[idx] = merged;
 	else tracks.push(merged);
+	if (coverPath && !merged.cover_url) {
+		void hydrateCoverUrl(merged.id, coverPath);
+	}
+}
+
+/**
+ * @param {string} trackId
+ * @param {string} coverPath
+ */
+async function hydrateCoverUrl(trackId, coverPath) {
+	const session = activeSession();
+	if (!session || !coverPath) return;
+	try {
+		let url = coverUrlCache.get(coverPath);
+		if (!url) {
+			const bytes = await getPath(session, coverPath);
+			const blob = new Blob([bytes], { type: sniffImageType(bytes) });
+			url = URL.createObjectURL(blob);
+			coverUrlCache.set(coverPath, url);
+		}
+		const idx = tracks.findIndex((t) => t.id === trackId);
+		if (idx >= 0 && tracks[idx].cover_path === coverPath) {
+			tracks[idx] = { ...tracks[idx], cover_url: url };
+		}
+	} catch {
+		/* cover missing */
+	}
+}
+
+/**
+ * @param {Uint8Array} bytes
+ */
+function sniffImageType(bytes) {
+	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+		return 'image/jpeg';
+	}
+	if (
+		bytes.length >= 8 &&
+		bytes[0] === 0x89 &&
+		bytes[1] === 0x50 &&
+		bytes[2] === 0x4e &&
+		bytes[3] === 0x47
+	) {
+		return 'image/png';
+	}
+	if (bytes.length >= 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+		return 'image/webp';
+	}
+	return 'image/jpeg';
+}
+
+/** Ensure current track (and library rows with cover_path) get object URLs. */
+export async function ensureTrackCover(track) {
+	if (!track?.cover_path) return null;
+	if (track.cover_url) return track.cover_url;
+	await hydrateCoverUrl(track.id, track.cover_path);
+	return tracks.find((t) => t.id === track.id)?.cover_url ?? null;
 }
 
 /**
@@ -653,7 +789,9 @@ function applyTrackLocal(next) {
  *   album?: string,
  *   album_artist?: string,
  *   year?: number | null,
- *   genres?: string[]
+ *   genres?: string[],
+ *   coverFile?: File | null,
+ *   clearCover?: boolean
  * }} patch
  */
 export async function saveTrackEdit(patch) {
@@ -661,6 +799,7 @@ export async function saveTrackEdit(patch) {
 	if (!session) throw new Error('Connect Drive in Settings first');
 	const list = editingTracks();
 	if (!list.length) throw new Error('No track selected');
+	const ids = list.map((t) => t.id);
 
 	if (list.length === 1) {
 		const next = await putTrackMeta(session, list[0], {
@@ -683,6 +822,17 @@ export async function saveTrackEdit(patch) {
 		const updated = await patchTracks(session, list, bulk);
 		for (const next of updated) applyTrackLocal(next);
 	}
+
+	if (patch.clearCover || patch.coverFile) {
+		const fresh = tracks.filter((t) => ids.includes(t.id));
+		const withCover = await setTracksCover(
+			session,
+			fresh.length ? fresh : list,
+			patch.clearCover ? null : patch.coverFile
+		);
+		for (const next of withCover) applyTrackLocal(next);
+	}
+
 	playerUi.editingIds = [];
 	playerUi.selectedIds = [];
 }
@@ -817,8 +967,11 @@ export async function playEndedAdvance() {
 
 export function playerHeading() {
 	if (playerBrowse.mode === 'songs') return 'Songs';
+	if (playerBrowse.mode === 'recent') return 'Recently Added';
 	if (playerBrowse.mode === 'artists' && playerBrowse.artist) return playerBrowse.artist;
 	if (playerBrowse.mode === 'artists') return 'Artists';
+	if (playerBrowse.mode === 'albums' && playerBrowse.album) return playerBrowse.album;
+	if (playerBrowse.mode === 'albums') return 'Albums';
 	if (playerBrowse.mode === 'playlist' && playerBrowse.playlistId) {
 		return playlists.find((p) => p.id === playerBrowse.playlistId)?.title ?? 'Playlist';
 	}
@@ -863,6 +1016,26 @@ export function artistNames() {
 }
 
 /**
+ * Album rows for Albums browse: title + primary artist + track count.
+ * @returns {{ album: string, artist: string, count: number }[]}
+ */
+export function albumRows() {
+	/** @type {Map<string, { album: string, artist: string, count: number }>} */
+	const map = new Map();
+	for (const t of tracks) {
+		const album = String(t.album ?? '').trim() || 'Unknown Album';
+		const artist =
+			String(t.album_artist ?? '').trim() ||
+			(Array.isArray(t.artists) && t.artists[0] ? t.artists[0] : 'Unknown');
+		const key = album.toLowerCase();
+		const cur = map.get(key);
+		if (cur) cur.count += 1;
+		else map.set(key, { album, artist, count: 1 });
+	}
+	return [...map.values()].sort((a, b) => a.album.localeCompare(b.album));
+}
+
+/**
  * Album → disc → track no → title (matches Drive list sort).
  * @param {any} a
  * @param {any} b
@@ -878,6 +1051,15 @@ function compareTracks(a, b) {
 	const bt = Number(b.track_no) || 0;
 	if (at !== bt) return at - bt;
 	return String(a.title).localeCompare(String(b.title));
+}
+
+/**
+ * @param {any} t
+ */
+function trackCreatedMs(t) {
+	const raw = t.created_at ?? t.updated_at;
+	const ms = raw ? Date.parse(raw) : 0;
+	return Number.isFinite(ms) ? ms : 0;
 }
 
 /** Tracks visible in the detail column for current browse state. */
@@ -898,6 +1080,18 @@ export function visibleTracks() {
 	}
 	if (playerBrowse.mode === 'artists') {
 		return [];
+	}
+	if (playerBrowse.mode === 'albums' && playerBrowse.album) {
+		const want = playerBrowse.album;
+		return tracks
+			.filter((t) => (String(t.album ?? '').trim() || 'Unknown Album') === want)
+			.sort(compareTracks);
+	}
+	if (playerBrowse.mode === 'albums') {
+		return [];
+	}
+	if (playerBrowse.mode === 'recent') {
+		return [...tracks].sort((a, b) => trackCreatedMs(b) - trackCreatedMs(a) || compareTracks(a, b));
 	}
 	return [...tracks].sort(compareTracks);
 }
