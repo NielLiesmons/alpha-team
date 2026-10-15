@@ -623,7 +623,8 @@
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
-		padding: 12px 12px 12px 0;
+		/* No top pad — list/detail top bars sit flush with the shell */
+		padding: 0 12px 12px 0;
 		box-sizing: border-box;
 		display: flex;
 	}
@@ -636,10 +637,11 @@
 		flex-direction: row;
 		align-items: stretch;
 		overflow: hidden;
-		border-radius: 20px;
+		border-radius: 0 0 20px 20px;
 		/* Follows theme page bg (#121212-ish dark / soft light) */
 		background: var(--bg);
 		border: 1px solid var(--hairline);
+		border-top: 0;
 		color: var(--white);
 	}
 

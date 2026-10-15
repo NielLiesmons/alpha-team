@@ -4,18 +4,31 @@
  */
 
 /**
+ * Strip a leading track index from a title/filename stem.
+ * "01 Songname", "01. Songname", "01 - Songname", "1_Songname"
+ * @param {string} raw
+ * @returns {{ title: string, track_no: number | null }}
+ */
+export function stripLeadingTrackNo(raw) {
+	const t = String(raw ?? '').trim();
+	if (!t) return { title: 'Untitled', track_no: null };
+	const m = t.match(/^(\d{1,3})(?:\s*[.\-_]\s*|\s+)(.+)$/);
+	if (!m) return { title: t, track_no: null };
+	const n = parseInt(m[1], 10);
+	const title = m[2].trim();
+	if (!title || !Number.isFinite(n) || n < 1) return { title: t, track_no: null };
+	return { title, track_no: n };
+}
+
+/**
  * @param {string} filename
  */
 export function parseAudioFilename(filename) {
 	const base = filename.replace(/\.[^.]+$/, '').trim() || 'Untitled';
+	const stripped = stripLeadingTrackNo(base);
+	let rest = stripped.title;
 	/** @type {number | null} */
-	let track_no = null;
-	let rest = base;
-	const num = base.match(/^(\d{1,3})[\s.\-_]+(.+)$/);
-	if (num) {
-		track_no = Math.max(1, parseInt(num[1], 10));
-		rest = num[2].trim();
-	}
+	let track_no = stripped.track_no;
 	const m = rest.match(/^(.+?)\s*[-–—]\s*(.+)$/);
 	if (m) {
 		return { artists: [m[1].trim()], title: m[2].trim(), album: '', track_no, disc_no: null };
@@ -45,14 +58,15 @@ export async function readAudioTags(file) {
 		const head = new Uint8Array(await file.slice(0, Math.min(file.size, 2 * 1024 * 1024)).arrayBuffer());
 		const tagged = readId3v2(head) || readMp4Tags(head);
 		if (!tagged) return fromName;
+		const fromTag = stripLeadingTrackNo(tagged.title || fromName.title);
 		return {
-			title: tagged.title || fromName.title,
+			title: fromTag.title || fromName.title,
 			artists:
 				tagged.artists?.length && tagged.artists[0] !== 'Unknown'
 					? tagged.artists
 					: fromName.artists,
 			album: tagged.album || fromName.album,
-			track_no: tagged.track_no ?? fromName.track_no,
+			track_no: tagged.track_no ?? fromTag.track_no ?? fromName.track_no,
 			disc_no: tagged.disc_no ?? fromName.disc_no
 		};
 	} catch {

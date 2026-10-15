@@ -295,8 +295,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		/* Flush with detail column — no outer frame (match Task/Note body inset via row pad) */
-		padding: 0 0 8px;
+		padding: 8px;
 		width: 100%;
 		box-sizing: border-box;
 	}
@@ -308,14 +307,13 @@
 		gap: 4px;
 		width: 100%;
 		min-width: 0;
-		border-radius: 0;
+		border-radius: 12px;
 		box-sizing: border-box;
 	}
 
 	.artist-row {
-		padding: 0.85rem 16px;
+		padding: 0.85rem 0.9rem;
 		border: 0;
-		border-radius: 0;
 		background: transparent;
 		color: inherit;
 		text-align: left;
@@ -371,9 +369,9 @@
 		flex-direction: column;
 		align-items: stretch;
 		gap: 2px;
-		padding: 0.75rem 0.4rem 0.75rem 16px;
+		padding: 0.75rem 0.4rem 0.75rem 0.75rem;
 		border: 0;
-		border-radius: 0;
+		border-radius: 12px;
 		background: transparent;
 		color: inherit;
 		text-align: left;
@@ -441,7 +439,7 @@
 	.menu-wrap {
 		position: relative;
 		flex-shrink: 0;
-		margin-right: 8px;
+		margin-right: 4px;
 	}
 
 	.more-btn {
@@ -541,11 +539,7 @@
 		}
 
 		.main {
-			padding: 0.7rem 0.5rem 0.7rem 16px;
-		}
-
-		.menu-wrap {
-			margin-right: 10px;
+			padding: 0.7rem 0.5rem 0.7rem 0.85rem;
 		}
 	}
 </style>
