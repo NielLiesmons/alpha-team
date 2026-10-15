@@ -18,7 +18,7 @@
 	let importBusy = $state(false);
 	let importMsg = $state('');
 
-	let emailDraft = $state(actor.email || 'niel@bley.farm');
+	let emailDraft = $state(actor.email || '');
 
 	$effect(() => {
 		emailDraft = actor.email || emailDraft;

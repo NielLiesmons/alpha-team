@@ -51,7 +51,7 @@
 		await refreshFromDrive();
 		token = '';
 		rootKey = '';
-		msg = 'Disconnected — demo Tasks again.';
+		msg = 'Disconnected — this device is signed out.';
 	}
 </script>
 
@@ -111,7 +111,7 @@
 	{#if driveSession.connected}
 		<p class="status on">Connected to {driveSession.url}</p>
 	{:else}
-		<p class="status">Demo mode (sample Tasks) — import an invite or connect manually.</p>
+		<p class="status">Not connected — use Join Drive above or reconnect manually.</p>
 	{/if}
 	{#if msg}
 		<p class="status">{msg}</p>

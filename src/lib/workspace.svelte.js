@@ -1,6 +1,5 @@
 /**
- * Workspace state. When Drive is connected, Tasks/Projects/Notes load from ciphertext.
- * Otherwise sample fixtures (demo).
+ * Workspace state. Data loads from Drive when signed in; otherwise empty.
  */
 
 import {
@@ -19,142 +18,23 @@ import {
 	toUiTask
 } from './drive/entities.js';
 import { activePerson, members } from './actor.svelte.js';
-import { activeSession, driveSession, loadSessionFromStorage } from './drive/session.svelte.js';
+import { activeSession, driveSession } from './drive/session.svelte.js';
 
-const niel = members[0];
-const sarah = members[1];
-const marc = { email: 'marc@bley.farm', name: 'Marc' };
-
-/** People available for assignee pickers (demo + local). Email = account id. */
-export const people = [niel, sarah, marc];
-
-const demoTasks = [
-	{
-		id: 't4',
-		title: 'Check the tunnel vents',
-		status: 'inReview',
-		priority: 'urgent',
-		body: 'South door sticks when the wind picks up.',
-		labels: ['Farm', 'Urgent'],
-		targets: [{ id: 'p1', label: 'Spring CSA' }],
-		project_ids: ['p1'],
-		author: niel.email,
-		assignees: [sarah],
-		commenters: [marc],
-		createdAt: 4
-	},
-	{
-		id: 't2',
-		title: 'Pack the first ice cream tubs',
-		status: 'inProgress',
-		priority: 'medium',
-		body: 'Vanilla only. Strawberry waits on the fruit.',
-		labels: ['Shop'],
-		targets: [],
-		project_ids: [],
-		author: sarah.email,
-		assignees: [marc],
-		commenters: [],
-		createdAt: 3
-	},
-	{
-		id: 't1',
-		title: 'Move the egg mobile',
-		status: 'open',
-		priority: 'high',
-		body: 'New paddock behind the tunnels, before Friday drop-off.',
-		labels: ['Farm', 'Drop-off'],
-		targets: [{ id: 'p2', label: 'Egg mobile' }],
-		project_ids: ['p2'],
-		author: niel.email,
-		assignees: [marc],
-		commenters: [],
-		createdAt: 2
-	},
-	{
-		id: 't5',
-		title: 'Order boxes for the market',
-		status: 'backlog',
-		priority: 'low',
-		body: '',
-		labels: ['Shop'],
-		targets: [],
-		project_ids: [],
-		author: marc.email,
-		assignees: [],
-		commenters: [],
-		createdAt: 1
-	},
-	{
-		id: 't3',
-		title: 'Send the March letter',
-		status: 'closed',
-		priority: 'none',
-		body: 'Already on the site.',
-		labels: ['News'],
-		targets: [],
-		project_ids: [],
-		author: niel.email,
-		assignees: [],
-		commenters: [],
-		createdAt: 0
-	}
-];
-
-const demoProjects = [
-	{
-		id: 'p1',
-		title: 'Spring CSA',
-		status: 'planned',
-		summary: 'Drop-offs in Guingamp and Saint-Brieuc.',
-		body: 'Open the list when the tunnels are producing.'
-	},
-	{
-		id: 'p2',
-		title: 'Egg mobile',
-		status: 'inProgress',
-		summary: 'Move the hens, then update the map.',
-		body: 'Private notes stay off the website.'
-	}
-];
-
-const demoNotes = [
-	{
-		id: 'n1',
-		title: 'Drop-off planning',
-		body: `## This week\n\n- Wednesday: Guingamp\n- Thursday: Saint-Brieuc\n- Saturday: at the farm, by appointment\n`,
-		labels: ['Logistics'],
-		targets: [{ id: 'p1', label: 'Spring CSA' }],
-		project_ids: ['p1'],
-		author: niel.email,
-		assignees: [sarah],
-		createdAt: 2
-	},
-	{
-		id: 'n2',
-		title: 'Pasture notes',
-		body: `Hens follow the sheep.\n\nThe logs for mushrooms stay on the north edge.\n`,
-		labels: ['Farm'],
-		targets: [{ id: 'p2', label: 'Egg mobile' }],
-		project_ids: ['p2'],
-		author: sarah.email,
-		assignees: [],
-		createdAt: 1
-	}
-];
+/** People available for assignee pickers. Email = account id. */
+export const people = members;
 
 /** @type {any[]} */
-export const tasks = $state([...demoTasks]);
+export const tasks = $state([]);
 /** @type {any[]} */
-export const projects = $state([...demoProjects]);
+export const projects = $state([]);
 /** @type {any[]} */
-export const notes = $state([...demoNotes]);
+export const notes = $state([]);
 
 export const ui = $state({
 	/** @type {string | null} */
-	projectId: 'p1',
+	projectId: null,
 	/** @type {string | null} */
-	noteId: 'n1',
+	noteId: null,
 	/**
 	 * Opened entity in the desktop detail column (view, not create).
 	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat', id: string }}
@@ -162,8 +42,8 @@ export const ui = $state({
 	selection: null,
 	/** @type {null | { kind: 'task' | 'project' | 'note', id?: string, status?: string }} */
 	composer: null,
-	/** @type {'demo' | 'drive'} */
-	source: 'demo'
+	/** @type {'none' | 'drive'} */
+	source: 'none'
 });
 
 /**
@@ -196,13 +76,21 @@ function replaceArray(target, next) {
 	target.splice(0, target.length, ...next);
 }
 
+function clearWorkspace() {
+	replaceArray(tasks, []);
+	replaceArray(projects, []);
+	replaceArray(notes, []);
+	ui.projectId = null;
+	ui.noteId = null;
+	ui.selection = null;
+	ui.composer = null;
+	ui.source = 'none';
+}
+
 export async function refreshFromDrive() {
 	const session = activeSession();
 	if (!session) {
-		replaceArray(tasks, demoTasks);
-		replaceArray(projects, demoProjects);
-		replaceArray(notes, demoNotes);
-		ui.source = 'demo';
+		clearWorkspace();
 		return;
 	}
 	driveSession.loading = true;
@@ -219,9 +107,9 @@ export async function refreshFromDrive() {
 			plist.map((p) => ({
 				id: p.id,
 				title: p.title,
-				status: 'planned',
 				summary: p.description ?? '',
 				body: '',
+				status: 'planned',
 				slug: p.slug,
 				_drive: p
 			}))
@@ -237,7 +125,7 @@ export async function refreshFromDrive() {
 		ui.source = 'drive';
 	} catch (e) {
 		driveSession.error = e instanceof Error ? e.message : String(e);
-		ui.source = 'demo';
+		clearWorkspace();
 	} finally {
 		driveSession.loading = false;
 	}
@@ -313,7 +201,6 @@ export async function saveTask(draft, isNew) {
 		const plist = projects.map((p) => p._drive ?? p);
 		const uiTask = {
 			...toUiTask(saved, plist),
-			/* Assignees not on Drive schema yet — keep UI-side picks */
 			author: draft.author ?? (idx >= 0 ? tasks[idx].author : undefined) ?? activePerson().email,
 			assignees: draft.assignees ?? (idx >= 0 ? tasks[idx].assignees : []) ?? [],
 			commenters: draft.commenters ?? (idx >= 0 ? tasks[idx].commenters : []) ?? []
@@ -401,11 +288,9 @@ export async function saveProject(draft, isNew) {
 		if (isNew) {
 			const id = draft.id || crypto.randomUUID();
 			projects.unshift({
+				...draft,
 				id,
-				title: draft.title,
-				summary: draft.summary ?? '',
-				body: draft.body ?? '',
-				status: draft.status ?? 'planned'
+				slug: draft.slug
 			});
 			ui.projectId = id;
 		} else {
@@ -432,14 +317,8 @@ export async function saveProject(draft, isNew) {
 		});
 		ui.projectId = created.id;
 	} else {
-		/* v0: local fields only; project.json rewrite comes with full edit later */
 		const idx = projects.findIndex((p) => p.id === draft.id);
 		if (idx >= 0) Object.assign(projects[idx], draft);
 		ui.projectId = draft.id;
 	}
-}
-
-loadSessionFromStorage();
-if (typeof window !== 'undefined' && activeSession()) {
-	refreshFromDrive();
 }

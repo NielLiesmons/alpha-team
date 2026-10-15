@@ -33,17 +33,12 @@
 <svelte:head><title>Tasks</title></svelte:head>
 
 <div class="feed">
-	{#if ui.source === 'demo'}
-		<p class="banner">
-			Demo Tasks — connect Drive in <a href="/settings">Settings</a>
-			{#if driveSession.error}
-				<span class="err"> · {driveSession.error}</span>
-			{/if}
-		</p>
-	{:else if driveSession.loading}
+	{#if driveSession.loading}
 		<p class="banner">Loading from Drive…</p>
+	{:else if driveSession.error}
+		<p class="banner"><span class="err">{driveSession.error}</span></p>
 	{/if}
-	{#if tasks.length === 0}
+	{#if !driveSession.loading && tasks.length === 0}
 		<p class="empty">No Tasks yet</p>
 	{:else}
 		{#each groups as group (group.key)}

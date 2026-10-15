@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { mobileNav, primaryNav } from '$lib/sections.js';
+	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
 		clearSelection,
 		notes,
@@ -109,7 +110,7 @@
 	<aside class="sidebar">
 		<header class="side-top">
 			<button type="button" class="pfp-btn" aria-label="Settings" onclick={() => go('/settings')}>
-				<ProfilePic name="Niel" size={32} />
+				<ProfilePic name={displayNameFromEmail()} size={32} />
 			</button>
 			<label class="search">
 				<span class="sr-only">Search</span>

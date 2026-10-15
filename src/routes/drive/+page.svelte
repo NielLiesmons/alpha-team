@@ -111,11 +111,7 @@
 	<div>
 		<h1>Drive</h1>
 		<p>
-			{#if ui.source === 'drive'}
-				Column browser — content-type folders. Upload into the selected folder.
-			{:else}
-				<a href="/settings">Connect Drive</a> to browse and upload.
-			{/if}
+			Column browser — content-type folders. Upload into the selected folder.
 		</p>
 	</div>
 	{#if ui.source === 'drive'}

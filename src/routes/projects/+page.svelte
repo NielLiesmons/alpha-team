@@ -5,12 +5,6 @@
 
 <svelte:head><title>Projects</title></svelte:head>
 
-{#if ui.source === 'demo'}
-	<p class="banner">
-		Demo projects — connect Drive in <a href="/settings">Settings</a>
-	</p>
-{/if}
-
 {#if driveSession.loading}
 	<p class="muted">Loading…</p>
 {:else if projects.length === 0}
@@ -37,17 +31,6 @@
 {/if}
 
 <style>
-	.banner {
-		margin: 0;
-		padding: 10px 16px;
-		font-size: 13px;
-		color: var(--fg-66);
-	}
-
-	.banner a {
-		color: var(--fg);
-	}
-
 	.muted,
 	.empty {
 		padding: 2rem 1rem;
