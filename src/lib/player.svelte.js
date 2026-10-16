@@ -18,6 +18,7 @@ import {
 	mseMimeForContentType,
 	streamMediaChunks
 } from './drive/media.js';
+import { hasMpegFrameSync } from './drive/audio-meta.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 
 /** @type {Map<string, string>} cover_path → object URL */
@@ -503,6 +504,9 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 
 	let started = false;
 	let chunksAppended = 0;
+	/** Prefix of appended bytes — used to wait for a real MPEG frame (skip fat ID3). */
+	let headBytes = new Uint8Array(0);
+	const wantMpeg = mime.includes('mpeg');
 	/** @type {((v?: undefined) => void) | null} */
 	let resolveStart = null;
 	/** @type {((e: Error) => void) | null} */
@@ -514,6 +518,9 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 
 	const tryStart = () => {
 		if (started || generation !== playGeneration) return;
+		if (wantMpeg && chunksAppended > 0 && !hasMpegFrameSync(headBytes) && playerUi.bufferRatio < 0.999) {
+			return;
+		}
 		started = true;
 		playerUi.status = 'ready';
 		boundAudio?.play()?.catch(() => {});
@@ -534,9 +541,16 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 				throw new Error('MediaSource closed during append');
 			}
 			// Copy — some engines detach the underlying ArrayBuffer after append.
-			await appendBuffer(sb, bytes.slice(), signal);
+			const copy = bytes.slice();
+			if (wantMpeg && headBytes.length < 512 * 1024) {
+				const next = new Uint8Array(Math.min(512 * 1024, headBytes.length + copy.length));
+				next.set(headBytes);
+				next.set(copy.subarray(0, next.length - headBytes.length), headBytes.length);
+				headBytes = next;
+			}
+			await appendBuffer(sb, copy, signal);
 			chunksAppended += 1;
-			if (chunksAppended >= 1) tryStart();
+			tryStart();
 		}
 	})
 		.then(() => {
@@ -607,8 +621,11 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 
 	const startEarly = () => {
 		if (started || generation !== playGeneration || !parts.length) return;
-		started = true;
 		const early = concatParts(parts);
+		// Fat ID3 tags can fill the first chunk(s) with zero MPEG frames — keep buffering.
+		const looksMp3 = type.includes('mpeg') || type.includes('mp3');
+		if (looksMp3 && !hasMpegFrameSync(early) && playerUi.bufferRatio < 0.999) return;
+		started = true;
 		earlyUrl = URL.createObjectURL(new Blob([early], { type }));
 		playerUi.objectUrl = earlyUrl;
 		attachAudioSrc(earlyUrl);
@@ -628,8 +645,8 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		onChunk: async (_i, bytes) => {
 			if (generation !== playGeneration) return;
 			parts.push(bytes);
-			// First chunk (~256KB) is enough to begin decoding MP3.
-			if (parts.length === 1) startEarly();
+			// Start as soon as we have decodable audio (not merely chunk 0).
+			if (!started) startEarly();
 		}
 	})
 		.then(async () => {
@@ -857,7 +874,10 @@ async function hydrateCoverUrl(trackId, coverPath) {
 		let url = coverUrlCache.get(coverPath);
 		if (!url) {
 			const bytes = await getPath(session, coverPath);
-			const blob = new Blob([bytes], { type: sniffImageType(bytes) });
+			// Copy — Blob may detach shared ArrayBuffers from decrypt.
+			const copy = new Uint8Array(bytes.byteLength);
+			copy.set(bytes);
+			const blob = new Blob([copy], { type: sniffImageType(copy) });
 			url = URL.createObjectURL(blob);
 			coverUrlCache.set(coverPath, url);
 		}
@@ -865,8 +885,8 @@ async function hydrateCoverUrl(trackId, coverPath) {
 		if (idx >= 0 && tracks[idx].cover_path === coverPath) {
 			tracks[idx] = { ...tracks[idx], cover_url: url };
 		}
-	} catch {
-		/* cover missing */
+	} catch (e) {
+		console.warn('Cover hydrate failed', coverPath, e);
 	}
 }
 

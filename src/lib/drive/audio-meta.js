@@ -108,6 +108,45 @@ export async function readAudioTags(file) {
 }
 
 /**
+ * Strip ID3v2 (start) + ID3v1 (end) so the first media chunk is real MPEG frames.
+ * Large embedded artwork otherwise fills the first 256KB and blocks progressive play.
+ * @param {Uint8Array} bytes
+ * @returns {Uint8Array}
+ */
+export function stripId3Containers(bytes) {
+	let start = 0;
+	let end = bytes.length;
+	if (end >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+		const tagSize = synchsafe32(bytes, 6);
+		const header = 10 + tagSize;
+		// v2.4 footer
+		const hasFooter = (bytes[5] & 0x10) !== 0;
+		start = Math.min(end, header + (hasFooter ? 10 : 0));
+	}
+	if (end - start >= 128) {
+		const tag = end - 128;
+		if (bytes[tag] === 0x54 && bytes[tag + 1] === 0x41 && bytes[tag + 2] === 0x47) {
+			end = tag;
+		}
+	}
+	if (start === 0 && end === bytes.length) return bytes;
+	if (start >= end) return bytes;
+	return bytes.subarray(start, end);
+}
+
+/**
+ * True when buffer contains an MPEG frame sync (0xFFEx).
+ * @param {Uint8Array} bytes
+ */
+export function hasMpegFrameSync(bytes) {
+	const n = bytes.length - 1;
+	for (let i = 0; i < n; i++) {
+		if (bytes[i] === 0xff && (bytes[i + 1] & 0xe0) === 0xe0) return true;
+	}
+	return false;
+}
+
+/**
  * Browser metadata probe — works for anything <audio> can decode.
  * @param {File | Blob} file
  * @returns {Promise<number | null>}

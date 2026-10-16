@@ -1,5 +1,5 @@
 <script>
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import {
 		closeTrackEdit,
 		editingTracks,
@@ -43,6 +43,8 @@
 	const list = $derived(editingTracks());
 	const bulk = $derived(list.length > 1);
 	const open = $derived(playerUi.editingIds.length > 0 && list.length > 0);
+	/** Only reset the form when the edited selection changes — not on every track mutate. */
+	const editKey = $derived(playerUi.editingIds.join('\0'));
 
 	/**
 	 * @template T
@@ -59,68 +61,82 @@
 	}
 
 	$effect(() => {
-		if (!open || !list.length) return;
-		coverFile = null;
-		clearCover = false;
-		if (coverPreview?.startsWith('blob:') && !list.some((t) => t.cover_url === coverPreview)) {
-			URL.revokeObjectURL(coverPreview);
-		}
-		coverPreview = null;
+		const key = editKey;
+		const isOpen = open;
+		if (!isOpen || !key) return;
 
-		if (!bulk) {
-			const track = list[0];
-			title = track.title ?? '';
-			artists = Array.isArray(track.artists) ? track.artists.join(', ') : '';
-			album = track.album ?? '';
-			albumArtist = track.album_artist ?? '';
-			year = track.year != null && track.year !== '' ? String(track.year) : '';
-			genres = Array.isArray(track.genres) ? track.genres.join(', ') : '';
-			coverPreview = track.cover_url ?? null;
-			if (track.cover_path && !coverPreview) {
-				ensureTrackCover(track).then((url) => {
-					if (open && !coverFile && !clearCover) coverPreview = url;
-				});
+		// untrack: track metadata updates must not wipe a chosen cover file mid-edit.
+		untrack(() => {
+			const rows = editingTracks();
+			if (!rows.length) return;
+			const isBulk = rows.length > 1;
+
+			coverFile = null;
+			clearCover = false;
+			if (coverPreview?.startsWith('blob:') && !rows.some((t) => t.cover_url === coverPreview)) {
+				URL.revokeObjectURL(coverPreview);
 			}
-		} else {
-			title = '';
-			const a = commonValue(
-				list.map((t) => (Array.isArray(t.artists) ? t.artists.join(', ') : ''))
-			);
-			artists = a.mixed ? '' : a.value;
-			const al = commonValue(list.map((t) => t.album ?? ''));
-			album = al.mixed ? '' : al.value;
-			const aa = commonValue(list.map((t) => t.album_artist ?? ''));
-			albumArtist = aa.mixed ? '' : aa.value;
-			const y = commonValue(
-				list.map((t) => (t.year != null && t.year !== '' ? String(t.year) : ''))
-			);
-			year = y.mixed ? '' : y.value;
-			const g = commonValue(
-				list.map((t) => (Array.isArray(t.genres) ? t.genres.join(', ') : ''))
-			);
-			genres = g.mixed ? '' : g.value;
-			initialBulk = {
-				artists,
-				album,
-				albumArtist,
-				year,
-				genres
-			};
-			const covers = commonValue(list.map((t) => t.cover_path ?? ''));
-			if (!covers.mixed && covers.value) {
-				const sample = list.find((t) => t.cover_path === covers.value);
-				coverPreview = sample?.cover_url ?? null;
-				if (sample && !coverPreview) {
-					ensureTrackCover(sample).then((url) => {
-						if (open && !coverFile && !clearCover) coverPreview = url;
+			coverPreview = null;
+
+			if (!isBulk) {
+				const track = rows[0];
+				title = track.title ?? '';
+				artists = Array.isArray(track.artists) ? track.artists.join(', ') : '';
+				album = track.album ?? '';
+				albumArtist = track.album_artist ?? '';
+				year = track.year != null && track.year !== '' ? String(track.year) : '';
+				genres = Array.isArray(track.genres) ? track.genres.join(', ') : '';
+				coverPreview = track.cover_url ?? null;
+				if (track.cover_path && !coverPreview) {
+					ensureTrackCover(track).then((url) => {
+						if (playerUi.editingIds.join('\0') === key && !coverFile && !clearCover) {
+							coverPreview = url;
+						}
 					});
 				}
+			} else {
+				title = '';
+				const a = commonValue(
+					rows.map((t) => (Array.isArray(t.artists) ? t.artists.join(', ') : ''))
+				);
+				artists = a.mixed ? '' : a.value;
+				const al = commonValue(rows.map((t) => t.album ?? ''));
+				album = al.mixed ? '' : al.value;
+				const aa = commonValue(rows.map((t) => t.album_artist ?? ''));
+				albumArtist = aa.mixed ? '' : aa.value;
+				const y = commonValue(
+					rows.map((t) => (t.year != null && t.year !== '' ? String(t.year) : ''))
+				);
+				year = y.mixed ? '' : y.value;
+				const g = commonValue(
+					rows.map((t) => (Array.isArray(t.genres) ? t.genres.join(', ') : ''))
+				);
+				genres = g.mixed ? '' : g.value;
+				initialBulk = {
+					artists,
+					album,
+					albumArtist,
+					year,
+					genres
+				};
+				const covers = commonValue(rows.map((t) => t.cover_path ?? ''));
+				if (!covers.mixed && covers.value) {
+					const sample = rows.find((t) => t.cover_path === covers.value);
+					coverPreview = sample?.cover_url ?? null;
+					if (sample && !coverPreview) {
+						ensureTrackCover(sample).then((url) => {
+							if (playerUi.editingIds.join('\0') === key && !coverFile && !clearCover) {
+								coverPreview = url;
+							}
+						});
+					}
+				}
 			}
-		}
-		saving = false;
-		saveStatus = '';
-		saveError = '';
-		tick().then(() => (bulk ? artistsInput : titleInput)?.focus());
+			saving = false;
+			saveStatus = '';
+			saveError = '';
+			tick().then(() => (isBulk ? artistsInput : titleInput)?.focus());
+		});
 	});
 
 	/** @param {string} raw */

@@ -1,6 +1,6 @@
 /** Project / Task / Note / Track helpers over the browser Drive client. */
 
-import { parseAudioFilename, readAudioTags } from './audio-meta.js';
+import { parseAudioFilename, readAudioTags, stripId3Containers } from './audio-meta.js';
 import {
 	deletePaths,
 	getPath,
@@ -459,7 +459,15 @@ export async function uploadTrack(session, file, opts = {}) {
 	const id = newId();
 	const meta = await readAudioTags(file);
 	const contentType = file.type || 'audio/mpeg';
-	const bytes = new Uint8Array(await file.arrayBuffer());
+	const raw = new Uint8Array(await file.arrayBuffer());
+	// Drop ID3 so chunk 0 starts on MPEG frames (embedded art tags can be >256KB).
+	const bytes =
+		contentType.includes('mpeg') ||
+		contentType.includes('mp3') ||
+		/\.mp3$/i.test(file.name) ||
+		(raw.length >= 3 && raw[0] === 0x49 && raw[1] === 0x44 && raw[2] === 0x33)
+			? stripId3Containers(raw)
+			: raw;
 	if (opts.signal?.aborted) {
 		const err = new Error('Aborted');
 		err.name = 'AbortError';
@@ -482,16 +490,20 @@ export async function uploadTrack(session, file, opts = {}) {
 
 	/** @type {string | null} */
 	let coverPath = null;
+	/** @type {{ path: string, kind: string, plaintext: string | Uint8Array }[]} */
+	const indexEntries = [];
 	if (meta.artwork?.bytes?.length) {
 		try {
 			opts.onProgress?.('artwork', 0, 1);
-			const blob = new Blob([meta.artwork.bytes], {
-				type: meta.artwork.mime || 'image/jpeg'
-			});
+			const artBytes = meta.artwork.bytes;
+			const copy = new Uint8Array(artBytes.byteLength);
+			copy.set(artBytes);
+			const blob = new Blob([copy], { type: meta.artwork.mime || 'image/jpeg' });
 			const prepared = await prepareCoverImage(blob);
 			coverPath = prepared.path;
-			await putPath(session, prepared.path, 'blob', prepared.bytes);
-		} catch {
+			indexEntries.push({ path: prepared.path, kind: 'blob', plaintext: prepared.bytes });
+		} catch (e) {
+			console.warn('Embedded artwork skipped:', e);
 			coverPath = null;
 		}
 	}
@@ -514,7 +526,12 @@ export async function uploadTrack(session, file, opts = {}) {
 		updated_at: nowRfc3339()
 	};
 	opts.onProgress?.('index', 1, 1);
-	await putPath(session, trackPath, 'track', JSON.stringify(track, null, 2));
+	indexEntries.push({
+		path: trackPath,
+		kind: 'track',
+		plaintext: JSON.stringify(track, null, 2)
+	});
+	await putPaths(session, indexEntries);
 	invalidateTrackCache(session);
 	return track;
 }
@@ -647,34 +664,57 @@ async function encodeCoverJpeg(file) {
 	if (type.includes('heic') || type.includes('heif')) {
 		throw new Error('HEIC photos aren’t supported — export as JPEG or PNG first');
 	}
-	if (type && !type.startsWith('image/')) {
+	if (type && !type.startsWith('image/') && type !== 'application/octet-stream') {
 		throw new Error('Cover must be an image (JPEG, PNG, or WebP)');
 	}
 	if (file.size > 20 * 1024 * 1024) {
 		throw new Error('Cover image is too large (max 20MB)');
 	}
 
-	let bitmap;
+	const maxEdge = 1400;
+	/** @type {number} */
+	let width;
+	/** @type {number} */
+	let height;
+	/** @type {(ctx: CanvasRenderingContext2D, w: number, h: number) => void} */
+	let draw;
+
 	try {
-		bitmap = await createImageBitmap(file);
+		const bitmap = await createImageBitmap(file);
+		width = bitmap.width;
+		height = bitmap.height;
+		draw = (ctx, w, h) => {
+			ctx.drawImage(bitmap, 0, 0, w, h);
+			bitmap.close();
+		};
 	} catch {
-		throw new Error('Couldn’t read that image — try JPEG or PNG');
+		// Safari / odd containers: fall back to HTMLImageElement
+		const url = URL.createObjectURL(file);
+		try {
+			const img = await new Promise((resolve, reject) => {
+				const el = new Image();
+				el.onload = () => resolve(el);
+				el.onerror = () => reject(new Error('Couldn’t read that image — try JPEG or PNG'));
+				el.src = url;
+			});
+			width = img.naturalWidth || img.width;
+			height = img.naturalHeight || img.height;
+			draw = (ctx, w, h) => ctx.drawImage(img, 0, 0, w, h);
+		} finally {
+			URL.revokeObjectURL(url);
+		}
 	}
 
-	const maxEdge = 1400;
-	const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height, 1));
-	const w = Math.max(1, Math.round(bitmap.width * scale));
-	const h = Math.max(1, Math.round(bitmap.height * scale));
+	if (!width || !height) throw new Error('Couldn’t read that image — try JPEG or PNG');
+	const scale = Math.min(1, maxEdge / Math.max(width, height, 1));
+	const w = Math.max(1, Math.round(width * scale));
+	const h = Math.max(1, Math.round(height * scale));
 	const canvas = document.createElement('canvas');
 	canvas.width = w;
 	canvas.height = h;
 	const ctx = canvas.getContext('2d');
-	if (!ctx) {
-		bitmap.close();
-		throw new Error('Couldn’t process cover image');
-	}
-	ctx.drawImage(bitmap, 0, 0, w, h);
-	bitmap.close();
+	if (!ctx) throw new Error('Couldn’t process cover image');
+	draw(ctx, w, h);
 
 	const blob = await new Promise((resolve, reject) => {
 		canvas.toBlob(

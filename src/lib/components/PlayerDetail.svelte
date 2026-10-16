@@ -221,26 +221,17 @@
 						{/if}
 
 						<button type="button" class="main" onclick={() => onRowClick(track)}>
-							<span class="art" aria-hidden="true">
-								{#if track.cover_url}
-									<img src={track.cover_url} alt="" />
-								{:else}
-									<span class="art-ph"></span>
-								{/if}
+							<span class="line-primary">
+								<span class="col title">{track.title}</span>
+								<span class="col artist">{artist}</span>
+								<span class="col album">{album}</span>
 							</span>
-							<span class="track-text">
-								<span class="line-primary">
-									<span class="col title">{track.title}</span>
-									<span class="col artist">{artist}</span>
-									<span class="col album">{album}</span>
-								</span>
-								<span class="line-secondary">
-									<span class="sub">{artist}</span>
-									{#if album && album !== '—'}
-										<span class="dot" aria-hidden="true">·</span>
-										<span class="sub">{album}</span>
-									{/if}
-								</span>
+							<span class="line-secondary">
+								<span class="sub">{artist}</span>
+								{#if album && album !== '—'}
+									<span class="dot" aria-hidden="true">·</span>
+									<span class="sub">{album}</span>
+								{/if}
 							</span>
 						</button>
 
@@ -487,10 +478,10 @@
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 12px;
-		padding: 0.65rem 0.4rem 0.65rem 0.65rem;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+		padding: 0.75rem 0.4rem 0.75rem 0.75rem;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -499,38 +490,6 @@
 		cursor: pointer;
 		font: inherit;
 		box-sizing: border-box;
-	}
-
-	.art {
-		flex-shrink: 0;
-		width: 40px;
-		height: 40px;
-		border-radius: 8px;
-		overflow: hidden;
-		background: var(--fg-8);
-	}
-
-	.art img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.art-ph {
-		display: block;
-		width: 100%;
-		height: 100%;
-		background: var(--fg-8);
-	}
-
-	.track-text {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: stretch;
-		gap: 2px;
 	}
 
 	.line-primary {
