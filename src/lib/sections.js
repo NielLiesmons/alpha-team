@@ -8,7 +8,7 @@
  *   label: string,
  *   icon: string,
  *   countKey?: 'tasks' | 'projects' | 'notes',
- *   createKind?: 'task' | 'project' | 'note'
+ *   createKind?: 'task' | 'project' | 'note' | 'newsletter'
  * }} NavItem
  */
 
@@ -22,7 +22,12 @@ export const primaryNav = [
 	{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
 	{ href: '/website', label: 'Website', icon: 'website' },
-	{ href: '/publications', label: 'Publications', icon: 'publications' },
+	{
+		href: '/publications',
+		label: 'Publications',
+		icon: 'publications',
+		createKind: 'newsletter'
+	},
 	{ href: '/player', label: 'Player', icon: 'player' }
 ];
 

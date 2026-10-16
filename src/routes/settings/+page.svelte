@@ -1,4 +1,5 @@
 <script>
+	import { onMount } from 'svelte';
 	import { brand, setBrand } from '$lib/brand.svelte.js';
 	import DriveInvite from '$lib/components/DriveInvite.svelte';
 	import { health } from '$lib/drive/client.js';
@@ -7,6 +8,7 @@
 		driveSession,
 		saveSession
 	} from '$lib/drive/session.svelte.js';
+	import { getAdminToken, setAdminToken } from '$lib/mail-api.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { setTheme, themeChoice } from '$lib/theme.svelte.js';
 
@@ -22,6 +24,17 @@
 	let busy = $state(false);
 	let msg = $state('');
 	let advancedOpen = $state(false);
+	let apiTokenDraft = $state('');
+	let apiTokenMsg = $state('');
+
+	onMount(() => {
+		apiTokenDraft = getAdminToken();
+	});
+
+	function saveApiToken() {
+		setAdminToken(apiTokenDraft);
+		apiTokenMsg = 'Saved on this device.';
+	}
 
 	async function connect() {
 		busy = true;
@@ -62,11 +75,38 @@
 <header class="page-head">
 	<div>
 		<h1>Settings</h1>
-		<p>Who you are, Drive invite for family devices, brand, and appearance.</p>
+		<p>Accounts, Drive, Publications API, brand, and appearance.</p>
 	</div>
 </header>
 
+<section class="block">
+	<p class="field-label">Accounts</p>
+	<p class="hint">
+		Family people: display name, mailbox (<code>you@bley.farm</code>), and Chatmail address —
+		created here later so you don’t need the Stalwart UI. Until then, “I am” below is your
+		signed-in mailbox id.
+	</p>
+</section>
+
 <DriveInvite />
+
+<section class="block">
+	<p class="field-label">Publications API</p>
+	<p class="hint">
+		Bearer token for welcome + newsletters (<code>ALPHA_API_ADMIN_TOKEN</code> on
+		<code>api.bley.farm</code>). Stored only in this browser — not for Mail inbox.
+	</p>
+	<label class="row stack">
+		<span>Admin token</span>
+		<input type="password" bind:value={apiTokenDraft} autocomplete="off" spellcheck="false" />
+	</label>
+	<div class="actions">
+		<button type="button" class="btn" onclick={saveApiToken}>Save token</button>
+	</div>
+	{#if apiTokenMsg}
+		<p class="status on">{apiTokenMsg}</p>
+	{/if}
+</section>
 
 <section class="block">
 	<p class="field-label">Drive (advanced)</p>

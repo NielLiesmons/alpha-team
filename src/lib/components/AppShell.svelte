@@ -15,6 +15,7 @@
 	import DetailColumn from './DetailColumn.svelte';
 	import MobilePlayerPill from './MobilePlayerPill.svelte';
 	import NavIcon from './NavIcon.svelte';
+	import NewsletterCreate from './NewsletterCreate.svelte';
 	import NoteCreate from './NoteCreate.svelte';
 	import NowPlayingScreen from './NowPlayingScreen.svelte';
 	import PlayerEngine from './PlayerEngine.svelte';
@@ -25,6 +26,7 @@
 	import PlaylistCreate from './PlaylistCreate.svelte';
 	import TrackEdit from './TrackEdit.svelte';
 	import UploadModal from './UploadModal.svelte';
+	import WelcomeEdit from './WelcomeEdit.svelte';
 
 	let { children } = $props();
 
@@ -65,7 +67,9 @@
 	});
 
 	const createKind = $derived(
-		'createKind' in activeItem ? /** @type {'task' | 'project' | 'note' | undefined} */ (activeItem.createKind) : undefined
+		'createKind' in activeItem
+			? /** @type {'task' | 'project' | 'note' | 'newsletter' | undefined} */ (activeItem.createKind)
+			: undefined
 	);
 
 	/** Clear detail whenever the section changes — never carry a Task into Mail, etc. */
@@ -81,13 +85,14 @@
 		goto(href);
 	}
 
-	/** @param {'task' | 'project' | 'note'} kind */
+	/** @param {'task' | 'project' | 'note' | 'newsletter'} kind */
 	function create(kind) {
 		createMenuOpen = false;
 		openComposer(kind);
 		if (kind === 'task') go('/tasks');
 		else if (kind === 'project') go('/projects');
 		else if (kind === 'note') go('/notes');
+		else if (kind === 'newsletter') go('/publications');
 	}
 
 	function onListPlus() {
@@ -157,6 +162,9 @@
 						<button type="button" role="menuitem" onclick={() => create('task')}>New task</button>
 						<button type="button" role="menuitem" onclick={() => create('project')}>New project</button>
 						<button type="button" role="menuitem" onclick={() => create('note')}>New note</button>
+						<button type="button" role="menuitem" onclick={() => create('newsletter')}
+							>New newsletter</button
+						>
 					</div>
 				{/if}
 			</div>
@@ -180,7 +188,10 @@
 									type="button"
 									class="row-plus"
 									aria-label="New {item.createKind}"
-									onclick={() => openComposer(/** @type {'task' | 'project' | 'note'} */ (item.createKind))}
+									onclick={() =>
+										openComposer(
+											/** @type {'task' | 'project' | 'note' | 'newsletter'} */ (item.createKind)
+										)}
 								>
 									<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 										<path
@@ -291,6 +302,8 @@
 	<TaskCreate />
 	<ProjectCreate />
 	<NoteCreate />
+	<NewsletterCreate />
+	<WelcomeEdit />
 	<TrackEdit />
 	<PlaylistCreate />
 	<UploadModal />

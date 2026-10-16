@@ -38,10 +38,10 @@ export const ui = $state({
 	noteId: null,
 	/**
 	 * Opened entity in the desktop detail column (view, not create).
-	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat', id: string }}
+	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome', id: string }}
 	 */
 	selection: null,
-	/** @type {null | { kind: 'task' | 'project' | 'note', id?: string, status?: string }} */
+	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome', id?: string, status?: string }} */
 	composer: null,
 	/** @type {'none' | 'drive'} */
 	source: 'none'
@@ -49,7 +49,7 @@ export const ui = $state({
 
 /**
  * Open an entity in the third column (does not open the create/edit modal).
- * @param {'task' | 'project' | 'note' | 'mail' | 'chat'} kind
+ * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome'} kind
  * @param {string} id
  */
 export function selectEntity(kind, id) {
@@ -60,7 +60,11 @@ export function clearSelection() {
 	ui.selection = null;
 }
 
-/** @param {'task' | 'project' | 'note'} kind @param {string} [id] @param {string} [status] */
+/**
+ * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome'} kind
+ * @param {string} [id]
+ * @param {string} [status]
+ */
 export function openComposer(kind, id, status) {
 	ui.composer = {
 		kind,

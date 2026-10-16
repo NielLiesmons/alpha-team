@@ -22,6 +22,11 @@
 	import { activePerson, actor, asPerson } from '$lib/actor.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import {
+		campaigns,
+		mailSettings,
+		persistSendCampaign
+	} from '$lib/publications.svelte.js';
+	import {
 		clearSelection,
 		notes,
 		openComposer,
@@ -66,6 +71,10 @@
 	const note = $derived(
 		selection?.kind === 'note' ? notes.find((n) => n.id === selection.id) : null
 	);
+	const newsletter = $derived(
+		selection?.kind === 'newsletter' ? campaigns.find((c) => c.id === selection.id) : null
+	);
+	const welcomeSelected = $derived(selection?.kind === 'welcome');
 
 	const projectTasks = $derived.by(() => {
 		if (!project) return [];
@@ -145,13 +154,22 @@
 		if (task) return 'Task';
 		if (project) return 'Project';
 		if (note) return 'Note';
+		if (newsletter) return 'Newsletter';
+		if (welcomeSelected) return 'Welcome';
 		if (selection?.kind === 'mail') return 'Mail';
 		if (selection?.kind === 'chat') return 'Chat';
 		return 'Detail';
 	});
 
 	const open = $derived(
-		Boolean((isPlayer && playerBrowse.detailOpen) || task || project || note)
+		Boolean(
+			(isPlayer && playerBrowse.detailOpen) ||
+				task ||
+				project ||
+				note ||
+				newsletter ||
+				welcomeSelected
+		)
 	);
 
 	const emptyCopy = $derived.by(() => {
@@ -159,10 +177,31 @@
 		if (path.startsWith('/tasks')) return { title: 'No task selected', body: 'Pick a task from the list to read it here.' };
 		if (path.startsWith('/projects')) return { title: 'No project selected', body: 'Open a project to see its summary and notes.' };
 		if (path.startsWith('/notes')) return { title: 'No note selected', body: 'Choose a note to read it beside the list.' };
-		if (path.startsWith('/mail')) return { title: 'Newsletter tools', body: 'Welcome + campaigns live in the main column — IMAP inbox later.' };
+		if (path.startsWith('/publications'))
+			return {
+				title: 'No publication selected',
+				body: 'Welcome + newsletters for the public list. Use + to write a letter.'
+			};
+		if (path.startsWith('/mail'))
+			return { title: 'No message selected', body: 'Inbox and sent mail open here when IMAP is wired.' };
 		if (path.startsWith('/chat')) return { title: 'No chat selected', body: 'Conversations will open here when chat is ready.' };
 		return { title: 'Nothing open', body: 'Select a task, project, note, mail, or chat to view it here.' };
 	});
+
+	let sendBusy = $state(false);
+
+	async function sendSelectedNewsletter() {
+		if (!newsletter || newsletter.status === 'sent') return;
+		if (!confirm('Send this newsletter to every subscribed address?')) return;
+		sendBusy = true;
+		try {
+			await persistSendCampaign(newsletter.id);
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
+		} finally {
+			sendBusy = false;
+		}
+	}
 
 	let menuOpen = $state(false);
 
@@ -217,7 +256,12 @@
 	function editCurrent() {
 		menuOpen = false;
 		if (!selection) return;
-		if (selection.kind === 'task' || selection.kind === 'project') {
+		if (
+			selection.kind === 'task' ||
+			selection.kind === 'project' ||
+			selection.kind === 'newsletter' ||
+			selection.kind === 'welcome'
+		) {
 			openComposer(selection.kind, selection.id);
 		}
 	}
@@ -623,6 +667,72 @@
 				</div>
 			{/key}
 		</div>
+	{:else if welcomeSelected}
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Welcome</span>
+			<div class="detail-top-actions">
+				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
+			</div>
+		</header>
+		<div class="body">
+			<p class="pub-kicker">{mailSettings.welcome.enabled ? 'On for new subscribers' : 'Off'}</p>
+			<h2 class="pub-title">{mailSettings.welcome.subject_fr || 'Welcome'}</h2>
+			<pre class="pub-body">{mailSettings.welcome.body_fr}</pre>
+		</div>
+	{:else if newsletter}
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Newsletter</span>
+			<div class="detail-top-actions">
+				{#if newsletter.status === 'draft' || newsletter.status === 'failed'}
+					<button
+						type="button"
+						class="send-chip"
+						disabled={sendBusy}
+						onclick={sendSelectedNewsletter}
+					>
+						{sendBusy ? 'Sending…' : 'Send'}
+					</button>
+				{/if}
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
+			</div>
+		</header>
+		<div class="body">
+			<p class="pub-kicker">
+				{newsletter.status}{#if newsletter.sent_count}
+					· {newsletter.sent_count} sent{/if}
+			</p>
+			<h2 class="pub-title">{newsletter.subject}</h2>
+			<pre class="pub-body">{newsletter.body}</pre>
+		</div>
 	{:else}
 		<div class="empty desktop-empty">
 			<p class="empty-title">{emptyCopy.title}</p>
@@ -632,6 +742,54 @@
 </aside>
 
 <style>
+	.pub-kicker {
+		margin: 0 0 8px;
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--fg-33);
+	}
+
+	.pub-title {
+		margin: 0 0 16px;
+		font-size: 22px;
+		font-weight: 650;
+		line-height: 1.25;
+		color: var(--fg);
+	}
+
+	.pub-body {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		font: inherit;
+		font-size: 15px;
+		line-height: 1.55;
+		color: var(--fg-66);
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	.send-chip {
+		height: 28px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 8px;
+		background: var(--fg);
+		color: var(--bg);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 650;
+		cursor: pointer;
+	}
+
+	.send-chip:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
 	.detail {
 		flex: 1 1 auto;
 		min-width: 0;
