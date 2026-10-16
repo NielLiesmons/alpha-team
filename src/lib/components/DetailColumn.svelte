@@ -103,7 +103,7 @@
 		if (path.startsWith('/tasks')) return { title: 'No task selected', body: 'Pick a task from the list to read it here.' };
 		if (path.startsWith('/projects')) return { title: 'No project selected', body: 'Open a project to see its summary and notes.' };
 		if (path.startsWith('/notes')) return { title: 'No note selected', body: 'Choose a note to read it beside the list.' };
-		if (path.startsWith('/mail')) return { title: 'No message selected', body: 'Mail will open here when it’s wired up.' };
+		if (path.startsWith('/mail')) return { title: 'Newsletter tools', body: 'Welcome + campaigns live in the main column — IMAP inbox later.' };
 		if (path.startsWith('/chat')) return { title: 'No chat selected', body: 'Conversations will open here when chat is ready.' };
 		return { title: 'Nothing open', body: 'Select a task, project, note, mail, or chat to view it here.' };
 	});
