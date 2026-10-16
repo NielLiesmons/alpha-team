@@ -194,18 +194,22 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
-/* Nav counts: Inter only — never display/serif/mono from brand chrome */
+/* Nav / progress counts — same Inter stack as body, no mono/tabular tricks */
 .sidebar-nav .count,
 .nav-item .count,
-.row-end .count {
-	font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+.row-end .count,
+.task-group-count,
+.group-count,
+.proj-section-count,
+.upload-chip .chip-label {
+	font-family: var(--font) !important;
 	font-style: normal !important;
-	font-weight: 700 !important;
+	font-weight: 500 !important;
 	font-synthesis: none;
 	letter-spacing: 0 !important;
 	font-variant-numeric: normal !important;
-	font-feature-settings: normal !important;
-	font-optical-sizing: none;
+	font-feature-settings: "kern" 1 !important;
+	font-optical-sizing: auto;
 }
 
 button,

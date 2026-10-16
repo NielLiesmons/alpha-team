@@ -5,6 +5,7 @@
 		albumRows,
 		artistNames,
 		clearTrackSelection,
+		ensureTrackCover,
 		openBulkTrackEdit,
 		openPlaylistCreate,
 		openTrackEdit,
@@ -25,6 +26,17 @@
 	const list = $derived(visibleTracks());
 	const artists = $derived(artistNames());
 	const albums = $derived(albumRows());
+
+	// Hydrate album covers for the grid (lazy).
+	$effect(() => {
+		if (playerBrowse.mode !== 'albums' || playerBrowse.album) return;
+		for (const row of albums) {
+			if (row.cover_path && !row.cover_url && row.sampleId) {
+				const sample = tracks.find((t) => t.id === row.sampleId);
+				if (sample) void ensureTrackCover(sample);
+			}
+		}
+	});
 	const browsingIndex = $derived(
 		(playerBrowse.mode === 'artists' && !playerBrowse.artist) ||
 			(playerBrowse.mode === 'albums' && !playerBrowse.album)
@@ -169,20 +181,26 @@
 			{#if albums.length === 0}
 				<p class="empty">No albums yet. Upload audio to build your library.</p>
 			{:else}
-				<div class="card-stack">
+				<div class="album-grid">
 					{#each albums as row (row.album)}
+						{@const cover =
+							row.cover_url ||
+							tracks.find((t) => t.id === row.sampleId)?.cover_url ||
+							tracks.find((t) => t.cover_path && t.cover_path === row.cover_path)?.cover_url}
 						<button
 							type="button"
-							class="artist-row album-row"
+							class="album-card"
 							onclick={() => setPlayerBrowse('albums', { album: row.album })}
 						>
-							<span class="line-primary">
-								<span class="col title">{row.album}</span>
-								<span class="col meta">{row.count}</span>
+							<span class="album-art" aria-hidden="true">
+								{#if cover}
+									<img src={cover} alt="" />
+								{:else}
+									<span class="album-art-ph"></span>
+								{/if}
 							</span>
-							<span class="line-secondary">
-								<span class="sub">{row.artist}</span>
-							</span>
+							<span class="album-title">{row.album}</span>
+							<span class="album-artist">{row.artist}</span>
 						</button>
 					{/each}
 				</div>
@@ -402,35 +420,13 @@
 	}
 
 	.artist-row {
-		padding: 0.85rem 0.9rem;
+		padding: 0.65rem 0.9rem;
 		border: 0;
 		background: transparent;
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
 		font: inherit;
-	}
-
-	.album-row {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 2px;
-		padding: 0.7rem 0.9rem;
-	}
-
-	.album-row .line-primary {
-		display: flex;
-		align-items: baseline;
-		gap: 10px;
-		width: 100%;
-	}
-
-	.album-row .line-secondary {
-		display: flex;
-	}
-
-	.album-row .col.meta {
-		display: block;
 	}
 
 	.artist-row:hover,
@@ -480,8 +476,8 @@
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		gap: 2px;
-		padding: 0.75rem 0.4rem 0.75rem 0.75rem;
+		gap: 1px;
+		padding: 0.55rem 0.4rem 0.55rem 0.75rem;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -506,11 +502,11 @@
 		min-width: 0;
 	}
 
-	/* Mobile: title + stacked artist/album */
+	/* Mobile: title + stacked artist/album — same size for density */
 	.col.title {
 		flex: 1 1 auto;
 		max-width: 100%;
-		font-size: 14px;
+		font-size: 12px;
 		font-weight: 500;
 		color: var(--fg);
 		overflow: hidden;
@@ -525,8 +521,9 @@
 
 	.col.meta {
 		flex: 0 0 auto;
-		font-size: 13px;
+		font-size: 12px;
 		font-weight: 500;
+		font-family: var(--font);
 		color: var(--fg-33);
 	}
 
@@ -541,6 +538,81 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.album-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 16px 12px;
+		padding: 12px;
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	.album-card {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+		min-width: 0;
+	}
+
+	.album-card:hover .album-art {
+		background: var(--fg-8);
+	}
+
+	.album-art {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		border-radius: 12px;
+		overflow: hidden;
+		background: var(--fg-8);
+	}
+
+	.album-art img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.album-art-ph {
+		display: block;
+		width: 100%;
+		height: 100%;
+		background: var(--fg-8);
+	}
+
+	.album-title,
+	.album-artist {
+		display: block;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 12px;
+		font-weight: 500;
+		line-height: 1.3;
+		font-family: var(--font);
+	}
+
+	.album-title {
+		color: var(--fg);
+		margin-top: 2px;
+	}
+
+	.album-artist {
+		color: var(--fg-33);
 	}
 
 	.dot {
@@ -638,13 +710,14 @@
 		.col.title {
 			flex: 0 0 42%;
 			max-width: 42%;
+			font-size: 12px;
 		}
 
 		.col.artist {
 			display: block;
 			flex: 0 0 28%;
 			max-width: 28%;
-			font-size: 13px;
+			font-size: 12px;
 			font-weight: 500;
 			color: var(--fg-33);
 			overflow: hidden;
@@ -656,7 +729,7 @@
 			display: block;
 			flex: 1 1 auto;
 			min-width: 0;
-			font-size: 13px;
+			font-size: 12px;
 			font-weight: 500;
 			color: var(--fg-33);
 			overflow: hidden;
@@ -665,7 +738,19 @@
 		}
 
 		.main {
-			padding: 0.7rem 0.5rem 0.7rem 0.85rem;
+			padding: 0.5rem 0.5rem 0.5rem 0.85rem;
+		}
+
+		.album-grid {
+			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+			gap: 20px 16px;
+			padding: 16px;
+		}
+	}
+
+	@media (min-width: 1100px) {
+		.album-grid {
+			grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 		}
 	}
 </style>

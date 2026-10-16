@@ -111,9 +111,8 @@
 		display: flex;
 		justify-content: space-between;
 		font-size: 10px;
-		font-variant-numeric: tabular-nums;
 		color: var(--fg-33);
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-family: var(--font);
 		line-height: 1.2;
 	}
 

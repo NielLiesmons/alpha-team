@@ -172,9 +172,9 @@
 	.status {
 		flex-shrink: 0;
 		font-size: 12px;
-		font-weight: 600;
+		font-weight: 500;
+		font-family: var(--font);
 		color: var(--fg-33);
-		font-variant-numeric: tabular-nums;
 	}
 
 	.row.err .status {

@@ -579,17 +579,14 @@
 		height: 24px;
 		margin: 0;
 		padding: 0;
-		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+		font-family: var(--font);
 		font-size: 12px;
-		font-weight: 700;
+		font-weight: 500;
 		font-style: normal;
 		line-height: 1;
 		letter-spacing: 0;
 		color: var(--white33);
 		text-align: center;
-		font-synthesis: none;
-		font-variant-numeric: normal;
-		font-feature-settings: normal;
 		transition: opacity 0.22s var(--ease);
 	}
 

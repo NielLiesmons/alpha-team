@@ -57,6 +57,8 @@ export const playerUi = $state({
 	/** Reliable full-track duration (0 while unknown / first-chunk-only) */
 	duration: 0,
 	playing: false,
+	/** Explicit play intent — survives src soft-swaps; pause clears this. */
+	wantsPlay: false,
 	/** Mobile now-playing bottom sheet */
 	nowPlayingOpen: false,
 	/** @type {string[]} track ids open in edit modal (1 = single, many = bulk) */
@@ -523,7 +525,7 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 		}
 		started = true;
 		playerUi.status = 'ready';
-		boundAudio?.play()?.catch(() => {});
+		if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
 		resolveStart?.();
 	};
 
@@ -630,8 +632,43 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		playerUi.objectUrl = earlyUrl;
 		attachAudioSrc(earlyUrl);
 		playerUi.status = 'ready';
-		boundAudio?.play()?.catch(() => {});
+		if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
 		resolveStart?.();
+	};
+
+	/**
+	 * Replace early partial blob with the complete file without fighting user pause.
+	 * @param {string} fullUrl
+	 */
+	const softSwapFull = (fullUrl) => {
+		const audio = boundAudio;
+		const t = audio?.currentTime ?? 0;
+		const resume = playerUi.wantsPlay;
+		playerUi.objectUrl = fullUrl;
+		attachAudioSrc(fullUrl);
+		let done = false;
+		const finish = () => {
+			if (done || generation !== playGeneration || !boundAudio) return;
+			done = true;
+			try {
+				boundAudio.currentTime = t;
+			} catch {
+				/* ignore */
+			}
+			if (resume && playerUi.wantsPlay) boundAudio.play()?.catch(() => {});
+			else {
+				boundAudio.pause();
+				playerUi.playing = false;
+			}
+		};
+		if (audio) {
+			audio.addEventListener('loadedmetadata', finish, { once: true });
+			requestAnimationFrame(() => {
+				if (boundAudio && boundAudio.readyState >= 1) finish();
+			});
+		}
+		if (earlyUrl && earlyUrl !== fullUrl) URL.revokeObjectURL(earlyUrl);
+		earlyUrl = fullUrl;
 	};
 
 	bufferTail = streamMediaChunks(session, track.media_path, {
@@ -659,25 +696,39 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 				playerUi.objectUrl = fullUrl;
 				attachAudioSrc(fullUrl);
 				playerUi.status = 'ready';
-				boundAudio?.play()?.catch(() => {});
+				if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
 				resolveStart?.();
 				return;
 			}
-			// Soft-swap to the complete file — keep playhead.
-			const t = boundAudio?.currentTime ?? 0;
-			const wasPlaying = boundAudio ? !boundAudio.paused : true;
-			playerUi.objectUrl = fullUrl;
-			attachAudioSrc(fullUrl);
-			if (boundAudio) {
-				try {
-					boundAudio.currentTime = t;
-				} catch {
-					/* ignore */
-				}
-				if (wasPlaying) boundAudio.play()?.catch(() => {});
+			// If the user paused, swap quietly. If still playing, wait for pause/waiting
+			// so we don't hitch mid-phrase — then swap once.
+			const audio = boundAudio;
+			if (!audio || audio.paused || !playerUi.wantsPlay) {
+				softSwapFull(fullUrl);
+				return;
 			}
-			if (earlyUrl && earlyUrl !== fullUrl) URL.revokeObjectURL(earlyUrl);
-			earlyUrl = fullUrl;
+			let swapped = false;
+			const applyWhenSafe = () => {
+				if (swapped) return;
+				swapped = true;
+				audio.removeEventListener('pause', applyWhenSafe);
+				audio.removeEventListener('waiting', applyWhenSafe);
+				audio.removeEventListener('ended', applyWhenSafe);
+				if (generation !== playGeneration) {
+					URL.revokeObjectURL(fullUrl);
+					return;
+				}
+				softSwapFull(fullUrl);
+			};
+			audio.addEventListener('pause', applyWhenSafe);
+			audio.addEventListener('waiting', applyWhenSafe);
+			audio.addEventListener('ended', applyWhenSafe);
+			// Last resort if the engine never fires waiting (keeps early blob forever otherwise).
+			sleep(45000, signal)
+				.then(applyWhenSafe)
+				.catch(() => {
+					if (!swapped) URL.revokeObjectURL(fullUrl);
+				});
 		})
 		.catch((e) => {
 			if (generation !== playGeneration || e?.name === 'AbortError') return;
@@ -724,6 +775,7 @@ export async function playTrack(track) {
 			? track.duration_ms / 1000
 			: 0;
 	playerUi.playing = false;
+	playerUi.wantsPlay = true;
 	playerUi.error = '';
 	if (track.cover_path) void ensureTrackCover(track);
 
@@ -794,6 +846,7 @@ export function stopPlayback() {
 	playerUi.currentTime = 0;
 	playerUi.duration = 0;
 	playerUi.playing = false;
+	playerUi.wantsPlay = false;
 	playerUi.nowPlayingOpen = false;
 	playerUi.upNextId = null;
 }
@@ -1121,8 +1174,13 @@ export function playerHeading() {
 
 export function togglePlayPause() {
 	if (!boundAudio || playerUi.status !== 'ready') return;
-	if (boundAudio.paused) boundAudio.play().catch(() => {});
-	else boundAudio.pause();
+	if (boundAudio.paused) {
+		playerUi.wantsPlay = true;
+		boundAudio.play().catch(() => {});
+	} else {
+		playerUi.wantsPlay = false;
+		boundAudio.pause();
+	}
 }
 
 /** Group tracks for library browse. */
@@ -1157,11 +1215,11 @@ export function artistNames() {
 }
 
 /**
- * Album rows for Albums browse: title + primary artist + track count.
- * @returns {{ album: string, artist: string, count: number }[]}
+ * Album rows for Albums browse: title + primary artist + cover + track count.
+ * @returns {{ album: string, artist: string, count: number, cover_path: string | null, cover_url: string | null, sampleId: string | null }[]}
  */
 export function albumRows() {
-	/** @type {Map<string, { album: string, artist: string, count: number }>} */
+	/** @type {Map<string, { album: string, artist: string, count: number, cover_path: string | null, cover_url: string | null, sampleId: string | null }>} */
 	const map = new Map();
 	for (const t of tracks) {
 		const album = String(t.album ?? '').trim() || 'Unknown Album';
@@ -1170,8 +1228,25 @@ export function albumRows() {
 			(Array.isArray(t.artists) && t.artists[0] ? t.artists[0] : 'Unknown');
 		const key = album.toLowerCase();
 		const cur = map.get(key);
-		if (cur) cur.count += 1;
-		else map.set(key, { album, artist, count: 1 });
+		if (cur) {
+			cur.count += 1;
+			if (!cur.cover_path && t.cover_path) {
+				cur.cover_path = t.cover_path ?? null;
+				cur.cover_url = t.cover_url ?? null;
+				cur.sampleId = t.id ?? null;
+			} else if (cur.cover_path && !cur.cover_url && t.cover_path === cur.cover_path && t.cover_url) {
+				cur.cover_url = t.cover_url;
+			}
+		} else {
+			map.set(key, {
+				album,
+				artist,
+				count: 1,
+				cover_path: t.cover_path ?? null,
+				cover_url: t.cover_url ?? null,
+				sampleId: t.id ?? null
+			});
+		}
 	}
 	return [...map.values()].sort((a, b) => a.album.localeCompare(b.album));
 }

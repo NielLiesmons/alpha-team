@@ -32,12 +32,12 @@
 			return;
 		}
 		// Do not call load() — it resets MediaSource progressive streams.
-		// Compare pathname-style: audioEl.src is absolute, object URLs may differ by resolution.
 		const current = audioEl.getAttribute('src') || '';
 		if (current !== url && audioEl.src !== url) {
 			audioEl.src = url;
 		}
-		if (playerUi.status === 'ready' && audioEl.paused) {
+		// Only autoplay when the user still wants playback — never on pause soft-swaps.
+		if (playerUi.status === 'ready' && playerUi.wantsPlay && audioEl.paused) {
 			audioEl.play().catch(() => {});
 		}
 	});

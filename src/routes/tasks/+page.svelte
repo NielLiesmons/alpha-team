@@ -135,7 +135,7 @@
 	}
 
 	.task-group-count {
-		font-family: 'Inter', system-ui, sans-serif;
+		font-family: var(--font);
 		font-size: 11px;
 		font-weight: 500;
 		color: var(--fg-33);
