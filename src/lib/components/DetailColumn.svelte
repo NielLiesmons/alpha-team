@@ -1,6 +1,9 @@
 <script>
 	import { page } from '$app/stores';
 	import StatusBox from './StatusBox.svelte';
+	import ProjectBox from './ProjectBox.svelte';
+	import MilestoneBox from './MilestoneBox.svelte';
+	import TaskBox from './TaskBox.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import PlayerDetail from './PlayerDetail.svelte';
@@ -22,8 +25,10 @@
 		clearSelection,
 		notes,
 		openComposer,
+		patchProject,
 		projects,
 		saveNote,
+		selectEntity,
 		tasks,
 		ui
 	} from '$lib/workspace.svelte.js';
@@ -61,6 +66,57 @@
 	const note = $derived(
 		selection?.kind === 'note' ? notes.find((n) => n.id === selection.id) : null
 	);
+
+	const projectTasks = $derived.by(() => {
+		if (!project) return [];
+		const id = project.id;
+		return tasks.filter((t) => {
+			const ids = t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? [];
+			return ids.includes(id);
+		});
+	});
+
+	const projectNotes = $derived.by(() => {
+		if (!project) return [];
+		const id = project.id;
+		return notes.filter((n) => (n.project_ids ?? []).includes(id));
+	});
+
+	async function addMilestone() {
+		if (!project) return;
+		const title = prompt('Milestone title');
+		if (!title?.trim()) return;
+		const milestones = [
+			...(project.milestones ?? []),
+			{
+				id: crypto.randomUUID(),
+				title: title.trim(),
+				percentage: 0,
+				sort: (project.milestones ?? []).length
+			}
+		];
+		try {
+			await patchProject(project.id, { milestones });
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
+		}
+	}
+
+	/**
+	 * @param {string} milestoneId
+	 * @param {number} percentage
+	 */
+	async function setMilestonePct(milestoneId, percentage) {
+		if (!project) return;
+		const milestones = (project.milestones ?? []).map((m) =>
+			m.id === milestoneId ? { ...m, percentage } : m
+		);
+		try {
+			await patchProject(project.id, { milestones });
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
+		}
+	}
 
 	/**
 	 * Prefer entity author; fall back to signed-in actor (never legacy "You").
@@ -415,7 +471,7 @@
 		</header>
 		<div class="body">
 			<div class="title-row">
-				<StatusBox state={project.status} size={22} />
+				<ProjectBox state={project.status} size={24} />
 				<h2 class="title">{project.title}</h2>
 			</div>
 			{#if project.summary}
@@ -423,9 +479,106 @@
 			{/if}
 			{#if project.body}
 				<p class="prose">{project.body}</p>
-			{:else}
-				<p class="muted">No project notes yet.</p>
+			{:else if !project.summary}
+				<p class="muted">No description yet.</p>
 			{/if}
+
+			<section class="proj-section">
+				<div class="proj-section-head">
+					<span class="eyebrow-label-xs">Milestones</span>
+					<span class="proj-section-count">{project.milestones?.length ?? 0}</span>
+					<button type="button" class="proj-add" aria-label="Add milestone" onclick={addMilestone}>
+						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+							<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+						</svg>
+					</button>
+				</div>
+				{#if (project.milestones?.length ?? 0) === 0}
+					<p class="muted tight">No milestones yet.</p>
+				{:else}
+					<ul class="mile-list">
+						{#each project.milestones as mile (mile.id)}
+							<li class="mile-row">
+								<button
+									type="button"
+									class="mile-box-hit"
+									aria-label="Advance {mile.title}"
+									onclick={() =>
+										setMilestonePct(
+											mile.id,
+											mile.percentage >= 100 ? 0 : Math.min(100, (mile.percentage || 0) + 25)
+										)}
+								>
+									<MilestoneBox percentage={mile.percentage || 0} size={22} />
+								</button>
+								<span class="mile-title">{mile.title}</span>
+								<span class="mile-pct">{mile.percentage || 0}%</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+
+			<section class="proj-section">
+				<div class="proj-section-head">
+					<span class="eyebrow-label-xs">Tasks</span>
+					<span class="proj-section-count">{projectTasks.length}</span>
+					<button
+						type="button"
+						class="proj-add"
+						aria-label="Add task"
+						onclick={() => openComposer('task', undefined, 'open')}
+					>
+						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+							<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+						</svg>
+					</button>
+				</div>
+				{#if projectTasks.length === 0}
+					<p class="muted tight">No tasks tagged with this project.</p>
+				{:else}
+					<ul class="linked-list">
+						{#each projectTasks as t (t.id)}
+							<li>
+								<button type="button" class="linked-row" onclick={() => selectEntity('task', t.id)}>
+									<TaskBox state={t.status} size={18} />
+									<span class="linked-title">{t.title}</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+
+			<section class="proj-section">
+				<div class="proj-section-head">
+					<span class="eyebrow-label-xs">Notes</span>
+					<span class="proj-section-count">{projectNotes.length}</span>
+					<button
+						type="button"
+						class="proj-add"
+						aria-label="Add note"
+						onclick={() => openComposer('note')}
+					>
+						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+							<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+						</svg>
+					</button>
+				</div>
+				{#if projectNotes.length === 0}
+					<p class="muted tight">No notes tagged with this project.</p>
+				{:else}
+					<ul class="linked-list">
+						{#each projectNotes as n (n.id)}
+							<li>
+								<button type="button" class="linked-row" onclick={() => selectEntity('note', n.id)}>
+									<span class="linked-title">{n.title || 'Untitled'}</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
 		</div>
 	{:else if note}
 		<header class="detail-top desktop-head">
@@ -702,6 +855,125 @@
 		margin: 0;
 		font-size: 14px;
 		color: var(--white33);
+	}
+
+	.muted.tight {
+		padding: 4px 16px 8px;
+	}
+
+	.proj-section {
+		margin-top: 20px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.proj-section-head {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 6px 8px 4px 16px;
+		background: var(--fg-4);
+		box-sizing: border-box;
+	}
+
+	.eyebrow-label-xs {
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--fg-66);
+	}
+
+	.proj-section-count {
+		font-family: 'Inter', system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	.proj-add {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		padding: 0;
+		border: 0;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--fg-33);
+		cursor: pointer;
+	}
+
+	.proj-add:hover {
+		color: var(--fg);
+		background: var(--fg-8);
+	}
+
+	.mile-list,
+	.linked-list {
+		list-style: none;
+		margin: 0;
+		padding: 4px 8px 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.mile-row,
+	.linked-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		padding: 10px 12px;
+		border: 0;
+		border-radius: 12px;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		font: inherit;
+		box-sizing: border-box;
+	}
+
+	.linked-row {
+		cursor: pointer;
+	}
+
+	.linked-row:hover,
+	.mile-row:hover {
+		background: var(--fg-4);
+	}
+
+	.mile-box-hit {
+		display: flex;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.mile-title,
+	.linked-title {
+		flex: 1;
+		min-width: 0;
+		font-size: 0.9rem;
+		font-weight: 500;
+		color: var(--fg);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.mile-pct {
+		flex-shrink: 0;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-33);
+		font-family: 'Inter', system-ui, sans-serif;
 	}
 
 	.block {

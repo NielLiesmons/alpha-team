@@ -1,6 +1,7 @@
 <script>
 	import {
 		bindPlayerAudio,
+		currentTrack,
 		playEndedAdvance,
 		playerUi,
 		reliableDuration
@@ -41,18 +42,24 @@
 		}
 	});
 
+	function taggedDurationSec() {
+		const ms = currentTrack()?.duration_ms;
+		return typeof ms === 'number' && ms > 0 ? ms / 1000 : 0;
+	}
+
 	function syncClock() {
 		if (!audioEl) return;
 		playerUi.currentTime = audioEl.currentTime;
 		playerUi.playing = !audioEl.paused;
-		playerUi.duration = reliableDuration(audioEl, playerUi.bufferRatio);
+		playerUi.duration = reliableDuration(audioEl, playerUi.bufferRatio, taggedDurationSec());
 	}
 
 	// When byte buffer fills, re-evaluate duration (first-chunk trick duration → real).
 	$effect(() => {
 		playerUi.bufferRatio;
+		playerUi.currentId;
 		if (audioEl) {
-			playerUi.duration = reliableDuration(audioEl, playerUi.bufferRatio);
+			playerUi.duration = reliableDuration(audioEl, playerUi.bufferRatio, taggedDurationSec());
 		}
 	});
 

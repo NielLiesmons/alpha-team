@@ -39,7 +39,7 @@ export const playerBrowse = $state({
 	/** @type {string | null} album title when drilling in from Albums */
 	album: null,
 	/** Mobile: slide detail over the browse list. Desktop always shows detail. */
-	detailOpen: false
+	detailOpen: true
 });
 
 export const playerUi = $state({
@@ -701,7 +701,11 @@ export async function playTrack(track) {
 	playerUi.status = 'loading';
 	playerUi.bufferRatio = 0;
 	playerUi.currentTime = 0;
-	playerUi.duration = 0;
+	// Show tagged length immediately — MSE often reports Infinity until EOS.
+	playerUi.duration =
+		typeof track.duration_ms === 'number' && track.duration_ms > 0
+			? track.duration_ms / 1000
+			: 0;
 	playerUi.playing = false;
 	playerUi.error = '';
 	if (track.cover_path) void ensureTrackCover(track);
@@ -998,17 +1002,21 @@ export async function removeTracks(ids) {
 /**
  * Reliable duration while progressive chunks load.
  * First-chunk-only sources report duration ≈ buffered end — treat that as unknown.
+ * MSE often reports Infinity until endOfStream — then use tagged fallbackSec.
  * @param {HTMLAudioElement | null} audio
  * @param {number} bufferRatio
+ * @param {number} [fallbackSec] from track.duration_ms / 1000
  */
-export function reliableDuration(audio, bufferRatio) {
-	if (!audio) return 0;
+export function reliableDuration(audio, bufferRatio, fallbackSec = 0) {
+	const fallback = Number.isFinite(fallbackSec) && fallbackSec > 0 ? fallbackSec : 0;
+	if (!audio) return fallback;
 	const d = audio.duration;
-	if (!Number.isFinite(d) || d <= 0) return 0;
+	if (!Number.isFinite(d) || d <= 0) return fallback;
 	if (bufferRatio >= 0.999) return d;
-	if (!audio.buffered.length) return 0;
+	if (!audio.buffered.length) return fallback || 0;
 	const end = audio.buffered.end(audio.buffered.length - 1);
-	if (end >= d - 0.35) return 0;
+	// Progressive blob: duration ≈ buffered end until the full file is swapped in.
+	if (end >= d - 0.35) return fallback || 0;
 	return d;
 }
 

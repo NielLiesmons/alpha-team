@@ -13,6 +13,7 @@ import {
 	listProjects,
 	listTasks,
 	putNote,
+	putProject as drivePutProject,
 	putTask,
 	toUiNote,
 	toUiTask
@@ -108,8 +109,9 @@ export async function refreshFromDrive() {
 				id: p.id,
 				title: p.title,
 				summary: p.description ?? '',
-				body: '',
-				status: 'planned',
+				body: p.body ?? '',
+				status: p.status || 'planned',
+				milestones: Array.isArray(p.milestones) ? p.milestones : [],
 				slug: p.slug,
 				_drive: p
 			}))
@@ -151,6 +153,17 @@ export async function patchNote(id, patch) {
 	const n = notes.find((x) => x.id === id);
 	if (!n) return;
 	await saveNote({ ...n, ...patch }, false);
+}
+
+/**
+ * Quick field patch for projects (status, milestones, …).
+ * @param {string} id
+ * @param {Record<string, unknown>} patch
+ */
+export async function patchProject(id, patch) {
+	const p = projects.find((x) => x.id === id);
+	if (!p) return;
+	await saveProject({ ...p, ...patch }, false);
 }
 
 /**
@@ -290,13 +303,17 @@ export async function saveProject(draft, isNew) {
 			projects.unshift({
 				...draft,
 				id,
-				slug: draft.slug
+				slug: draft.slug,
+				milestones: draft.milestones ?? [],
+				status: draft.status ?? 'planned'
 			});
 			ui.projectId = id;
+			ui.selection = { kind: 'project', id };
 		} else {
 			const idx = projects.findIndex((p) => p.id === draft.id);
 			if (idx >= 0) Object.assign(projects[idx], draft);
 			ui.projectId = draft.id;
+			ui.selection = { kind: 'project', id: draft.id };
 		}
 		return;
 	}
@@ -304,21 +321,52 @@ export async function saveProject(draft, isNew) {
 	if (isNew) {
 		const created = await driveCreateProject(session, {
 			title: draft.title,
-			description: draft.summary || draft.body || ''
+			description: draft.summary || '',
+			body: draft.body || '',
+			status: draft.status ?? 'planned',
+			milestones: draft.milestones ?? []
 		});
-		projects.unshift({
+		const uiProj = {
 			id: created.id,
 			title: created.title,
 			summary: created.description ?? '',
-			body: '',
-			status: draft.status ?? 'planned',
+			body: created.body ?? '',
+			status: created.status ?? draft.status ?? 'planned',
+			milestones: created.milestones ?? [],
 			slug: created.slug,
 			_drive: created
-		});
+		};
+		projects.unshift(uiProj);
 		ui.projectId = created.id;
+		ui.selection = { kind: 'project', id: created.id };
 	} else {
-		const idx = projects.findIndex((p) => p.id === draft.id);
-		if (idx >= 0) Object.assign(projects[idx], draft);
-		ui.projectId = draft.id;
+		const prev = projects.find((p) => p.id === draft.id);
+		const base = {
+			...(prev?._drive ?? {}),
+			id: draft.id,
+			slug: draft.slug || prev?.slug,
+			title: draft.title,
+			description: draft.summary ?? '',
+			body: draft.body ?? '',
+			status: draft.status ?? 'planned',
+			milestones: draft.milestones ?? prev?.milestones ?? [],
+			created_at: prev?._drive?.created_at
+		};
+		const saved = await drivePutProject(session, base);
+		const uiProj = {
+			id: saved.id,
+			title: saved.title,
+			summary: saved.description ?? '',
+			body: saved.body ?? '',
+			status: saved.status ?? 'planned',
+			milestones: Array.isArray(saved.milestones) ? saved.milestones : [],
+			slug: saved.slug,
+			_drive: saved
+		};
+		const idx = projects.findIndex((p) => p.id === saved.id);
+		if (idx >= 0) Object.assign(projects[idx], uiProj);
+		else projects.unshift(uiProj);
+		ui.projectId = saved.id;
+		ui.selection = { kind: 'project', id: saved.id };
 	}
 }

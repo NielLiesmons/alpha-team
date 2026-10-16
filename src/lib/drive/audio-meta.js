@@ -1,6 +1,7 @@
 /**
  * Lightweight tag readers for Player upload (ID3v2 + iTunes/MP4 atoms).
  * Falls back to filename heuristics when tags are missing/stripped.
+ * Also extracts embedded artwork (APIC/PIC/covr) and probes duration.
  */
 
 /**
@@ -49,34 +50,103 @@ function parseTrackPart(raw) {
 }
 
 /**
+ * @typedef {{
+ *   title: string,
+ *   artists: string[],
+ *   album: string,
+ *   track_no: number | null,
+ *   disc_no: number | null,
+ *   artwork?: { mime: string, bytes: Uint8Array } | null,
+ *   duration_ms?: number | null
+ * }} AudioMeta
+ */
+
+/**
  * @param {File} file
- * @returns {Promise<{ title: string, artists: string[], album: string, track_no: number | null, disc_no: number | null }>}
+ * @returns {Promise<AudioMeta>}
  */
 export async function readAudioTags(file) {
 	const fromName = parseAudioFilename(file.name);
+	/** @type {AudioMeta} */
+	let meta = {
+		title: fromName.title,
+		artists: fromName.artists,
+		album: fromName.album,
+		track_no: fromName.track_no,
+		disc_no: fromName.disc_no,
+		artwork: null,
+		duration_ms: null
+	};
 	try {
-		const head = new Uint8Array(await file.slice(0, Math.min(file.size, 2 * 1024 * 1024)).arrayBuffer());
+		// Artwork can sit late in large ID3 tags — read up to 4MB of prefix.
+		const head = new Uint8Array(await file.slice(0, Math.min(file.size, 4 * 1024 * 1024)).arrayBuffer());
 		const tagged = readId3v2(head) || readMp4Tags(head);
-		if (!tagged) return fromName;
-		const fromTag = stripLeadingTrackNo(tagged.title || fromName.title);
-		return {
-			title: fromTag.title || fromName.title,
-			artists:
-				tagged.artists?.length && tagged.artists[0] !== 'Unknown'
-					? tagged.artists
-					: fromName.artists,
-			album: tagged.album || fromName.album,
-			track_no: tagged.track_no ?? fromTag.track_no ?? fromName.track_no,
-			disc_no: tagged.disc_no ?? fromName.disc_no
-		};
+		if (tagged) {
+			const fromTag = stripLeadingTrackNo(tagged.title || fromName.title);
+			meta = {
+				title: fromTag.title || fromName.title,
+				artists:
+					tagged.artists?.length && tagged.artists[0] !== 'Unknown'
+						? tagged.artists
+						: fromName.artists,
+				album: tagged.album || fromName.album,
+				track_no: tagged.track_no ?? fromTag.track_no ?? fromName.track_no,
+				disc_no: tagged.disc_no ?? fromName.disc_no,
+				artwork: tagged.artwork ?? null,
+				duration_ms: null
+			};
+		}
 	} catch {
-		return fromName;
+		/* keep filename meta */
 	}
+	try {
+		meta.duration_ms = await probeDurationMs(file);
+	} catch {
+		meta.duration_ms = null;
+	}
+	return meta;
+}
+
+/**
+ * Browser metadata probe — works for anything <audio> can decode.
+ * @param {File | Blob} file
+ * @returns {Promise<number | null>}
+ */
+export function probeDurationMs(file) {
+	return new Promise((resolve) => {
+		const url = URL.createObjectURL(file);
+		const audio = new Audio();
+		let settled = false;
+		/** @param {number | null} ms */
+		const finish = (ms) => {
+			if (settled) return;
+			settled = true;
+			URL.revokeObjectURL(url);
+			audio.removeAttribute('src');
+			audio.load();
+			resolve(ms);
+		};
+		audio.preload = 'metadata';
+		audio.onloadedmetadata = () => {
+			const d = audio.duration;
+			finish(Number.isFinite(d) && d > 0 ? Math.round(d * 1000) : null);
+		};
+		audio.onerror = () => finish(null);
+		setTimeout(() => finish(null), 10000);
+		audio.src = url;
+	});
 }
 
 /**
  * @param {Uint8Array} bytes
- * @returns {{ title?: string, artists?: string[], album?: string, track_no?: number | null, disc_no?: number | null } | null}
+ * @returns {{
+ *   title?: string,
+ *   artists?: string[],
+ *   album?: string,
+ *   track_no?: number | null,
+ *   disc_no?: number | null,
+ *   artwork?: { mime: string, bytes: Uint8Array } | null
+ * } | null}
  */
 function readId3v2(bytes) {
 	if (bytes.length < 10) return null;
@@ -87,6 +157,8 @@ function readId3v2(bytes) {
 	const end = Math.min(bytes.length, 10 + tagSize);
 	/** @type {Record<string, string>} */
 	const frames = {};
+	/** @type {{ mime: string, bytes: Uint8Array } | null} */
+	let artwork = null;
 	let off = 10;
 	// skip extended header if present (v3/v4)
 	if (bytes[5] & 0x40) {
@@ -104,7 +176,7 @@ function readId3v2(bytes) {
 		let header = 10;
 		if (ver === 2) {
 			id = ascii(bytes, off, 3);
-			size = (bytes[off + 3] << 16) | (bytes[off + 4] << 8) | bytes[off + 5];
+			size = (bytes[off + 3] << 16) | (bytes[off + 4] << 8) | (bytes[off + 5]);
 			header = 6;
 			if (!/^[A-Z0-9]{3}$/.test(id) || size <= 0) break;
 		} else {
@@ -116,8 +188,13 @@ function readId3v2(bytes) {
 		const dataStart = off + header;
 		const dataEnd = dataStart + size;
 		if (dataEnd > end) break;
-		const text = decodeId3Text(bytes.subarray(dataStart, dataEnd), ver);
-		if (text) frames[id] = text;
+		const payload = bytes.subarray(dataStart, dataEnd);
+		if ((id === 'APIC' || id === 'PIC') && !artwork) {
+			artwork = parseId3Picture(payload, ver);
+		} else if (id !== 'APIC' && id !== 'PIC' && id !== 'PRIV' && id !== 'GEOB') {
+			const text = decodeId3Text(payload, ver);
+			if (text) frames[id] = text;
+		}
 		off = dataEnd;
 	}
 
@@ -126,14 +203,78 @@ function readId3v2(bytes) {
 	const album = frames.TALB || frames.TAL;
 	const track_no = parseTrackPart(frames.TRCK || frames.TRK);
 	const disc_no = parseTrackPart(frames.TPOS || frames.TPA);
-	if (!title && !artist && !album && track_no == null) return null;
+	if (!title && !artist && !album && track_no == null && !artwork) return null;
 	return {
 		title: title || undefined,
 		artists: artist ? splitArtists(artist) : undefined,
 		album: album || undefined,
 		track_no,
-		disc_no
+		disc_no,
+		artwork
 	};
+}
+
+/**
+ * @param {Uint8Array} data
+ * @param {number} ver
+ * @returns {{ mime: string, bytes: Uint8Array } | null}
+ */
+function parseId3Picture(data, ver) {
+	if (data.length < 4) return null;
+	const encoding = data[0];
+	let o = 1;
+	/** @type {string} */
+	let mime;
+	if (ver === 2) {
+		// PIC: 3-char image format ("JPG", "PNG", …)
+		const fmt = ascii(data, o, 3).toUpperCase();
+		o += 3;
+		mime = fmt === 'PNG' ? 'image/png' : fmt === 'JPG' || fmt === 'JPEG' ? 'image/jpeg' : `image/${fmt.toLowerCase()}`;
+	} else {
+		const nul = indexOfByte(data, 0, o);
+		if (nul < 0) return null;
+		mime = cleanText(new TextDecoder('latin1').decode(data.subarray(o, nul))).toLowerCase() || 'image/jpeg';
+		o = nul + 1;
+		if (mime === 'image/jpg') mime = 'image/jpeg';
+		if (!mime.includes('/')) mime = `image/${mime}`;
+	}
+	if (o >= data.length) return null;
+	o += 1; // picture type
+	// description (encoding-terminated)
+	const descEnd = skipId3EncodedString(data, o, encoding);
+	if (descEnd < 0 || descEnd >= data.length) return null;
+	const pic = data.subarray(descEnd);
+	if (pic.length < 32) return null;
+	return { mime, bytes: pic.slice() };
+}
+
+/**
+ * @param {Uint8Array} data
+ * @param {number} start
+ * @param {number} encoding
+ */
+function skipId3EncodedString(data, start, encoding) {
+	if (encoding === 0 || encoding === 3) {
+		const nul = indexOfByte(data, 0, start);
+		return nul < 0 ? -1 : nul + 1;
+	}
+	// UTF-16: terminated by 0x00 0x00
+	for (let i = start; i + 1 < data.length; i += 2) {
+		if (data[i] === 0 && data[i + 1] === 0) return i + 2;
+	}
+	return -1;
+}
+
+/**
+ * @param {Uint8Array} data
+ * @param {number} value
+ * @param {number} from
+ */
+function indexOfByte(data, value, from) {
+	for (let i = from; i < data.length; i++) {
+		if (data[i] === value) return i;
+	}
+	return -1;
 }
 
 /**
@@ -166,6 +307,8 @@ function readMp4Tags(bytes) {
 	let track_no = null;
 	/** @type {number | null} */
 	let disc_no = null;
+	/** @type {{ mime: string, bytes: Uint8Array } | null} */
+	let artwork = null;
 	let off = 0;
 	while (off + 8 <= ilst.length) {
 		const size = u32(ilst, off);
@@ -176,6 +319,8 @@ function readMp4Tags(bytes) {
 			track_no = readMp4IntPair(payload);
 		} else if (typ === 'disk') {
 			disc_no = readMp4IntPair(payload);
+		} else if (typ === 'covr' && !artwork) {
+			artwork = readMp4Cover(payload);
 		} else {
 			const text = readMp4DataAtom(payload);
 			if (text) tags[typ] = text;
@@ -185,14 +330,32 @@ function readMp4Tags(bytes) {
 	const title = tags['©nam'] || tags.name;
 	const artist = tags['©ART'] || tags.aART || tags['©art'];
 	const album = tags['©alb'];
-	if (!title && !artist && !album && track_no == null) return null;
+	if (!title && !artist && !album && track_no == null && !artwork) return null;
 	return {
 		title: title || undefined,
 		artists: artist ? splitArtists(artist) : undefined,
 		album: album || undefined,
 		track_no,
-		disc_no
+		disc_no,
+		artwork
 	};
+}
+
+/**
+ * @param {Uint8Array} payload
+ * @returns {{ mime: string, bytes: Uint8Array } | null}
+ */
+function readMp4Cover(payload) {
+	const data = findAtom(payload, 'data');
+	if (!data || data.length < 8) return null;
+	const type = u32(data, 0);
+	const value = data.subarray(8);
+	if (value.length < 32) return null;
+	// 13 = JPEG, 14 = PNG (iTunes); some files use 0
+	let mime = 'image/jpeg';
+	if (type === 14 || (value[0] === 0x89 && value[1] === 0x50)) mime = 'image/png';
+	else if (type === 13 || value[0] === 0xff) mime = 'image/jpeg';
+	return { mime, bytes: value.slice() };
 }
 
 /**
@@ -286,7 +449,7 @@ function cleanText(s) {
  * @param {number} o
  */
 function u32(b, o) {
-	return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+	return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | (b[o + 3])) >>> 0;
 }
 
 /**

@@ -1,14 +1,15 @@
 <script>
 	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
-	import StatusBox from './StatusBox.svelte';
+	import ProjectBox from './ProjectBox.svelte';
 	import { closeComposer, projects, saveProject, ui } from '$lib/workspace.svelte.js';
 
 	const statuses = [
 		{ value: 'backlog', label: 'Backlog' },
 		{ value: 'planned', label: 'Planned' },
 		{ value: 'inProgress', label: 'In progress' },
-		{ value: 'closed', label: 'Completed' }
+		{ value: 'closed', label: 'Completed' },
+		{ value: 'canceled', label: 'Canceled' }
 	];
 
 	let title = $state('');
@@ -29,7 +30,7 @@
 		title = editing?.title ?? '';
 		summary = editing?.summary ?? '';
 		body = editing?.body ?? '';
-		status = editing?.status ?? 'planned';
+		status = editing?.status ?? ui.composer?.status ?? 'planned';
 		statusOpen = false;
 		tick().then(() => titleInput?.focus());
 	});
@@ -44,7 +45,8 @@
 					title: nextTitle,
 					summary,
 					body,
-					status
+					status,
+					milestones: editing?.milestones ?? []
 				},
 				!editing
 			);
@@ -59,13 +61,13 @@
 	<div class="sheet-title-row">
 		<div class="menu-anchor">
 			<button type="button" class="bare" aria-label="Status" onclick={() => (statusOpen = !statusOpen)}>
-				<StatusBox state={status} size={24} />
+				<ProjectBox state={status} size={24} />
 			</button>
 			{#if statusOpen}
 				<div class="menu">
 					{#each statuses as opt (opt.value)}
 						<button type="button" class:on={status === opt.value} onclick={() => { status = opt.value; statusOpen = false; }}>
-							<StatusBox state={opt.value} size={16} />
+							<ProjectBox state={opt.value} size={16} />
 							{opt.label}
 						</button>
 					{/each}

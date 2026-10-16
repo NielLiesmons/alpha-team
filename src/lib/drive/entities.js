@@ -47,7 +47,14 @@ export async function initSpace(session, name) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {{ title: string, slug?: string, description?: string }} input
+ * @param {{
+ *   title: string,
+ *   slug?: string,
+ *   description?: string,
+ *   body?: string,
+ *   status?: string,
+ *   milestones?: { id: string, title: string, percentage?: number, sort?: number }[]
+ * }} input
  */
 export async function createProject(session, input) {
 	const id = newId();
@@ -59,6 +66,9 @@ export async function createProject(session, input) {
 		slug: input.slug || slugify(input.title),
 		title: input.title,
 		description: input.description || undefined,
+		body: input.body || undefined,
+		status: input.status || 'planned',
+		milestones: Array.isArray(input.milestones) ? input.milestones : [],
 		created_at: created,
 		updated_at: created,
 		drive: {
@@ -68,6 +78,28 @@ export async function createProject(session, input) {
 	};
 	await putPath(session, `projects/${id}/project.json`, 'project', JSON.stringify(project, null, 2));
 	return project;
+}
+
+/**
+ * Persist project fields (status, milestones, description, …).
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} project Drive document (must include id)
+ * @param {Record<string, unknown>} [patch]
+ */
+export async function putProject(session, project, patch = {}) {
+	const id = project.id;
+	if (!id) throw new Error('Project missing id');
+	const next = {
+		...project,
+		...patch,
+		schema: 'alpha.project/1',
+		id,
+		updated_at: nowRfc3339()
+	};
+	if (!Array.isArray(next.milestones)) next.milestones = [];
+	if (!next.status) next.status = 'planned';
+	await putPath(session, `projects/${id}/project.json`, 'project', JSON.stringify(next, null, 2));
+	return next;
 }
 
 /**
@@ -448,6 +480,22 @@ export async function uploadTrack(session, file, opts = {}) {
 		throw err;
 	}
 
+	/** @type {string | null} */
+	let coverPath = null;
+	if (meta.artwork?.bytes?.length) {
+		try {
+			opts.onProgress?.('artwork', 0, 1);
+			const blob = new Blob([meta.artwork.bytes], {
+				type: meta.artwork.mime || 'image/jpeg'
+			});
+			const prepared = await prepareCoverImage(blob);
+			coverPath = prepared.path;
+			await putPath(session, prepared.path, 'blob', prepared.bytes);
+		} catch {
+			coverPath = null;
+		}
+	}
+
 	const track = {
 		schema: 'alpha.track/1',
 		id,
@@ -457,7 +505,8 @@ export async function uploadTrack(session, file, opts = {}) {
 		track_no: meta.track_no ?? null,
 		disc_no: meta.disc_no ?? null,
 		media_path: mediaPath,
-		duration_ms: null,
+		cover_path: coverPath,
+		duration_ms: meta.duration_ms ?? null,
 		genres: [],
 		project_ids: [],
 		labels: [],
