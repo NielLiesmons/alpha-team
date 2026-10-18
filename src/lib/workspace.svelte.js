@@ -171,127 +171,164 @@ export async function patchProject(id, patch) {
 }
 
 /**
- * Persist a new or edited task. Drive when connected; otherwise local only.
+ * Persist a new or edited task. Optimistic UI — feed updates immediately.
  * @param {any} draft
  * @param {boolean} isNew
  */
 export async function saveTask(draft, isNew) {
 	const session = activeSession();
-	if (!session) {
-		if (isNew) {
-			tasks.unshift({
-				...draft,
-				id: draft.id || crypto.randomUUID(),
-				createdAt: Date.now(),
-				author: draft.author ?? activePerson().email,
-				assignees: draft.assignees ?? [],
-				commenters: draft.commenters ?? [],
-				targets: draft.targets ?? [],
-				project_ids: draft.project_ids ?? []
-			});
-		} else {
-			const idx = tasks.findIndex((t) => t.id === draft.id);
-			if (idx >= 0) Object.assign(tasks[idx], draft);
-		}
-		return;
-	}
+	const author = draft.author ?? activePerson().email;
 
 	if (isNew) {
-		const created = await driveCreateTask(session, {
-			title: draft.title,
-			description: draft.body,
-			status: draft.status,
-			priority: draft.priority,
-			labels: draft.labels,
-			project_ids: draft.project_ids ?? [],
-			author: draft.author ?? activePerson().email
-		});
-		const plist = projects.map((p) => p._drive ?? p);
-		tasks.unshift(toUiTask(created, plist));
-	} else {
-		const entity = fromUiTask({
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = {
 			...draft,
-			author: draft.author ?? activePerson().email
-		});
+			id: tempId,
+			createdAt: Date.now(),
+			author,
+			assignees: draft.assignees ?? [],
+			commenters: draft.commenters ?? [],
+			targets: draft.targets ?? [],
+			project_ids: draft.project_ids ?? [],
+			_pending: Boolean(session)
+		};
+		tasks.unshift(optimistic);
+		ui.selection = { kind: 'task', id: tempId };
+		if (!session) return optimistic;
+
+		try {
+			const created = await driveCreateTask(session, {
+				title: draft.title,
+				description: draft.body,
+				status: draft.status,
+				priority: draft.priority,
+				labels: draft.labels,
+				project_ids: draft.project_ids ?? [],
+				author
+			});
+			const plist = projects.map((p) => p._drive ?? p);
+			const uiTask = {
+				...toUiTask(created, plist),
+				author,
+				assignees: draft.assignees ?? [],
+				commenters: draft.commenters ?? []
+			};
+			const idx = tasks.findIndex((t) => t.id === tempId);
+			if (idx >= 0) tasks[idx] = uiTask;
+			else tasks.unshift(uiTask);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'task', id: uiTask.id };
+			return uiTask;
+		} catch (e) {
+			const idx = tasks.findIndex((t) => t.id === tempId);
+			if (idx >= 0) tasks.splice(idx, 1);
+			throw e;
+		}
+	}
+
+	const idx = tasks.findIndex((t) => t.id === draft.id);
+	const prev = idx >= 0 ? { ...tasks[idx] } : null;
+	if (idx >= 0) Object.assign(tasks[idx], { ...draft, author, _pending: Boolean(session) });
+	if (!session) return draft;
+
+	try {
+		const entity = fromUiTask({ ...draft, author });
 		const saved = await putTask(session, entity);
-		const idx = tasks.findIndex((t) => t.id === saved.id);
 		const plist = projects.map((p) => p._drive ?? p);
 		const uiTask = {
 			...toUiTask(saved, plist),
-			author: draft.author ?? (idx >= 0 ? tasks[idx].author : undefined) ?? activePerson().email,
-			assignees: draft.assignees ?? (idx >= 0 ? tasks[idx].assignees : []) ?? [],
-			commenters: draft.commenters ?? (idx >= 0 ? tasks[idx].commenters : []) ?? []
+			author: draft.author ?? prev?.author ?? author,
+			assignees: draft.assignees ?? prev?.assignees ?? [],
+			commenters: draft.commenters ?? prev?.commenters ?? []
 		};
-		if (idx >= 0) Object.assign(tasks[idx], uiTask);
+		const i = tasks.findIndex((t) => t.id === saved.id);
+		if (i >= 0) Object.assign(tasks[i], uiTask);
 		else tasks.unshift(uiTask);
+		return uiTask;
+	} catch (e) {
+		if (idx >= 0 && prev) Object.assign(tasks[idx], prev);
+		throw e;
 	}
 }
 
 /**
- * Persist a new or edited note. Drive when connected; otherwise local only.
+ * Persist a new or edited note. Optimistic UI — feed updates immediately.
  * @param {any} draft
  * @param {boolean} isNew
  */
 export async function saveNote(draft, isNew) {
 	const session = activeSession();
-	if (!session) {
-		if (isNew) {
-			const id = draft.id || crypto.randomUUID();
-			notes.unshift({
-				...draft,
-				id,
-				createdAt: Date.now(),
-				targets: draft.targets ?? [],
-				project_ids: draft.project_ids ?? [],
-				labels: draft.labels ?? [],
-				assignees: draft.assignees ?? [],
-				author: draft.author ?? activePerson().email
-			});
-			ui.noteId = id;
-			ui.selection = { kind: 'note', id };
-		} else {
-			const idx = notes.findIndex((n) => n.id === draft.id);
-			if (idx >= 0) Object.assign(notes[idx], draft);
-			ui.noteId = draft.id;
-			ui.selection = { kind: 'note', id: draft.id };
-		}
-		return;
-	}
+	const author = draft.author ?? activePerson().email;
 
 	if (isNew) {
-		const created = await driveCreateNote(session, {
-			title: draft.title,
-			body: draft.body,
-			labels: draft.labels,
-			project_ids: draft.project_ids ?? [],
-			author: draft.author ?? activePerson().email
-		});
-		const plist = projects.map((p) => p._drive ?? p);
-		const uiNote = {
-			...toUiNote(created, plist),
-			assignees: draft.assignees ?? [],
-			author: draft.author ?? activePerson().email
-		};
-		notes.unshift(uiNote);
-		ui.noteId = uiNote.id;
-		ui.selection = { kind: 'note', id: uiNote.id };
-	} else {
-		const entity = fromUiNote({
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = {
 			...draft,
-			author: draft.author ?? activePerson().email
-		});
+			id: tempId,
+			createdAt: Date.now(),
+			targets: draft.targets ?? [],
+			project_ids: draft.project_ids ?? [],
+			labels: draft.labels ?? [],
+			assignees: draft.assignees ?? [],
+			author,
+			_pending: Boolean(session)
+		};
+		notes.unshift(optimistic);
+		ui.noteId = tempId;
+		ui.selection = { kind: 'note', id: tempId };
+		if (!session) return optimistic;
+
+		try {
+			const created = await driveCreateNote(session, {
+				title: draft.title,
+				body: draft.body,
+				labels: draft.labels,
+				project_ids: draft.project_ids ?? [],
+				author
+			});
+			const plist = projects.map((p) => p._drive ?? p);
+			const uiNote = {
+				...toUiNote(created, plist),
+				assignees: draft.assignees ?? [],
+				author
+			};
+			const idx = notes.findIndex((n) => n.id === tempId);
+			if (idx >= 0) notes[idx] = uiNote;
+			else notes.unshift(uiNote);
+			ui.noteId = uiNote.id;
+			ui.selection = { kind: 'note', id: uiNote.id };
+			return uiNote;
+		} catch (e) {
+			const idx = notes.findIndex((n) => n.id === tempId);
+			if (idx >= 0) notes.splice(idx, 1);
+			throw e;
+		}
+	}
+
+	const idx = notes.findIndex((n) => n.id === draft.id);
+	const prev = idx >= 0 ? { ...notes[idx] } : null;
+	if (idx >= 0) Object.assign(notes[idx], { ...draft, author, _pending: Boolean(session) });
+	ui.noteId = draft.id;
+	ui.selection = { kind: 'note', id: draft.id };
+	if (!session) return draft;
+
+	try {
+		const entity = fromUiNote({ ...draft, author });
 		const saved = await putNote(session, entity);
-		const idx = notes.findIndex((n) => n.id === saved.id);
 		const plist = projects.map((p) => p._drive ?? p);
 		const uiNote = {
 			...toUiNote(saved, plist),
-			assignees: draft.assignees ?? (idx >= 0 ? notes[idx].assignees : []) ?? [],
-			author: draft.author ?? (idx >= 0 ? notes[idx].author : undefined) ?? activePerson().email
+			assignees: draft.assignees ?? prev?.assignees ?? [],
+			author: draft.author ?? prev?.author ?? author
 		};
-		if (idx >= 0) Object.assign(notes[idx], uiNote);
+		const i = notes.findIndex((n) => n.id === saved.id);
+		if (i >= 0) Object.assign(notes[i], uiNote);
 		else notes.unshift(uiNote);
 		ui.noteId = uiNote.id;
 		ui.selection = { kind: 'note', id: uiNote.id };
+		return uiNote;
+	} catch (e) {
+		if (idx >= 0 && prev) Object.assign(notes[idx], prev);
+		throw e;
 	}
 }
 

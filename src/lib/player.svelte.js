@@ -19,18 +19,38 @@ import {
 	streamMediaChunks
 } from './drive/media.js';
 import { hasMpegFrameSync } from './drive/audio-meta.js';
-import {
-	fetchRemoteTip,
-	pushRecentlyPlayed,
-	readLibraryCache,
-	readRecentlyPlayed,
-	writeLibraryCache
-} from './player-cache.js';
+import { pushRecentlyPlayed, readRecentlyPlayed } from './player-cache.js';
 import { actor } from './actor.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 
 /** @type {Map<string, string>} cover_path → object URL */
 const coverUrlCache = new Map();
+/** In-flight cover fetches (dedupe). */
+const coverInflight = new Map();
+/** Cap parallel decrypts — mass cover hydrate froze Firefox. */
+const COVER_CONCURRENCY = 2;
+let coverActive = 0;
+/** @type {(() => void)[]} */
+const coverWait = [];
+
+function acquireCoverSlot() {
+	if (coverActive < COVER_CONCURRENCY) {
+		coverActive++;
+		return Promise.resolve();
+	}
+	return new Promise((resolve) => {
+		coverWait.push(() => {
+			coverActive++;
+			resolve();
+		});
+	});
+}
+
+function releaseCoverSlot() {
+	coverActive = Math.max(0, coverActive - 1);
+	const next = coverWait.shift();
+	if (next) next();
+}
 
 /** @type {any[]} */
 export const tracks = $state([]);
@@ -85,11 +105,7 @@ export const playerUi = $state({
 	pendingAddTrackIds: [],
 	error: '',
 	uploading: false,
-	uploadLabel: '',
-	/** Background tip/library sync (UI stays usable from cache). */
-	syncing: false,
-	/** True when list was painted from local cache before network. */
-	fromCache: false
+	uploadLabel: ''
 });
 
 /** Upload job UI — modal can close while work continues. */
@@ -187,50 +203,17 @@ export async function refreshTracks() {
 		replaceTracks([]);
 		replacePlaylists([]);
 		playerUi.status = 'idle';
-		playerUi.syncing = false;
-		playerUi.fromCache = false;
 		return;
 	}
-
-	// Local-first: paint last-known library immediately.
-	const cached = readLibraryCache(session);
-	if (cached?.tracks?.length) {
-		replaceTracks(cached.tracks);
-		replacePlaylists(cached.playlists);
-		playerUi.fromCache = true;
-		for (const t of tracks) {
-			if (t.cover_path && !t.cover_url) void hydrateCoverUrl(t.id, t.cover_path);
-		}
-	}
-
-	const empty = tracks.length === 0;
-	driveSession.loading = empty;
-	playerUi.syncing = true;
+	driveSession.loading = tracks.length === 0;
 	try {
-		const tip = await fetchRemoteTip(session);
-		if (cached?.tip && tip && tip === cached.tip && cached.tracks.length) {
-			// Tip unchanged — keep cache, skip full decrypt.
-			return;
-		}
 		const [list, pls] = await Promise.all([listTracks(session), listPlaylists(session)]);
 		replaceTracks(list);
 		replacePlaylists(pls);
-		playerUi.fromCache = false;
-		writeLibraryCache(session, {
-			tip: tip || cached?.tip || '',
-			tracks: list,
-			playlists: pls
-		});
-		for (const t of tracks) {
-			if (t.cover_path && !t.cover_url) void hydrateCoverUrl(t.id, t.cover_path);
-		}
 	} catch (e) {
-		if (!tracks.length) {
-			playerUi.error = e instanceof Error ? e.message : String(e);
-		}
+		playerUi.error = e instanceof Error ? e.message : String(e);
 	} finally {
 		driveSession.loading = false;
-		playerUi.syncing = false;
 	}
 }
 
@@ -987,17 +970,38 @@ function applyTrackLocal(next) {
 async function hydrateCoverUrl(trackId, coverPath) {
 	const session = activeSession();
 	if (!session || !coverPath) return;
-	try {
-		let url = coverUrlCache.get(coverPath);
-		if (!url) {
-			const bytes = await getPath(session, coverPath);
-			// Copy — Blob may detach shared ArrayBuffers from decrypt.
-			const copy = new Uint8Array(bytes.byteLength);
-			copy.set(bytes);
-			const blob = new Blob([copy], { type: sniffImageType(copy) });
-			url = URL.createObjectURL(blob);
-			coverUrlCache.set(coverPath, url);
+
+	const cached = coverUrlCache.get(coverPath);
+	if (cached) {
+		const idx = tracks.findIndex((t) => t.id === trackId);
+		if (idx >= 0 && tracks[idx].cover_path === coverPath) {
+			tracks[idx] = { ...tracks[idx], cover_url: cached };
 		}
+		return;
+	}
+
+	let pending = coverInflight.get(coverPath);
+	if (!pending) {
+		pending = (async () => {
+			await acquireCoverSlot();
+			try {
+				const bytes = await getPath(session, coverPath);
+				const copy = new Uint8Array(bytes.byteLength);
+				copy.set(bytes);
+				const blob = new Blob([copy], { type: sniffImageType(copy) });
+				const url = URL.createObjectURL(blob);
+				coverUrlCache.set(coverPath, url);
+				return url;
+			} finally {
+				releaseCoverSlot();
+				coverInflight.delete(coverPath);
+			}
+		})();
+		coverInflight.set(coverPath, pending);
+	}
+
+	try {
+		const url = await pending;
 		const idx = tracks.findIndex((t) => t.id === trackId);
 		if (idx >= 0 && tracks[idx].cover_path === coverPath) {
 			tracks[idx] = { ...tracks[idx], cover_url: url };

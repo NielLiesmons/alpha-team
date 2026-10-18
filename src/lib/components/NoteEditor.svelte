@@ -116,6 +116,9 @@
 		line-height: 1.55;
 		color: var(--fg-66);
 		caret-color: var(--fg);
+		overflow-wrap: anywhere;
+		word-break: break-word;
+		white-space: pre-wrap;
 	}
 
 	.note-editor.readonly :global(.tiptap),

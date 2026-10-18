@@ -1,6 +1,7 @@
 <script>
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import SkeletonLoader from '$lib/components/SkeletonLoader.svelte';
 	import {
 		addTracksToPlaylist,
 		albumRows,
@@ -28,13 +29,18 @@
 	const artists = $derived(artistNames());
 	const albums = $derived(albumRows());
 
-	// Hydrate album covers for the grid (lazy).
+	// Lazy-hydrate covers for visible rows only (queued inside ensureTrackCover).
 	$effect(() => {
-		if (playerBrowse.mode !== 'albums' || playerBrowse.album) return;
-		for (const row of albums) {
-			if (row.cover_path && !row.cover_url && row.sampleId) {
-				const sample = tracks.find((t) => t.id === row.sampleId);
-				if (sample) void ensureTrackCover(sample);
+		const batch = list.slice(0, 24);
+		for (const t of batch) {
+			if (t.cover_path && !t.cover_url) void ensureTrackCover(t);
+		}
+		if (playerBrowse.mode === 'albums' && !playerBrowse.album) {
+			for (const row of albums.slice(0, 24)) {
+				if (row.cover_path && !row.cover_url && row.sampleId) {
+					const sample = tracks.find((t) => t.id === row.sampleId);
+					if (sample) void ensureTrackCover(sample);
+				}
 			}
 		}
 	});
@@ -250,17 +256,28 @@
 						{/if}
 
 						<button type="button" class="main" onclick={() => onRowClick(track)}>
-							<span class="line-primary">
-								<span class="col title">{track.title}</span>
-								<span class="col artist">{artist}</span>
-								<span class="col album">{album}</span>
-							</span>
-							<span class="line-secondary">
-								<span class="sub">{artist}</span>
-								{#if album && album !== '—'}
-									<span class="dot" aria-hidden="true">·</span>
-									<span class="sub">{album}</span>
+							<span class="row-art" aria-hidden="true">
+								{#if track.cover_url}
+									<img src={track.cover_url} alt="" />
+								{:else if track.cover_path}
+									<span class="row-art-skel"><SkeletonLoader /></span>
+								{:else}
+									<span class="row-art-ph"></span>
 								{/if}
+							</span>
+							<span class="track-text">
+								<span class="line-primary">
+									<span class="col title">{track.title}</span>
+									<span class="col artist">{artist}</span>
+									<span class="col album">{album}</span>
+								</span>
+								<span class="line-secondary">
+									<span class="sub">{artist}</span>
+									{#if album && album !== '—'}
+										<span class="dot" aria-hidden="true">·</span>
+										<span class="sub">{album}</span>
+									{/if}
+								</span>
 							</span>
 						</button>
 
@@ -531,10 +548,10 @@
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		flex-direction: column;
-		align-items: stretch;
-		gap: 1px;
-		padding: 0.55rem 0.4rem 0.55rem 0.75rem;
+		flex-direction: row;
+		align-items: center;
+		gap: 10px;
+		padding: 0.45rem 0.4rem 0.45rem 0.65rem;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -543,6 +560,44 @@
 		cursor: pointer;
 		font: inherit;
 		box-sizing: border-box;
+	}
+
+	/* Mobile: artwork; desktop hides via media query below */
+	.row-art {
+		display: none;
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		overflow: hidden;
+		background: var(--fg-8);
+	}
+
+	.row-art img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.row-art-skel,
+	.row-art-ph {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+
+	.row-art-ph {
+		background: var(--fg-8);
+	}
+
+	.track-text {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 1px;
 	}
 
 	.line-primary {
@@ -758,8 +813,18 @@
 		color: var(--fg-33);
 	}
 
+	@media (max-width: 767px) {
+		.row-art {
+			display: block;
+		}
+	}
+
 	@media (min-width: 768px) {
-		/* Desktop: title | artist | album columns */
+		/* Desktop: title | artist | album columns — no thumbs */
+		.row-art {
+			display: none;
+		}
+
 		.line-secondary {
 			display: none;
 		}

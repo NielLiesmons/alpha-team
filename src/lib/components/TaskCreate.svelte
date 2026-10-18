@@ -4,6 +4,7 @@
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import ProfilePic from './ProfilePic.svelte';
+	import Spinner from './Spinner.svelte';
 	import { closeComposer, people, projects, saveTask, tasks, ui } from '$lib/workspace.svelte.js';
 
 	const statuses = [
@@ -40,12 +41,16 @@
 	let labelDraft = $state('');
 	/** @type {HTMLInputElement | undefined} */
 	let titleInput = $state();
+	let saving = $state(false);
 
 	const editing = $derived(ui.composer?.kind === 'task' ? tasks.find((item) => item.id === ui.composer.id) : null);
 	const open = $derived(ui.composer?.kind === 'task');
 
 	$effect(() => {
-		if (!open) return;
+		if (!open) {
+			saving = false;
+			return;
+		}
 		title = editing?.title ?? '';
 		body = editing?.body ?? '';
 		status = editing?.status ?? ui.composer?.status ?? 'open';
@@ -57,6 +62,7 @@
 		priorityOpen = false;
 		bottomMenu = null;
 		labelDraft = '';
+		saving = false;
 		tick().then(() => titleInput?.focus());
 	});
 
@@ -85,7 +91,9 @@
 
 	async function save() {
 		const nextTitle = title.trim();
-		if (!nextTitle) return;
+		if (!nextTitle || saving) return;
+		const isNew = !editing;
+		saving = true;
 		const draft = {
 			id: editing?.id,
 			title: nextTitle,
@@ -104,10 +112,13 @@
 			_drive: editing?._drive
 		};
 		try {
-			await saveTask(draft, !editing);
+			const pending = saveTask(draft, isNew);
 			closeComposer();
+			await pending;
 		} catch (e) {
 			alert(e instanceof Error ? e.message : String(e));
+		} finally {
+			saving = false;
 		}
 	}
 </script>
@@ -352,7 +363,10 @@
 			</div>
 		</div>
 
-		<button type="button" class="publish-btn" disabled={!title.trim()} onclick={save}>
+		<button type="button" class="publish-btn" disabled={!title.trim() || saving} onclick={save}>
+			{#if saving}
+				<Spinner size={14} label="Saving" />
+			{/if}
 			{editing ? 'Save' : 'Publish'}
 		</button>
 	</div>
@@ -747,6 +761,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		gap: 8px;
 		background: var(--fg);
 		border: none;
 		border-radius: 9999px;

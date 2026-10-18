@@ -385,15 +385,7 @@ export function fromUiNote(ui) {
 
 export { parseAudioFilename };
 
-const TRACK_CACHE_PREFIX = 'alpha.player.tracks:';
 const LIST_CONCURRENCY = 8;
-
-/**
- * @param {import('./client.js').DriveSession} session
- */
-function trackCacheKey(session) {
-	return `${TRACK_CACHE_PREFIX}${session.url}`;
-}
 
 /**
  * @param {any[]} out
@@ -417,30 +409,8 @@ function sortTracks(out) {
 	return out;
 }
 
-/**
- * @param {import('./client.js').DriveSession} session
- * @param {any[]} tracks
- * @param {string} tip
- */
-function writeTrackCache(session, tracks, tip) {
-	try {
-		sessionStorage.setItem(trackCacheKey(session), JSON.stringify({ tip, tracks }));
-	} catch {
-		/* quota / private mode */
-	}
-}
-
-/**
- * Invalidate tip-keyed library cache after upload.
- * @param {import('./client.js').DriveSession} session
- */
-export function invalidateTrackCache(session) {
-	try {
-		sessionStorage.removeItem(trackCacheKey(session));
-	} catch {
-		/* ignore */
-	}
-}
+/** No-op — library cache removed (was freezing Firefox / filling sessionStorage). */
+export function invalidateTrackCache(_session) {}
 
 /**
  * Upload an audio File as chunked media + alpha.track/1.
@@ -870,19 +840,7 @@ export async function deleteTracks(session, trackOrTracks) {
  * @param {import('./client.js').DriveSession} session
  */
 export async function listTracks(session) {
-	const { tip, dir } = await loadRootDirWithTip(session);
-
-	try {
-		const raw = sessionStorage.getItem(trackCacheKey(session));
-		if (raw) {
-			const cached = JSON.parse(raw);
-			if (cached?.tip === tip && Array.isArray(cached.tracks)) {
-				return cached.tracks;
-			}
-		}
-	} catch {
-		/* ignore */
-	}
+	const { dir } = await loadRootDirWithTip(session);
 
 	const paths = Object.entries(dir.children ?? {})
 		.filter(([path, child]) => child.kind === 'track' || path.endsWith('/track.json'))
@@ -914,9 +872,7 @@ export async function listTracks(session) {
 	);
 	await Promise.all(workers);
 
-	const out = sortTracks(slots.filter(Boolean));
-	writeTrackCache(session, out, tip);
-	return out;
+	return sortTracks(slots.filter(Boolean));
 }
 
 /**

@@ -82,15 +82,20 @@
 		width: 100%;
 		height: auto;
 		max-height: min(92svh, 880px);
+		min-height: 0;
 		background: var(--modal-bg);
 		border: 1px solid var(--hairline);
 		border-bottom: none;
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
 		box-shadow: 0 16px 48px var(--shadow-strong);
-		overflow: auto;
-		/* Pad lives on the sheet so it can’t be clipped under the last row */
+		/* Children scroll inside — keeps bottom CTA row pinned */
+		overflow: hidden;
 		padding: 0 0 calc(14px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
+	}
+
+	.sheet > :global(*) {
+		min-width: 0;
 	}
 
 	@media (min-width: 640px) {
