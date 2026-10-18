@@ -2,6 +2,7 @@
 	import {
 		bindPlayerAudio,
 		currentTrack,
+		handleProgressiveStall,
 		playEndedAdvance,
 		playerUi,
 		reliableDuration
@@ -31,12 +32,10 @@
 			}
 			return;
 		}
-		// Do not call load() — it resets MediaSource progressive streams.
 		const current = audioEl.getAttribute('src') || '';
 		if (current !== url && audioEl.src !== url) {
 			audioEl.src = url;
 		}
-		// Only autoplay when the user still wants playback — never on pause soft-swaps.
 		if (playerUi.status === 'ready' && playerUi.wantsPlay && audioEl.paused) {
 			audioEl.play().catch(() => {});
 		}
@@ -52,9 +51,20 @@
 		playerUi.currentTime = audioEl.currentTime;
 		playerUi.playing = !audioEl.paused;
 		playerUi.duration = reliableDuration(audioEl, playerUi.bufferRatio, taggedDurationSec());
+
+		// iOS: truncated blob is about to end — grow before we hit `ended`.
+		if (
+			playerUi.wantsPlay &&
+			playerUi.bufferRatio < 0.999 &&
+			audioEl.buffered.length > 0
+		) {
+			const end = audioEl.buffered.end(audioEl.buffered.length - 1);
+			if (end - audioEl.currentTime < 1.25) {
+				handleProgressiveStall();
+			}
+		}
 	}
 
-	// When byte buffer fills, re-evaluate duration (first-chunk trick duration → real).
 	$effect(() => {
 		playerUi.bufferRatio;
 		playerUi.currentId;
@@ -65,7 +75,13 @@
 
 	function onEnded() {
 		syncClock();
+		// Early progressive blob finished — extend with more chunks, don't skip track.
+		if (handleProgressiveStall()) return;
 		playEndedAdvance().catch(() => {});
+	}
+
+	function onWaiting() {
+		if (playerUi.wantsPlay) handleProgressiveStall();
 	}
 </script>
 
@@ -79,6 +95,7 @@
 	onplay={syncClock}
 	onpause={syncClock}
 	onended={onEnded}
+	onwaiting={onWaiting}
 	oncanplay={syncClock}
 ></audio>
 

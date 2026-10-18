@@ -1,8 +1,10 @@
 <script>
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
+	import Spinner from '$lib/components/Spinner.svelte';
 	import {
 		openPlaylistCreate,
 		playerBrowse,
+		playerUi,
 		playlists,
 		refreshTracks,
 		setPlayerBrowse
@@ -21,6 +23,12 @@
 <svelte:head><title>Player</title></svelte:head>
 
 <nav class="feed" aria-label="Library">
+	{#if playerUi.syncing}
+		<div class="sync-pill" aria-live="polite">
+			<Spinner size={12} label="Syncing library" />
+			<span>Updating library…</span>
+		</div>
+	{/if}
 	<div class="card-stack top">
 		<button
 			type="button"
@@ -75,6 +83,24 @@
 				</svg>
 			</span>
 			<span class="title">Albums</span>
+		</button>
+		<button
+			type="button"
+			class="row"
+			class:on={playerBrowse.mode === 'played'}
+			onclick={() => setPlayerBrowse('played')}
+		>
+			<span class="row-icon" aria-hidden="true">
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+					<path
+						d="M3 3.5h4.5v4.5H3zM8.5 3.5H13v4.5H8.5zM3 8.5h4.5V13H3zM8.5 8.5H13V13H8.5z"
+						stroke="currentColor"
+						stroke-width="1.3"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</span>
+			<span class="title">Recently Played</span>
 		</button>
 		<button
 			type="button"
@@ -141,6 +167,20 @@
 		min-height: 0;
 		overflow: auto;
 		padding-bottom: 8px;
+	}
+
+	.sync-pill {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 8px 12px 0;
+		padding: 8px 12px;
+		border-radius: 10px;
+		background: var(--fg-4);
+		font-size: 12px;
+		font-weight: 500;
+		font-family: var(--font);
+		color: var(--fg-66);
 	}
 
 	.group-header {

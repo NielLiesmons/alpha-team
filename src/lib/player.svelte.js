@@ -19,6 +19,14 @@ import {
 	streamMediaChunks
 } from './drive/media.js';
 import { hasMpegFrameSync } from './drive/audio-meta.js';
+import {
+	fetchRemoteTip,
+	pushRecentlyPlayed,
+	readLibraryCache,
+	readRecentlyPlayed,
+	writeLibraryCache
+} from './player-cache.js';
+import { actor } from './actor.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 
 /** @type {Map<string, string>} cover_path → object URL */
@@ -28,10 +36,12 @@ const coverUrlCache = new Map();
 export const tracks = $state([]);
 /** @type {any[]} */
 export const playlists = $state([]);
+/** Bumps when recently-played history changes (for list reactivity). */
+export const recentPlayedRev = $state({ n: 0 });
 
 /** Browse selection for list column → detail column. */
 export const playerBrowse = $state({
-	/** @type {'songs' | 'artists' | 'albums' | 'recent' | 'playlist'} */
+	/** @type {'songs' | 'artists' | 'albums' | 'recent' | 'played' | 'playlist'} */
 	mode: 'songs',
 	/** @type {string | null} */
 	playlistId: null,
@@ -75,7 +85,11 @@ export const playerUi = $state({
 	pendingAddTrackIds: [],
 	error: '',
 	uploading: false,
-	uploadLabel: ''
+	uploadLabel: '',
+	/** Background tip/library sync (UI stays usable from cache). */
+	syncing: false,
+	/** True when list was painted from local cache before network. */
+	fromCache: false
 });
 
 /** Upload job UI — modal can close while work continues. */
@@ -104,6 +118,22 @@ let activeMediaSource = null;
 /** Background MSE buffering (must not block playTrack). */
 /** @type {Promise<void> | null} */
 let bufferTail = null;
+/**
+ * Blob progressive: called when the early truncated file stalls/ends before full download.
+ * @type {null | (() => void)}
+ */
+let onProgressiveStall = null;
+
+/**
+ * If progressive blob ran out before the full file arrived, grow/swap instead of skipping tracks.
+ * @returns {boolean} true if handled
+ */
+export function handleProgressiveStall() {
+	if (playerUi.bufferRatio >= 0.999) return false;
+	if (!onProgressiveStall) return false;
+	onProgressiveStall();
+	return true;
+}
 
 /**
  * @param {HTMLAudioElement | null} el
@@ -157,26 +187,55 @@ export async function refreshTracks() {
 		replaceTracks([]);
 		replacePlaylists([]);
 		playerUi.status = 'idle';
+		playerUi.syncing = false;
+		playerUi.fromCache = false;
 		return;
 	}
-	driveSession.loading = true;
+
+	// Local-first: paint last-known library immediately.
+	const cached = readLibraryCache(session);
+	if (cached?.tracks?.length) {
+		replaceTracks(cached.tracks);
+		replacePlaylists(cached.playlists);
+		playerUi.fromCache = true;
+		for (const t of tracks) {
+			if (t.cover_path && !t.cover_url) void hydrateCoverUrl(t.id, t.cover_path);
+		}
+	}
+
+	const empty = tracks.length === 0;
+	driveSession.loading = empty;
+	playerUi.syncing = true;
 	try {
+		const tip = await fetchRemoteTip(session);
+		if (cached?.tip && tip && tip === cached.tip && cached.tracks.length) {
+			// Tip unchanged — keep cache, skip full decrypt.
+			return;
+		}
 		const [list, pls] = await Promise.all([listTracks(session), listPlaylists(session)]);
 		replaceTracks(list);
 		replacePlaylists(pls);
-		// Hydrate covers for tracks that already have art (lazy per path)
+		playerUi.fromCache = false;
+		writeLibraryCache(session, {
+			tip: tip || cached?.tip || '',
+			tracks: list,
+			playlists: pls
+		});
 		for (const t of tracks) {
 			if (t.cover_path && !t.cover_url) void hydrateCoverUrl(t.id, t.cover_path);
 		}
 	} catch (e) {
-		playerUi.error = e instanceof Error ? e.message : String(e);
+		if (!tracks.length) {
+			playerUi.error = e instanceof Error ? e.message : String(e);
+		}
 	} finally {
 		driveSession.loading = false;
+		playerUi.syncing = false;
 	}
 }
 
 /**
- * @param {'songs' | 'artists' | 'albums' | 'recent' | 'playlist'} mode
+ * @param {'songs' | 'artists' | 'albums' | 'recent' | 'played' | 'playlist'} mode
  * @param {{ playlistId?: string | null, artist?: string | null, album?: string | null }} [opts]
  */
 export function setPlayerBrowse(mode, opts = {}) {
@@ -596,8 +655,8 @@ function concatParts(parts) {
 }
 
 /**
- * Fallback when MSE can't append MP3 (e.g. Safari): start after the first chunk,
- * keep downloading, then quietly swap to the full file once ready.
+ * Fallback when MSE can't append MP3 (Safari/iOS): play growing blobs.
+ * Truncated early blobs MUST be replaced before they end — otherwise phones stop cold.
  * @param {import('./drive/client.js').DriveSession} session
  * @param {any} track
  * @param {any} manifest
@@ -610,7 +669,9 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 	/** @type {Uint8Array[]} */
 	const parts = [];
 	let started = false;
-	let earlyUrl = /** @type {string | null} */ (null);
+	let activeUrl = /** @type {string | null} */ (null);
+	let partsAttached = 0;
+	let swapping = false;
 
 	/** @type {((v?: undefined) => void) | null} */
 	let resolveStart = null;
@@ -621,37 +682,35 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		rejectStart = reject;
 	});
 
-	const startEarly = () => {
-		if (started || generation !== playGeneration || !parts.length) return;
-		const early = concatParts(parts);
-		// Fat ID3 tags can fill the first chunk(s) with zero MPEG frames — keep buffering.
-		const looksMp3 = type.includes('mpeg') || type.includes('mp3');
-		if (looksMp3 && !hasMpegFrameSync(early) && playerUi.bufferRatio < 0.999) return;
-		started = true;
-		earlyUrl = URL.createObjectURL(new Blob([early], { type }));
-		playerUi.objectUrl = earlyUrl;
-		attachAudioSrc(earlyUrl);
-		playerUi.status = 'ready';
-		if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
-		resolveStart?.();
-	};
-
 	/**
-	 * Replace early partial blob with the complete file without fighting user pause.
-	 * @param {string} fullUrl
+	 * Attach a blob built from the first `n` parts (or all). Restores playhead + wantsPlay.
+	 * @param {number} [n]
 	 */
-	const softSwapFull = (fullUrl) => {
+	const attachFromParts = (n = parts.length) => {
+		if (generation !== playGeneration || n < 1 || n > parts.length) return;
+		if (swapping) return;
+		// Already playing this many parts (or more).
+		if (started && n <= partsAttached && activeUrl) return;
+		swapping = true;
+		const slice = parts.slice(0, n);
+		const bytes = concatParts(slice);
+		const url = URL.createObjectURL(new Blob([bytes], { type }));
 		const audio = boundAudio;
 		const t = audio?.currentTime ?? 0;
 		const resume = playerUi.wantsPlay;
-		playerUi.objectUrl = fullUrl;
-		attachAudioSrc(fullUrl);
+		const prev = activeUrl;
+		activeUrl = url;
+		playerUi.objectUrl = url;
+		attachAudioSrc(url);
+		partsAttached = n;
+
 		let done = false;
 		const finish = () => {
 			if (done || generation !== playGeneration || !boundAudio) return;
 			done = true;
+			swapping = false;
 			try {
-				boundAudio.currentTime = t;
+				if (t > 0) boundAudio.currentTime = t;
 			} catch {
 				/* ignore */
 			}
@@ -666,9 +725,36 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 			requestAnimationFrame(() => {
 				if (boundAudio && boundAudio.readyState >= 1) finish();
 			});
+			setTimeout(finish, 400);
+		} else {
+			swapping = false;
 		}
-		if (earlyUrl && earlyUrl !== fullUrl) URL.revokeObjectURL(earlyUrl);
-		earlyUrl = fullUrl;
+		if (prev && prev !== url) URL.revokeObjectURL(prev);
+	};
+
+	const startEarly = () => {
+		if (started || generation !== playGeneration || !parts.length) return;
+		const early = concatParts(parts);
+		const looksMp3 = type.includes('mpeg') || type.includes('mp3');
+		if (looksMp3 && !hasMpegFrameSync(early) && playerUi.bufferRatio < 0.999) return;
+		started = true;
+		playerUi.status = 'ready';
+		attachFromParts(parts.length);
+		if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
+		resolveStart?.();
+	};
+
+	/** Grow attached blob when the engine stalls or early file ends. */
+	const growIfNeeded = () => {
+		if (generation !== playGeneration) return;
+		if (!started || parts.length <= partsAttached) return;
+		attachFromParts(parts.length);
+	};
+
+	onProgressiveStall = () => {
+		if (generation !== playGeneration) return;
+		if (parts.length > partsAttached) growIfNeeded();
+		else if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
 	};
 
 	bufferTail = streamMediaChunks(session, track.media_path, {
@@ -682,62 +768,33 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		onChunk: async (_i, bytes) => {
 			if (generation !== playGeneration) return;
 			parts.push(bytes);
-			// Start as soon as we have decodable audio (not merely chunk 0).
 			if (!started) startEarly();
+			// Further growth is driven by waiting / near-end / ended (see PlayerEngine).
 		}
 	})
 		.then(async () => {
 			if (generation !== playGeneration) return;
 			playerUi.bufferRatio = 1;
-			const full = concatParts(parts);
-			const fullUrl = URL.createObjectURL(new Blob([full], { type }));
+			onProgressiveStall = null;
 			if (!started) {
-				earlyUrl = fullUrl;
-				playerUi.objectUrl = fullUrl;
-				attachAudioSrc(fullUrl);
+				started = true;
 				playerUi.status = 'ready';
+				attachFromParts(parts.length);
 				if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
 				resolveStart?.();
 				return;
 			}
-			// If the user paused, swap quietly. If still playing, wait for pause/waiting
-			// so we don't hitch mid-phrase — then swap once.
-			const audio = boundAudio;
-			if (!audio || audio.paused || !playerUi.wantsPlay) {
-				softSwapFull(fullUrl);
-				return;
-			}
-			let swapped = false;
-			const applyWhenSafe = () => {
-				if (swapped) return;
-				swapped = true;
-				audio.removeEventListener('pause', applyWhenSafe);
-				audio.removeEventListener('waiting', applyWhenSafe);
-				audio.removeEventListener('ended', applyWhenSafe);
-				if (generation !== playGeneration) {
-					URL.revokeObjectURL(fullUrl);
-					return;
-				}
-				softSwapFull(fullUrl);
-			};
-			audio.addEventListener('pause', applyWhenSafe);
-			audio.addEventListener('waiting', applyWhenSafe);
-			audio.addEventListener('ended', applyWhenSafe);
-			// Last resort if the engine never fires waiting (keeps early blob forever otherwise).
-			sleep(45000, signal)
-				.then(applyWhenSafe)
-				.catch(() => {
-					if (!swapped) URL.revokeObjectURL(fullUrl);
-				});
+			// Final full-file attach (same grow path).
+			attachFromParts(parts.length);
 		})
 		.catch((e) => {
 			if (generation !== playGeneration || e?.name === 'AbortError') return;
+			onProgressiveStall = null;
 			if (!started) {
 				rejectStart?.(e instanceof Error ? e : new Error(String(e)));
 			}
 		});
 
-	// Don't hang forever if chunk 0 is slow — wait with abort.
 	const timeout = sleep(30000, signal).then(() => {
 		if (!started) {
 			rejectStart?.(new Error('Timed out waiting for audio'));
@@ -760,6 +817,7 @@ export async function playTrack(track) {
 	if (!track?.media_path) throw new Error('Track has no media_path');
 
 	cancelInFlightPlay();
+	onProgressiveStall = null;
 	const generation = playGeneration;
 	const ac = new AbortController();
 	playAbort = ac;
@@ -824,6 +882,11 @@ export async function playTrack(track) {
 			playAbort = null;
 			if (playerUi.upNextId === track.id) playerUi.upNextId = null;
 			if (isMobileViewport()) playerUi.nowPlayingOpen = true;
+			const sess = activeSession();
+			if (sess) {
+				pushRecentlyPlayed(actor.email, sess, track.id);
+				recentPlayedRev.n += 1;
+			}
 		}
 		return url;
 	} catch (e) {
@@ -839,6 +902,7 @@ export async function playTrack(track) {
 
 export function stopPlayback() {
 	cancelInFlightPlay();
+	onProgressiveStall = null;
 	revokeUrl();
 	playerUi.currentId = null;
 	playerUi.status = 'idle';
@@ -1162,6 +1226,7 @@ export async function playEndedAdvance() {
 export function playerHeading() {
 	if (playerBrowse.mode === 'songs') return 'Songs';
 	if (playerBrowse.mode === 'recent') return 'Recently Added';
+	if (playerBrowse.mode === 'played') return 'Recently Played';
 	if (playerBrowse.mode === 'artists' && playerBrowse.artist) return playerBrowse.artist;
 	if (playerBrowse.mode === 'artists') return 'Artists';
 	if (playerBrowse.mode === 'albums' && playerBrowse.album) return playerBrowse.album;
@@ -1309,6 +1374,14 @@ export function visibleTracks() {
 	}
 	if (playerBrowse.mode === 'recent') {
 		return [...tracks].sort((a, b) => trackAddedMs(b) - trackAddedMs(a) || compareTracks(a, b));
+	}
+	if (playerBrowse.mode === 'played') {
+		recentPlayedRev.n; // subscribe
+		const session = activeSession();
+		if (!session) return [];
+		const recent = readRecentlyPlayed(actor.email, session);
+		const byId = new Map(tracks.map((t) => [t.id, t]));
+		return recent.map((r) => byId.get(r.id)).filter(Boolean);
 	}
 	return [...tracks].sort(compareTracks);
 }
