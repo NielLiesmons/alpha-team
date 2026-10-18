@@ -28,12 +28,8 @@
 				</div>
 				<div class="meta">
 					<p class="title">{track?.title ?? ''}</p>
-					<p class="artist">
-						{#if buffering}
-							Loading…
-						{:else}
-							{track?.artists?.join(', ') ?? ''}
-						{/if}
+					<p class="artist" class:buffering>
+						{track?.artists?.join(', ') ?? ''}
 					</p>
 				</div>
 			</button>
@@ -167,6 +163,17 @@
 			text-overflow: ellipsis;
 			white-space: nowrap;
 			line-height: 1.25;
+		}
+
+		.artist.buffering {
+			opacity: 0.45;
+			animation: pill-pulse 1s ease-in-out infinite;
+		}
+
+		@keyframes pill-pulse {
+			50% {
+				opacity: 0.2;
+			}
 		}
 
 		.play {

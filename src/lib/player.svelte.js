@@ -22,6 +22,7 @@ import { hasMpegFrameSync } from './drive/audio-meta.js';
 import { pushRecentlyPlayed, readRecentlyPlayed } from './player-cache.js';
 import { actor } from './actor.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
+import { idbGet, idbSet, thinTrack, tracksCacheKey } from './local-db.js';
 
 /** @type {Map<string, string>} cover_path → object URL */
 const coverUrlCache = new Map();
@@ -197,6 +198,26 @@ function replacePlaylists(list) {
 	playlists.splice(0, playlists.length, ...list);
 }
 
+/** Instant reopen from IndexedDB (metadata only — no cover blobs). */
+export async function hydrateTracksFromCache() {
+	const session = activeSession();
+	if (!session) return false;
+	const snap = await idbGet(tracksCacheKey(session, actor.email));
+	if (!snap || !Array.isArray(snap.tracks)) return false;
+	replaceTracks(snap.tracks.map((t) => ({ ...t, cover_url: null })));
+	replacePlaylists(Array.isArray(snap.playlists) ? snap.playlists : []);
+	return true;
+}
+
+async function persistTracksCache(session) {
+	if (!session) return;
+	await idbSet(tracksCacheKey(session, actor.email), {
+		at: Date.now(),
+		tracks: tracks.map(thinTrack),
+		playlists: playlists.map((p) => ({ ...p }))
+	});
+}
+
 export async function refreshTracks() {
 	const session = activeSession();
 	if (!session) {
@@ -205,11 +226,13 @@ export async function refreshTracks() {
 		playerUi.status = 'idle';
 		return;
 	}
-	driveSession.loading = tracks.length === 0;
+	const hadLocal = tracks.length > 0;
+	driveSession.loading = !hadLocal;
 	try {
 		const [list, pls] = await Promise.all([listTracks(session), listPlaylists(session)]);
 		replaceTracks(list);
 		replacePlaylists(pls);
+		void persistTracksCache(session);
 	} catch (e) {
 		playerUi.error = e instanceof Error ? e.message : String(e);
 	} finally {

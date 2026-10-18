@@ -18,8 +18,9 @@ import {
 	toUiNote,
 	toUiTask
 } from './drive/entities.js';
-import { activePerson, members } from './actor.svelte.js';
+import { activePerson, actor, members } from './actor.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
+import { idbGet, idbSet, workspaceCacheKey } from './local-db.js';
 
 /** People available for assignee pickers. Email = account id. */
 export const people = members;
@@ -92,13 +93,58 @@ function clearWorkspace() {
 	ui.source = 'none';
 }
 
+function cacheKeyForSession(session) {
+	return workspaceCacheKey(session, actor.email);
+}
+
+/** Persist a thin workspace snapshot for instant PWA reopen. */
+async function persistWorkspaceCache(session) {
+	if (!session) return;
+	const snapshot = {
+		at: Date.now(),
+		projects: projects.map((p) => ({ ...p })),
+		tasks: tasks.map((t) => {
+			const { _pending: _, ...rest } = t;
+			return rest;
+		}),
+		notes: notes.map((n) => {
+			const { _pending: _, ...rest } = n;
+			return rest;
+		})
+	};
+	await idbSet(cacheKeyForSession(session), snapshot);
+}
+
+/** Call after local mutations so home-screen reopen stays fresh. */
+export function scheduleWorkspacePersist() {
+	const session = activeSession();
+	if (session) void persistWorkspaceCache(session);
+}
+
+/**
+ * Hydrate UI from IndexedDB before Drive round-trip (home-screen PWA).
+ * @returns {Promise<boolean>} true if cache applied
+ */
+export async function hydrateWorkspaceFromCache() {
+	const session = activeSession();
+	if (!session) return false;
+	const snap = await idbGet(cacheKeyForSession(session));
+	if (!snap || !Array.isArray(snap.tasks)) return false;
+	replaceArray(projects, Array.isArray(snap.projects) ? snap.projects : []);
+	replaceArray(tasks, snap.tasks);
+	replaceArray(notes, Array.isArray(snap.notes) ? snap.notes : []);
+	ui.source = 'drive';
+	return true;
+}
+
 export async function refreshFromDrive() {
 	const session = activeSession();
 	if (!session) {
 		clearWorkspace();
 		return;
 	}
-	driveSession.loading = true;
+	const hadLocal = tasks.length > 0 || projects.length > 0 || notes.length > 0;
+	driveSession.loading = !hadLocal;
 	driveSession.error = null;
 	try {
 		await ensureSpace(session, 'Bley Family');
@@ -129,9 +175,10 @@ export async function refreshFromDrive() {
 			nlist.map((n) => toUiNote(n, plist))
 		);
 		ui.source = 'drive';
+		void persistWorkspaceCache(session);
 	} catch (e) {
 		driveSession.error = e instanceof Error ? e.message : String(e);
-		clearWorkspace();
+		if (!hadLocal) clearWorkspace();
 	} finally {
 		driveSession.loading = false;
 	}
@@ -194,6 +241,7 @@ export async function saveTask(draft, isNew) {
 		};
 		tasks.unshift(optimistic);
 		ui.selection = { kind: 'task', id: tempId };
+		scheduleWorkspacePersist();
 		if (!session) return optimistic;
 
 		try {
@@ -217,10 +265,12 @@ export async function saveTask(draft, isNew) {
 			if (idx >= 0) tasks[idx] = uiTask;
 			else tasks.unshift(uiTask);
 			if (ui.selection?.id === tempId) ui.selection = { kind: 'task', id: uiTask.id };
+			scheduleWorkspacePersist();
 			return uiTask;
 		} catch (e) {
 			const idx = tasks.findIndex((t) => t.id === tempId);
 			if (idx >= 0) tasks.splice(idx, 1);
+			scheduleWorkspacePersist();
 			throw e;
 		}
 	}
@@ -228,6 +278,7 @@ export async function saveTask(draft, isNew) {
 	const idx = tasks.findIndex((t) => t.id === draft.id);
 	const prev = idx >= 0 ? { ...tasks[idx] } : null;
 	if (idx >= 0) Object.assign(tasks[idx], { ...draft, author, _pending: Boolean(session) });
+	scheduleWorkspacePersist();
 	if (!session) return draft;
 
 	try {
@@ -243,9 +294,11 @@ export async function saveTask(draft, isNew) {
 		const i = tasks.findIndex((t) => t.id === saved.id);
 		if (i >= 0) Object.assign(tasks[i], uiTask);
 		else tasks.unshift(uiTask);
+		scheduleWorkspacePersist();
 		return uiTask;
 	} catch (e) {
 		if (idx >= 0 && prev) Object.assign(tasks[idx], prev);
+		scheduleWorkspacePersist();
 		throw e;
 	}
 }
@@ -275,6 +328,7 @@ export async function saveNote(draft, isNew) {
 		notes.unshift(optimistic);
 		ui.noteId = tempId;
 		ui.selection = { kind: 'note', id: tempId };
+		scheduleWorkspacePersist();
 		if (!session) return optimistic;
 
 		try {
@@ -296,10 +350,12 @@ export async function saveNote(draft, isNew) {
 			else notes.unshift(uiNote);
 			ui.noteId = uiNote.id;
 			ui.selection = { kind: 'note', id: uiNote.id };
+			scheduleWorkspacePersist();
 			return uiNote;
 		} catch (e) {
 			const idx = notes.findIndex((n) => n.id === tempId);
 			if (idx >= 0) notes.splice(idx, 1);
+			scheduleWorkspacePersist();
 			throw e;
 		}
 	}
@@ -309,6 +365,7 @@ export async function saveNote(draft, isNew) {
 	if (idx >= 0) Object.assign(notes[idx], { ...draft, author, _pending: Boolean(session) });
 	ui.noteId = draft.id;
 	ui.selection = { kind: 'note', id: draft.id };
+	scheduleWorkspacePersist();
 	if (!session) return draft;
 
 	try {
@@ -325,9 +382,11 @@ export async function saveNote(draft, isNew) {
 		else notes.unshift(uiNote);
 		ui.noteId = uiNote.id;
 		ui.selection = { kind: 'note', id: uiNote.id };
+		scheduleWorkspacePersist();
 		return uiNote;
 	} catch (e) {
 		if (idx >= 0 && prev) Object.assign(notes[idx], prev);
+		scheduleWorkspacePersist();
 		throw e;
 	}
 }

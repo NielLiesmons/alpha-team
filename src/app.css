@@ -722,3 +722,19 @@ table.data tr.selected td {
 		align-items: stretch;
 	}
 }
+
+@media (max-width: 767px) {
+	/* AppShell floating list title replaces page h1 on mobile */
+	.page-head h1 {
+		display: none;
+	}
+
+	.page-head {
+		margin-bottom: 12px;
+		padding: 4px 16px 0;
+	}
+
+	.page-head p {
+		margin-top: 0;
+	}
+}

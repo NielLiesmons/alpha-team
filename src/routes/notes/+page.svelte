@@ -1,4 +1,6 @@
 <script>
+	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
+	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { notePlainText } from '$lib/note-text.js';
 	import { notes, selectEntity, ui } from '$lib/workspace.svelte.js';
 
@@ -20,7 +22,9 @@
 <svelte:head><title>Notes</title></svelte:head>
 
 <div class="feed">
-	{#if notes.length === 0}
+	{#if driveSession.loading && notes.length === 0}
+		<FeedSkeleton rows={8} />
+	{:else if notes.length === 0}
 		<p class="empty">No notes yet</p>
 	{:else}
 		<div class="card-stack">

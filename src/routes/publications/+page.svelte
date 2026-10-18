@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import {
 		campaigns,
 		mailSettings,
@@ -36,7 +37,7 @@
 			<button type="button" class="linkish" onclick={() => refreshPublications()}>Retry</button>
 		</p>
 	{:else if pubsUi.loading && campaigns.length === 0}
-		<p class="empty">Loading…</p>
+		<FeedSkeleton rows={5} />
 	{/if}
 
 	<div class="card-stack">

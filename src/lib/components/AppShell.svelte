@@ -218,27 +218,10 @@
 				<header class="list-top">
 					<h1 class="list-title">{activeItem.label}</h1>
 					<div class="list-actions">
-						{#if createKind}
-							<button
-								type="button"
-								class="filter-btn list-plus"
-								aria-label="New {createKind}"
-								onclick={onListPlus}
-							>
-								<svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-									<path
-										d="M6 1.5v9M1.5 6h9"
-										stroke="currentColor"
-										stroke-width="1.6"
-										stroke-linecap="round"
-									/>
-								</svg>
-							</button>
-						{/if}
 						<div class="filter-wrap">
 							<button
 								type="button"
-								class="filter-btn"
+								class="chrome-btn"
 								class:on={filter !== 'all'}
 								aria-label="Filter"
 								aria-expanded={filterOpen}
@@ -289,6 +272,23 @@
 								</div>
 							{/if}
 						</div>
+						{#if createKind}
+							<button
+								type="button"
+								class="chrome-btn list-plus"
+								aria-label="New {createKind}"
+								onclick={onListPlus}
+							>
+								<svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+									<path
+										d="M6 1.5v9M1.5 6h9"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linecap="round"
+									/>
+								</svg>
+							</button>
+						{/if}
 					</div>
 				</header>
 				<div class="pane">
@@ -690,10 +690,10 @@
 	.list-actions {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 6px;
 	}
 
-	.filter-btn {
+	.chrome-btn {
 		width: 30px;
 		height: 30px;
 		display: grid;
@@ -707,9 +707,9 @@
 		box-sizing: border-box;
 	}
 
-	.filter-btn:hover,
-	.filter-btn.on,
-	.filter-btn[aria-expanded='true'] {
+	.chrome-btn:hover,
+	.chrome-btn.on,
+	.chrome-btn[aria-expanded='true'] {
 		color: var(--white);
 		background: var(--white4);
 	}
@@ -763,11 +763,65 @@
 		}
 
 		.list-col {
+			position: relative;
 			flex: 1;
 			width: 100%;
 			max-width: none;
 			min-width: 0;
 			border-right: 0;
+		}
+
+		/* Floating large title + round actions; content fades under the bar */
+		.list-top {
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			z-index: 6;
+			height: auto;
+			min-height: calc(52px + env(safe-area-inset-top, 0px));
+			padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 36px 16px;
+			border-bottom: none;
+			align-items: center;
+			pointer-events: none;
+			background: linear-gradient(
+				to bottom,
+				var(--bg) 0%,
+				var(--bg) 42%,
+				color-mix(in srgb, var(--bg) 78%, transparent) 68%,
+				color-mix(in srgb, var(--bg) 0%, transparent) 100%
+			);
+		}
+
+		.list-top > * {
+			pointer-events: auto;
+		}
+
+		.list-title {
+			font-size: 23px;
+			font-weight: 700;
+			letter-spacing: -0.02em;
+			line-height: 1.15;
+			color: var(--fg);
+		}
+
+		.chrome-btn {
+			width: 36px;
+			height: 36px;
+			border-radius: 9999px;
+			background: var(--fg-8);
+			color: var(--fg-66);
+		}
+
+		.chrome-btn:hover,
+		.chrome-btn.on,
+		.chrome-btn[aria-expanded='true'] {
+			color: var(--fg);
+			background: var(--fg-16);
+		}
+
+		.pane {
+			padding-top: calc(52px + env(safe-area-inset-top, 0px));
 		}
 
 		.bottom-pill {

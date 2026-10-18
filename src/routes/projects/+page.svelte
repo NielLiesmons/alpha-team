@@ -1,4 +1,5 @@
 <script>
+	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import ProjectCard from '$lib/components/ProjectCard.svelte';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
@@ -63,12 +64,12 @@
 <svelte:head><title>Projects</title></svelte:head>
 
 <div class="feed">
-	{#if driveSession.loading}
-		<p class="banner">Loading from Drive…</p>
-	{:else if driveSession.error}
+	{#if driveSession.error}
 		<p class="banner"><span class="err">{driveSession.error}</span></p>
 	{/if}
-	{#if !driveSession.loading && projects.length === 0}
+	{#if driveSession.loading && projects.length === 0}
+		<FeedSkeleton rows={6} />
+	{:else if projects.length === 0}
 		<p class="empty">No Projects yet</p>
 	{:else}
 		{#each groups as group (group.key)}

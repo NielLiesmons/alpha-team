@@ -169,7 +169,8 @@
 		overflow-x: hidden;
 		overflow-y: auto;
 		overscroll-behavior: contain;
-		padding: 12px 16px;
+		/* Match TaskCreate .task-body padding */
+		padding: 10px 16px;
 		box-sizing: border-box;
 		-webkit-overflow-scrolling: touch;
 	}

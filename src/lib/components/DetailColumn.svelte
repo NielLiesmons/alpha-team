@@ -161,6 +161,17 @@
 		return 'Detail';
 	});
 
+	/** Centered mobile detail title (entity name when available). */
+	const mobileTitle = $derived.by(() => {
+		if (isPlayer) return playerTitle || 'Player';
+		if (task?.title) return task.title;
+		if (project?.title) return project.title;
+		if (note?.title) return note.title;
+		if (newsletter?.subject) return newsletter.subject;
+		if (welcomeSelected) return 'Welcome';
+		return typeLabel;
+	});
+
 	const open = $derived(
 		Boolean(
 			(isPlayer && playerBrowse.detailOpen) ||
@@ -288,7 +299,7 @@
 		<header class="mobile-bar">
 			<button
 				type="button"
-				class="icon-hit"
+				class="chrome-btn"
 				aria-label="Back"
 				onclick={() => (isPlayer ? closePlayerDetail() : close())}
 			>
@@ -302,18 +313,11 @@
 					/>
 				</svg>
 			</button>
-			{#if detailAuthor}
-				<div class="author-chip center">
-					<ProfilePic name={detailAuthor.name} size={22} />
-					<span class="author-name">{detailAuthor.name}</span>
-				</div>
-			{:else}
-				<span class="type-label">{isPlayer ? playerTitle : typeLabel}</span>
-			{/if}
+			<span class="mobile-title">{mobileTitle}</span>
 			<div class="menu-wrap">
 				<button
 					type="button"
-					class="icon-hit"
+					class="chrome-btn"
 					aria-label="More"
 					aria-expanded={menuOpen}
 					onclick={() => (menuOpen = !menuOpen)}
@@ -1264,49 +1268,76 @@
 		}
 
 		.mobile-bar {
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			z-index: 8;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			gap: 8px;
-			height: 52px;
-			padding: 0 10px;
-			border-bottom: 1px solid var(--hairline);
+			gap: 10px;
+			height: auto;
+			min-height: calc(52px + env(safe-area-inset-top, 0px));
+			padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 36px;
+			border-bottom: none;
 			flex-shrink: 0;
 			box-sizing: border-box;
-			background: var(--bg);
+			pointer-events: none;
+			background: linear-gradient(
+				to bottom,
+				var(--bg) 0%,
+				var(--bg) 42%,
+				color-mix(in srgb, var(--bg) 78%, transparent) 68%,
+				color-mix(in srgb, var(--bg) 0%, transparent) 100%
+			);
 		}
 
-		.type-label {
+		.mobile-bar > * {
+			pointer-events: auto;
+		}
+
+		.mobile-title {
 			flex: 1;
+			min-width: 0;
 			text-align: center;
-			font-family: var(--font);
-			font-size: 15px;
+			font-family: 'Inter', var(--font), system-ui, sans-serif;
+			font-size: 17px;
 			font-weight: 650;
-			color: var(--white);
-		}
-
-		.author-chip.center .author-name {
-			font-size: 15px;
-			font-weight: 650;
+			letter-spacing: -0.01em;
+			line-height: 1.2;
 			color: var(--fg);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 
-		.icon-hit {
+		.chrome-btn {
 			width: 36px;
 			height: 36px;
 			display: grid;
 			place-items: center;
 			border: 0;
-			border-radius: 10px;
-			background: transparent;
-			color: var(--white66);
+			border-radius: 9999px;
+			background: var(--fg-8);
+			color: var(--fg-66);
 			padding: 0;
 			cursor: pointer;
+			flex-shrink: 0;
+			box-sizing: border-box;
 		}
 
-		.icon-hit:hover {
-			color: var(--white);
-			background: var(--white4);
+		.chrome-btn:hover,
+		.chrome-btn[aria-expanded='true'] {
+			color: var(--fg);
+			background: var(--fg-16);
+		}
+
+		/* Keep equal-width side slots so the title stays optically centered */
+		.mobile-bar > .chrome-btn,
+		.mobile-bar > .menu-wrap {
+			width: 36px;
+			flex-shrink: 0;
 		}
 
 		.desktop-head,
@@ -1315,7 +1346,12 @@
 		}
 
 		.body {
-			padding: 0 0 calc(12px + env(safe-area-inset-bottom, 0px));
+			padding: calc(52px + env(safe-area-inset-top, 0px)) 0
+				calc(12px + env(safe-area-inset-bottom, 0px));
+		}
+
+		.body.player-body {
+			padding-top: calc(52px + env(safe-area-inset-top, 0px));
 		}
 	}
 </style>

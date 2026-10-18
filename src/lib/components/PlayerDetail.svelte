@@ -1,6 +1,6 @@
 <script>
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
-	import Spinner from '$lib/components/Spinner.svelte';
+	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import SkeletonLoader from '$lib/components/SkeletonLoader.svelte';
 	import {
 		addTracksToPlaylist,
@@ -164,15 +164,7 @@
 		{#if !connected}
 			<p class="empty">Connect Drive in Settings to use the Player.</p>
 		{:else if driveSession.loading && tracks.length === 0}
-			<div class="loading-block" aria-busy="true">
-				<Spinner size={28} label="Loading library" />
-				<p class="loading-copy">Loading library…</p>
-				<div class="skel-stack" aria-hidden="true">
-					{#each Array(8) as _, i (i)}
-						<div class="skel-row"></div>
-					{/each}
-				</div>
-			</div>
+			<FeedSkeleton rows={10} withArt={true} />
 		{:else if playerBrowse.mode === 'artists' && !playerBrowse.artist}
 			{#if artists.length === 0}
 				<p class="empty">No artists yet. Upload audio to build your library.</p>
@@ -425,52 +417,6 @@
 		padding: 48px 16px;
 		color: var(--fg-66);
 		font-size: 14px;
-	}
-
-	.loading-block {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 12px;
-		padding: 28px 16px 16px;
-	}
-
-	.loading-copy {
-		margin: 0;
-		font-size: 13px;
-		font-weight: 500;
-		font-family: var(--font);
-		color: var(--fg-66);
-	}
-
-	.skel-stack {
-		width: 100%;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		padding: 8px 0 0;
-	}
-
-	.skel-row {
-		height: 36px;
-		border-radius: 10px;
-		background: linear-gradient(
-			90deg,
-			var(--fg-4) 0%,
-			var(--fg-8) 45%,
-			var(--fg-4) 90%
-		);
-		background-size: 200% 100%;
-		animation: skel 1.1s ease-in-out infinite;
-	}
-
-	@keyframes skel {
-		0% {
-			background-position: 100% 0;
-		}
-		100% {
-			background-position: -100% 0;
-		}
 	}
 
 	.card-stack {

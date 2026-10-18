@@ -1,4 +1,5 @@
 <script>
+	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import { listEntries, uploadFile } from '$lib/drive/entities.js';
 	import { childrenOf } from '$lib/drive/tree.js';
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
@@ -130,7 +131,7 @@
 		<p class="err">{err}</p>
 	{/if}
 	{#if loading && entries.length === 0}
-		<p class="muted">Loading…</p>
+		<FeedSkeleton rows={8} />
 	{:else}
 		<div class="miller" role="navigation" aria-label="Drive folders">
 			{#each columns as col, colIndex (col.folderPath + '-' + colIndex)}
