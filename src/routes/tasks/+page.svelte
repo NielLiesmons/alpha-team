@@ -1,6 +1,7 @@
 <script>
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import TaskCard from '$lib/components/TaskCard.svelte';
+	import { appBoot } from '$lib/boot.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { openComposer, selectEntity, tasks, ui } from '$lib/workspace.svelte.js';
 
@@ -37,7 +38,7 @@
 	{#if driveSession.error}
 		<p class="banner"><span class="err">{driveSession.error}</span></p>
 	{/if}
-	{#if driveSession.loading && tasks.length === 0}
+	{#if !appBoot.listsReady && tasks.length === 0}
 		<FeedSkeleton rows={8} />
 	{:else if tasks.length === 0}
 		<p class="empty">No Tasks yet</p>

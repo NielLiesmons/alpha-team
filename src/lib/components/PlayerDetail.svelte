@@ -1,4 +1,5 @@
 <script>
+	import { appBoot } from '$lib/boot.svelte.js';
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import SkeletonLoader from '$lib/components/SkeletonLoader.svelte';
@@ -22,9 +23,7 @@
 		tracks,
 		visibleTracks
 	} from '$lib/player.svelte.js';
-	import { ui } from '$lib/workspace.svelte.js';
-
-	const connected = $derived(Boolean(activeSession()) && ui.source === 'drive');
+	const connected = $derived(Boolean(activeSession()));
 	const list = $derived(visibleTracks());
 	const artists = $derived(artistNames());
 	const albums = $derived(albumRows());
@@ -163,7 +162,7 @@
 	<div class="feed">
 		{#if !connected}
 			<p class="empty">Connect Drive in Settings to use the Player.</p>
-		{:else if driveSession.loading && tracks.length === 0}
+		{:else if (!appBoot.listsReady || driveSession.loading) && tracks.length === 0}
 			<FeedSkeleton rows={10} withArt={true} />
 		{:else if playerBrowse.mode === 'artists' && !playerBrowse.artist}
 			{#if artists.length === 0}

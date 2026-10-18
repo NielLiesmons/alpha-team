@@ -21,19 +21,21 @@
 		initTheme();
 		bootApp();
 
-		// Register SW after first paint — autoUpdate keeps home-screen installs fresh.
+		// Light SW registration — avoid hammering iOS with update checks.
 		if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 			void import('virtual:pwa-register').then(({ registerSW }) => {
 				registerSW({
 					immediate: true,
 					onRegisteredSW(_swUrl, registration) {
 						if (!registration) return;
-						// Periodic check (iOS PWA often sleeps; catch updates on resume)
-						setInterval(() => {
-							void registration.update();
-						}, 60 * 60 * 1000);
+						let lastCheck = 0;
+						const CHECK_MS = 6 * 60 * 60 * 1000;
 						document.addEventListener('visibilitychange', () => {
-							if (document.visibilityState === 'visible') void registration.update();
+							if (document.visibilityState !== 'visible') return;
+							const now = Date.now();
+							if (now - lastCheck < CHECK_MS) return;
+							lastCheck = now;
+							void registration.update();
 						});
 					}
 				});

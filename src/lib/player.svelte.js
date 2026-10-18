@@ -28,8 +28,8 @@ import { idbGet, idbSet, thinTrack, tracksCacheKey } from './local-db.js';
 const coverUrlCache = new Map();
 /** In-flight cover fetches (dedupe). */
 const coverInflight = new Map();
-/** Cap parallel decrypts — mass cover hydrate froze Firefox. */
-const COVER_CONCURRENCY = 2;
+/** Cap parallel decrypts — mass cover hydrate froze phones. */
+const COVER_CONCURRENCY = 1;
 let coverActive = 0;
 /** @type {(() => void)[]} */
 const coverWait = [];
@@ -202,16 +202,16 @@ function replacePlaylists(list) {
 export async function hydrateTracksFromCache() {
 	const session = activeSession();
 	if (!session) return false;
-	const snap = await idbGet(tracksCacheKey(session, actor.email));
+	const snap = await idbGet(tracksCacheKey(session));
 	if (!snap || !Array.isArray(snap.tracks)) return false;
 	replaceTracks(snap.tracks.map((t) => ({ ...t, cover_url: null })));
 	replacePlaylists(Array.isArray(snap.playlists) ? snap.playlists : []);
-	return true;
+	return snap.tracks.length > 0 || (Array.isArray(snap.playlists) && snap.playlists.length > 0);
 }
 
 async function persistTracksCache(session) {
 	if (!session) return;
-	await idbSet(tracksCacheKey(session, actor.email), {
+	await idbSet(tracksCacheKey(session), {
 		at: Date.now(),
 		tracks: tracks.map(thinTrack),
 		playlists: playlists.map((p) => ({ ...p }))

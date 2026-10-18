@@ -41,7 +41,7 @@
 	const selection = $derived(ui.selection);
 	const isPlayer = $derived($page.url.pathname.startsWith('/player'));
 	const playerTitle = $derived(isPlayer ? playerHeading() : '');
-	const playerConnected = $derived(Boolean(activeSession()) && ui.source === 'drive');
+	const playerConnected = $derived(Boolean(activeSession()));
 
 	/** @type {HTMLInputElement | undefined} */
 	let playerFileInput = $state();
@@ -795,6 +795,7 @@
 	}
 
 	.detail {
+		position: relative;
 		flex: 1 1 auto;
 		min-width: 0;
 		min-height: 0;
@@ -809,18 +810,33 @@
 		display: none;
 	}
 
-	/* Matches AppShell .list-top (40px) */
+	/* Floating detail header — same fade recipe as list-top */
 	.detail-top {
-		flex-shrink: 0;
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 6;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
 		width: 100%;
-		height: 40px;
+		height: 48px;
 		padding: 0 8px 0 16px;
-		border-bottom: 1px solid var(--hairline);
+		border-bottom: none;
 		box-sizing: border-box;
+		pointer-events: none;
+		background: linear-gradient(
+			to bottom,
+			color-mix(in srgb, var(--bg) 100%, transparent) 0%,
+			color-mix(in srgb, var(--bg) 66%, transparent) 50%,
+			color-mix(in srgb, var(--bg) 0%, transparent) 100%
+		);
+	}
+
+	.detail-top > * {
+		pointer-events: auto;
 	}
 
 	.detail-top-start {
@@ -962,7 +978,7 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		padding: 0;
+		padding: 48px 0 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0;
@@ -1276,19 +1292,17 @@
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			gap: 10px;
-			height: auto;
-			min-height: calc(52px + env(safe-area-inset-top, 0px));
-			padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 36px;
+			gap: 12px;
+			height: calc(60px + env(safe-area-inset-top, 0px));
+			padding: env(safe-area-inset-top, 0px) 14px 0;
 			border-bottom: none;
 			flex-shrink: 0;
 			box-sizing: border-box;
 			pointer-events: none;
 			background: linear-gradient(
 				to bottom,
-				var(--bg) 0%,
-				var(--bg) 42%,
-				color-mix(in srgb, var(--bg) 78%, transparent) 68%,
+				color-mix(in srgb, var(--bg) 100%, transparent) 0%,
+				color-mix(in srgb, var(--bg) 66%, transparent) 50%,
 				color-mix(in srgb, var(--bg) 0%, transparent) 100%
 			);
 		}
@@ -1302,10 +1316,10 @@
 			min-width: 0;
 			text-align: center;
 			font-family: 'Inter', var(--font), system-ui, sans-serif;
-			font-size: 17px;
+			font-size: 19px;
 			font-weight: 650;
-			letter-spacing: -0.01em;
-			line-height: 1.2;
+			letter-spacing: -0.02em;
+			line-height: 1.15;
 			color: var(--fg);
 			overflow: hidden;
 			text-overflow: ellipsis;
@@ -1313,8 +1327,8 @@
 		}
 
 		.chrome-btn {
-			width: 36px;
-			height: 36px;
+			width: 44px;
+			height: 44px;
 			display: grid;
 			place-items: center;
 			border: 0;
@@ -1333,10 +1347,15 @@
 			background: var(--fg-16);
 		}
 
+		.chrome-btn :global(svg) {
+			width: 20px;
+			height: 20px;
+		}
+
 		/* Keep equal-width side slots so the title stays optically centered */
 		.mobile-bar > .chrome-btn,
 		.mobile-bar > .menu-wrap {
-			width: 36px;
+			width: 44px;
 			flex-shrink: 0;
 		}
 
@@ -1346,12 +1365,12 @@
 		}
 
 		.body {
-			padding: calc(52px + env(safe-area-inset-top, 0px)) 0
+			padding: calc(60px + env(safe-area-inset-top, 0px)) 0
 				calc(12px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.body.player-body {
-			padding-top: calc(52px + env(safe-area-inset-top, 0px));
+			padding-top: calc(60px + env(safe-area-inset-top, 0px));
 		}
 	}
 </style>

@@ -228,7 +228,7 @@
 								aria-haspopup="listbox"
 								onclick={() => (filterOpen = !filterOpen)}
 							>
-								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+								<svg class="chrome-ico" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 									<path
 										d="M2.5 4h11M4.5 8h7M6.5 12h3"
 										stroke="currentColor"
@@ -279,7 +279,7 @@
 								aria-label="New {createKind}"
 								onclick={onListPlus}
 							>
-								<svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<svg class="chrome-ico" width="18" height="18" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 									<path
 										d="M6 1.5v9M1.5 6h9"
 										stroke="currentColor"
@@ -656,6 +656,7 @@
 	}
 
 	.list-col {
+		position: relative;
 		flex: 0 0 var(--list);
 		width: var(--list);
 		min-width: 280px;
@@ -666,16 +667,32 @@
 		overflow: hidden;
 	}
 
+	/* Floating header: content scrolls under; fade = bar height (100% → 66% mid → 0%) */
 	.list-top {
-		flex-shrink: 0;
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 6;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
-		height: 40px;
-		padding: 0 8px 0 16px;
-		border-bottom: 1px solid var(--hairline);
+		height: 48px;
+		padding: 0 10px 0 16px;
+		border-bottom: none;
 		box-sizing: border-box;
+		pointer-events: none;
+		background: linear-gradient(
+			to bottom,
+			color-mix(in srgb, var(--bg) 100%, transparent) 0%,
+			color-mix(in srgb, var(--bg) 66%, transparent) 50%,
+			color-mix(in srgb, var(--bg) 0%, transparent) 100%
+		);
+	}
+
+	.list-top > * {
+		pointer-events: auto;
 	}
 
 	.list-title {
@@ -714,11 +731,16 @@
 		background: var(--white4);
 	}
 
+	.chrome-ico {
+		display: block;
+	}
+
 	.pane {
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
 		overflow: auto;
+		padding-top: 48px;
 	}
 
 	.sr-only {
@@ -763,7 +785,6 @@
 		}
 
 		.list-col {
-			position: relative;
 			flex: 1;
 			width: 100%;
 			max-width: none;
@@ -771,43 +792,33 @@
 			border-right: 0;
 		}
 
-		/* Floating large title + round actions; content fades under the bar */
 		.list-top {
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			z-index: 6;
-			height: auto;
-			min-height: calc(52px + env(safe-area-inset-top, 0px));
-			padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 36px 16px;
-			border-bottom: none;
+			height: calc(64px + env(safe-area-inset-top, 0px));
+			padding: env(safe-area-inset-top, 0px) 14px 0 18px;
 			align-items: center;
-			pointer-events: none;
 			background: linear-gradient(
 				to bottom,
-				var(--bg) 0%,
-				var(--bg) 42%,
-				color-mix(in srgb, var(--bg) 78%, transparent) 68%,
+				color-mix(in srgb, var(--bg) 100%, transparent) 0%,
+				color-mix(in srgb, var(--bg) 66%, transparent) 50%,
 				color-mix(in srgb, var(--bg) 0%, transparent) 100%
 			);
 		}
 
-		.list-top > * {
-			pointer-events: auto;
-		}
-
 		.list-title {
-			font-size: 23px;
+			font-size: 30px;
 			font-weight: 700;
-			letter-spacing: -0.02em;
-			line-height: 1.15;
+			letter-spacing: -0.03em;
+			line-height: 1.1;
 			color: var(--fg);
 		}
 
+		.list-actions {
+			gap: 8px;
+		}
+
 		.chrome-btn {
-			width: 36px;
-			height: 36px;
+			width: 44px;
+			height: 44px;
 			border-radius: 9999px;
 			background: var(--fg-8);
 			color: var(--fg-66);
@@ -820,8 +831,13 @@
 			background: var(--fg-16);
 		}
 
+		.chrome-ico {
+			width: 20px;
+			height: 20px;
+		}
+
 		.pane {
-			padding-top: calc(52px + env(safe-area-inset-top, 0px));
+			padding-top: calc(64px + env(safe-area-inset-top, 0px));
 		}
 
 		.bottom-pill {

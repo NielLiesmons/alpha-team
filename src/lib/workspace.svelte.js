@@ -18,7 +18,7 @@ import {
 	toUiNote,
 	toUiTask
 } from './drive/entities.js';
-import { activePerson, actor, members } from './actor.svelte.js';
+import { activePerson, members } from './actor.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { idbGet, idbSet, workspaceCacheKey } from './local-db.js';
 
@@ -94,7 +94,7 @@ function clearWorkspace() {
 }
 
 function cacheKeyForSession(session) {
-	return workspaceCacheKey(session, actor.email);
+	return workspaceCacheKey(session);
 }
 
 /** Persist a thin workspace snapshot for instant PWA reopen. */
@@ -102,7 +102,10 @@ async function persistWorkspaceCache(session) {
 	if (!session) return;
 	const snapshot = {
 		at: Date.now(),
-		projects: projects.map((p) => ({ ...p })),
+		projects: projects.map((p) => {
+			const { _pending: _, ...rest } = p;
+			return rest;
+		}),
 		tasks: tasks.map((t) => {
 			const { _pending: _, ...rest } = t;
 			return rest;
@@ -122,19 +125,24 @@ export function scheduleWorkspacePersist() {
 }
 
 /**
- * Hydrate UI from IndexedDB before Drive round-trip (home-screen PWA).
+ * Hydrate UI from local cache before Drive round-trip (home-screen PWA).
  * @returns {Promise<boolean>} true if cache applied
  */
 export async function hydrateWorkspaceFromCache() {
 	const session = activeSession();
 	if (!session) return false;
 	const snap = await idbGet(cacheKeyForSession(session));
-	if (!snap || !Array.isArray(snap.tasks)) return false;
+	if (!snap) return false;
+	const hasAny =
+		(Array.isArray(snap.tasks) && snap.tasks.length > 0) ||
+		(Array.isArray(snap.notes) && snap.notes.length > 0) ||
+		(Array.isArray(snap.projects) && snap.projects.length > 0);
+	if (!hasAny && !Array.isArray(snap.tasks)) return false;
 	replaceArray(projects, Array.isArray(snap.projects) ? snap.projects : []);
-	replaceArray(tasks, snap.tasks);
+	replaceArray(tasks, Array.isArray(snap.tasks) ? snap.tasks : []);
 	replaceArray(notes, Array.isArray(snap.notes) ? snap.notes : []);
 	ui.source = 'drive';
-	return true;
+	return hasAny || Array.isArray(snap.tasks);
 }
 
 export async function refreshFromDrive() {

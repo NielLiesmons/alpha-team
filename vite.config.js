@@ -46,8 +46,10 @@ export default defineConfig({
 				]
 			},
 			workbox: {
+				// App shell only — never intercept Drive API / cross-origin traffic.
 				navigateFallback: '/',
-				navigationPreload: true,
+				navigateFallbackDenylist: [/^\/api/, /\/sw\.js$/],
+				navigationPreload: false,
 				cleanupOutdatedCaches: true,
 				clientsClaim: true,
 				skipWaiting: true,
@@ -57,16 +59,7 @@ export default defineConfig({
 						handler: 'CacheFirst',
 						options: {
 							cacheName: 'fonts',
-							expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 365 }
-						}
-					},
-					{
-						urlPattern: ({ request }) =>
-							request.destination === 'image' || request.destination === 'style',
-						handler: 'StaleWhileRevalidate',
-						options: {
-							cacheName: 'assets',
-							expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 }
+							expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 365 }
 						}
 					}
 				]

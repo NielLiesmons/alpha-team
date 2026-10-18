@@ -1,11 +1,15 @@
 /**
- * IndexedDB key-value cache for offline-first Admin (PWA).
+ * IndexedDB + localStorage backup for offline-first Admin (PWA).
  * Stores workspace + track *metadata* only — never media/cover blobs.
+ *
+ * Important: Svelte 5 $state values are Proxies — structured clone fails.
+ * Always JSON-roundtrip before write.
  */
 
 const DB_NAME = 'alpha-admin-local';
 const DB_VERSION = 1;
 const STORE = 'kv';
+const LS_BACKUP_PREFIX = 'alpha-admin-kv:';
 
 /** @type {Promise<IDBDatabase> | null} */
 let dbPromise = null;
@@ -31,18 +35,39 @@ function openDb() {
 }
 
 /**
+ * Strip Proxies / non-cloneables. Returns null if not serializable.
+ * @param {any} value
+ */
+export function toPlain(value) {
+	try {
+		return JSON.parse(JSON.stringify(value));
+	} catch {
+		return null;
+	}
+}
+
+/**
  * @param {string} key
  * @returns {Promise<any | undefined>}
  */
 export async function idbGet(key) {
 	try {
 		const db = await openDb();
-		return await new Promise((resolve, reject) => {
+		const fromIdb = await new Promise((resolve, reject) => {
 			const tx = db.transaction(STORE, 'readonly');
 			const req = tx.objectStore(STORE).get(key);
 			req.onsuccess = () => resolve(req.result);
 			req.onerror = () => reject(req.error);
 		});
+		if (fromIdb !== undefined) return fromIdb;
+	} catch {
+		/* fall through to localStorage */
+	}
+	try {
+		if (typeof localStorage === 'undefined') return undefined;
+		const raw = localStorage.getItem(LS_BACKUP_PREFIX + key);
+		if (!raw) return undefined;
+		return JSON.parse(raw);
 	} catch {
 		return undefined;
 	}
@@ -53,16 +78,28 @@ export async function idbGet(key) {
  * @param {any} value
  */
 export async function idbSet(key, value) {
+	const plain = toPlain(value);
+	if (plain == null) return;
+
+	// localStorage backup first — survives flaky iOS IDB in PWAs for smaller payloads
+	try {
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(LS_BACKUP_PREFIX + key, JSON.stringify(plain));
+		}
+	} catch {
+		/* quota */
+	}
+
 	try {
 		const db = await openDb();
 		await new Promise((resolve, reject) => {
 			const tx = db.transaction(STORE, 'readwrite');
-			tx.objectStore(STORE).put(value, key);
+			tx.objectStore(STORE).put(plain, key);
 			tx.oncomplete = () => resolve(undefined);
 			tx.onerror = () => reject(tx.error);
 		});
 	} catch {
-		/* private mode / quota — ignore */
+		/* IDB may fail; LS backup may still work */
 	}
 }
 
@@ -70,6 +107,13 @@ export async function idbSet(key, value) {
  * @param {string} key
  */
 export async function idbDel(key) {
+	try {
+		if (typeof localStorage !== 'undefined') {
+			localStorage.removeItem(LS_BACKUP_PREFIX + key);
+		}
+	} catch {
+		/* ignore */
+	}
 	try {
 		const db = await openDb();
 		await new Promise((resolve, reject) => {
@@ -84,21 +128,18 @@ export async function idbDel(key) {
 }
 
 /**
+ * One cache per Drive host on this device (email mismatch was wiping reopen).
  * @param {import('./drive/client.js').DriveSession} session
- * @param {string} [email]
  */
-export function workspaceCacheKey(session, email) {
-	const who = (email || 'anon').trim().toLowerCase() || 'anon';
-	return `workspace.v1:${session.url}:${who}`;
+export function workspaceCacheKey(session) {
+	return `workspace.v2:${session.url}`;
 }
 
 /**
  * @param {import('./drive/client.js').DriveSession} session
- * @param {string} [email]
  */
-export function tracksCacheKey(session, email) {
-	const who = (email || 'anon').trim().toLowerCase() || 'anon';
-	return `tracks.v1:${session.url}:${who}`;
+export function tracksCacheKey(session) {
+	return `tracks.v2:${session.url}`;
 }
 
 /**

@@ -6,15 +6,16 @@
 		playerBrowse,
 		playlists,
 		refreshTracks,
-		setPlayerBrowse
+		setPlayerBrowse,
+		tracks
 	} from '$lib/player.svelte.js';
-	import { ui } from '$lib/workspace.svelte.js';
 
-	const connected = $derived(Boolean(activeSession()) && ui.source === 'drive');
+	const connected = $derived(Boolean(activeSession()));
 
 	$effect(() => {
 		clearStaleLibraryCache();
-		if (ui.source === 'drive' || driveSession.connected) {
+		// Boot already refreshes; only re-fetch if we landed here with a session and empty list.
+		if (driveSession.connected && tracks.length === 0 && !driveSession.loading) {
 			refreshTracks();
 		}
 	});

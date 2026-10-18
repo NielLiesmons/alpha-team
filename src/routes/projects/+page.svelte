@@ -1,6 +1,7 @@
 <script>
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import ProjectCard from '$lib/components/ProjectCard.svelte';
+	import { appBoot } from '$lib/boot.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
 		notes,
@@ -67,7 +68,7 @@
 	{#if driveSession.error}
 		<p class="banner"><span class="err">{driveSession.error}</span></p>
 	{/if}
-	{#if driveSession.loading && projects.length === 0}
+	{#if !appBoot.listsReady && projects.length === 0}
 		<FeedSkeleton rows={6} />
 	{:else if projects.length === 0}
 		<p class="empty">No Projects yet</p>
