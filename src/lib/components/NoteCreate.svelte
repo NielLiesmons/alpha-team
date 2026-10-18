@@ -247,10 +247,12 @@
 		max-height: 220px;
 		overflow: auto;
 		padding: 4px;
-		background: var(--popover);
-		border: 1px solid var(--hairline);
+		background: var(--glass);
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
 		box-shadow: 0 12px 32px var(--shadow-strong);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.option {

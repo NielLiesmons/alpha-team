@@ -108,10 +108,12 @@
 		left: 0;
 		z-index: 5;
 		min-width: 168px;
-		background: var(--popover);
-		border: 1px solid var(--hairline);
+		background: var(--glass);
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
 		overflow: hidden;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.menu button {

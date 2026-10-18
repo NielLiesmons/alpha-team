@@ -59,8 +59,7 @@
 		inset: 0;
 		z-index: 60;
 		background: var(--scrim);
-		backdrop-filter: blur(6px);
-		-webkit-backdrop-filter: blur(6px);
+		/* Color-only scrim — no blur */
 	}
 
 	.wrap {
@@ -83,11 +82,13 @@
 		height: auto;
 		max-height: min(92svh, 880px);
 		min-height: 0;
-		background: var(--modal-bg);
-		border: 1px solid var(--hairline);
+		background: var(--glass);
+		border: 1px solid var(--glass-border);
 		border-bottom: none;
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
 		box-shadow: 0 16px 48px var(--shadow-strong);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 		/* Children scroll inside — keeps bottom CTA row pinned */
 		overflow: hidden;
 		padding: 0 0 calc(14px + env(safe-area-inset-bottom, 0px));

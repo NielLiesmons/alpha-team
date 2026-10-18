@@ -87,11 +87,13 @@
 			align-items: center;
 			gap: 4px;
 			padding: 6px 8px 6px 6px;
-			border: 1px solid var(--hairline);
+			border: 1px solid var(--glass-border);
 			border-radius: 999px;
-			background: var(--modal-bg);
+			background: var(--glass);
 			box-shadow: 0 8px 28px var(--shadow-strong);
 			box-sizing: border-box;
+			backdrop-filter: blur(var(--glass-blur));
+			-webkit-backdrop-filter: blur(var(--glass-blur));
 		}
 
 		.open {
@@ -182,11 +184,13 @@
 			flex-shrink: 0;
 			display: grid;
 			place-items: center;
-			border: 0;
+			border: 1px solid var(--glass-border);
 			border-radius: 999px;
-			background: var(--fg-8);
+			background: var(--glass);
 			color: var(--fg);
 			padding: 0;
+			backdrop-filter: blur(var(--glass-blur));
+			-webkit-backdrop-filter: blur(var(--glass-blur));
 			cursor: pointer;
 		}
 

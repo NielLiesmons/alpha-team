@@ -942,17 +942,19 @@
 		height: 30px;
 		display: grid;
 		place-items: center;
-		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--white33);
+		border: 1px solid var(--glass-border);
+		border-radius: 9999px;
+		background: var(--glass);
+		color: var(--fg-66);
 		padding: 0;
 		cursor: pointer;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.icon-hit:hover {
-		color: var(--white);
-		background: var(--white4);
+		color: var(--fg);
+		background: color-mix(in srgb, var(--bg) 78%, transparent);
 	}
 
 	.title-row {
@@ -978,7 +980,8 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		padding: 48px 0 0;
+		/* Scroll under floating detail-top */
+		padding: 48px 0 24px;
 		display: flex;
 		flex-direction: column;
 		gap: 0;
@@ -1226,10 +1229,12 @@
 		z-index: 50;
 		min-width: 140px;
 		padding: 4px;
-		background: var(--popover);
-		border: 1px solid var(--hairline);
+		background: var(--glass);
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
 		box-shadow: 0 12px 32px var(--shadow-strong);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.more-menu button {
@@ -1331,20 +1336,22 @@
 			height: 44px;
 			display: grid;
 			place-items: center;
-			border: 0;
+			border: 1px solid var(--glass-border);
 			border-radius: 9999px;
-			background: var(--fg-8);
+			background: var(--glass);
 			color: var(--fg-66);
 			padding: 0;
 			cursor: pointer;
 			flex-shrink: 0;
 			box-sizing: border-box;
+			backdrop-filter: blur(var(--glass-blur));
+			-webkit-backdrop-filter: blur(var(--glass-blur));
 		}
 
 		.chrome-btn:hover,
 		.chrome-btn[aria-expanded='true'] {
 			color: var(--fg);
-			background: var(--fg-16);
+			background: color-mix(in srgb, var(--bg) 78%, transparent);
 		}
 
 		.chrome-btn :global(svg) {
@@ -1366,11 +1373,13 @@
 
 		.body {
 			padding: calc(60px + env(safe-area-inset-top, 0px)) 0
-				calc(12px + env(safe-area-inset-bottom, 0px));
+				calc(24px + env(safe-area-inset-bottom, 0px));
 		}
 
+		/* Player feed scrolls under the mobile bar — pad inside PlayerDetail.feed */
 		.body.player-body {
-			padding-top: calc(60px + env(safe-area-inset-top, 0px));
+			padding-top: 0;
+			padding-bottom: 0;
 		}
 	}
 </style>

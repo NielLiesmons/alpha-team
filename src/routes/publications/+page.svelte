@@ -88,8 +88,7 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
-		padding-bottom: 8px;
-	}
+		}
 
 	.banner {
 		margin: 8px 12px;

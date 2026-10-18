@@ -183,12 +183,14 @@
 		top: calc(100% + 6px);
 		left: 0;
 		z-index: 20;
-		background: var(--popover);
-		border: 1px solid var(--hairline);
+		background: var(--glass);
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
 		overflow: hidden;
 		min-width: 168px;
 		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.menu-right {

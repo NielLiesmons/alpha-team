@@ -46,13 +46,14 @@
 	/* Selected list/card fill — quieter than --fg-8 */
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
-	/* Panels / modals — ~#1A1A1A with a whisper of accent */
+	/* Panels / modals — glass (66% + blur); solid surface for denser UI */
 	--surface: color-mix(in srgb, #161616 96%, var(--accent));
-	--popover: color-mix(in srgb, #1a1a1a 96%, var(--accent));
-	--modal-bg: var(--popover);
+	--glass: color-mix(in srgb, var(--bg) 66%, transparent);
+	--glass-blur: 20px;
+	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
+	--popover: var(--glass);
+	--modal-bg: var(--glass);
 	--hairline: var(--fg-11);
-	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
-	--glass-blur: 14px;
 
 	/* Chrome behind nav + workspace gutter — darker than --bg (~#090909) */
 	--shell: hsl(from var(--accent) h 10% 3.5%);
@@ -62,7 +63,7 @@
 	 * Scrim/shadow always from the dark pole — same recipe light & dark
 	 * (matches Bley; never pure #000 with a different %).
 	 */
-	--scrim: color-mix(in srgb, var(--fg-raw) 48%, transparent);
+	--scrim: color-mix(in srgb, var(--fg-raw) 40%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 
@@ -115,10 +116,12 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, #161616 96%, var(--accent));
-	--popover: color-mix(in srgb, #1a1a1a 96%, var(--accent));
-	--modal-bg: var(--popover);
+	--glass: color-mix(in srgb, var(--bg) 66%, transparent);
+	--glass-blur: 20px;
+	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
+	--popover: var(--glass);
+	--modal-bg: var(--glass);
 	--hairline: var(--fg-11);
-	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
 	--shell: hsl(from var(--accent) h 10% 3.5%);
 	--shell-border: var(--hairline);
 	--ink: var(--fg);
@@ -148,10 +151,12 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
-	--popover: color-mix(in srgb, var(--fg) 5%, var(--bg));
+	--popover: color-mix(in srgb, var(--bg) 66%, transparent);
 	--modal-bg: var(--popover);
 	--hairline: var(--fg-11);
-	--glass: color-mix(in srgb, var(--bg) 88%, transparent);
+	--glass: color-mix(in srgb, var(--bg) 66%, transparent);
+	--glass-blur: 20px;
+	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
 	--shell: hsl(from var(--accent) h 3% 96%);
 	--shell-border: var(--hairline);
 	--ink: var(--fg);
@@ -167,8 +172,8 @@
 	--black: var(--bg);
 	--nav-plus-bg: color-mix(in srgb, var(--fg) 3.5%, transparent);
 	--nav-plus-fg: color-mix(in srgb, var(--fg) 42%, transparent);
-	/* Scrim stays on dark pole — do not lighten with theme */
-	--scrim: color-mix(in srgb, var(--fg-raw) 48%, transparent);
+	/* Scrim stays on dark pole — color only, no blur */
+	--scrim: color-mix(in srgb, var(--fg-raw) 40%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 	color-scheme: light;
@@ -694,7 +699,8 @@ table.data tr.selected td {
 	flex: 1;
 	min-height: 0;
 	overflow: auto;
-	padding: 16px 20px 40px;
+	/* Clears floating list-top so content can scroll under it */
+	padding: 48px 20px 40px;
 }
 
 .pane:has(.feed),
@@ -705,10 +711,22 @@ table.data tr.selected td {
 	overflow: hidden;
 }
 
+/* Scroll lives on .feed — pad so rows clear then pass under chrome */
 .pane:has(.feed) > .feed,
 .pane:has(.fill) > .fill {
 	flex: 1;
 	min-height: 0;
+	overflow: auto;
+	padding-top: var(--feed-pad-top, 48px);
+	padding-bottom: var(--feed-pad-bottom, 40px);
+	box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+	.pane {
+		padding: var(--feed-pad-top, calc(64px + env(safe-area-inset-top, 0px))) 16px
+			var(--feed-pad-bottom, calc(88px + env(safe-area-inset-bottom, 0px)));
+	}
 }
 
 @media (max-width: 860px) {

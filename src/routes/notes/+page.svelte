@@ -54,8 +54,7 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
-		padding-bottom: 8px;
-	}
+		}
 
 	.empty {
 		padding: 48px 16px;

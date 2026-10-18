@@ -335,6 +335,8 @@
 
 <style>
 	.shell {
+		--feed-pad-top: 48px;
+		--feed-pad-bottom: 40px;
 		display: flex;
 		height: 100dvh;
 		width: 100%;
@@ -456,10 +458,12 @@
 		z-index: 50;
 		min-width: 148px;
 		padding: 4px;
-		background: var(--popover);
-		border: 1px solid var(--hairline);
+		background: var(--glass);
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
 		box-shadow: 0 12px 32px var(--shadow-strong);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.create-menu button,
@@ -716,19 +720,21 @@
 		display: grid;
 		place-items: center;
 		padding: 0;
-		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--white33);
+		border: 1px solid var(--glass-border);
+		border-radius: 9999px;
+		background: var(--glass);
+		color: var(--fg-66);
 		cursor: pointer;
 		box-sizing: border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.chrome-btn:hover,
 	.chrome-btn.on,
 	.chrome-btn[aria-expanded='true'] {
-		color: var(--white);
-		background: var(--white4);
+		color: var(--fg);
+		background: color-mix(in srgb, var(--bg) 78%, transparent);
 	}
 
 	.chrome-ico {
@@ -740,7 +746,8 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: auto;
-		padding-top: 48px;
+		/* Padding lives on .feed (see app.css) so rows scroll under the header */
+		padding: 0;
 	}
 
 	.sr-only {
@@ -760,15 +767,18 @@
 	}
 
 	@media (max-width: 767px) {
+		/* Full-bleed shell — feeds pad their own ends so content scrolls under chrome */
 		.shell {
+			--feed-pad-top: calc(64px + env(safe-area-inset-top, 0px));
+			--feed-pad-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
 			flex-direction: column;
-			padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+			padding-bottom: 0;
 			background: var(--bg);
 		}
 
 		.shell.has-mini-player {
-			/* nav + 8px gap + mini player */
-			padding-bottom: calc(72px + 8px + 52px + env(safe-area-inset-bottom, 0px));
+			--feed-pad-bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+			padding-bottom: 0;
 		}
 
 		.sidebar {
@@ -820,15 +830,18 @@
 			width: 44px;
 			height: 44px;
 			border-radius: 9999px;
-			background: var(--fg-8);
+			background: var(--glass);
 			color: var(--fg-66);
+			border: 1px solid var(--glass-border);
+			backdrop-filter: blur(var(--glass-blur));
+			-webkit-backdrop-filter: blur(var(--glass-blur));
 		}
 
 		.chrome-btn:hover,
 		.chrome-btn.on,
 		.chrome-btn[aria-expanded='true'] {
 			color: var(--fg);
-			background: var(--fg-16);
+			background: color-mix(in srgb, var(--bg) 78%, transparent);
 		}
 
 		.chrome-ico {
@@ -837,7 +850,7 @@
 		}
 
 		.pane {
-			padding-top: calc(64px + env(safe-area-inset-top, 0px));
+			padding: 0;
 		}
 
 		.bottom-pill {
@@ -856,10 +869,12 @@
 			max-width: 100%;
 			margin: 0 auto;
 			border-radius: 999px;
-			background: var(--modal-bg);
-			border: 1px solid var(--hairline);
+			background: var(--glass);
+			border: 1px solid var(--glass-border);
 			box-shadow: 0 8px 28px var(--shadow-strong);
 			overflow: hidden;
+			backdrop-filter: blur(var(--glass-blur));
+			-webkit-backdrop-filter: blur(var(--glass-blur));
 		}
 
 		.pill-track {

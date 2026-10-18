@@ -472,11 +472,13 @@
 		left: 0;
 		z-index: 20;
 		min-width: 168px;
-		background: var(--popover);
-		border: 1px solid var(--hairline);
+		background: var(--glass);
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
 		overflow: hidden;
 		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.menu-empty {

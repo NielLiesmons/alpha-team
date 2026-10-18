@@ -38,7 +38,8 @@
 		position: fixed;
 		inset: 0;
 		z-index: 40;
-		background: color-mix(in srgb, var(--black) 65%, transparent);
+		background: var(--scrim);
+		/* Color-only — no backdrop blur */
 	}
 
 	.wrap {
@@ -55,12 +56,14 @@
 	.sheet {
 		pointer-events: auto;
 		width: 100%;
-		background: var(--modal-bg);
-		border: 1px solid var(--hairline);
+		background: var(--glass);
+		border: 1px solid var(--glass-border);
 		border-bottom: none;
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
 		padding: 16px;
 		box-shadow: 0 16px 48px var(--shadow-strong);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	@media (min-width: 768px) {
