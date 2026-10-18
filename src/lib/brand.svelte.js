@@ -28,7 +28,7 @@ export function applyBrand(next = brand) {
 	root.style.setProperty('--ink-raw', 'var(--fg-raw)');
 
 	/* Scrim/shadow always from dark pole — never theme-dependent pure black % */
-	root.style.setProperty('--scrim', 'color-mix(in srgb, var(--fg-raw) 48%, transparent)');
+	root.style.setProperty('--scrim', 'color-mix(in srgb, var(--fg-raw) 64%, transparent)');
 	root.style.setProperty('--shadow', 'color-mix(in srgb, var(--fg-raw) 22%, transparent)');
 	root.style.setProperty('--shadow-strong', 'color-mix(in srgb, var(--fg-raw) 32%, transparent)');
 

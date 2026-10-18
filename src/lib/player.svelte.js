@@ -23,6 +23,7 @@ import { pushRecentlyPlayed, readRecentlyPlayed } from './player-cache.js';
 import { actor } from './actor.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { idbGet, idbSet, thinTrack, tracksCacheKey } from './local-db.js';
+import { isMobileNav, popDetailLayer, pushDetailLayer } from './nav-stack.js';
 
 /** @type {Map<string, string>} cover_path → object URL */
 const coverUrlCache = new Map();
@@ -70,8 +71,8 @@ export const playerBrowse = $state({
 	artist: null,
 	/** @type {string | null} album title when drilling in from Albums */
 	album: null,
-	/** Mobile: slide detail over the browse list. Desktop always shows detail. */
-	detailOpen: true
+	/** Mobile: slide detail over the browse list. Desktop forced open on /player. */
+	detailOpen: false
 });
 
 export const playerUi = $state({
@@ -245,16 +246,45 @@ export async function refreshTracks() {
  * @param {{ playlistId?: string | null, artist?: string | null, album?: string | null }} [opts]
  */
 export function setPlayerBrowse(mode, opts = {}) {
+	const wasOpen = playerBrowse.detailOpen;
 	playerBrowse.mode = mode;
 	playerBrowse.playlistId = opts.playlistId ?? null;
 	playerBrowse.artist = opts.artist ?? null;
 	playerBrowse.album = opts.album ?? null;
 	playerBrowse.detailOpen = true;
 	playerUi.selectedIds = [];
+	if (!wasOpen) pushDetailLayer('player');
 }
 
+/** Close player overlay; on mobile prefers history.back so system back matches. */
 export function closePlayerDetail() {
+	popDetailLayer('player', () => {
+		playerBrowse.detailOpen = false;
+		playerBrowse.artist = null;
+		playerBrowse.album = null;
+	});
+}
+
+/** Force-close without touching history (route changes / popstate). */
+export function forceClosePlayerDetail() {
 	playerBrowse.detailOpen = false;
+	playerBrowse.artist = null;
+	playerBrowse.album = null;
+}
+
+/** Mobile chrome back: unwind artist/album drill, then close the Songs sheet. */
+export function playerBack() {
+	if (playerBrowse.artist || playerBrowse.album) {
+		playerBrowse.artist = null;
+		playerBrowse.album = null;
+		return;
+	}
+	closePlayerDetail();
+}
+
+/** Desktop always shows the player detail column. */
+export function ensureDesktopPlayerDetail() {
+	if (!isMobileNav()) playerBrowse.detailOpen = true;
 }
 
 /**

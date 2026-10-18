@@ -417,7 +417,7 @@
 
 	@media (max-width: 767px) {
 		.feed {
-			padding-top: calc(60px + env(safe-area-inset-top, 0px));
+			padding-top: calc(56px + env(safe-area-inset-top, 0px));
 			padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
 		}
 	}

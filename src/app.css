@@ -46,11 +46,13 @@
 	/* Selected list/card fill — quieter than --fg-8 */
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
-	/* Panels / modals — glass (66% + blur); solid surface for denser UI */
+	/* Panels / modals — lifted glass fill at ~70% opacity + blur */
 	--surface: color-mix(in srgb, #161616 96%, var(--accent));
-	--glass: color-mix(in srgb, var(--bg) 66%, transparent);
-	--glass-blur: 20px;
-	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
+	/* Dark mode: lighter than --bg so chrome reads as a sheet */
+	--glass-fill: color-mix(in srgb, var(--fg) 18%, var(--bg));
+	--glass: color-mix(in srgb, var(--glass-fill) 72%, transparent);
+	--glass-blur: 22px;
+	--glass-border: color-mix(in srgb, var(--fg) 16%, transparent);
 	--popover: var(--glass);
 	--modal-bg: var(--glass);
 	--hairline: var(--fg-11);
@@ -63,7 +65,7 @@
 	 * Scrim/shadow always from the dark pole — same recipe light & dark
 	 * (matches Bley; never pure #000 with a different %).
 	 */
-	--scrim: color-mix(in srgb, var(--fg-raw) 40%, transparent);
+	--scrim: color-mix(in srgb, var(--fg-raw) 64%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 
@@ -116,9 +118,10 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, #161616 96%, var(--accent));
-	--glass: color-mix(in srgb, var(--bg) 66%, transparent);
-	--glass-blur: 20px;
-	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
+	--glass-fill: color-mix(in srgb, var(--fg) 18%, var(--bg));
+	--glass: color-mix(in srgb, var(--glass-fill) 72%, transparent);
+	--glass-blur: 22px;
+	--glass-border: color-mix(in srgb, var(--fg) 16%, transparent);
 	--popover: var(--glass);
 	--modal-bg: var(--glass);
 	--hairline: var(--fg-11);
@@ -151,12 +154,14 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
-	--popover: color-mix(in srgb, var(--bg) 66%, transparent);
-	--modal-bg: var(--popover);
+	/* Light mode: darker sheet than page bg */
+	--glass-fill: color-mix(in srgb, var(--fg) 10%, var(--bg));
+	--glass: color-mix(in srgb, var(--glass-fill) 78%, transparent);
+	--glass-blur: 22px;
+	--glass-border: color-mix(in srgb, var(--fg) 14%, transparent);
+	--popover: var(--glass);
+	--modal-bg: var(--glass);
 	--hairline: var(--fg-11);
-	--glass: color-mix(in srgb, var(--bg) 66%, transparent);
-	--glass-blur: 20px;
-	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
 	--shell: hsl(from var(--accent) h 3% 96%);
 	--shell-border: var(--hairline);
 	--ink: var(--fg);
@@ -173,7 +178,7 @@
 	--nav-plus-bg: color-mix(in srgb, var(--fg) 3.5%, transparent);
 	--nav-plus-fg: color-mix(in srgb, var(--fg) 42%, transparent);
 	/* Scrim stays on dark pole — color only, no blur */
-	--scrim: color-mix(in srgb, var(--fg-raw) 40%, transparent);
+	--scrim: color-mix(in srgb, var(--fg-raw) 64%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 	color-scheme: light;
@@ -717,15 +722,21 @@ table.data tr.selected td {
 	flex: 1;
 	min-height: 0;
 	overflow: auto;
-	padding-top: var(--feed-pad-top, 48px);
-	padding-bottom: var(--feed-pad-bottom, 40px);
+	-webkit-overflow-scrolling: touch;
+	padding-top: var(--feed-pad-top, 44px);
+	padding-bottom: var(--feed-pad-bottom, 36px);
 	box-sizing: border-box;
 }
 
 @media (max-width: 767px) {
 	.pane {
-		padding: var(--feed-pad-top, calc(64px + env(safe-area-inset-top, 0px))) 16px
-			var(--feed-pad-bottom, calc(88px + env(safe-area-inset-bottom, 0px)));
+		padding: var(--feed-pad-top, calc(56px + env(safe-area-inset-top, 0px))) 16px
+			var(--feed-pad-bottom, calc(96px + env(safe-area-inset-bottom, 0px)));
+	}
+
+	.pane:has(.feed),
+	.pane:has(.fill) {
+		padding: 0;
 	}
 }
 

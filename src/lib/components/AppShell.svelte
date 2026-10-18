@@ -4,14 +4,19 @@
 	import { mobileNav, primaryNav } from '$lib/sections.js';
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
-		clearSelection,
+		forceClearSelection,
 		notes,
 		openComposer,
 		projects,
 		tasks
 	} from '$lib/workspace.svelte.js';
-	import { tick } from 'svelte';
-	import { currentTrack } from '$lib/player.svelte.js';
+	import { onMount, tick } from 'svelte';
+	import {
+		currentTrack,
+		ensureDesktopPlayerDetail,
+		forceClosePlayerDetail
+	} from '$lib/player.svelte.js';
+	import { bindDetailPopstate } from '$lib/nav-stack.js';
 	import DetailColumn from './DetailColumn.svelte';
 	import MobilePlayerPill from './MobilePlayerPill.svelte';
 	import NavIcon from './NavIcon.svelte';
@@ -74,15 +79,34 @@
 
 	/** Clear detail whenever the section changes — never carry a Task into Mail, etc. */
 	$effect(() => {
-		path;
-		clearSelection();
+		const p = path;
+		forceClearSelection();
 		filter = 'all';
 		filterOpen = false;
+		if (p.startsWith('/player')) {
+			ensureDesktopPlayerDetail();
+		} else {
+			forceClosePlayerDetail();
+		}
 	});
+
+	onMount(() =>
+		bindDetailPopstate({
+			onPlayer: () => forceClosePlayerDetail(),
+			onSelection: () => forceClearSelection()
+		})
+	);
 
 	/** @param {string} href */
 	function go(href) {
-		goto(href);
+		/* If a mobile detail layer is on the stack, replace it so Back from the
+		 * next tab returns to that section’s root — not through the overlay. */
+		const replace = Boolean(
+			typeof history !== 'undefined' && history.state?.alphaLayer
+		);
+		forceClearSelection();
+		forceClosePlayerDetail();
+		goto(href, { replaceState: replace });
 	}
 
 	/** @param {'task' | 'project' | 'note' | 'newsletter'} kind */
@@ -294,6 +318,7 @@
 				<div class="pane">
 					{@render children()}
 				</div>
+				<div class="list-bottom-fade" aria-hidden="true"></div>
 			</section>
 			<DetailColumn />
 		</div>
@@ -335,8 +360,10 @@
 
 <style>
 	.shell {
-		--feed-pad-top: 48px;
-		--feed-pad-bottom: 40px;
+		/* Pad < fade height so first rows sit in the soft end of the gradient */
+		--feed-pad-top: 44px;
+		--feed-pad-bottom: 36px;
+		--chrome-fade: var(--bg);
 		display: flex;
 		height: 100dvh;
 		width: 100%;
@@ -671,7 +698,7 @@
 		overflow: hidden;
 	}
 
-	/* Floating header: content scrolls under; fade = bar height (100% → 66% mid → 0%) */
+	/* Floating header: taller than pad so rows scroll through a visible fade */
 	.list-top {
 		position: absolute;
 		top: 0;
@@ -679,24 +706,41 @@
 		right: 0;
 		z-index: 6;
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
 		gap: 10px;
-		height: 48px;
-		padding: 0 10px 0 16px;
+		height: 72px;
+		padding: 10px 10px 0 16px;
 		border-bottom: none;
 		box-sizing: border-box;
 		pointer-events: none;
 		background: linear-gradient(
 			to bottom,
-			color-mix(in srgb, var(--bg) 100%, transparent) 0%,
-			color-mix(in srgb, var(--bg) 66%, transparent) 50%,
-			color-mix(in srgb, var(--bg) 0%, transparent) 100%
+			var(--chrome-fade) 0%,
+			color-mix(in srgb, var(--chrome-fade) 85%, transparent) 42%,
+			color-mix(in srgb, var(--chrome-fade) 40%, transparent) 72%,
+			transparent 100%
 		);
 	}
 
 	.list-top > * {
 		pointer-events: auto;
+	}
+
+	.list-bottom-fade {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 5;
+		height: 56px;
+		pointer-events: none;
+		background: linear-gradient(
+			to top,
+			var(--chrome-fade) 0%,
+			color-mix(in srgb, var(--chrome-fade) 70%, transparent) 45%,
+			transparent 100%
+		);
 	}
 
 	.list-title {
@@ -767,17 +811,18 @@
 	}
 
 	@media (max-width: 767px) {
-		/* Full-bleed shell — feeds pad their own ends so content scrolls under chrome */
+		/* Full-bleed shell — darker than desktop workspace; matches desktop sidebar */
 		.shell {
-			--feed-pad-top: calc(64px + env(safe-area-inset-top, 0px));
-			--feed-pad-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+			--chrome-fade: var(--shell);
+			--feed-pad-top: calc(56px + env(safe-area-inset-top, 0px));
+			--feed-pad-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 			flex-direction: column;
 			padding-bottom: 0;
-			background: var(--bg);
+			background: var(--shell);
 		}
 
 		.shell.has-mini-player {
-			--feed-pad-bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+			--feed-pad-bottom: calc(156px + env(safe-area-inset-bottom, 0px));
 			padding-bottom: 0;
 		}
 
@@ -792,6 +837,7 @@
 		.workspace {
 			border-radius: 0;
 			border: 0;
+			background: var(--shell);
 		}
 
 		.list-col {
@@ -800,17 +846,29 @@
 			max-width: none;
 			min-width: 0;
 			border-right: 0;
+			background: var(--shell);
 		}
 
 		.list-top {
-			height: calc(64px + env(safe-area-inset-top, 0px));
-			padding: env(safe-area-inset-top, 0px) 14px 0 18px;
-			align-items: center;
+			height: calc(88px + env(safe-area-inset-top, 0px));
+			padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 0 18px;
+			align-items: flex-start;
 			background: linear-gradient(
 				to bottom,
-				color-mix(in srgb, var(--bg) 100%, transparent) 0%,
-				color-mix(in srgb, var(--bg) 66%, transparent) 50%,
-				color-mix(in srgb, var(--bg) 0%, transparent) 100%
+				var(--chrome-fade) 0%,
+				color-mix(in srgb, var(--chrome-fade) 88%, transparent) 38%,
+				color-mix(in srgb, var(--chrome-fade) 45%, transparent) 70%,
+				transparent 100%
+			);
+		}
+
+		.list-bottom-fade {
+			height: calc(100px + env(safe-area-inset-bottom, 0px));
+			background: linear-gradient(
+				to top,
+				var(--chrome-fade) 0%,
+				color-mix(in srgb, var(--chrome-fade) 80%, transparent) 40%,
+				transparent 100%
 			);
 		}
 

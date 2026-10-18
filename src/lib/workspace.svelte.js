@@ -21,6 +21,7 @@ import {
 import { activePerson, members } from './actor.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { idbGet, idbSet, workspaceCacheKey } from './local-db.js';
+import { popDetailLayer, pushDetailLayer } from './nav-stack.js';
 
 /** People available for assignee pickers. Email = account id. */
 export const people = members;
@@ -54,10 +55,20 @@ export const ui = $state({
  * @param {string} id
  */
 export function selectEntity(kind, id) {
+	const opening = !ui.selection;
 	ui.selection = { kind, id };
+	if (opening) pushDetailLayer('selection');
 }
 
+/** Close selection; on mobile uses history.back when we pushed a layer. */
 export function clearSelection() {
+	popDetailLayer('selection', () => {
+		ui.selection = null;
+	});
+}
+
+/** Force-clear without history (section changes / popstate). */
+export function forceClearSelection() {
 	ui.selection = null;
 }
 

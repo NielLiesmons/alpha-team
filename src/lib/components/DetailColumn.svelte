@@ -12,6 +12,7 @@
 		closePlayerDetail,
 		currentTrack,
 		openUploadModal,
+		playerBack,
 		playerBrowse,
 		playerHeading,
 		playerUi,
@@ -285,23 +286,55 @@
 		}
 		clearSelection();
 	}
+
+	/** Keep body mounted through the mobile slide-out so the panel doesn’t blank mid-transition. */
+	let renderBody = $state(false);
+	let panelOpen = $state(false);
+
+	$effect(() => {
+		if (open) {
+			renderBody = true;
+			/* Double rAF so the off-screen frame paints before .open slides in. */
+			let id2 = 0;
+			const id1 = requestAnimationFrame(() => {
+				id2 = requestAnimationFrame(() => {
+					panelOpen = true;
+				});
+			});
+			return () => {
+				cancelAnimationFrame(id1);
+				cancelAnimationFrame(id2);
+			};
+		}
+		panelOpen = false;
+		const mobile =
+			typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+		if (!mobile) {
+			renderBody = false;
+			return;
+		}
+		const t = setTimeout(() => {
+			renderBody = false;
+		}, 340);
+		return () => clearTimeout(t);
+	});
 </script>
 
 <aside
 	class="detail"
-	class:open
-	class:empty={!open}
+	class:open={panelOpen}
+	class:empty={!renderBody}
 	class:player-mode={isPlayer}
 	class:has-mini={isPlayer && Boolean(currentTrack())}
 	aria-label="Detail"
 >
-	{#if open}
+	{#if renderBody}
 		<header class="mobile-bar">
 			<button
 				type="button"
 				class="chrome-btn"
 				aria-label="Back"
-				onclick={() => (isPlayer ? closePlayerDetail() : close())}
+				onclick={() => (isPlayer ? playerBack() : close())}
 			>
 				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 					<path
@@ -358,7 +391,6 @@
 				{/if}
 			</div>
 		</header>
-	{/if}
 
 	{#if isPlayer}
 		<input
@@ -737,12 +769,13 @@
 			<h2 class="pub-title">{newsletter.subject}</h2>
 			<pre class="pub-body">{newsletter.body}</pre>
 		</div>
-	{:else}
-		<div class="empty desktop-empty">
-			<p class="empty-title">{emptyCopy.title}</p>
-			<p class="empty-body">{emptyCopy.body}</p>
-		</div>
 	{/if}
+{:else}
+	<div class="empty desktop-empty">
+		<p class="empty-title">{emptyCopy.title}</p>
+		<p class="empty-body">{emptyCopy.body}</p>
+	</div>
+{/if}
 </aside>
 
 <style>
@@ -818,20 +851,21 @@
 		right: 0;
 		z-index: 6;
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
 		gap: 10px;
 		width: 100%;
-		height: 48px;
-		padding: 0 8px 0 16px;
+		height: 72px;
+		padding: 10px 8px 0 16px;
 		border-bottom: none;
 		box-sizing: border-box;
 		pointer-events: none;
 		background: linear-gradient(
 			to bottom,
-			color-mix(in srgb, var(--bg) 100%, transparent) 0%,
-			color-mix(in srgb, var(--bg) 66%, transparent) 50%,
-			color-mix(in srgb, var(--bg) 0%, transparent) 100%
+			var(--bg) 0%,
+			color-mix(in srgb, var(--bg) 85%, transparent) 42%,
+			color-mix(in srgb, var(--bg) 40%, transparent) 72%,
+			transparent 100%
 		);
 	}
 
@@ -980,8 +1014,8 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		/* Scroll under floating detail-top */
-		padding: 48px 0 24px;
+		/* Pad < fade height so content sits in / scrolls through the gradient */
+		padding: 44px 0 24px;
 		display: flex;
 		flex-direction: column;
 		gap: 0;
@@ -1263,10 +1297,12 @@
 			inset: 0;
 			z-index: 55;
 			width: 100%;
-			background: var(--bg);
-			transform: translateX(100%);
-			transition: transform 0.32s var(--ease);
+			/* Match mobile shell (desktop sidebar) — stay mounted off-screen for slide */
+			background: var(--shell);
+			transform: translate3d(100%, 0, 0);
+			transition: transform 0.34s var(--ease);
 			pointer-events: none;
+			visibility: visible;
 		}
 
 		/* Songs / Artists list stays above the bottom nav + mini player */
@@ -1280,12 +1316,13 @@
 		}
 
 		.detail.open {
-			transform: translateX(0);
+			transform: translate3d(0, 0, 0);
 			pointer-events: auto;
 		}
 
+		/* Keep off-screen panel in the layer tree (no display:none — that kills slide) */
 		.detail.empty {
-			display: none;
+			display: flex;
 		}
 
 		.mobile-bar {
@@ -1295,20 +1332,21 @@
 			right: 0;
 			z-index: 8;
 			display: flex;
-			align-items: center;
+			align-items: flex-start;
 			justify-content: space-between;
 			gap: 12px;
-			height: calc(60px + env(safe-area-inset-top, 0px));
-			padding: env(safe-area-inset-top, 0px) 14px 0;
+			height: calc(88px + env(safe-area-inset-top, 0px));
+			padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 0;
 			border-bottom: none;
 			flex-shrink: 0;
 			box-sizing: border-box;
 			pointer-events: none;
 			background: linear-gradient(
 				to bottom,
-				color-mix(in srgb, var(--bg) 100%, transparent) 0%,
-				color-mix(in srgb, var(--bg) 66%, transparent) 50%,
-				color-mix(in srgb, var(--bg) 0%, transparent) 100%
+				var(--shell) 0%,
+				color-mix(in srgb, var(--shell) 88%, transparent) 38%,
+				color-mix(in srgb, var(--shell) 45%, transparent) 70%,
+				transparent 100%
 			);
 		}
 
@@ -1372,7 +1410,7 @@
 		}
 
 		.body {
-			padding: calc(60px + env(safe-area-inset-top, 0px)) 0
+			padding: calc(56px + env(safe-area-inset-top, 0px)) 0
 				calc(24px + env(safe-area-inset-bottom, 0px));
 		}
 
