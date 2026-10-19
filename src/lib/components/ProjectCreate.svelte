@@ -1,5 +1,4 @@
 <script>
-	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import FloatPanel from './FloatPanel.svelte';
@@ -14,9 +13,6 @@
 	let iconOpen = $state(false);
 	/** @type {HTMLButtonElement | undefined} */
 	let iconBtn = $state();
-	/** @type {HTMLInputElement | undefined} */
-	let titleInput = $state();
-
 	const editing = $derived(
 		ui.composer?.kind === 'project' ? projects.find((item) => item.id === ui.composer.id) : null
 	);
@@ -29,7 +25,7 @@
 		description = editing?.description ?? editing?.summary ?? editing?.body ?? '';
 		icon = editing?.icon ?? null;
 		iconOpen = false;
-		tick().then(() => titleInput?.focus());
+		/* No autofocus — avoids PWA keyboard scroll jumping the sheet. */
 	});
 
 	async function save() {
@@ -72,11 +68,12 @@
 			class="bare"
 			aria-label="Project icon"
 			aria-expanded={iconOpen}
+			onpointerdown={(e) => e.preventDefault()}
 			onclick={() => (iconOpen = !iconOpen)}
 		>
 			<ProjectBox state={previewStatus} {icon} size={28} />
 		</button>
-		<input bind:this={titleInput} class="sheet-input" placeholder="Project title" bind:value={title} />
+		<input class="sheet-input" placeholder="Project title" bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
 	<textarea class="sheet-body" placeholder="Description" bind:value={description}></textarea>

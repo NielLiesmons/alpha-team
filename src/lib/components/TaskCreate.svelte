@@ -1,5 +1,4 @@
 <script>
-	import { tick } from 'svelte';
 	import { activePerson } from '$lib/actor.svelte.js';
 	import CreateSheet from './CreateSheet.svelte';
 	import FloatPanel from './FloatPanel.svelte';
@@ -45,18 +44,20 @@
 	/** @type {null | 'assignees' | 'projects' | 'labels'} */
 	let bottomMenu = $state(null);
 	let labelDraft = $state('');
-	/** @type {HTMLInputElement | undefined} */
-	let titleInput = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let assigneeBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let projectsBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let labelsBtn = $state();
-	/** @type {HTMLInputElement | undefined} */
-	let labelInput = $state();
 	let saving = $state(false);
 	const me = $derived(activePerson());
+
+	/** Keep title/body keyboard open while tapping pills / menus. */
+	/** @param {PointerEvent} e */
+	function keepKeyboard(e) {
+		e.preventDefault();
+	}
 
 	const editing = $derived(ui.composer?.kind === 'task' ? tasks.find((item) => item.id === ui.composer.id) : null);
 	const open = $derived(ui.composer?.kind === 'task');
@@ -78,11 +79,7 @@
 		bottomMenu = null;
 		labelDraft = '';
 		saving = false;
-		tick().then(() => titleInput?.focus());
-	});
-
-	$effect(() => {
-		if (bottomMenu === 'labels') tick().then(() => labelInput?.focus());
+		/* No autofocus — mobile PWAs scroll the sheet into the keyboard and hide chrome. */
 	});
 
 	/** @param {string} id */
@@ -165,6 +162,7 @@
 				type="button"
 				class="icon-hit"
 				aria-label="Set task status"
+				onpointerdown={keepKeyboard}
 				onclick={() => {
 					statusOpen = !statusOpen;
 					priorityOpen = false;
@@ -195,7 +193,6 @@
 		</div>
 
 		<input
-			bind:this={titleInput}
 			class="task-title-input"
 			placeholder="Title of Task"
 			bind:value={title}
@@ -207,6 +204,7 @@
 				type="button"
 				class="icon-hit"
 				aria-label="Set task priority"
+				onpointerdown={keepKeyboard}
 				onclick={() => {
 					priorityOpen = !priorityOpen;
 					statusOpen = false;
@@ -291,6 +289,7 @@
 					class:empty={assignees.length === 0}
 					aria-label="Assignees"
 					aria-expanded={bottomMenu === 'assignees'}
+					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('assignees')}
 				>
 					{#if assignees.length === 0}
@@ -311,6 +310,7 @@
 					class:empty={projectIds.length === 0}
 					aria-label="Projects"
 					aria-expanded={bottomMenu === 'projects'}
+					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('projects')}
 				>
 					<ProjectPillsDisplay {projectIds} />
@@ -325,6 +325,7 @@
 					class:has-labels={labels.length > 0}
 					aria-label="Add labels"
 					aria-expanded={bottomMenu === 'labels'}
+					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('labels')}
 				>
 					<span class="labels-trigger-body">
@@ -415,7 +416,6 @@
 		}}
 	>
 		<input
-			bind:this={labelInput}
 			class="label-input"
 			placeholder="New label"
 			bind:value={labelDraft}

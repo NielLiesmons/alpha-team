@@ -1,5 +1,4 @@
 <script>
-	import { tick } from 'svelte';
 	import { activePerson } from '$lib/actor.svelte.js';
 	import ProfilePic from './ProfilePic.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
@@ -50,9 +49,6 @@
 	let projectsBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let labelsBtn = $state();
-	/** @type {HTMLInputElement | undefined} */
-	let labelInput = $state();
-
 	const showStatusPriority = $derived(kind === 'task');
 	const showAssignees = $derived(kind === 'task');
 	const assignees = $derived(entity?.assignees ?? []);
@@ -82,9 +78,10 @@
 		labelDraft = '';
 	}
 
-	$effect(() => {
-		if (menu === 'labels') tick().then(() => labelInput?.focus());
-	});
+	/** @param {PointerEvent} e */
+	function keepKeyboard(e) {
+		e.preventDefault();
+	}
 
 	/**
 	 * @param {Record<string, unknown>} patch
@@ -186,6 +183,7 @@
 				class="meta-pill"
 				aria-label="Status"
 				aria-expanded={menu === 'status'}
+				onpointerdown={keepKeyboard}
 				onclick={(e) => toggleMenu('status', e)}
 			>
 				<TaskBox state={entity.status} size={20} />
@@ -199,6 +197,7 @@
 				class="meta-pill"
 				aria-label="Priority"
 				aria-expanded={menu === 'priority'}
+				onpointerdown={keepKeyboard}
 				onclick={(e) => toggleMenu('priority', e)}
 			>
 				<PriorityBox priority={entity.priority} size={18} />
@@ -216,6 +215,7 @@
 				class:empty={assignees.length === 0}
 				aria-label="Assignees"
 				aria-expanded={menu === 'assignees'}
+				onpointerdown={keepKeyboard}
 				onclick={(e) => toggleMenu('assignees', e)}
 			>
 				{#if assignees.length === 0}
@@ -239,6 +239,7 @@
 			class:empty={targets.length === 0}
 			aria-label="Projects"
 			aria-expanded={menu === 'projects'}
+			onpointerdown={keepKeyboard}
 			onclick={(e) => toggleMenu('projects', e)}
 		>
 			<ProjectPillsDisplay {projectIds} />
@@ -264,6 +265,7 @@
 			class="label-add"
 			aria-label="Add label"
 			aria-expanded={menu === 'labels'}
+			onpointerdown={keepKeyboard}
 			onclick={(e) => toggleMenu('labels', e)}
 		>
 			<span class="label-add-body">Label</span>
@@ -392,7 +394,6 @@
 >
 	<form class="label-form" onsubmit={addLabel}>
 		<input
-			bind:this={labelInput}
 			class="label-input"
 			placeholder="New label"
 			bind:value={labelDraft}

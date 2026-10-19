@@ -2,22 +2,15 @@
 	/**
 	 * Compact emoji panel — recent defaults + fast search (no category tabs).
 	 */
-	import { tick } from 'svelte';
 	import { defaultEmojiPanel, rememberEmoji, searchEmojis } from '$lib/emoji.js';
 
 	/** @type {{ value?: string | null, onselect: (emoji: string) => void, onclear?: (() => void) | null }} */
 	let { value = null, onselect, onclear = null } = $props();
 
 	let query = $state('');
-	/** @type {HTMLInputElement | undefined} */
-	let inputEl = $state();
 
 	const searching = $derived(query.trim().length > 0);
 	const items = $derived(searching ? searchEmojis(query, 96) : defaultEmojiPanel(64));
-
-	$effect(() => {
-		void tick().then(() => inputEl?.focus());
-	});
 
 	/** @param {string} glyph */
 	function pick(glyph) {
@@ -29,7 +22,6 @@
 <div class="picker">
 	<div class="search-row">
 		<input
-			bind:this={inputEl}
 			class="search"
 			type="search"
 			placeholder="Search emoji…"

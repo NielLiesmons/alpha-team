@@ -1,6 +1,7 @@
 <script>
 	/**
 	 * Light glass popover portaled to body so it is never clipped by modal overflow.
+	 * Drop-ups anchor to the trigger’s top edge using the panel’s real height.
 	 */
 	import { tick } from 'svelte';
 
@@ -28,7 +29,7 @@
 	} = $props();
 
 	/** @type {HTMLDivElement | undefined} */
-	let rootEl = $state();
+	let panelEl = $state();
 	let pos = $state({ top: 0, left: 0 });
 
 	/** @param {HTMLElement} node */
@@ -47,33 +48,61 @@
 		const gap = 6;
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
+		const panelH = panelEl?.offsetHeight || Math.min(120, maxHeight);
+
 		let left = align === 'end' ? r.right - width : r.left;
 		left = Math.max(8, Math.min(left, vw - width - 8));
+
 		let top;
 		if (placement === 'below') {
 			top = r.bottom + gap;
-			if (top + Math.min(maxHeight, 200) > vh - 8) {
-				top = Math.max(8, r.top - gap - Math.min(maxHeight, vh * 0.5));
+			if (top + panelH > vh - 8) {
+				/* Flip up — sit flush above the trigger */
+				top = r.top - gap - panelH;
 			}
 		} else {
-			top = r.top - gap - Math.min(maxHeight, vh * 0.55);
-			if (top < 8) top = Math.min(vh - 8, r.bottom + gap);
+			/* Drop-up: bottom edge of panel sits just above the trigger */
+			top = r.top - gap - panelH;
+			if (top < 8) {
+				top = r.bottom + gap;
+			}
 		}
+		top = Math.max(8, Math.min(top, vh - panelH - 8));
 		pos = { top, left };
 	}
 
 	$effect(() => {
 		if (!open) return;
 		anchor;
+		placement;
 		void tick().then(reposition);
+
 		const onWin = () => reposition();
 		window.addEventListener('resize', onWin);
 		window.addEventListener('scroll', onWin, true);
+
+		/** @type {ResizeObserver | undefined} */
+		let ro;
+		if (panelEl && typeof ResizeObserver !== 'undefined') {
+			ro = new ResizeObserver(() => reposition());
+			ro.observe(panelEl);
+		}
+
 		return () => {
 			window.removeEventListener('resize', onWin);
 			window.removeEventListener('scroll', onWin, true);
+			ro?.disconnect();
 		};
 	});
+
+	/** Keep the underlying text field focused so the mobile keyboard stays up. */
+	/** @param {PointerEvent} e */
+	function keepKeyboard(e) {
+		const t = e.target;
+		if (!(t instanceof HTMLElement)) return;
+		if (t.closest('input, textarea, select, [contenteditable="true"]')) return;
+		e.preventDefault();
+	}
 
 	/** @param {KeyboardEvent} e */
 	function onKey(e) {
@@ -88,15 +117,18 @@
 <svelte:window onkeydown={onKey} />
 
 {#if open}
-	<div class="float-root" use:portal bind:this={rootEl}>
+	<div class="float-root" use:portal>
 		<button type="button" class="scrim" aria-label="Close" onclick={onclose}></button>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
+			bind:this={panelEl}
 			class="panel"
 			role="dialog"
 			style:top="{pos.top}px"
 			style:left="{pos.left}px"
 			style:width="{width}px"
 			style:max-height="{maxHeight}px"
+			onpointerdown={keepKeyboard}
 		>
 			{@render children?.()}
 		</div>
@@ -128,18 +160,19 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		/* Light suggestion-style glass — less opaque than modal panels */
-		background: color-mix(in srgb, var(--bg) 52%, transparent);
-		border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+		/* Lift above shell + modal glass — white haze in dark, ink haze in light */
+		background: color-mix(in srgb, #ffffff 16%, transparent);
+		border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
 		border-radius: 14px;
 		box-shadow: 0 10px 36px color-mix(in srgb, var(--fg-raw) 22%, transparent);
-		backdrop-filter: blur(18px) saturate(1.15);
-		-webkit-backdrop-filter: blur(18px) saturate(1.15);
+		backdrop-filter: blur(20px) saturate(1.2);
+		-webkit-backdrop-filter: blur(20px) saturate(1.2);
 		overflow: hidden;
 		box-sizing: border-box;
 	}
 
 	:global(:root[data-theme='light']) .panel {
-		background: color-mix(in srgb, var(--bg) 72%, transparent);
+		background: color-mix(in srgb, #000000 10%, transparent);
+		border-color: color-mix(in srgb, #000000 10%, transparent);
 	}
 </style>

@@ -1,6 +1,6 @@
 <script>
-	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
+	import FloatPanel from './FloatPanel.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import Spinner from './Spinner.svelte';
 	import ProjectBox from './ProjectBox.svelte';
@@ -14,12 +14,12 @@
 	let projectIds = $state([]);
 	/** @type {string | null} */
 	let seededFor = $state(null);
-	/** @type {HTMLInputElement | undefined} */
-	let titleInput = $state();
 	let saving = $state(false);
 	let saveError = $state('');
 	/** @type {null | 'projects'} */
 	let bottomMenu = $state(null);
+	/** @type {HTMLButtonElement | undefined} */
+	let projectsBtn = $state();
 
 	const editing = $derived(
 		ui.composer?.kind === 'note' && ui.composer.id
@@ -46,7 +46,7 @@
 		saving = false;
 		saveError = '';
 		bottomMenu = null;
-		tick().then(() => titleInput?.focus());
+		/* No autofocus — avoids PWA keyboard scroll jumping the sheet. */
 	});
 
 	/** @param {string} id */
@@ -86,9 +86,19 @@
 	}
 </script>
 
-<CreateSheet {open} label={editing ? 'Edit note' : 'New note'} onclose={closeComposer}>
+<CreateSheet
+	{open}
+	label={editing ? 'Edit note' : 'New note'}
+	onclose={() => {
+		if (bottomMenu) {
+			bottomMenu = null;
+			return;
+		}
+		closeComposer();
+	}}
+>
 	<div class="sheet-title-row">
-		<input bind:this={titleInput} class="sheet-input" placeholder="Note title" bind:value={title} />
+		<input class="sheet-input" placeholder="Note title" bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
 	<div class="note-scroll">
@@ -107,41 +117,17 @@
 		<div class="bottom-pills">
 			<div class="pill-wrap">
 				<button
+					bind:this={projectsBtn}
 					type="button"
 					class="meta-pill"
 					class:empty={projectIds.length === 0}
 					aria-label="Projects"
 					aria-expanded={bottomMenu === 'projects'}
+					onpointerdown={(e) => e.preventDefault()}
 					onclick={() => (bottomMenu = bottomMenu === 'projects' ? null : 'projects')}
 				>
 					<ProjectPillsDisplay {projectIds} />
 				</button>
-				{#if bottomMenu === 'projects'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
-					></button>
-					<div class="bottom-menu" role="listbox">
-						{#if projects.length === 0}
-							<p class="menu-empty">No projects yet</p>
-						{:else}
-							{#each projects as project (project.id)}
-								{@const on = projectIds.includes(project.id)}
-								<button
-									type="button"
-									class="option"
-									class:active={on}
-									onclick={() => toggleProject(project.id)}
-								>
-									<ProjectBox
-										state={deriveProjectStatus(project.id, tasks)}
-										icon={project.icon}
-										size={18}
-									/>
-									<span>{project.title}</span>
-								</button>
-							{/each}
-						{/if}
-					</div>
-				{/if}
 			</div>
 		</div>
 
@@ -158,6 +144,33 @@
 		</button>
 	</div>
 </CreateSheet>
+
+<FloatPanel
+	open={bottomMenu === 'projects'}
+	anchor={projectsBtn}
+	placement="above"
+	width={240}
+	maxHeight={280}
+	onclose={() => (bottomMenu = null)}
+>
+	<div class="float-list" role="listbox">
+		{#if projects.length === 0}
+			<p class="menu-empty">No projects yet</p>
+		{:else}
+			{#each projects as project (project.id)}
+				{@const on = projectIds.includes(project.id)}
+				<button type="button" class="option" class:active={on} onclick={() => toggleProject(project.id)}>
+					<ProjectBox
+						state={deriveProjectStatus(project.id, tasks)}
+						icon={project.icon}
+						size={18}
+					/>
+					<span>{project.title}</span>
+				</button>
+			{/each}
+		{/if}
+	</div>
+</FloatPanel>
 
 <style>
 	.sheet-title-row {
@@ -249,29 +262,19 @@
 		color: var(--fg);
 	}
 
-	.menu-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 40;
-		border: 0;
-		background: transparent;
+	.float-list {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow: auto;
+		padding: 4px 0;
 	}
 
-	.bottom-menu {
-		position: absolute;
-		bottom: calc(100% + 6px);
-		left: 0;
-		z-index: 50;
-		min-width: 180px;
-		max-height: 220px;
-		overflow: auto;
-		padding: 4px;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		box-shadow: 0 12px 32px var(--shadow-strong);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+	.menu-empty {
+		margin: 0;
+		padding: 12px;
+		font-size: 13px;
+		color: var(--fg-33);
 	}
 
 	.option {
@@ -294,13 +297,6 @@
 	.option.active {
 		background: var(--fg-8);
 		color: var(--fg);
-	}
-
-	.menu-empty {
-		margin: 0;
-		padding: 10px 12px;
-		font-size: 13px;
-		color: var(--fg-33);
 	}
 
 	.publish-btn {

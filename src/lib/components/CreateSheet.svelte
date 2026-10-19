@@ -88,7 +88,8 @@
 		flex-direction: column;
 		width: 100%;
 		height: auto;
-		max-height: min(92svh, 880px);
+		/* Prefer dynamic viewport so keyboard doesn't leave a tall empty sheet */
+		max-height: min(92dvh, 92svh, 880px);
 		min-height: 0;
 		border: 1px solid var(--glass-border);
 		border-bottom: none;
@@ -107,8 +108,11 @@
 		flex-direction: column;
 		min-height: 0;
 		flex: 1;
-		overflow: visible;
+		overflow: auto;
+		overscroll-behavior: contain;
 		border-radius: inherit;
+		/* Stop browsers from scrolling focused fields under the keyboard chrome */
+		scroll-padding-bottom: 0;
 	}
 
 	.sheet-inner > :global(*) {
