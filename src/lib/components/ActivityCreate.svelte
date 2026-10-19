@@ -104,7 +104,7 @@
 	}
 </script>
 
-<CreateSheet {open} sheetId="activity-create" label="New activity" onclose={closeComposer}>
+<CreateSheet {open} label="New activity" onclose={closeComposer}>
 	<div class="sheet-title-row">
 		<input
 			bind:this={titleInput}

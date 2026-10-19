@@ -1,10 +1,14 @@
 <script>
+	import { tick } from 'svelte';
+	import { activePerson } from '$lib/actor.svelte.js';
 	import ProfilePic from './ProfilePic.svelte';
+	import ProfilePicStack from './ProfilePicStack.svelte';
 	import LabelPill from './LabelPill.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
+	import FloatPanel from './FloatPanel.svelte';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import { patchNote, patchTask, people, projects, tasks } from '$lib/workspace.svelte.js';
 
@@ -27,8 +31,6 @@
 
 	/**
 	 * Shared property pills for opened Task / Note detail.
-	 * Tasks also show status + priority; notes skip those.
-	 * Status/priority use the same `.meta-pill` chrome as projects — never a nested picker plate.
 	 * @type {{ entity: any, kind: 'task' | 'note' }}
 	 */
 	let { entity, kind } = $props();
@@ -37,6 +39,19 @@
 	let menu = $state(null);
 	let labelDraft = $state('');
 	let saving = $state(false);
+
+	/** @type {HTMLButtonElement | undefined} */
+	let statusBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let priorityBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let assigneeBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let projectsBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let labelsBtn = $state();
+	/** @type {HTMLInputElement | undefined} */
+	let labelInput = $state();
 
 	const showStatusPriority = $derived(kind === 'task');
 	const showAssignees = $derived(kind === 'task');
@@ -50,6 +65,7 @@
 	const priorityLabel = $derived(
 		PRIORITIES.find((p) => p.value === entity?.priority)?.label ?? entity?.priority ?? 'None'
 	);
+	const me = $derived(activePerson());
 
 	/**
 	 * @param {null | 'status' | 'priority' | 'assignees' | 'projects' | 'labels'} next
@@ -61,12 +77,14 @@
 		if (next !== 'labels') labelDraft = '';
 	}
 
-	/** @param {MouseEvent} e */
-	function closeMenu(e) {
-		e.stopPropagation();
+	function closeMenu() {
 		menu = null;
 		labelDraft = '';
 	}
+
+	$effect(() => {
+		if (menu === 'labels') tick().then(() => labelInput?.focus());
+	});
 
 	/**
 	 * @param {Record<string, unknown>} patch
@@ -163,6 +181,7 @@
 	{#if showStatusPriority}
 		<div class="meta-item" role="listitem">
 			<button
+				bind:this={statusBtn}
 				type="button"
 				class="meta-pill"
 				aria-label="Status"
@@ -172,25 +191,10 @@
 				<TaskBox state={entity.status} size={20} />
 				<span>{statusLabel}</span>
 			</button>
-			{#if menu === 'status'}
-				<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
-				<div class="menu" role="listbox">
-					{#each STATUSES as opt (opt.value)}
-						<button
-							type="button"
-							class="option"
-							class:active={entity.status === opt.value}
-							onclick={(e) => pickStatus(opt.value, e)}
-						>
-							<TaskBox state={opt.value} size={20} />
-							<span>{opt.label}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
 		</div>
 		<div class="meta-item" role="listitem">
 			<button
+				bind:this={priorityBtn}
 				type="button"
 				class="meta-pill"
 				aria-label="Priority"
@@ -200,28 +204,13 @@
 				<PriorityBox priority={entity.priority} size={18} />
 				<span>{priorityLabel}</span>
 			</button>
-			{#if menu === 'priority'}
-				<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
-				<div class="menu" role="listbox">
-					{#each PRIORITIES as opt (opt.value)}
-						<button
-							type="button"
-							class="option"
-							class:active={entity.priority === opt.value}
-							onclick={(e) => pickPriority(opt.value, e)}
-						>
-							<PriorityBox priority={opt.value} size={18} />
-							<span>{opt.label}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
 		</div>
 	{/if}
 
 	{#if showAssignees}
 		<div class="meta-item" role="listitem">
 			<button
+				bind:this={assigneeBtn}
 				type="button"
 				class="meta-pill"
 				class:empty={assignees.length === 0}
@@ -230,41 +219,21 @@
 				onclick={(e) => toggleMenu('assignees', e)}
 			>
 				{#if assignees.length === 0}
-					<span class="empty-avatar" aria-hidden="true"></span>
+					<ProfilePic name={me.name} size={20} />
 					<span>Assignee</span>
 				{:else}
-					{#each assignees.slice(0, 3) as person, i (person.email ?? person.name ?? i)}
-						<span class="stack-pic" style:margin-left={i > 0 ? '-6px' : '0'} style:z-index={3 - i}>
-							<ProfilePic name={person.name ?? ''} size={20} />
-						</span>
-					{/each}
+					<ProfilePicStack profiles={assignees} size="xs" />
 					<span class="pill-names">
 						{assignees.map((/** @type {any} */ a) => a.name).filter(Boolean).join(', ')}
 					</span>
 				{/if}
 			</button>
-			{#if menu === 'assignees'}
-				<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
-				<div class="menu" role="listbox">
-					{#each people as person (person.email)}
-						{@const on = assignees.some((/** @type {any} */ a) => a.email === person.email)}
-						<button
-							type="button"
-							class="option"
-							class:active={on}
-							onclick={(e) => toggleAssignee(person, e)}
-						>
-							<ProfilePic name={person.name} size={20} />
-							<span>{person.name}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
 		</div>
 	{/if}
 
 	<div class="meta-item" role="listitem">
 		<button
+			bind:this={projectsBtn}
 			type="button"
 			class="meta-pill"
 			class:empty={targets.length === 0}
@@ -274,31 +243,6 @@
 		>
 			<ProjectPillsDisplay {projectIds} />
 		</button>
-		{#if menu === 'projects'}
-			<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
-			<div class="menu" role="listbox">
-				{#if projects.length === 0}
-					<p class="menu-empty">No projects yet</p>
-				{:else}
-					{#each projects as project (project.id)}
-						{@const on = projectIds.includes(project.id)}
-						<button
-							type="button"
-							class="option"
-							class:active={on}
-							onclick={(e) => toggleProject(project.id, e)}
-						>
-							<ProjectBox
-								state={deriveProjectStatus(project.id, tasks)}
-								icon={project.icon}
-								size={18}
-							/>
-							<span>{project.title}</span>
-						</button>
-					{/each}
-				{/if}
-			</div>
-		{/if}
 	</div>
 
 	{#each labels as labelText (labelText)}
@@ -315,6 +259,7 @@
 
 	<div class="meta-item" role="listitem">
 		<button
+			bind:this={labelsBtn}
 			type="button"
 			class="label-add"
 			aria-label="Add label"
@@ -329,22 +274,133 @@
 				/>
 			</svg>
 		</button>
-		{#if menu === 'labels'}
-			<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>
-			<div class="menu labels-menu" role="dialog">
-				<form class="label-form" onsubmit={addLabel}>
-					<input
-						class="label-input"
-						placeholder="New label"
-						bind:value={labelDraft}
-						aria-label="New label"
-					/>
-					<button type="submit" class="label-submit" disabled={!labelDraft.trim()}>Add</button>
-				</form>
-			</div>
-		{/if}
 	</div>
 </div>
+
+{#if showStatusPriority}
+	<FloatPanel
+		open={menu === 'status'}
+		anchor={statusBtn}
+		placement="below"
+		width={200}
+		maxHeight={320}
+		onclose={closeMenu}
+	>
+		<div class="float-list" role="listbox">
+			{#each STATUSES as opt (opt.value)}
+				<button
+					type="button"
+					class="option"
+					class:active={entity.status === opt.value}
+					onclick={(e) => pickStatus(opt.value, e)}
+				>
+					<TaskBox state={opt.value} size={20} />
+					<span>{opt.label}</span>
+				</button>
+			{/each}
+		</div>
+	</FloatPanel>
+	<FloatPanel
+		open={menu === 'priority'}
+		anchor={priorityBtn}
+		placement="below"
+		width={180}
+		maxHeight={280}
+		onclose={closeMenu}
+	>
+		<div class="float-list" role="listbox">
+			{#each PRIORITIES as opt (opt.value)}
+				<button
+					type="button"
+					class="option"
+					class:active={entity.priority === opt.value}
+					onclick={(e) => pickPriority(opt.value, e)}
+				>
+					<PriorityBox priority={opt.value} size={18} />
+					<span>{opt.label}</span>
+				</button>
+			{/each}
+		</div>
+	</FloatPanel>
+{/if}
+
+{#if showAssignees}
+	<FloatPanel
+		open={menu === 'assignees'}
+		anchor={assigneeBtn}
+		placement="below"
+		width={220}
+		maxHeight={280}
+		onclose={closeMenu}
+	>
+		<div class="float-list" role="listbox">
+			{#each people as person (person.email)}
+				{@const on = assignees.some((/** @type {any} */ a) => a.email === person.email)}
+				<button
+					type="button"
+					class="option"
+					class:active={on}
+					onclick={(e) => toggleAssignee(person, e)}
+				>
+					<ProfilePic name={person.name} size={20} />
+					<span>{person.name}</span>
+				</button>
+			{/each}
+		</div>
+	</FloatPanel>
+{/if}
+
+<FloatPanel
+	open={menu === 'projects'}
+	anchor={projectsBtn}
+	placement="below"
+	width={240}
+	maxHeight={280}
+	onclose={closeMenu}
+>
+	<div class="float-list" role="listbox">
+		{#if projects.length === 0}
+			<p class="menu-empty">No projects yet</p>
+		{:else}
+			{#each projects as project (project.id)}
+				{@const on = projectIds.includes(project.id)}
+				<button
+					type="button"
+					class="option"
+					class:active={on}
+					onclick={(e) => toggleProject(project.id, e)}
+				>
+					<ProjectBox
+						state={deriveProjectStatus(project.id, tasks)}
+						icon={project.icon}
+						size={18}
+					/>
+					<span>{project.title}</span>
+				</button>
+			{/each}
+		{/if}
+	</div>
+</FloatPanel>
+
+<FloatPanel
+	open={menu === 'labels'}
+	anchor={labelsBtn}
+	placement="below"
+	width={240}
+	maxHeight={160}
+	onclose={closeMenu}
+>
+	<form class="label-form" onsubmit={addLabel}>
+		<input
+			bind:this={labelInput}
+			class="label-input"
+			placeholder="New label"
+			bind:value={labelDraft}
+			aria-label="New label"
+		/>
+		<button type="submit" class="label-submit" disabled={!labelDraft.trim()}>Add</button>
+	</form>
+</FloatPanel>
 
 <style>
 	.meta-row {
@@ -390,47 +446,11 @@
 		color: var(--fg-66);
 	}
 
-	.empty-avatar {
-		width: 20px;
-		height: 20px;
-		border-radius: 50%;
-		border: 1px dashed var(--fg-16);
-		box-sizing: border-box;
-		flex-shrink: 0;
-	}
-
-	.stack-pic {
-		display: inline-flex;
-		flex-shrink: 0;
-	}
-
 	.pill-names {
 		max-width: 140px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.pill-projects {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 6px;
-		min-width: 0;
-	}
-
-	.pill-project {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-		min-width: 0;
-	}
-
-	.pill-project-name {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		max-width: 8rem;
 	}
 
 	.meta-label {
@@ -482,29 +502,12 @@
 		height: 32px;
 	}
 
-	.menu-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 19;
-		border: 0;
-		padding: 0;
-		background: transparent;
-		cursor: default;
-	}
-
-	.menu {
-		position: absolute;
-		top: calc(100% + 6px);
-		left: 0;
-		z-index: 20;
-		min-width: 168px;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		overflow: hidden;
-		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+	.float-list {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow: auto;
+		padding: 4px 0;
 	}
 
 	.menu-empty {
@@ -544,25 +547,21 @@
 		font-weight: 600;
 	}
 
-	.labels-menu {
-		padding: 8px;
-		min-width: 200px;
-	}
-
 	.label-form {
 		display: flex;
 		gap: 6px;
 		align-items: center;
+		padding: 10px;
 	}
 
 	.label-input {
 		flex: 1;
 		min-width: 0;
-		height: 32px;
+		height: 34px;
 		padding: 0 10px;
-		border: 1px solid var(--hairline);
-		border-radius: 8px;
-		background: var(--bg);
+		border: 0;
+		border-radius: 10px;
+		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
 		font-size: 13px;
@@ -570,10 +569,10 @@
 	}
 
 	.label-submit {
-		height: 32px;
-		padding: 0 10px;
+		height: 34px;
+		padding: 0 12px;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 10px;
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;

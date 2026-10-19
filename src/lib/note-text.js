@@ -44,3 +44,29 @@ export function stripMarkdownSyntax(s) {
 export function noteLooksLikeHtml(raw) {
 	return typeof raw === 'string' && /<\/?[a-z][\s\S]*>/i.test(raw);
 }
+
+/** @param {string} s */
+function escapeHtml(s) {
+	return String(s)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+}
+
+/**
+ * Escape plain text and turn markdown / bare URLs into accent-ready anchors.
+ * @param {string} raw
+ */
+export function renderInlineLinks(raw) {
+	if (!raw) return '';
+	const escaped = escapeHtml(raw);
+	const withMd = escaped.replace(
+		/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+		'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+	);
+	return withMd.replace(
+		/(^|[\s(])(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g,
+		'$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>'
+	);
+}

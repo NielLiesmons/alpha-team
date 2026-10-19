@@ -2,6 +2,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { Editor } from '@tiptap/core';
 	import StarterKit from '@tiptap/starter-kit';
+	import Link from '@tiptap/extension-link';
 	import Placeholder from '@tiptap/extension-placeholder';
 	import { noteLooksLikeHtml } from '$lib/note-text.js';
 
@@ -50,6 +51,15 @@
 			extensions: [
 				StarterKit.configure({
 					heading: { levels: [1, 2, 3] }
+				}),
+				Link.configure({
+					openOnClick: true,
+					autolink: true,
+					linkOnPaste: true,
+					HTMLAttributes: {
+						rel: 'noopener noreferrer',
+						target: '_blank'
+					}
 				}),
 				Placeholder.configure({ placeholder })
 			],
@@ -192,5 +202,17 @@
 		padding-left: 0.85rem;
 		border-left: 2px solid var(--white16);
 		color: var(--white66);
+	}
+
+	.note-editor :global(.note-prose a) {
+		color: var(--link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		text-decoration-thickness: 1px;
+		cursor: pointer;
+	}
+
+	.note-editor :global(.note-prose a:hover) {
+		color: var(--link-hover);
 	}
 </style>

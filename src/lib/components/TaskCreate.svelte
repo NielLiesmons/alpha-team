@@ -1,9 +1,12 @@
 <script>
 	import { tick } from 'svelte';
+	import { activePerson } from '$lib/actor.svelte.js';
 	import CreateSheet from './CreateSheet.svelte';
+	import FloatPanel from './FloatPanel.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import ProfilePic from './ProfilePic.svelte';
+	import ProfilePicStack from './ProfilePicStack.svelte';
 	import Spinner from './Spinner.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
@@ -39,13 +42,21 @@
 	let projectIds = $state([]);
 	/** @type {{ email?: string, name?: string }[]} */
 	let assignees = $state([]);
-	/** @type {null | 'assignees' | 'projects'} */
+	/** @type {null | 'assignees' | 'projects' | 'labels'} */
 	let bottomMenu = $state(null);
-	let labelOpen = $state(false);
 	let labelDraft = $state('');
 	/** @type {HTMLInputElement | undefined} */
 	let titleInput = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let assigneeBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let projectsBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let labelsBtn = $state();
+	/** @type {HTMLInputElement | undefined} */
+	let labelInput = $state();
 	let saving = $state(false);
+	const me = $derived(activePerson());
 
 	const editing = $derived(ui.composer?.kind === 'task' ? tasks.find((item) => item.id === ui.composer.id) : null);
 	const open = $derived(ui.composer?.kind === 'task');
@@ -65,10 +76,13 @@
 		statusOpen = false;
 		priorityOpen = false;
 		bottomMenu = null;
-		labelOpen = false;
 		labelDraft = '';
 		saving = false;
 		tick().then(() => titleInput?.focus());
+	});
+
+	$effect(() => {
+		if (bottomMenu === 'labels') tick().then(() => labelInput?.focus());
 	});
 
 	/** @param {string} id */
@@ -91,7 +105,13 @@
 		if (!text) return;
 		if (!labels.includes(text)) labels = [...labels, text];
 		labelDraft = '';
-		labelOpen = false;
+		bottomMenu = null;
+	}
+
+	/** @param {null | 'assignees' | 'projects' | 'labels'} next */
+	function toggleBottom(next) {
+		bottomMenu = bottomMenu === next ? null : next;
+		if (next !== 'labels') labelDraft = '';
 	}
 
 	async function save() {
@@ -130,11 +150,10 @@
 
 <CreateSheet
 	{open}
-	sheetId="task-create"
 	label={editing ? 'Edit task' : 'New task'}
 	onclose={() => {
-		if (labelOpen) {
-			labelOpen = false;
+		if (bottomMenu) {
+			bottomMenu = null;
 			return;
 		}
 		closeComposer();
@@ -266,87 +285,47 @@
 		<div class="bottom-pills">
 			<div class="pill-wrap">
 				<button
+					bind:this={assigneeBtn}
 					type="button"
 					class="meta-pill"
 					class:empty={assignees.length === 0}
 					aria-label="Assignees"
 					aria-expanded={bottomMenu === 'assignees'}
-					onclick={() => (bottomMenu = bottomMenu === 'assignees' ? null : 'assignees')}
+					onclick={() => toggleBottom('assignees')}
 				>
 					{#if assignees.length === 0}
-						<span class="empty-avatar" aria-hidden="true"></span>
+						<ProfilePic name={me.name} size={22} />
 						<span>Assignee</span>
 					{:else}
-						{#each assignees.slice(0, 2) as person, i (person.email ?? person.name ?? i)}
-							<span class="stack-pic" style:margin-left={i > 0 ? '-6px' : '0'}>
-								<ProfilePic name={person.name ?? ''} size={22} />
-							</span>
-						{/each}
+						<ProfilePicStack profiles={assignees} size="xs" />
 						<span class="pill-names">{assignees.map((a) => a.name).filter(Boolean).join(', ')}</span>
 					{/if}
 				</button>
-				{#if bottomMenu === 'assignees'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
-					></button>
-					<div class="bottom-menu" role="listbox">
-						{#each people as person (person.email)}
-							{@const on = assignees.some((a) => a.email === person.email)}
-							<button type="button" class="option" class:active={on} onclick={() => toggleAssignee(person)}>
-								<ProfilePic name={person.name} size={20} />
-								<span>{person.name}</span>
-							</button>
-						{/each}
-					</div>
-				{/if}
 			</div>
 
 			<div class="pill-wrap">
 				<button
+					bind:this={projectsBtn}
 					type="button"
 					class="meta-pill"
 					class:empty={projectIds.length === 0}
 					aria-label="Projects"
 					aria-expanded={bottomMenu === 'projects'}
-					onclick={() => (bottomMenu = bottomMenu === 'projects' ? null : 'projects')}
+					onclick={() => toggleBottom('projects')}
 				>
 					<ProjectPillsDisplay {projectIds} />
 				</button>
-				{#if bottomMenu === 'projects'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
-					></button>
-					<div class="bottom-menu" role="listbox">
-						{#if projects.length === 0}
-							<p class="menu-empty">No projects yet</p>
-						{:else}
-							{#each projects as project (project.id)}
-								{@const on = projectIds.includes(project.id)}
-								<button
-									type="button"
-									class="option"
-									class:active={on}
-									onclick={() => toggleProject(project.id)}
-								>
-									<ProjectBox
-										state={deriveProjectStatus(project.id, tasks)}
-										icon={project.icon}
-										size={18}
-									/>
-									<span>{project.title}</span>
-								</button>
-							{/each}
-						{/if}
-					</div>
-				{/if}
 			</div>
 
 			<div class="pill-wrap">
 				<button
+					bind:this={labelsBtn}
 					type="button"
 					class="labels-trigger"
 					class:has-labels={labels.length > 0}
 					aria-label="Add labels"
-					aria-expanded={labelOpen}
-					onclick={() => (labelOpen = true)}
+					aria-expanded={bottomMenu === 'labels'}
+					onclick={() => toggleBottom('labels')}
 				>
 					<span class="labels-trigger-body">
 						<span class="trigger-count">{labels.length}</span>
@@ -371,67 +350,82 @@
 	</div>
 </CreateSheet>
 
-<CreateSheet
-	open={labelOpen}
-	nested
-	sheetId="task-label"
-	label="Add label"
+<FloatPanel
+	open={bottomMenu === 'assignees'}
+	anchor={assigneeBtn}
+	placement="above"
+	width={220}
+	maxHeight={280}
+	onclose={() => (bottomMenu = null)}
+>
+	<div class="float-list" role="listbox">
+		{#each people as person (person.email)}
+			{@const on = assignees.some((a) => a.email === person.email)}
+			<button type="button" class="option" class:active={on} onclick={() => toggleAssignee(person)}>
+				<ProfilePic name={person.name} size={20} />
+				<span>{person.name}</span>
+			</button>
+		{/each}
+	</div>
+</FloatPanel>
+
+<FloatPanel
+	open={bottomMenu === 'projects'}
+	anchor={projectsBtn}
+	placement="above"
+	width={240}
+	maxHeight={280}
+	onclose={() => (bottomMenu = null)}
+>
+	<div class="float-list" role="listbox">
+		{#if projects.length === 0}
+			<p class="menu-empty">No projects yet</p>
+		{:else}
+			{#each projects as project (project.id)}
+				{@const on = projectIds.includes(project.id)}
+				<button type="button" class="option" class:active={on} onclick={() => toggleProject(project.id)}>
+					<ProjectBox
+						state={deriveProjectStatus(project.id, tasks)}
+						icon={project.icon}
+						size={18}
+					/>
+					<span>{project.title}</span>
+				</button>
+			{/each}
+		{/if}
+	</div>
+</FloatPanel>
+
+<FloatPanel
+	open={bottomMenu === 'labels'}
+	anchor={labelsBtn}
+	placement="above"
+	width={240}
+	maxHeight={200}
 	onclose={() => {
-		labelOpen = false;
+		bottomMenu = null;
 		labelDraft = '';
 	}}
 >
-	<div class="nested-head">
-		<span class="nested-title">Label</span>
-	</div>
-	<div class="form-divider"></div>
 	<form
-		class="nested-label-form"
+		class="label-form"
 		onsubmit={(e) => {
 			e.preventDefault();
 			addLabel();
 		}}
 	>
-		<input class="text" placeholder="New label" bind:value={labelDraft} aria-label="New label" />
-		<button type="submit" class="publish-btn nested-add" disabled={!labelDraft.trim()}>Add</button>
+		<input
+			bind:this={labelInput}
+			class="label-input"
+			placeholder="New label"
+			bind:value={labelDraft}
+			aria-label="New label"
+		/>
+		<button type="submit" class="label-submit" disabled={!labelDraft.trim()}>Add</button>
 	</form>
-</CreateSheet>
+</FloatPanel>
 
 <style>
-	.nested-head {
-		display: flex;
-		align-items: center;
-		padding: 14px 16px 6px;
-	}
-
-	.nested-title {
-		font-size: 15px;
-		font-weight: 600;
-		color: var(--fg);
-	}
-
-	.nested-label-form {
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		padding: 12px 16px 4px;
-	}
-
-	.nested-label-form .text {
-		height: 42px;
-		padding: 0 14px;
-		border-radius: 12px;
-		font: inherit;
-		font-size: 15px;
-		color: var(--fg);
-		box-sizing: border-box;
-	}
-
-	.nested-add {
-		margin-left: 0;
-		align-self: flex-end;
-	}
-
 	.task-title-row {
 		display: flex;
 		flex-direction: row;
@@ -493,9 +487,58 @@
 		right: 0;
 	}
 
-	.bottom-menu {
-		bottom: calc(100% + 6px);
-		left: 0;
+	.float-list {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow: auto;
+		padding: 4px 0;
+	}
+
+	.label-form {
+		display: flex;
+		gap: 6px;
+		align-items: center;
+		padding: 10px;
+	}
+
+	.label-input {
+		flex: 1;
+		min-width: 0;
+		height: 34px;
+		padding: 0 10px;
+		border: 0;
+		border-radius: 10px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		outline: none;
+	}
+
+	.label-submit {
+		height: 34px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 10px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.label-submit:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.menu-empty {
+		margin: 0;
+		padding: 12px;
+		font-size: 13px;
+		color: var(--fg-33);
 	}
 
 	.status-option,
@@ -676,20 +719,6 @@
 
 	.meta-pill:hover {
 		background: var(--fg-8);
-	}
-
-	.empty-avatar {
-		width: 22px;
-		height: 22px;
-		border-radius: 50%;
-		border: 1px dashed var(--fg-16);
-		box-sizing: border-box;
-		flex-shrink: 0;
-	}
-
-	.stack-pic {
-		display: inline-flex;
-		flex-shrink: 0;
 	}
 
 	.pill-names {

@@ -49,6 +49,9 @@
 	/* Semantic aliases */
 	--accent: var(--accent-1);
 	--accent-66: var(--accent-1-66);
+	/* Links: accent nudged toward white (dark) / black (light) for readability */
+	--link: color-mix(in srgb, var(--accent) 78%, #ffffff);
+	--link-hover: color-mix(in srgb, var(--accent) 62%, #ffffff);
 	--accent-success: var(--accent-1);
 	--accent-progress: var(--accent-2);
 	--accent-success-66: var(--accent-1-66);
@@ -189,6 +192,8 @@
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
+	--link: color-mix(in srgb, var(--accent) 78%, #000000);
+	--link-hover: color-mix(in srgb, var(--accent) 62%, #000000);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
 	--glass-fill: color-mix(in srgb, var(--fg) 4%, var(--bg));
 	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);

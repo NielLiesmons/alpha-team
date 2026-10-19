@@ -156,7 +156,7 @@
 	const accountLabel = $derived(accounts.find((a) => a.id === accountId)?.title ?? 'Account');
 </script>
 
-<CreateSheet {open} sheetId="ledger-create" label="New entry" onclose={closeComposer}>
+<CreateSheet {open} label="New entry" onclose={closeComposer}>
 	<div class="sheet-title-row dir-row">
 		<button
 			type="button"

@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
+	import FloatPanel from './FloatPanel.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import { closeComposer, projects, saveProject, tasks, ui } from '$lib/workspace.svelte.js';
@@ -11,6 +12,8 @@
 	/** @type {string | null} */
 	let icon = $state(null);
 	let iconOpen = $state(false);
+	/** @type {HTMLButtonElement | undefined} */
+	let iconBtn = $state();
 	/** @type {HTMLInputElement | undefined} */
 	let titleInput = $state();
 
@@ -49,28 +52,27 @@
 			alert(e instanceof Error ? e.message : String(e));
 		}
 	}
+</script>
 
-	function onBaseClose() {
+<CreateSheet
+	{open}
+	label={editing ? 'Edit project' : 'New project'}
+	onclose={() => {
 		if (iconOpen) {
 			iconOpen = false;
 			return;
 		}
 		closeComposer();
-	}
-</script>
-
-<CreateSheet
-	{open}
-	sheetId="project-create"
-	label={editing ? 'Edit project' : 'New project'}
-	onclose={onBaseClose}
+	}}
 >
 	<div class="sheet-title-row">
 		<button
+			bind:this={iconBtn}
 			type="button"
 			class="bare"
 			aria-label="Project icon"
-			onclick={() => (iconOpen = true)}
+			aria-expanded={iconOpen}
+			onclick={() => (iconOpen = !iconOpen)}
 		>
 			<ProjectBox state={previewStatus} {icon} size={28} />
 		</button>
@@ -86,17 +88,14 @@
 	</div>
 </CreateSheet>
 
-<CreateSheet
+<FloatPanel
 	open={iconOpen}
-	nested
-	sheetId="project-emoji"
-	label="Choose emoji"
+	anchor={iconBtn}
+	placement="below"
+	width={292}
+	maxHeight={360}
 	onclose={() => (iconOpen = false)}
 >
-	<div class="nested-head">
-		<span class="nested-title">Emoji</span>
-	</div>
-	<div class="form-divider"></div>
 	<EmojiPicker
 		value={icon}
 		onselect={(emoji) => {
@@ -108,7 +107,7 @@
 			iconOpen = false;
 		}}
 	/>
-</CreateSheet>
+</FloatPanel>
 
 <style>
 	.bare {
@@ -119,17 +118,5 @@
 		place-items: center;
 		cursor: pointer;
 		flex-shrink: 0;
-	}
-
-	.nested-head {
-		display: flex;
-		align-items: center;
-		padding: 14px 16px 6px;
-	}
-
-	.nested-title {
-		font-size: 15px;
-		font-weight: 600;
-		color: var(--fg);
 	}
 </style>

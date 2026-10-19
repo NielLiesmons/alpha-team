@@ -28,6 +28,7 @@
 		persistSendCampaign
 	} from '$lib/publications.svelte.js';
 	import { deriveProjectStatus } from '$lib/project-status.js';
+	import { renderInlineLinks } from '$lib/note-text.js';
 	import {
 		activities,
 		clearSelection,
@@ -543,7 +544,7 @@
 			</div>
 			<DetailMetaPills entity={task} kind="task" />
 			{#if task.body}
-				<p class="prose">{task.body}</p>
+				<p class="prose">{@html renderInlineLinks(task.body)}</p>
 			{:else}
 				<p class="muted">No description.</p>
 			{/if}
@@ -582,7 +583,7 @@
 				<h2 class="title">{project.title}</h2>
 			</div>
 			{#if project.description}
-				<p class="prose">{project.description}</p>
+				<p class="prose">{@html renderInlineLinks(project.description)}</p>
 			{:else}
 				<p class="muted">No description yet.</p>
 			{/if}
@@ -1042,10 +1043,10 @@
 		outline: none;
 		background: transparent;
 		font-family: var(--font);
-		font-size: 1.15rem;
+		font-size: 1.55rem;
 		font-weight: 700;
-		letter-spacing: -0.02em;
-		line-height: 1.25;
+		letter-spacing: -0.03em;
+		line-height: 1.2;
 		color: var(--fg);
 	}
 
@@ -1118,10 +1119,10 @@
 		min-width: 0;
 		margin: 0;
 		font-family: var(--font);
-		font-size: 1.15rem;
+		font-size: 1.55rem;
 		font-weight: 700;
-		letter-spacing: -0.02em;
-		line-height: 1.25;
+		letter-spacing: -0.03em;
+		line-height: 1.2;
 		color: var(--white);
 	}
 
@@ -1173,6 +1174,17 @@
 		line-height: 1.55;
 		color: var(--white66);
 		white-space: pre-wrap;
+	}
+
+	.prose :global(a) {
+		color: var(--link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		text-decoration-thickness: 1px;
+	}
+
+	.prose :global(a:hover) {
+		color: var(--link-hover);
 	}
 
 	.summary {
