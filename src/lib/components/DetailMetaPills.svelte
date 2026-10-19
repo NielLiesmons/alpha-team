@@ -3,7 +3,9 @@
 	import LabelPill from './LabelPill.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
-	import { patchNote, patchTask, people, projects } from '$lib/workspace.svelte.js';
+	import ProjectBox from './ProjectBox.svelte';
+	import { deriveProjectStatus } from '$lib/project-status.js';
+	import { patchNote, patchTask, people, projects, tasks } from '$lib/workspace.svelte.js';
 
 	const STATUSES = [
 		{ value: 'backlog', label: 'Backlog' },
@@ -272,7 +274,19 @@
 			{#if targets.length === 0}
 				<span>Project</span>
 			{:else}
-				<span class="pill-names">{targets.map((/** @type {any} */ t) => t.label).join(', ')}</span>
+				<span class="pill-projects">
+					{#each projectIds as pid (pid)}
+						{@const p = projects.find((x) => x.id === pid)}
+						<span class="pill-project">
+							<ProjectBox
+								state={p ? deriveProjectStatus(p.id, tasks) : 'planned'}
+								icon={p?.icon}
+								size={16}
+							/>
+							<span class="pill-project-name">{p?.title ?? pid}</span>
+						</span>
+					{/each}
+				</span>
 			{/if}
 		</button>
 		{#if menu === 'projects'}
@@ -289,6 +303,11 @@
 							class:active={on}
 							onclick={(e) => toggleProject(project.id, e)}
 						>
+							<ProjectBox
+								state={deriveProjectStatus(project.id, tasks)}
+								icon={project.icon}
+								size={18}
+							/>
 							<span>{project.title}</span>
 						</button>
 					{/each}
@@ -405,6 +424,28 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.pill-projects {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.pill-project {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		min-width: 0;
+	}
+
+	.pill-project-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 8rem;
 	}
 
 	.meta-label {

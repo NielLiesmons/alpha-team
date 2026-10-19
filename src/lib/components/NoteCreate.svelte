@@ -3,7 +3,9 @@
 	import CreateSheet from './CreateSheet.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import Spinner from './Spinner.svelte';
-	import { closeComposer, notes, projects, saveNote, ui } from '$lib/workspace.svelte.js';
+	import ProjectBox from './ProjectBox.svelte';
+	import { deriveProjectStatus } from '$lib/project-status.js';
+	import { closeComposer, notes, projects, saveNote, tasks, ui } from '$lib/workspace.svelte.js';
 
 	let title = $state('');
 	let body = $state('');
@@ -114,9 +116,19 @@
 					{#if projectIds.length === 0}
 						<span>Project</span>
 					{:else}
-						<span class="pill-names"
-							>{projectIds.map((id) => projects.find((p) => p.id === id)?.title ?? id).join(', ')}</span
-						>
+						<span class="pill-projects">
+							{#each projectIds as pid (pid)}
+								{@const p = projects.find((x) => x.id === pid)}
+								<span class="pill-project">
+									<ProjectBox
+										state={p ? deriveProjectStatus(p.id, tasks) : 'planned'}
+										icon={p?.icon}
+										size={16}
+									/>
+									<span>{p?.title ?? pid}</span>
+								</span>
+							{/each}
+						</span>
 					{/if}
 				</button>
 				{#if bottomMenu === 'projects'}
@@ -134,6 +146,11 @@
 									class:active={on}
 									onclick={() => toggleProject(project.id)}
 								>
+									<ProjectBox
+										state={deriveProjectStatus(project.id, tasks)}
+										icon={project.icon}
+										size={18}
+									/>
 									<span>{project.title}</span>
 								</button>
 							{/each}
@@ -227,6 +244,23 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		min-width: 0;
+		color: var(--fg);
+	}
+
+	.pill-projects {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.pill-project {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		min-width: 0;
+		font-size: 13px;
 		color: var(--fg);
 	}
 

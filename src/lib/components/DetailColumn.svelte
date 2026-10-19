@@ -27,6 +27,7 @@
 		mailSettings,
 		persistSendCampaign
 	} from '$lib/publications.svelte.js';
+	import { deriveProjectStatus } from '$lib/project-status.js';
 	import {
 		clearSelection,
 		notes,
@@ -551,7 +552,11 @@
 		</header>
 		<div class="body">
 			<div class="title-row">
-				<ProjectBox state={project.status} size={24} />
+				<ProjectBox
+					state={deriveProjectStatus(project.id, tasks)}
+					icon={project.icon}
+					size={24}
+				/>
 				<h2 class="title">{project.title}</h2>
 			</div>
 			{#if project.summary}

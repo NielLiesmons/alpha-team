@@ -159,9 +159,15 @@
 	.feed {
 		display: flex;
 		flex-direction: column;
+		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		}
+		-webkit-overflow-scrolling: touch;
+		/* Explicit chrome clearance so Songs/library scrolls under top bar + bottom nav */
+		padding-top: var(--feed-pad-top, 48px);
+		padding-bottom: var(--feed-pad-bottom, 40px);
+		box-sizing: border-box;
+	}
 
 	.group-header {
 		display: flex;
@@ -252,7 +258,12 @@
 	}
 
 	.row.on {
-		background: var(--selection);
+		border: 1px solid transparent;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.row-icon {

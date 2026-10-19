@@ -5,6 +5,8 @@
 	import PriorityBox from './PriorityBox.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import Spinner from './Spinner.svelte';
+	import ProjectBox from './ProjectBox.svelte';
+	import { deriveProjectStatus } from '$lib/project-status.js';
 	import { closeComposer, people, projects, saveTask, tasks, ui } from '$lib/workspace.svelte.js';
 
 	const statuses = [
@@ -296,9 +298,19 @@
 					{#if projectIds.length === 0}
 						<span>Project</span>
 					{:else}
-						<span class="pill-names"
-							>{projectIds.map((id) => projects.find((p) => p.id === id)?.title ?? id).join(', ')}</span
-						>
+						<span class="pill-projects">
+							{#each projectIds as pid (pid)}
+								{@const p = projects.find((x) => x.id === pid)}
+								<span class="pill-project">
+									<ProjectBox
+										state={p ? deriveProjectStatus(p.id, tasks) : 'planned'}
+										icon={p?.icon}
+										size={16}
+									/>
+									<span>{p?.title ?? pid}</span>
+								</span>
+							{/each}
+						</span>
 					{/if}
 				</button>
 				{#if bottomMenu === 'projects'}
@@ -316,6 +328,11 @@
 									class:active={on}
 									onclick={() => toggleProject(project.id)}
 								>
+									<ProjectBox
+										state={deriveProjectStatus(project.id, tasks)}
+										icon={project.icon}
+										size={18}
+									/>
 									<span>{project.title}</span>
 								</button>
 							{/each}
@@ -638,6 +655,22 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.pill-projects {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.pill-project {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		min-width: 0;
+		font-size: 13px;
 	}
 
 	.labels-trigger {

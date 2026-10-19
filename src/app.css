@@ -818,15 +818,27 @@ table.data tr.selected td {
 	min-height: 0;
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
-	padding-top: var(--feed-pad-top, 44px);
+	padding-top: var(--feed-pad-top, 48px);
 	padding-bottom: var(--feed-pad-bottom, 36px);
 	box-sizing: border-box;
 }
 
+/* Selected feed rows — glass plate (tasks, notes, projects, player rows) */
+.task-card.selected,
+.project-card.selected,
+.feed .row.on {
+	border: 1px solid transparent;
+	background:
+		linear-gradient(var(--glass), var(--glass)) padding-box,
+		var(--glass-shine) border-box;
+	backdrop-filter: blur(var(--glass-blur));
+	-webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
 @media (max-width: 767px) {
 	.pane {
-		padding: var(--feed-pad-top, calc(52px + env(safe-area-inset-top, 0px))) 16px
-			var(--feed-pad-bottom, calc(96px + env(safe-area-inset-bottom, 0px)));
+		padding: var(--feed-pad-top, calc(56px + env(safe-area-inset-top, 0px))) 16px
+			var(--feed-pad-bottom, calc(100px + env(safe-area-inset-bottom, 0px)));
 	}
 
 	.pane:has(.feed),

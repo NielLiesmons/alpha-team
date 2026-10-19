@@ -10,13 +10,13 @@
 		id = '',
 		title = '',
 		status = 'planned',
+		icon = /** @type {string | null} */ (null),
 		summary = '',
 		milestones = /** @type {{ id: string, title: string, percentage?: number }[]} */ ([]),
 		taskCount = 0,
 		noteCount = 0,
 		selected = false,
-		onclick = () => {},
-		onStatusClick = /** @type {((e: MouseEvent) => void) | null} */ (null)
+		onclick = () => {}
 	} = $props();
 
 	const avgPct = $derived.by(() => {
@@ -42,18 +42,7 @@
 >
 	<div class="row-main">
 		<div class="box-col">
-			{#if onStatusClick && id}
-				<ProjectBox
-					state={status}
-					size={24}
-					onclick={(e) => {
-						e.stopPropagation();
-						onStatusClick(e);
-					}}
-				/>
-			{:else}
-				<ProjectBox state={status} size={24} />
-			{/if}
+			<ProjectBox state={status} {icon} size={24} />
 		</div>
 		<span class="title" class:done={status === 'closed' || status === 'canceled'}>{title}</span>
 		{#if milestones.length > 0}
@@ -110,7 +99,12 @@
 	}
 
 	.project-card.selected {
-		background: var(--selection);
+		border: 1px solid transparent;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.row-main {

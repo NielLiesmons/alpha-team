@@ -1,10 +1,12 @@
 <script>
 	/**
-	 * Pointy-top hexagon for project status (Chateau-inspired, Alpha tokens).
-	 * States: backlog | planned | inProgress | closed (completed) | canceled
+	 * Pointy-top hexagon for a project — outline encodes derived status;
+	 * center shows emoji / image icon when set.
 	 */
-	/** @type {{ state?: string, size?: number, onclick?: ((e: MouseEvent) => void) | null }} */
-	let { state = 'planned', size = 24, onclick = null } = $props();
+	import { isProjectImageIcon } from '$lib/project-status.js';
+
+	/** @type {{ state?: string, icon?: string | null, size?: number, onclick?: ((e: MouseEvent) => void) | null }} */
+	let { state = 'planned', icon = null, size = 24, onclick = null } = $props();
 
 	const PATH = $derived(
 		size >= 32
@@ -13,13 +15,17 @@
 	);
 
 	const sw = 1.4;
-	const checkSize = $derived(size * 0.42);
-	const iconSize = $derived(size * 0.5);
-	const crossSize = $derived(size * 0.33);
-	const crossSw = 4.2;
-	const dotR = $derived(size >= 20 ? 2.2 : 1.8);
-	const checkSw = $derived(size >= 20 ? 2.8 : 1.4);
-	const gradId = $derived(`project-hex-${size}`);
+	const hasIcon = $derived(Boolean(icon && String(icon).trim()));
+	const isImage = $derived(hasIcon && isProjectImageIcon(icon));
+	const glyphSize = $derived(Math.round(size * 0.48));
+	const stroke = $derived.by(() => {
+		if (state === 'backlog') return 'var(--white33)';
+		if (state === 'inProgress') return 'var(--accent-2-66)';
+		if (state === 'closed') return 'var(--accent-1-66)';
+		if (state === 'canceled') return 'var(--white16)';
+		return 'var(--white33)';
+	});
+	const dash = $derived(state === 'backlog' ? '3.5 2.5' : undefined);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -28,93 +34,32 @@
 	style="width:{size}px; height:{size}px;"
 	role={onclick ? 'button' : undefined}
 	tabindex={onclick ? 0 : undefined}
-	aria-label={onclick ? 'Project status' : undefined}
+	aria-label={onclick ? 'Project icon' : undefined}
 	{onclick}
 	onkeydown={onclick ? (e) => e.key === 'Enter' && onclick(/** @type {any} */ (e)) : undefined}
 >
 	<svg viewBox="0 0 24 24" width={size} height={size} class="hex" aria-hidden="true">
-		{#if state === 'closed'}
-			<defs>
-				<radialGradient id={gradId} cx="0%" cy="0%" r="150%" gradientUnits="objectBoundingBox">
-					<stop offset="0%" stop-color="var(--accent-success)" stop-opacity="1" />
-					<stop offset="100%" stop-color="var(--accent-success)" stop-opacity="0.85" />
-				</radialGradient>
-			</defs>
-		{/if}
-
-		{#if state === 'planned'}
-			<path d={PATH} fill="var(--fg-8)" stroke="none" />
-		{:else if state === 'inProgress'}
-			<path d={PATH} fill="var(--fg-8)" stroke="none" />
-		{:else if state === 'closed'}
-			<path d={PATH} fill="url(#{gradId})" stroke="none" />
-		{:else if state === 'canceled'}
-			<path d={PATH} fill="var(--fg-8)" stroke="none" />
-		{:else}
-			<path d={PATH} fill="transparent" stroke="none" />
-		{/if}
-
-		{#if state === 'backlog'}
-			<path
-				d={PATH}
-				fill="none"
-				stroke="var(--white33)"
-				stroke-width={sw}
-				stroke-dasharray="3.5 2.5"
-				stroke-linecap="round"
-			/>
-		{:else if state === 'planned'}
-			<path d={PATH} fill="none" stroke="var(--white33)" stroke-width={sw} />
-		{:else if state === 'inProgress'}
-			<path d={PATH} fill="none" stroke="var(--accent-progress-66)" stroke-width={sw} />
-		{/if}
-
-		{#if state === 'planned'}
-			<circle cx="12" cy="12" r={dotR} fill="var(--white33)" />
-		{/if}
+		<path d={PATH} fill="var(--fg-8)" stroke="none" />
+		<path
+			d={PATH}
+			fill="none"
+			stroke={stroke}
+			stroke-width={sw}
+			stroke-dasharray={dash}
+			stroke-linecap="round"
+		/>
 	</svg>
 
-	{#if state === 'inProgress'}
-		<div class="overlay progress" style:padding-left="{Math.round(size * 0.25)}px">
-			<svg width={iconSize} height={iconSize} viewBox="0 0 11 22" aria-hidden="true">
-				<path
-					fill="var(--accent-progress)"
-					d="M1.56676 21.7923C6.89979 21.0318 11 16.4462 11 10.903C11 5.35977 6.89979 0.774213 1.56676 0.0137178C0.70758 -0.108803 0 0.60654 0 1.47442V20.3316C0 21.1994 0.707579 21.9148 1.56676 21.7923Z"
-				/>
-			</svg>
-		</div>
-	{:else if state === 'closed'}
-		<div class="overlay">
-			<svg
-				width={checkSize}
-				height={checkSize}
-				viewBox="0 0 18 14"
-				fill="none"
-				stroke="var(--white)"
-				stroke-width={checkSw}
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				<path d="M1.5 7.2 6.4 12 16.5 1.5" />
-			</svg>
-		</div>
-	{:else if state === 'canceled'}
-		<div class="overlay">
-			<svg
-				width={crossSize}
-				height={crossSize}
-				viewBox="0 0 14 14"
-				fill="none"
-				stroke="var(--white33)"
-				stroke-width={crossSw}
-				stroke-linecap="round"
-				aria-hidden="true"
-			>
-				<path d="M1 1l12 12M13 1 1 13" />
-			</svg>
-		</div>
-	{/if}
+	<div class="center" aria-hidden="true">
+		{#if isImage}
+			<img class="icon-img" src={icon} alt="" width={glyphSize} height={glyphSize} />
+		{:else if hasIcon}
+			<span class="icon-emoji" style:font-size="{Math.round(size * 0.42)}px">{icon}</span>
+		{:else}
+			<span class="placeholder" style:width="{Math.round(size * 0.18)}px" style:height="{Math.round(size * 0.18)}px"
+			></span>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -135,17 +80,30 @@
 		display: block;
 	}
 
-	.overlay {
+	.center {
 		position: absolute;
 		inset: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		pointer-events: none;
+		z-index: 1;
 	}
 
-	.overlay.progress {
-		justify-content: flex-start;
-		box-sizing: border-box;
+	.icon-img {
+		object-fit: cover;
+		border-radius: 4px;
+		display: block;
+	}
+
+	.icon-emoji {
+		line-height: 1;
+		user-select: none;
+	}
+
+	.placeholder {
+		border-radius: 999px;
+		background: var(--white33);
+		display: block;
 	}
 </style>

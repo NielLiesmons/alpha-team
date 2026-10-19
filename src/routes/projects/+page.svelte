@@ -3,10 +3,10 @@
 	import ProjectCard from '$lib/components/ProjectCard.svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { deriveProjectStatus } from '$lib/project-status.js';
 	import {
 		notes,
 		openComposer,
-		patchProject,
 		projects,
 		selectEntity,
 		tasks,
@@ -22,14 +22,12 @@
 		canceled: 'CANCELED'
 	};
 
-	const STATUS_CYCLE = ['backlog', 'planned', 'inProgress', 'closed', 'canceled'];
-
 	const groups = $derived.by(() => {
 		/** @type {Map<string, typeof projects>} */
 		const map = new Map();
 		const sorted = [...projects].sort((a, b) => String(a.title).localeCompare(String(b.title)));
 		for (const project of sorted) {
-			const key = STATUS_ORDER.includes(project.status) ? project.status : 'planned';
+			const key = deriveProjectStatus(project.id, tasks);
 			if (!map.has(key)) map.set(key, []);
 			map.get(key).push(project);
 		}
@@ -42,23 +40,14 @@
 
 	/** @param {string} projectId */
 	function taskCount(projectId) {
-		return tasks.filter((t) => (t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? []).includes(projectId)).length;
+		return tasks.filter((t) =>
+			(t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? []).includes(projectId)
+		).length;
 	}
 
 	/** @param {string} projectId */
 	function noteCount(projectId) {
 		return notes.filter((n) => (n.project_ids ?? []).includes(projectId)).length;
-	}
-
-	/** @param {any} project */
-	async function cycleStatus(project) {
-		const cur = STATUS_CYCLE.includes(project.status) ? project.status : 'planned';
-		const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(cur) + 1) % STATUS_CYCLE.length];
-		try {
-			await patchProject(project.id, { status: next });
-		} catch (e) {
-			alert(e instanceof Error ? e.message : String(e));
-		}
 	}
 </script>
 
@@ -80,8 +69,8 @@
 				<button
 					type="button"
 					class="task-group-add-btn"
-					aria-label="Add project with status {group.label}"
-					onclick={() => openComposer('project', undefined, group.key)}
+					aria-label="Add project"
+					onclick={() => openComposer('project')}
 				>
 					<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 						<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -93,14 +82,14 @@
 					<ProjectCard
 						id={project.id}
 						title={project.title}
-						status={project.status}
+						status={deriveProjectStatus(project.id, tasks)}
+						icon={project.icon}
 						summary={project.summary}
 						milestones={project.milestones ?? []}
 						taskCount={taskCount(project.id)}
 						noteCount={noteCount(project.id)}
 						onclick={() => selectEntity('project', project.id)}
 						selected={ui.selection?.kind === 'project' && ui.selection.id === project.id}
-						onStatusClick={() => cycleStatus(project)}
 					/>
 				{/each}
 			</div>
@@ -114,16 +103,12 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
-		}
+	}
 
 	.banner {
 		margin: 0;
 		padding: 10px 16px;
 		font-size: 13px;
-		color: var(--fg-66);
-	}
-
-	.banner .err {
 		color: var(--fg-66);
 	}
 
@@ -184,7 +169,6 @@
 	}
 
 	.task-group-add-btn:hover {
-		color: var(--fg);
-		background: var(--fg-8);
+		color: var(--fg-66);
 	}
 </style>

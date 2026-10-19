@@ -417,8 +417,9 @@
 
 	@media (max-width: 767px) {
 		.feed {
-			padding-top: calc(56px + env(safe-area-inset-top, 0px));
-			padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+			/* Scroll under floating detail chrome; panel already clears bottom nav */
+			padding-top: calc(64px + env(safe-area-inset-top, 0px));
+			padding-bottom: 24px;
 		}
 	}
 

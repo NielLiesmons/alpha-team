@@ -53,6 +53,7 @@ export async function initSpace(session, name) {
  *   description?: string,
  *   body?: string,
  *   status?: string,
+ *   icon?: string | null,
  *   milestones?: { id: string, title: string, percentage?: number, sort?: number }[]
  * }} input
  */
@@ -68,6 +69,7 @@ export async function createProject(session, input) {
 		description: input.description || undefined,
 		body: input.body || undefined,
 		status: input.status || 'planned',
+		icon: input.icon || undefined,
 		milestones: Array.isArray(input.milestones) ? input.milestones : [],
 		created_at: created,
 		updated_at: created,

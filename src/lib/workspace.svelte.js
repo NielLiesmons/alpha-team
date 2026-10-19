@@ -180,6 +180,7 @@ export async function refreshFromDrive() {
 				summary: p.description ?? '',
 				body: p.body ?? '',
 				status: p.status || 'planned',
+				icon: p.icon ?? null,
 				milestones: Array.isArray(p.milestones) ? p.milestones : [],
 				slug: p.slug,
 				_drive: p
@@ -424,7 +425,8 @@ export async function saveProject(draft, isNew) {
 				id,
 				slug: draft.slug,
 				milestones: draft.milestones ?? [],
-				status: draft.status ?? 'planned'
+				status: draft.status ?? 'planned',
+				icon: draft.icon ?? null
 			});
 			ui.projectId = id;
 			ui.selection = { kind: 'project', id };
@@ -443,6 +445,7 @@ export async function saveProject(draft, isNew) {
 			description: draft.summary || '',
 			body: draft.body || '',
 			status: draft.status ?? 'planned',
+			icon: draft.icon || null,
 			milestones: draft.milestones ?? []
 		});
 		const uiProj = {
@@ -451,6 +454,7 @@ export async function saveProject(draft, isNew) {
 			summary: created.description ?? '',
 			body: created.body ?? '',
 			status: created.status ?? draft.status ?? 'planned',
+			icon: created.icon ?? draft.icon ?? null,
 			milestones: created.milestones ?? [],
 			slug: created.slug,
 			_drive: created
@@ -460,6 +464,7 @@ export async function saveProject(draft, isNew) {
 		ui.selection = { kind: 'project', id: created.id };
 	} else {
 		const prev = projects.find((p) => p.id === draft.id);
+		const nextIcon = draft.icon === undefined ? (prev?.icon ?? null) : draft.icon;
 		const base = {
 			...(prev?._drive ?? {}),
 			id: draft.id,
@@ -467,7 +472,8 @@ export async function saveProject(draft, isNew) {
 			title: draft.title,
 			description: draft.summary ?? '',
 			body: draft.body ?? '',
-			status: draft.status ?? 'planned',
+			status: draft.status ?? prev?.status ?? 'planned',
+			icon: nextIcon || undefined,
 			milestones: draft.milestones ?? prev?.milestones ?? [],
 			created_at: prev?._drive?.created_at
 		};
@@ -478,6 +484,7 @@ export async function saveProject(draft, isNew) {
 			summary: saved.description ?? '',
 			body: saved.body ?? '',
 			status: saved.status ?? 'planned',
+			icon: saved.icon ?? nextIcon ?? null,
 			milestones: Array.isArray(saved.milestones) ? saved.milestones : [],
 			slug: saved.slug,
 			_drive: saved

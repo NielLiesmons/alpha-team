@@ -361,7 +361,7 @@
 <style>
 	.shell {
 		/* Pad ≈ control row; fade is short/soft so content stays readable until the bar */
-		--feed-pad-top: 44px;
+		--feed-pad-top: 48px;
 		--feed-pad-bottom: 36px;
 		--chrome-fade: var(--bg);
 		display: flex;
@@ -540,7 +540,12 @@
 	}
 
 	.nav-row.active {
-		background: var(--white8);
+		border: 1px solid transparent;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.nav-row.active .nav-item {
@@ -730,6 +735,7 @@
 
 	.list-bottom-fade {
 		display: none;
+		pointer-events: none;
 	}
 
 	.list-title {
@@ -786,9 +792,11 @@
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
-		overflow: auto;
-		/* Padding lives on .feed (see app.css) so rows scroll under the header */
+		/* Scroll on .feed so rows pass under absolute chrome fades */
+		overflow: hidden;
 		padding: 0;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.sr-only {
@@ -811,8 +819,8 @@
 		/* Full-bleed shell — darker than desktop workspace; matches desktop sidebar */
 		.shell {
 			--chrome-fade: var(--shell);
-			--feed-pad-top: calc(52px + env(safe-area-inset-top, 0px));
-			--feed-pad-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+			--feed-pad-top: calc(56px + env(safe-area-inset-top, 0px));
+			--feed-pad-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 			flex-direction: column;
 			padding-bottom: 0;
 			background: var(--shell);
@@ -859,8 +867,14 @@
 			);
 		}
 
+		/* Overlay fade — must not consume flex space or feeds never scroll under the nav */
 		.list-bottom-fade {
 			display: block;
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 5;
 			height: calc(100px + env(safe-area-inset-bottom, 0px));
 			background: linear-gradient(
 				to top,
