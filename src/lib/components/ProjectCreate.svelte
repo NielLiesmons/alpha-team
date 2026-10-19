@@ -66,6 +66,7 @@
 			bind:this={iconBtn}
 			type="button"
 			class="bare"
+			class:on={iconOpen}
 			aria-label="Project icon"
 			aria-expanded={iconOpen}
 			onpointerdown={(e) => e.preventDefault()}
@@ -110,10 +111,15 @@
 	.bare {
 		border: 0;
 		background: transparent;
-		padding: 0;
+		padding: 4px;
+		border-radius: 10px;
 		display: grid;
 		place-items: center;
 		cursor: pointer;
 		flex-shrink: 0;
+	}
+
+	.bare.on {
+		background: var(--float-trigger-on);
 	}
 </style>

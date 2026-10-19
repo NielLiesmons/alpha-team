@@ -52,6 +52,9 @@
 	/* Links: accent nudged toward white (dark) / black (light) for readability */
 	--link: color-mix(in srgb, var(--accent) 78%, #ffffff);
 	--link-hover: color-mix(in srgb, var(--accent) 62%, #ffffff);
+	/* Float panels + open trigger pills */
+	--float-panel-bg: color-mix(in srgb, #ffffff 8%, transparent);
+	--float-trigger-on: color-mix(in srgb, #ffffff 8%, transparent);
 	--accent-success: var(--accent-1);
 	--accent-progress: var(--accent-2);
 	--accent-success-66: var(--accent-1-66);
@@ -194,6 +197,8 @@
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--link: color-mix(in srgb, var(--accent) 78%, #000000);
 	--link-hover: color-mix(in srgb, var(--accent) 62%, #000000);
+	--float-panel-bg: color-mix(in srgb, #000000 8%, transparent);
+	--float-trigger-on: color-mix(in srgb, #000000 8%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
 	--glass-fill: color-mix(in srgb, var(--fg) 4%, var(--bg));
 	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);

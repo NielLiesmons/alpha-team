@@ -160,19 +160,14 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		/* Lift above shell + modal glass — white haze in dark, ink haze in light */
-		background: color-mix(in srgb, #ffffff 16%, transparent);
-		border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
+		/* Match open trigger chrome — soft lift over shell + modal glass */
+		background: var(--float-panel-bg);
+		border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
 		border-radius: 14px;
 		box-shadow: 0 10px 36px color-mix(in srgb, var(--fg-raw) 22%, transparent);
 		backdrop-filter: blur(20px) saturate(1.2);
 		-webkit-backdrop-filter: blur(20px) saturate(1.2);
 		overflow: hidden;
 		box-sizing: border-box;
-	}
-
-	:global(:root[data-theme='light']) .panel {
-		background: color-mix(in srgb, #000000 10%, transparent);
-		border-color: color-mix(in srgb, #000000 10%, transparent);
 	}
 </style>

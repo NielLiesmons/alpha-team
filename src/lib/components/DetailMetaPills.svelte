@@ -8,6 +8,7 @@
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import FloatPanel from './FloatPanel.svelte';
+	import LabelsPicker from './LabelsPicker.svelte';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import { patchNote, patchTask, people, projects, tasks } from '$lib/workspace.svelte.js';
 
@@ -36,7 +37,6 @@
 
 	/** @type {null | 'status' | 'priority' | 'assignees' | 'projects' | 'labels'} */
 	let menu = $state(null);
-	let labelDraft = $state('');
 	let saving = $state(false);
 
 	/** @type {HTMLButtonElement | undefined} */
@@ -70,12 +70,10 @@
 	function toggleMenu(next, e) {
 		e?.stopPropagation();
 		menu = menu === next ? null : next;
-		if (next !== 'labels') labelDraft = '';
 	}
 
 	function closeMenu() {
 		menu = null;
-		labelDraft = '';
 	}
 
 	/** @param {PointerEvent} e */
@@ -159,18 +157,20 @@
 		await apply({ labels: labels.filter((/** @type {string} */ l) => l !== text) });
 	}
 
-	/**
-	 * @param {Event} e
-	 */
-	async function addLabel(e) {
-		e.preventDefault();
-		const text = labelDraft.trim();
-		if (!text) return;
-		if (!labels.includes(text)) {
+	/** @param {string} text */
+	async function addLabel(text) {
+		const t = text.trim();
+		if (!t) return;
+		if (!labels.includes(t)) await apply({ labels: [...labels, t] });
+	}
+
+	/** @param {string} text */
+	async function toggleLabel(text) {
+		if (labels.includes(text)) {
+			await apply({ labels: labels.filter((/** @type {string} */ l) => l !== text) });
+		} else {
 			await apply({ labels: [...labels, text] });
 		}
-		labelDraft = '';
-		menu = null;
 	}
 </script>
 
@@ -290,14 +290,26 @@
 	>
 		<div class="float-list" role="listbox">
 			{#each STATUSES as opt (opt.value)}
+				{@const on = entity.status === opt.value}
 				<button
 					type="button"
 					class="option"
-					class:active={entity.status === opt.value}
+					class:active={on}
 					onclick={(e) => pickStatus(opt.value, e)}
 				>
 					<TaskBox state={opt.value} size={20} />
-					<span>{opt.label}</span>
+					<span class="option-text">{opt.label}</span>
+					{#if on}
+						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					{/if}
 				</button>
 			{/each}
 		</div>
@@ -312,14 +324,26 @@
 	>
 		<div class="float-list" role="listbox">
 			{#each PRIORITIES as opt (opt.value)}
+				{@const on = entity.priority === opt.value}
 				<button
 					type="button"
 					class="option"
-					class:active={entity.priority === opt.value}
+					class:active={on}
 					onclick={(e) => pickPriority(opt.value, e)}
 				>
 					<PriorityBox priority={opt.value} size={18} />
-					<span>{opt.label}</span>
+					<span class="option-text">{opt.label}</span>
+					{#if on}
+						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					{/if}
 				</button>
 			{/each}
 		</div>
@@ -345,7 +369,18 @@
 					onclick={(e) => toggleAssignee(person, e)}
 				>
 					<ProfilePic name={person.name} size={20} />
-					<span>{person.name}</span>
+					<span class="option-text">{person.name}</span>
+					{#if on}
+						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					{/if}
 				</button>
 			{/each}
 		</div>
@@ -377,7 +412,18 @@
 						icon={project.icon}
 						size={18}
 					/>
-					<span>{project.title}</span>
+					<span class="option-text">{project.title}</span>
+					{#if on}
+						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					{/if}
 				</button>
 			{/each}
 		{/if}
@@ -388,19 +434,11 @@
 	open={menu === 'labels'}
 	anchor={labelsBtn}
 	placement="below"
-	width={240}
-	maxHeight={160}
+	width={280}
+	maxHeight={360}
 	onclose={closeMenu}
 >
-	<form class="label-form" onsubmit={addLabel}>
-		<input
-			class="label-input"
-			placeholder="New label"
-			bind:value={labelDraft}
-			aria-label="New label"
-		/>
-		<button type="submit" class="label-submit" disabled={!labelDraft.trim()}>Add</button>
-	</form>
+	<LabelsPicker selected={labels} ontoggle={toggleLabel} onadd={addLabel} />
 </FloatPanel>
 
 <style>
@@ -445,6 +483,12 @@
 	.meta-pill:hover {
 		background: var(--fg-8);
 		color: var(--fg-66);
+	}
+
+	.meta-pill[aria-expanded='true'],
+	.label-add[aria-expanded='true'] {
+		background: var(--float-trigger-on);
+		--tip-bg: var(--float-trigger-on);
 	}
 
 	.pill-names {
@@ -531,7 +575,7 @@
 		text-align: left;
 		font-size: 0.9375rem;
 		font-weight: 500;
-		color: var(--fg-66);
+		color: var(--fg);
 		font-family: inherit;
 	}
 
@@ -543,48 +587,23 @@
 		background: var(--fg-4);
 	}
 
-	.option.active {
-		color: var(--fg);
-		font-weight: 600;
-	}
-
-	.label-form {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-		padding: 10px;
-	}
-
-	.label-input {
+	.option-text {
 		flex: 1;
 		min-width: 0;
-		height: 34px;
-		padding: 0 10px;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-8);
-		color: var(--fg);
-		font: inherit;
-		font-size: 13px;
-		outline: none;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.label-submit {
-		height: 34px;
-		padding: 0 12px;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-8);
+	.option.active .option-text {
 		color: var(--fg);
-		font: inherit;
-		font-size: 13px;
 		font-weight: 600;
-		cursor: pointer;
 	}
 
-	.label-submit:disabled {
-		opacity: 0.4;
-		cursor: default;
+	.option-check {
+		flex-shrink: 0;
+		color: var(--fg-66);
 	}
 
 	@media (max-width: 767px) {

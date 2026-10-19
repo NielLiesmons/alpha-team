@@ -9,6 +9,7 @@
 	import Spinner from './Spinner.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
+	import LabelsPicker from './LabelsPicker.svelte';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import { closeComposer, people, projects, saveTask, tasks, ui } from '$lib/workspace.svelte.js';
 
@@ -43,7 +44,6 @@
 	let assignees = $state([]);
 	/** @type {null | 'assignees' | 'projects' | 'labels'} */
 	let bottomMenu = $state(null);
-	let labelDraft = $state('');
 	/** @type {HTMLButtonElement | undefined} */
 	let assigneeBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
@@ -77,7 +77,6 @@
 		statusOpen = false;
 		priorityOpen = false;
 		bottomMenu = null;
-		labelDraft = '';
 		saving = false;
 		/* No autofocus — mobile PWAs scroll the sheet into the keyboard and hide chrome. */
 	});
@@ -97,18 +96,22 @@
 			: [...assignees, person];
 	}
 
-	function addLabel() {
-		const text = labelDraft.trim();
-		if (!text) return;
-		if (!labels.includes(text)) labels = [...labels, text];
-		labelDraft = '';
-		bottomMenu = null;
+	/** @param {string} text */
+	function addLabel(text) {
+		const t = text.trim();
+		if (!t) return;
+		if (!labels.includes(t)) labels = [...labels, t];
+	}
+
+	/** @param {string} text */
+	function toggleLabel(text) {
+		if (labels.includes(text)) labels = labels.filter((l) => l !== text);
+		else labels = [...labels, text];
 	}
 
 	/** @param {null | 'assignees' | 'projects' | 'labels'} next */
 	function toggleBottom(next) {
 		bottomMenu = bottomMenu === next ? null : next;
-		if (next !== 'labels') labelDraft = '';
 	}
 
 	async function save() {
@@ -364,7 +367,18 @@
 			{@const on = assignees.some((a) => a.email === person.email)}
 			<button type="button" class="option" class:active={on} onclick={() => toggleAssignee(person)}>
 				<ProfilePic name={person.name} size={20} />
-				<span>{person.name}</span>
+				<span class="option-text">{person.name}</span>
+				{#if on}
+					<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+							stroke="currentColor"
+							stroke-width="1.8"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				{/if}
 			</button>
 		{/each}
 	</div>
@@ -390,7 +404,18 @@
 						icon={project.icon}
 						size={18}
 					/>
-					<span>{project.title}</span>
+					<span class="option-text">{project.title}</span>
+					{#if on}
+						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					{/if}
 				</button>
 			{/each}
 		{/if}
@@ -401,28 +426,11 @@
 	open={bottomMenu === 'labels'}
 	anchor={labelsBtn}
 	placement="above"
-	width={240}
-	maxHeight={200}
-	onclose={() => {
-		bottomMenu = null;
-		labelDraft = '';
-	}}
+	width={280}
+	maxHeight={360}
+	onclose={() => (bottomMenu = null)}
 >
-	<form
-		class="label-form"
-		onsubmit={(e) => {
-			e.preventDefault();
-			addLabel();
-		}}
-	>
-		<input
-			class="label-input"
-			placeholder="New label"
-			bind:value={labelDraft}
-			aria-label="New label"
-		/>
-		<button type="submit" class="label-submit" disabled={!labelDraft.trim()}>Add</button>
-	</form>
+	<LabelsPicker selected={labels} ontoggle={toggleLabel} onadd={addLabel} />
 </FloatPanel>
 
 <style>
@@ -495,45 +503,6 @@
 		padding: 4px 0;
 	}
 
-	.label-form {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-		padding: 10px;
-	}
-
-	.label-input {
-		flex: 1;
-		min-width: 0;
-		height: 34px;
-		padding: 0 10px;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-8);
-		color: var(--fg);
-		font: inherit;
-		font-size: 13px;
-		outline: none;
-	}
-
-	.label-submit {
-		height: 34px;
-		padding: 0 12px;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-8);
-		color: var(--fg);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.label-submit:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-
 	.menu-empty {
 		margin: 0;
 		padding: 12px;
@@ -557,7 +526,7 @@
 		font: inherit;
 		font-size: 0.9375rem;
 		font-weight: 500;
-		color: var(--fg-66);
+		color: var(--fg);
 	}
 
 	.status-option:not(:last-child),
@@ -570,16 +539,27 @@
 		background: var(--fg-4);
 	}
 
-	.status-label {
+	.status-label,
+	.option-text {
+		flex: 1;
+		min-width: 0;
 		font-size: 0.9375rem;
 		font-weight: 500;
 		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.status-option.active .status-label,
-	.option.active {
+	.option.active .option-text {
 		color: var(--fg);
 		font-weight: 600;
+	}
+
+	.option-check {
+		flex-shrink: 0;
+		color: var(--fg-66);
 	}
 
 	.task-title-input {
@@ -721,6 +701,12 @@
 		background: var(--fg-8);
 	}
 
+	.meta-pill[aria-expanded='true'],
+	.labels-trigger[aria-expanded='true'] {
+		background: var(--float-trigger-on);
+		--trigger-bg: var(--float-trigger-on);
+	}
+
 	.pill-names {
 		max-width: 110px;
 		overflow: hidden;
@@ -807,49 +793,6 @@
 		display: block;
 		width: 27px;
 		height: var(--ctrl-h);
-	}
-
-	.labels-menu {
-		padding: 8px;
-		min-width: 200px;
-	}
-
-	.label-form {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-	}
-
-	.label-input {
-		flex: 1;
-		min-width: 0;
-		height: 32px;
-		padding: 0 10px;
-		border: 1px solid var(--hairline);
-		border-radius: 8px;
-		background: var(--bg);
-		color: var(--fg);
-		font: inherit;
-		font-size: 13px;
-		outline: none;
-	}
-
-	.label-submit {
-		height: 32px;
-		padding: 0 10px;
-		border: 0;
-		border-radius: 8px;
-		background: var(--fg-8);
-		color: var(--fg);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.label-submit:disabled {
-		opacity: 0.4;
-		cursor: default;
 	}
 
 	.menu-empty {

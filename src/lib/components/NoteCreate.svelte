@@ -165,7 +165,18 @@
 						icon={project.icon}
 						size={18}
 					/>
-					<span>{project.title}</span>
+					<span class="option-text">{project.title}</span>
+					{#if on}
+						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					{/if}
 				</button>
 			{/each}
 		{/if}
@@ -237,6 +248,10 @@
 		color: var(--fg-33);
 	}
 
+	.meta-pill[aria-expanded='true'] {
+		background: var(--float-trigger-on);
+	}
+
 	.pill-names {
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -286,17 +301,34 @@
 		border: 0;
 		border-radius: 8px;
 		background: transparent;
-		color: var(--fg-66);
+		color: var(--fg);
 		font: inherit;
 		font-size: 14px;
 		text-align: left;
 		cursor: pointer;
 	}
 
-	.option:hover,
-	.option.active {
+	.option:hover {
 		background: var(--fg-8);
+	}
+
+	.option-text {
+		flex: 1;
+		min-width: 0;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.option.active .option-text {
 		color: var(--fg);
+		font-weight: 600;
+	}
+
+	.option-check {
+		flex-shrink: 0;
+		color: var(--fg-66);
 	}
 
 	.publish-btn {
