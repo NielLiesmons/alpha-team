@@ -1493,3 +1493,160 @@ export async function putEnterprise(session, enterprise) {
 	);
 	return next;
 }
+
+/* ── Chat messages + per-entity comment indexes ── */
+
+const FEED_MAX = 200;
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} id
+ */
+export async function getChatMessage(session, id) {
+	const bytes = await getPath(session, `chat/messages/${id}.json`);
+	return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {'task' | 'note' | 'project'} type
+ * @param {string} entityId
+ * @returns {Promise<string[]>}
+ */
+export async function listCommentIds(session, type, entityId) {
+	const path = `${type}s/${entityId}/comments.json`;
+	try {
+		const bytes = await getPath(session, path);
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		if (Array.isArray(doc)) return doc.map(String);
+		if (Array.isArray(doc?.ids)) return doc.ids.map(String);
+		return [];
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {'task' | 'note' | 'project'} type
+ * @param {string} entityId
+ */
+export async function listComments(session, type, entityId) {
+	const ids = await listCommentIds(session, type, entityId);
+	/** @type {any[]} */
+	const out = [];
+	for (const id of ids) {
+		try {
+			out.push(await getChatMessage(session, id));
+		} catch {
+			/* missing leaf — skip */
+		}
+	}
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @returns {Promise<string[]>}
+ */
+export async function listFeedIds(session) {
+	try {
+		const bytes = await getPath(session, 'chat/feed.json');
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		if (Array.isArray(doc?.ids)) return doc.ids.map(String);
+		if (Array.isArray(doc)) return doc.map(String);
+		return [];
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {number} [limit]
+ */
+export async function listFeedMessages(session, limit = 80) {
+	const ids = (await listFeedIds(session)).slice(0, limit);
+	/** @type {any[]} */
+	const out = [];
+	for (const id of ids) {
+		try {
+			out.push(await getChatMessage(session, id));
+		} catch {
+			/* skip */
+		}
+	}
+	return out;
+}
+
+/**
+ * Write a chat/comment leaf, append entity comments.json + chat/feed.json.
+ * @param {import('./client.js').DriveSession} session
+ * @param {{
+ *   body: string,
+ *   author: string,
+ *   kind?: 'comment' | 'chat' | 'reaction',
+ *   ref?: { type: string, id: string } | null,
+ *   reaction?: string
+ * }} input
+ */
+export async function createChatMessage(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const kind = input.kind || (input.ref ? 'comment' : 'chat');
+	const msg = {
+		schema: 'alpha.chat_message/1',
+		id,
+		kind,
+		author: input.author,
+		body: input.body ?? '',
+		created_at: created,
+		...(input.ref ? { ref: { type: input.ref.type, id: input.ref.id } } : {}),
+		...(input.reaction ? { reaction: input.reaction } : {})
+	};
+
+	/** @type {{ path: string, kind: string, plaintext: string }[]} */
+	const writes = [
+		{
+			path: `chat/messages/${id}.json`,
+			kind: 'chat_message',
+			plaintext: JSON.stringify(msg, null, 2)
+		}
+	];
+
+	if (input.ref && (input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')) {
+		const indexPath = `${input.ref.type}s/${input.ref.id}/comments.json`;
+		let ids = [];
+		try {
+			ids = await listCommentIds(session, /** @type {'task'|'note'|'project'} */ (input.ref.type), input.ref.id);
+		} catch {
+			ids = [];
+		}
+		ids = [...ids, id];
+		writes.push({
+			path: indexPath,
+			kind: 'blob',
+			plaintext: JSON.stringify({ schema: 'alpha.comments_index/1', ids }, null, 2)
+		});
+	}
+
+	let feedIds = [];
+	try {
+		feedIds = await listFeedIds(session);
+	} catch {
+		feedIds = [];
+	}
+	feedIds = [id, ...feedIds.filter((x) => x !== id)].slice(0, FEED_MAX);
+	writes.push({
+		path: 'chat/feed.json',
+		kind: 'chat_feed',
+		plaintext: JSON.stringify(
+			{ schema: 'alpha.chat_feed/1', ids: feedIds, updated_at: created },
+			null,
+			2
+		)
+	});
+
+	await putPaths(session, writes);
+	return msg;
+}

@@ -31,6 +31,7 @@
 	import { renderInlineLinks } from '$lib/note-text.js';
 	import { accountingBrowse } from '$lib/accounting.svelte.js';
 	import AccountingDetail from './AccountingDetail.svelte';
+	import CommentThread from './CommentThread.svelte';
 	import EnterpriseSheet from './EnterpriseSheet.svelte';
 	import {
 		clearSelection,
@@ -577,6 +578,7 @@
 			{:else}
 				<p class="muted">No description.</p>
 			{/if}
+			<CommentThread type="task" entityId={task.id} />
 		</div>
 	{:else if project}
 		<header class="detail-top desktop-head">
@@ -756,6 +758,7 @@
 					<NoteEditor value={noteBody} editable={true} onChange={onNoteBodyChange} />
 				</div>
 			{/key}
+			<CommentThread type="note" entityId={note.id} />
 		</div>
 	{:else if welcomeSelected}
 		<header class="detail-top desktop-head">
