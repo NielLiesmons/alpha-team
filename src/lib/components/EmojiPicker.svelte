@@ -1,7 +1,6 @@
 <script>
 	/**
-	 * Shared emoji picker — categories + search.
-	 * Custom/image emoji can be added later without changing the select API.
+	 * Shared emoji picker body — use inside a nested CreateSheet.
 	 */
 	import { EMOJI_CATEGORIES } from '$lib/emoji.js';
 
@@ -17,16 +16,25 @@
 		if (!q) return active?.glyphs ?? [];
 		const hits = [];
 		for (const cat of EMOJI_CATEGORIES) {
+			if (cat.label.toLowerCase().includes(q)) {
+				hits.push(...cat.glyphs);
+				continue;
+			}
 			for (const g of cat.glyphs) {
-				if (g.includes(q) || cat.label.toLowerCase().includes(q)) hits.push(g);
+				if (g.includes(q)) hits.push(g);
 			}
 		}
-		return [...new Set(hits)].slice(0, 180);
+		return [...new Set(hits)].slice(0, 240);
 	});
 </script>
 
-<div class="picker" role="dialog" aria-label="Emoji picker">
-	<input class="search" type="search" placeholder="Search" bind:value={query} aria-label="Search emoji" />
+<div class="picker">
+	<div class="toolbar">
+		<input class="search" type="search" placeholder="Search emoji" bind:value={query} aria-label="Search emoji" />
+		{#if value && onclear}
+			<button type="button" class="clear" onclick={onclear}>Remove</button>
+		{/if}
+	</div>
 	{#if !query.trim()}
 		<div class="tabs" role="tablist" aria-label="Categories">
 			{#each EMOJI_CATEGORIES as cat (cat.id)}
@@ -43,6 +51,7 @@
 				</button>
 			{/each}
 		</div>
+		<p class="cat-label">{active?.label}</p>
 	{/if}
 	<div class="grid" role="listbox">
 		{#each filtered as emoji (emoji)}
@@ -61,31 +70,37 @@
 			<p class="empty">No matches</p>
 		{/if}
 	</div>
-	{#if value && onclear}
-		<button type="button" class="clear" onclick={onclear}>Remove</button>
-	{/if}
 </div>
 
 <style>
 	.picker {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		width: min(280px, 78vw);
-		padding: 10px;
+		gap: 10px;
+		min-height: 0;
+		flex: 1;
+		padding: 4px 12px 0;
 		box-sizing: border-box;
 	}
 
+	.toolbar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-shrink: 0;
+	}
+
 	.search {
-		width: 100%;
-		height: 32px;
-		padding: 0 10px;
+		flex: 1;
+		min-width: 0;
+		height: 36px;
+		padding: 0 12px;
 		border: 1px solid var(--hairline);
-		border-radius: 8px;
-		background: transparent;
+		border-radius: 10px;
+		background: var(--fg-4);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 14px;
 		box-sizing: border-box;
 	}
 
@@ -93,19 +108,38 @@
 		color: var(--fg-33);
 	}
 
+	.clear {
+		flex-shrink: 0;
+		height: 36px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 10px;
+		background: transparent;
+		color: var(--destructive);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 500;
+		cursor: pointer;
+	}
+
 	.tabs {
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		gap: 2px;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		flex-shrink: 0;
+		padding-bottom: 2px;
 	}
 
 	.tab {
-		width: 28px;
-		height: 28px;
+		flex-shrink: 0;
+		width: 34px;
+		height: 34px;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 10px;
 		background: transparent;
-		font-size: 15px;
+		font-size: 17px;
 		line-height: 1;
 		cursor: pointer;
 	}
@@ -115,21 +149,34 @@
 		background: var(--fg-8);
 	}
 
+	.cat-label {
+		margin: 0;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--fg-33);
+		flex-shrink: 0;
+	}
+
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(8, 1fr);
+		grid-template-columns: repeat(8, minmax(0, 1fr));
 		gap: 2px;
-		max-height: 220px;
+		flex: 1;
+		min-height: 220px;
+		max-height: min(48svh, 360px);
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
+		padding-bottom: 4px;
 	}
 
 	.cell {
 		aspect-ratio: 1;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 10px;
 		background: transparent;
-		font-size: 18px;
+		font-size: 22px;
 		line-height: 1;
 		cursor: pointer;
 		padding: 0;
@@ -142,26 +189,16 @@
 
 	.empty {
 		grid-column: 1 / -1;
-		margin: 12px 0;
+		margin: 24px 0;
 		text-align: center;
 		font-size: 13px;
 		color: var(--fg-33);
 	}
 
-	.clear {
-		align-self: flex-start;
-		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--destructive);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 500;
-		padding: 6px 8px;
-		cursor: pointer;
-	}
-
-	.clear:hover {
-		background: var(--fg-4);
+	@media (min-width: 640px) {
+		.grid {
+			grid-template-columns: repeat(7, minmax(0, 1fr));
+			max-height: 320px;
+		}
 	}
 </style>

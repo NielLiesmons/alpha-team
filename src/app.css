@@ -33,16 +33,16 @@
 	--gradient-accent-3: radial-gradient(circle at top left, #ff4778 0%, #ff005e 100%);
 	--gradient-accent-3-16: radial-gradient(circle at top left, #ff477829 0%, #ff005e29 100%);
 
-	/* Glassy CTA — accent tint, not a solid gradient fill */
+	/* CTA — ~8% white base + very light accent tint for contrast on dark panels */
 	--button-primary-bg: linear-gradient(
 		180deg,
-		color-mix(in srgb, var(--accent-1) 28%, var(--glass-fill)) 0%,
-		color-mix(in srgb, var(--accent-1) 14%, var(--glass-fill)) 100%
+		color-mix(in srgb, var(--accent-1) 8%, var(--fg-8)) 0%,
+		color-mix(in srgb, var(--accent-1) 4%, var(--fg-8)) 100%
 	);
 	--button-primary-bg-hover: linear-gradient(
 		180deg,
-		color-mix(in srgb, var(--accent-1) 36%, var(--glass-fill)) 0%,
-		color-mix(in srgb, var(--accent-1) 20%, var(--glass-fill)) 100%
+		color-mix(in srgb, var(--accent-1) 12%, var(--fg-8)) 0%,
+		color-mix(in srgb, var(--accent-1) 6%, var(--fg-8)) 100%
 	);
 	--button-primary-fg: var(--fg);
 
@@ -76,18 +76,18 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
-	--surface: #1a1a1a;
+	--surface: #161616;
 	/* Small chrome (buttons): slight lift + shine border */
-	--glass-fill: color-mix(in srgb, var(--fg) 7%, var(--bg));
+	--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--bg));
 	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
-	/* Large surfaces (modals / sheets): subtle lift over page, still dark */
+	/* Large surfaces (modals / sheets): quiet dark lift — not bright */
 	--glass-panel: color-mix(
 		in srgb,
-		color-mix(in srgb, var(--fg) 9%, var(--bg)) 90%,
+		color-mix(in srgb, var(--fg) 5%, var(--bg)) 92%,
 		transparent
 	);
 	--glass-blur: 22px;
-	--glass-border: color-mix(in srgb, var(--fg) 14%, transparent);
+	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
 	/* Soft specular — buttons only (not modals / bottom nav) */
 	--glass-shine: linear-gradient(
 		135deg,
@@ -147,16 +147,16 @@
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
-	--surface: #1a1a1a;
-	--glass-fill: color-mix(in srgb, var(--fg) 7%, var(--bg));
+	--surface: #161616;
+	--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--bg));
 	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
 	--glass-panel: color-mix(
 		in srgb,
-		color-mix(in srgb, var(--fg) 9%, var(--bg)) 90%,
+		color-mix(in srgb, var(--fg) 5%, var(--bg)) 92%,
 		transparent
 	);
 	--glass-blur: 22px;
-	--glass-border: color-mix(in srgb, var(--fg) 14%, transparent);
+	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
 	--popover: var(--glass-panel);
 	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
@@ -230,11 +230,11 @@
 @media (max-width: 767px) {
 	:root,
 	:root[data-theme='dark'] {
-		--glass-fill: color-mix(in srgb, var(--fg) 8%, var(--shell));
+		--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--shell));
 		--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
 		--glass-panel: color-mix(
 			in srgb,
-			color-mix(in srgb, var(--fg) 11%, var(--shell)) 90%,
+			color-mix(in srgb, var(--fg) 5.5%, var(--shell)) 92%,
 			transparent
 		);
 		--scrim: color-mix(in srgb, var(--shell) 88%, transparent);

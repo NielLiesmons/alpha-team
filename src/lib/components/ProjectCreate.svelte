@@ -40,7 +40,6 @@
 					description,
 					icon,
 					milestones: editing?.milestones ?? [],
-					/* Keep last stored status for Drive compat; UI derives from tasks */
 					status: editing?.status ?? 'planned'
 				},
 				!editing
@@ -50,38 +49,31 @@
 			alert(e instanceof Error ? e.message : String(e));
 		}
 	}
+
+	function onBaseClose() {
+		if (iconOpen) {
+			iconOpen = false;
+			return;
+		}
+		closeComposer();
+	}
 </script>
 
-<CreateSheet {open} label={editing ? 'Edit project' : 'New project'} onclose={closeComposer}>
+<CreateSheet
+	{open}
+	sheetId="project-create"
+	label={editing ? 'Edit project' : 'New project'}
+	onclose={onBaseClose}
+>
 	<div class="sheet-title-row">
-		<div class="menu-anchor">
-			<button
-				type="button"
-				class="bare"
-				aria-label="Project icon"
-				aria-expanded={iconOpen}
-				onclick={() => (iconOpen = !iconOpen)}
-			>
-				<ProjectBox state={previewStatus} {icon} size={28} />
-			</button>
-			{#if iconOpen}
-				<button type="button" class="menu-scrim" aria-label="Close" onclick={() => (iconOpen = false)}
-				></button>
-				<div class="menu">
-					<EmojiPicker
-						value={icon}
-						onselect={(emoji) => {
-							icon = emoji;
-							iconOpen = false;
-						}}
-						onclear={() => {
-							icon = null;
-							iconOpen = false;
-						}}
-					/>
-				</div>
-			{/if}
-		</div>
+		<button
+			type="button"
+			class="bare"
+			aria-label="Project icon"
+			onclick={() => (iconOpen = true)}
+		>
+			<ProjectBox state={previewStatus} {icon} size={28} />
+		</button>
 		<input bind:this={titleInput} class="sheet-input" placeholder="Project title" bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
@@ -94,6 +86,30 @@
 	</div>
 </CreateSheet>
 
+<CreateSheet
+	open={iconOpen}
+	nested
+	sheetId="project-emoji"
+	label="Choose emoji"
+	onclose={() => (iconOpen = false)}
+>
+	<div class="nested-head">
+		<span class="nested-title">Emoji</span>
+	</div>
+	<div class="form-divider"></div>
+	<EmojiPicker
+		value={icon}
+		onselect={(emoji) => {
+			icon = emoji;
+			iconOpen = false;
+		}}
+		onclear={() => {
+			icon = null;
+			iconOpen = false;
+		}}
+	/>
+</CreateSheet>
+
 <style>
 	.bare {
 		border: 0;
@@ -102,32 +118,18 @@
 		display: grid;
 		place-items: center;
 		cursor: pointer;
+		flex-shrink: 0;
 	}
 
-	.menu-anchor {
-		position: relative;
+	.nested-head {
+		display: flex;
+		align-items: center;
+		padding: 14px 16px 6px;
 	}
 
-	.menu-scrim {
-		position: fixed;
-		inset: 0;
-		z-index: 4;
-		border: 0;
-		background: transparent;
-		cursor: default;
-	}
-
-	.menu {
-		position: absolute;
-		top: calc(100% + 6px);
-		left: 0;
-		z-index: 5;
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		background: var(--glass);
-		overflow: hidden;
-		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+	.nested-title {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--fg);
 	}
 </style>

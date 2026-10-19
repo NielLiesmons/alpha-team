@@ -39,8 +39,9 @@
 	let projectIds = $state([]);
 	/** @type {{ email?: string, name?: string }[]} */
 	let assignees = $state([]);
-	/** @type {null | 'assignees' | 'projects' | 'labels'} */
+	/** @type {null | 'assignees' | 'projects'} */
 	let bottomMenu = $state(null);
+	let labelOpen = $state(false);
 	let labelDraft = $state('');
 	/** @type {HTMLInputElement | undefined} */
 	let titleInput = $state();
@@ -64,6 +65,7 @@
 		statusOpen = false;
 		priorityOpen = false;
 		bottomMenu = null;
+		labelOpen = false;
 		labelDraft = '';
 		saving = false;
 		tick().then(() => titleInput?.focus());
@@ -89,7 +91,7 @@
 		if (!text) return;
 		if (!labels.includes(text)) labels = [...labels, text];
 		labelDraft = '';
-		bottomMenu = null;
+		labelOpen = false;
 	}
 
 	async function save() {
@@ -126,7 +128,18 @@
 	}
 </script>
 
-<CreateSheet {open} label={editing ? 'Edit task' : 'New task'} onclose={closeComposer}>
+<CreateSheet
+	{open}
+	sheetId="task-create"
+	label={editing ? 'Edit task' : 'New task'}
+	onclose={() => {
+		if (labelOpen) {
+			labelOpen = false;
+			return;
+		}
+		closeComposer();
+	}}
+>
 	<div class="task-title-row">
 		<div class="status-wrapper">
 			<button
@@ -332,8 +345,8 @@
 					class="labels-trigger"
 					class:has-labels={labels.length > 0}
 					aria-label="Add labels"
-					aria-expanded={bottomMenu === 'labels'}
-					onclick={() => (bottomMenu = bottomMenu === 'labels' ? null : 'labels')}
+					aria-expanded={labelOpen}
+					onclick={() => (labelOpen = true)}
 				>
 					<span class="labels-trigger-body">
 						<span class="trigger-count">{labels.length}</span>
@@ -346,22 +359,6 @@
 						/>
 					</svg>
 				</button>
-				{#if bottomMenu === 'labels'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
-					></button>
-					<div class="bottom-menu labels-menu" role="dialog">
-						<form
-							class="label-form"
-							onsubmit={(e) => {
-								e.preventDefault();
-								addLabel();
-							}}
-						>
-							<input class="label-input" placeholder="New label" bind:value={labelDraft} aria-label="New label" />
-							<button type="submit" class="label-submit" disabled={!labelDraft.trim()}>Add</button>
-						</form>
-					</div>
-				{/if}
 			</div>
 		</div>
 
@@ -374,7 +371,70 @@
 	</div>
 </CreateSheet>
 
+<CreateSheet
+	open={labelOpen}
+	nested
+	sheetId="task-label"
+	label="Add label"
+	onclose={() => {
+		labelOpen = false;
+		labelDraft = '';
+	}}
+>
+	<div class="nested-head">
+		<span class="nested-title">Label</span>
+	</div>
+	<div class="form-divider"></div>
+	<form
+		class="nested-label-form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			addLabel();
+		}}
+	>
+		<input class="label-input" placeholder="New label" bind:value={labelDraft} aria-label="New label" />
+		<button type="submit" class="publish-btn nested-add" disabled={!labelDraft.trim()}>Add</button>
+	</form>
+</CreateSheet>
+
 <style>
+	.nested-head {
+		display: flex;
+		align-items: center;
+		padding: 14px 16px 6px;
+	}
+
+	.nested-title {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--fg);
+	}
+
+	.nested-label-form {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 12px 16px 4px;
+	}
+
+	.nested-label-form .label-input {
+		width: 100%;
+		height: 40px;
+		padding: 0 12px;
+		border: 1px solid var(--hairline);
+		border-radius: 10px;
+		background: var(--fg-4);
+		color: var(--fg);
+		font: inherit;
+		font-size: 15px;
+		box-sizing: border-box;
+	}
+
+	.nested-add {
+		margin-left: 0;
+		align-self: flex-end;
+	}
+
 	.task-title-row {
 		display: flex;
 		flex-direction: row;
