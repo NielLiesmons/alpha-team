@@ -3,18 +3,25 @@
  */
 
 import {
+	createActivity as driveCreateActivity,
+	createLedgerEntry as driveCreateLedgerEntry,
 	createNote as driveCreateNote,
 	createProject as driveCreateProject,
 	createTask as driveCreateTask,
+	ensureDefaultAccounts,
 	ensureSpace,
 	fromUiNote,
 	fromUiTask,
+	listActivities,
+	listLedgerEntries,
 	listNotes,
 	listProjects,
 	listTasks,
+	putLedgerEntry,
 	putNote,
 	putProject as drivePutProject,
 	putTask,
+	toUiLedgerEntry,
 	toUiNote,
 	toUiTask
 } from './drive/entities.js';
@@ -32,6 +39,12 @@ export const tasks = $state([]);
 export const projects = $state([]);
 /** @type {any[]} */
 export const notes = $state([]);
+/** @type {any[]} */
+export const accounts = $state([]);
+/** @type {any[]} */
+export const ledgerEntries = $state([]);
+/** @type {any[]} */
+export const activities = $state([]);
 
 export const ui = $state({
 	/** @type {string | null} */
@@ -40,10 +53,10 @@ export const ui = $state({
 	noteId: null,
 	/**
 	 * Opened entity in the desktop detail column (view, not create).
-	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome', id: string }}
+	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'activity', id: string }}
 	 */
 	selection: null,
-	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome', id?: string, status?: string }} */
+	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'activity', id?: string, status?: string }} */
 	composer: null,
 	/** @type {'none' | 'drive'} */
 	source: 'none'
@@ -51,7 +64,7 @@ export const ui = $state({
 
 /**
  * Open an entity in the third column (does not open the create/edit modal).
- * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome'} kind
+ * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'activity'} kind
  * @param {string} id
  */
 export function selectEntity(kind, id) {
@@ -73,7 +86,7 @@ export function forceClearSelection() {
 }
 
 /**
- * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome'} kind
+ * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'activity'} kind
  * @param {string} [id]
  * @param {string} [status]
  */
@@ -97,6 +110,9 @@ function clearWorkspace() {
 	replaceArray(tasks, []);
 	replaceArray(projects, []);
 	replaceArray(notes, []);
+	replaceArray(accounts, []);
+	replaceArray(ledgerEntries, []);
+	replaceArray(activities, []);
 	ui.projectId = null;
 	ui.noteId = null;
 	ui.selection = null;
@@ -123,6 +139,18 @@ async function persistWorkspaceCache(session) {
 		}),
 		notes: notes.map((n) => {
 			const { _pending: _, ...rest } = n;
+			return rest;
+		}),
+		accounts: accounts.map((a) => {
+			const { _pending: _, ...rest } = a;
+			return rest;
+		}),
+		ledgerEntries: ledgerEntries.map((e) => {
+			const { _pending: _, ...rest } = e;
+			return rest;
+		}),
+		activities: activities.map((a) => {
+			const { _pending: _, ...rest } = a;
 			return rest;
 		})
 	};
@@ -152,6 +180,9 @@ export async function hydrateWorkspaceFromCache() {
 	replaceArray(projects, Array.isArray(snap.projects) ? snap.projects : []);
 	replaceArray(tasks, Array.isArray(snap.tasks) ? snap.tasks : []);
 	replaceArray(notes, Array.isArray(snap.notes) ? snap.notes : []);
+	replaceArray(accounts, Array.isArray(snap.accounts) ? snap.accounts : []);
+	replaceArray(ledgerEntries, Array.isArray(snap.ledgerEntries) ? snap.ledgerEntries : []);
+	replaceArray(activities, Array.isArray(snap.activities) ? snap.activities : []);
 	ui.source = 'drive';
 	return hasAny || Array.isArray(snap.tasks);
 }
@@ -162,15 +193,23 @@ export async function refreshFromDrive() {
 		clearWorkspace();
 		return;
 	}
-	const hadLocal = tasks.length > 0 || projects.length > 0 || notes.length > 0;
+	const hadLocal =
+		tasks.length > 0 ||
+		projects.length > 0 ||
+		notes.length > 0 ||
+		ledgerEntries.length > 0 ||
+		activities.length > 0;
 	driveSession.loading = !hadLocal;
 	driveSession.error = null;
 	try {
 		await ensureSpace(session, 'Bley Family');
-		const [plist, tlist, nlist] = await Promise.all([
+		const [plist, tlist, nlist, alist, elist, actlist] = await Promise.all([
 			listProjects(session),
 			listTasks(session),
-			listNotes(session)
+			listNotes(session),
+			ensureDefaultAccounts(session),
+			listLedgerEntries(session),
+			listActivities(session)
 		]);
 		replaceArray(
 			projects,
@@ -194,6 +233,12 @@ export async function refreshFromDrive() {
 			notes,
 			nlist.map((n) => toUiNote(n, plist))
 		);
+		replaceArray(accounts, alist);
+		replaceArray(
+			ledgerEntries,
+			elist.map((e) => toUiLedgerEntry(e, plist, alist))
+		);
+		replaceArray(activities, actlist);
 		ui.source = 'drive';
 		void persistWorkspaceCache(session);
 	} catch (e) {
@@ -495,4 +540,119 @@ export async function saveProject(draft, isNew) {
 		ui.projectId = saved.id;
 		ui.selection = { kind: 'project', id: saved.id };
 	}
+}
+
+/**
+ * Persist a new or edited ledger entry. Optimistic UI.
+ * @param {any} draft
+ * @param {boolean} isNew
+ */
+export async function saveLedgerEntry(draft, isNew) {
+	const session = activeSession();
+	const author = draft.author ?? activePerson().email;
+	const plist = projects.map((p) => p._drive ?? p);
+
+	if (isNew) {
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = {
+			...toUiLedgerEntry(
+				{
+					...draft,
+					id: tempId,
+					occurred_at: draft.occurred_at || new Date().toISOString(),
+					created_at: new Date().toISOString(),
+					author
+				},
+				plist,
+				accounts
+			),
+			_pending: Boolean(session)
+		};
+		ledgerEntries.unshift(optimistic);
+		ui.selection = { kind: 'ledger', id: tempId };
+		scheduleWorkspacePersist();
+		if (!session) return optimistic;
+
+		try {
+			const created = await driveCreateLedgerEntry(session, {
+				...draft,
+				author
+			});
+			const uiEntry = toUiLedgerEntry(created, plist, accounts);
+			const idx = ledgerEntries.findIndex((e) => e.id === tempId);
+			if (idx >= 0) ledgerEntries[idx] = uiEntry;
+			else ledgerEntries.unshift(uiEntry);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'ledger', id: uiEntry.id };
+			scheduleWorkspacePersist();
+			return uiEntry;
+		} catch (e) {
+			const idx = ledgerEntries.findIndex((x) => x.id === tempId);
+			if (idx >= 0) ledgerEntries.splice(idx, 1);
+			scheduleWorkspacePersist();
+			throw e;
+		}
+	}
+
+	const idx = ledgerEntries.findIndex((e) => e.id === draft.id);
+	const prev = idx >= 0 ? { ...ledgerEntries[idx] } : null;
+	if (idx >= 0) {
+		Object.assign(
+			ledgerEntries[idx],
+			toUiLedgerEntry({ ...draft, author }, plist, accounts),
+			{ _pending: Boolean(session) }
+		);
+	}
+	ui.selection = { kind: 'ledger', id: draft.id };
+	scheduleWorkspacePersist();
+	if (!session) return draft;
+
+	try {
+		const saved = await putLedgerEntry(session, {
+			...(draft._drive ?? {}),
+			...draft,
+			author
+		});
+		const uiEntry = toUiLedgerEntry(saved, plist, accounts);
+		const i = ledgerEntries.findIndex((e) => e.id === saved.id);
+		if (i >= 0) Object.assign(ledgerEntries[i], uiEntry);
+		else ledgerEntries.unshift(uiEntry);
+		scheduleWorkspacePersist();
+		return uiEntry;
+	} catch (e) {
+		if (idx >= 0 && prev) Object.assign(ledgerEntries[idx], prev);
+		scheduleWorkspacePersist();
+		throw e;
+	}
+}
+
+/**
+ * Persist a new activity / scenario model.
+ * @param {any} draft
+ * @param {boolean} isNew
+ */
+export async function saveActivity(draft, isNew) {
+	const session = activeSession();
+	if (isNew) {
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = { ...draft, id: tempId, _pending: Boolean(session) };
+		activities.unshift(optimistic);
+		ui.selection = { kind: 'activity', id: tempId };
+		scheduleWorkspacePersist();
+		if (!session) return optimistic;
+		try {
+			const created = await driveCreateActivity(session, draft);
+			const idx = activities.findIndex((a) => a.id === tempId);
+			if (idx >= 0) activities[idx] = created;
+			else activities.unshift(created);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'activity', id: created.id };
+			scheduleWorkspacePersist();
+			return created;
+		} catch (e) {
+			const idx = activities.findIndex((a) => a.id === tempId);
+			if (idx >= 0) activities.splice(idx, 1);
+			scheduleWorkspacePersist();
+			throw e;
+		}
+	}
+	return draft;
 }

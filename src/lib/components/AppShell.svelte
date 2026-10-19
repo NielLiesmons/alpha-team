@@ -5,6 +5,7 @@
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
 		forceClearSelection,
+		ledgerEntries,
 		notes,
 		openComposer,
 		projects,
@@ -17,7 +18,9 @@
 		forceClosePlayerDetail
 	} from '$lib/player.svelte.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
+	import ActivityCreate from './ActivityCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
+	import LedgerCreate from './LedgerCreate.svelte';
 	import MobilePlayerPill from './MobilePlayerPill.svelte';
 	import NavIcon from './NavIcon.svelte';
 	import NewsletterCreate from './NewsletterCreate.svelte';
@@ -62,7 +65,8 @@
 	const counts = $derived({
 		tasks: tasks.length,
 		projects: projects.length,
-		notes: notes.length
+		notes: notes.length,
+		ledger: ledgerEntries.length
 	});
 
 	const filteredNav = $derived.by(() => {
@@ -73,7 +77,9 @@
 
 	const createKind = $derived(
 		'createKind' in activeItem
-			? /** @type {'task' | 'project' | 'note' | 'newsletter' | undefined} */ (activeItem.createKind)
+			? /** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | undefined} */ (
+					activeItem.createKind
+				)
 			: undefined
 	);
 
@@ -109,7 +115,7 @@
 		goto(href, { replaceState: replace });
 	}
 
-	/** @param {'task' | 'project' | 'note' | 'newsletter'} kind */
+	/** @param {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'activity'} kind */
 	function create(kind) {
 		createMenuOpen = false;
 		openComposer(kind);
@@ -117,6 +123,7 @@
 		else if (kind === 'project') go('/projects');
 		else if (kind === 'note') go('/notes');
 		else if (kind === 'newsletter') go('/publications');
+		else if (kind === 'ledger' || kind === 'activity') go('/accounting');
 	}
 
 	function onListPlus() {
@@ -189,6 +196,12 @@
 						<button type="button" role="menuitem" onclick={() => create('newsletter')}
 							>New newsletter</button
 						>
+						<button type="button" role="menuitem" onclick={() => create('ledger')}
+							>New ledger entry</button
+						>
+						<button type="button" role="menuitem" onclick={() => create('activity')}
+							>New activity</button
+						>
 					</div>
 				{/if}
 			</div>
@@ -214,7 +227,9 @@
 									aria-label="New {item.createKind}"
 									onclick={() =>
 										openComposer(
-											/** @type {'task' | 'project' | 'note' | 'newsletter'} */ (item.createKind)
+											/** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger'} */ (
+												item.createKind
+											)
 										)}
 								>
 									<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -327,6 +342,8 @@
 	<TaskCreate />
 	<ProjectCreate />
 	<NoteCreate />
+	<LedgerCreate />
+	<ActivityCreate />
 	<NewsletterCreate />
 	<WelcomeEdit />
 	<TrackEdit />

@@ -29,7 +29,9 @@
 	} from '$lib/publications.svelte.js';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import {
+		activities,
 		clearSelection,
+		ledgerEntries,
 		notes,
 		openComposer,
 		patchProject,
@@ -73,10 +75,26 @@
 	const note = $derived(
 		selection?.kind === 'note' ? notes.find((n) => n.id === selection.id) : null
 	);
+	const ledger = $derived(
+		selection?.kind === 'ledger' ? ledgerEntries.find((e) => e.id === selection.id) : null
+	);
+	const activity = $derived(
+		selection?.kind === 'activity' ? activities.find((a) => a.id === selection.id) : null
+	);
 	const newsletter = $derived(
 		selection?.kind === 'newsletter' ? campaigns.find((c) => c.id === selection.id) : null
 	);
 	const welcomeSelected = $derived(selection?.kind === 'welcome');
+
+	/** @param {number} cents */
+	function formatMoney(cents, currency = 'EUR') {
+		const n = (cents ?? 0) / 100;
+		try {
+			return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
+		} catch {
+			return `${n.toFixed(2)} ${currency}`;
+		}
+	}
 
 	const projectTasks = $derived.by(() => {
 		if (!project) return [];
@@ -156,6 +174,8 @@
 		if (task) return 'Task';
 		if (project) return 'Project';
 		if (note) return 'Note';
+		if (ledger) return 'Ledger';
+		if (activity) return 'Activity';
 		if (newsletter) return 'Newsletter';
 		if (welcomeSelected) return 'Welcome';
 		if (selection?.kind === 'mail') return 'Mail';
@@ -169,6 +189,8 @@
 		if (task?.title) return task.title;
 		if (project?.title) return project.title;
 		if (note?.title) return note.title;
+		if (ledger) return ledger.memo || ledger.account_title || 'Entry';
+		if (activity?.title) return activity.title;
 		if (newsletter?.subject) return newsletter.subject;
 		if (welcomeSelected) return 'Welcome';
 		return typeLabel;
@@ -180,6 +202,8 @@
 				task ||
 				project ||
 				note ||
+				ledger ||
+				activity ||
 				newsletter ||
 				welcomeSelected
 		)
@@ -190,6 +214,11 @@
 		if (path.startsWith('/tasks')) return { title: 'No task selected', body: 'Pick a task from the list to read it here.' };
 		if (path.startsWith('/projects')) return { title: 'No project selected', body: 'Open a project to see its summary and notes.' };
 		if (path.startsWith('/notes')) return { title: 'No note selected', body: 'Choose a note to read it beside the list.' };
+		if (path.startsWith('/accounting'))
+			return {
+				title: 'No entry selected',
+				body: 'Pick a ledger line or activity scenario to inspect it here.'
+			};
 		if (path.startsWith('/publications'))
 			return {
 				title: 'No publication selected',
@@ -760,6 +789,80 @@
 			</p>
 			<h2 class="pub-title">{newsletter.subject}</h2>
 			<pre class="pub-body">{newsletter.body}</pre>
+		</div>
+	{:else if ledger}
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Ledger</span>
+			<div class="detail-top-actions">
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
+			</div>
+		</header>
+		<div class="body">
+			<p class="pub-kicker">
+				{ledger.direction === 'in' ? 'Income' : 'Expense'}
+				· {ledger.kind}
+				{#if ledger.channel}· {ledger.channel}{/if}
+			</p>
+			<h2 class="pub-title">{formatMoney(ledger.amount_cents, ledger.currency)}</h2>
+			{#if ledger.memo}
+				<p class="prose">{ledger.memo}</p>
+			{/if}
+			<p class="muted">
+				{ledger.account_code} — {ledger.account_title}
+				{#if ledger.cost_behavior && ledger.cost_behavior !== 'none'}
+					· {ledger.cost_behavior}
+				{/if}
+			</p>
+			{#if ledger.targets?.length}
+				<p class="muted">
+					Projects: {ledger.targets.map((/** @type {{ label: string }} */ t) => t.label).join(', ')}
+				</p>
+			{/if}
+			{#if ledger.task_ids?.length}
+				<p class="muted">Tasks: {ledger.task_ids.length} linked</p>
+			{/if}
+		</div>
+	{:else if activity}
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Activity</span>
+			<div class="detail-top-actions">
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
+			</div>
+		</header>
+		<div class="body">
+			<p class="pub-kicker">{activity.status || 'draft'}</p>
+			<h2 class="pub-title">{activity.title}</h2>
+			{#if activity.description}
+				<p class="prose">{activity.description}</p>
+			{/if}
+			<p class="muted">
+				Fixed {formatMoney(activity.fixed_cost_cents_month || 0, activity.currency || 'EUR')}/mo · Variable
+				{formatMoney(activity.variable_cost_per_unit_cents || 0, activity.currency || 'EUR')}/{activity.unit_label ||
+					'unit'} · Price {formatMoney(activity.price_per_unit_cents || 0, activity.currency || 'EUR')}
+			</p>
+			<p class="muted">
+				{activity.expected_units_month || 0}
+				{activity.unit_label || 'units'}/mo
+				{#if activity.channels?.length}· {activity.channels.join(', ')}{/if}
+			</p>
 		</div>
 	{/if}
 {:else}

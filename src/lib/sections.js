@@ -7,8 +7,8 @@
  *   href: string,
  *   label: string,
  *   icon: string,
- *   countKey?: 'tasks' | 'projects' | 'notes',
- *   createKind?: 'task' | 'project' | 'note' | 'newsletter'
+ *   countKey?: 'tasks' | 'projects' | 'notes' | 'ledger',
+ *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger'
  * }} NavItem
  */
 
@@ -20,6 +20,13 @@ export const primaryNav = [
 	{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
 	{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
+	{
+		href: '/accounting',
+		label: 'Accounting',
+		icon: 'accounting',
+		countKey: 'ledger',
+		createKind: 'ledger'
+	},
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
 	{ href: '/website', label: 'Website', icon: 'website' },
 	{
@@ -38,6 +45,7 @@ export const mobileNav = [
 	{ href: '/publications', label: 'Publications', icon: 'publications' },
 	{ href: '/website', label: 'Website', icon: 'website' },
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
+	{ href: '/accounting', label: 'Accounting', icon: 'accounting' },
 	{ href: '/notes', label: 'Notes', icon: 'notes' },
 	{ href: '/projects', label: 'Projects', icon: 'projects' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },

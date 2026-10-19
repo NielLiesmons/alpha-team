@@ -1021,3 +1021,293 @@ export function fromUiTask(ui) {
 		updated_at: nowRfc3339()
 	};
 }
+/* ── Accounting (private Drive) — see alpha-docs/ADR-accounting-commerce.md ── */
+
+const DEFAULT_ACCOUNTS = [
+	{ code: 'cash', title: 'Cash / bank', kind: 'asset' },
+	{ code: 'feed', title: 'Feed', kind: 'expense' },
+	{ code: 'vet', title: 'Vet & animal health', kind: 'expense' },
+	{ code: 'packaging', title: 'Packaging', kind: 'expense' },
+	{ code: 'fuel', title: 'Fuel & transport', kind: 'expense' },
+	{ code: 'infra', title: 'Infrastructure / builds', kind: 'expense' },
+	{ code: 'sales-eggs', title: 'Sales — eggs', kind: 'income' },
+	{ code: 'sales-dairy', title: 'Sales — dairy / ice cream', kind: 'income' },
+	{ code: 'sales-meat', title: 'Sales — meat / sausages', kind: 'income' },
+	{ code: 'sales-other', title: 'Sales — other', kind: 'income' },
+	{ code: 'vat-out', title: 'VAT collected', kind: 'tax' },
+	{ code: 'vat-in', title: 'VAT deductible', kind: 'tax' },
+	{ code: 'fees', title: 'Payment / bank fees', kind: 'expense' }
+];
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listAccounts(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'account' || path.endsWith('/account.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {{ code: string, title: string, kind: string, currency?: string, labels?: string[] }} input
+ */
+export async function createAccount(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const account = {
+		schema: 'alpha.account/1',
+		id,
+		code: input.code,
+		title: input.title,
+		kind: input.kind,
+		currency: input.currency || 'EUR',
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(
+		session,
+		`accounts/${id}/account.json`,
+		'account',
+		JSON.stringify(account, null, 2)
+	);
+	return account;
+}
+
+/**
+ * Seed a starter chart of accounts when the Drive has none.
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function ensureDefaultAccounts(session) {
+	const existing = await listAccounts(session);
+	if (existing.length > 0) return existing;
+	/** @type {any[]} */
+	const created = [];
+	for (const row of DEFAULT_ACCOUNTS) {
+		created.push(await createAccount(session, row));
+	}
+	return created;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} [projectId]
+ */
+export async function listLedgerEntries(session, projectId) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'ledger' || path.endsWith('/entry.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				const e = JSON.parse(new TextDecoder().decode(bytes));
+				e.schema = 'alpha.ledger_entry/1';
+				e.project_ids = Array.isArray(e.project_ids) ? e.project_ids : [];
+				e.task_ids = Array.isArray(e.task_ids) ? e.task_ids : [];
+				e.labels = Array.isArray(e.labels) ? e.labels : [];
+				if (!projectId || e.project_ids.includes(projectId)) out.push(e);
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(b.occurred_at || '').localeCompare(String(a.occurred_at || '')));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createLedgerEntry(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const author =
+		typeof input.author === 'string' && input.author.trim()
+			? input.author.trim().toLowerCase()
+			: undefined;
+	const entry = {
+		schema: 'alpha.ledger_entry/1',
+		id,
+		occurred_at: input.occurred_at || created,
+		currency: input.currency || 'EUR',
+		amount_cents: Math.max(0, Math.round(Number(input.amount_cents) || 0)),
+		direction: input.direction === 'in' ? 'in' : 'out',
+		account_id: input.account_id,
+		counter_account_id: input.counter_account_id ?? null,
+		kind: input.kind || 'actual',
+		cost_behavior: input.cost_behavior || 'none',
+		project_ids: input.project_ids ?? [],
+		task_ids: input.task_ids ?? [],
+		activity_id: input.activity_id ?? null,
+		invoice_id: input.invoice_id ?? null,
+		order_id: input.order_id ?? null,
+		channel: input.channel || undefined,
+		tax: input.tax || undefined,
+		party: input.party || undefined,
+		memo: input.memo || '',
+		attachments: input.attachments ?? [],
+		labels: input.labels ?? [],
+		...(author ? { author } : {}),
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(session, `ledger/${id}/entry.json`, 'ledger', JSON.stringify(entry, null, 2));
+	return entry;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} entry
+ */
+export async function putLedgerEntry(session, entry) {
+	const author =
+		typeof entry.author === 'string' && entry.author.trim()
+			? entry.author.trim().toLowerCase()
+			: undefined;
+	const next = {
+		schema: 'alpha.ledger_entry/1',
+		id: entry.id,
+		occurred_at: entry.occurred_at,
+		currency: entry.currency || 'EUR',
+		amount_cents: Math.max(0, Math.round(Number(entry.amount_cents) || 0)),
+		direction: entry.direction === 'in' ? 'in' : 'out',
+		account_id: entry.account_id,
+		counter_account_id: entry.counter_account_id ?? null,
+		kind: entry.kind || 'actual',
+		cost_behavior: entry.cost_behavior || 'none',
+		project_ids: Array.isArray(entry.project_ids) ? entry.project_ids : [],
+		task_ids: Array.isArray(entry.task_ids) ? entry.task_ids : [],
+		activity_id: entry.activity_id ?? null,
+		invoice_id: entry.invoice_id ?? null,
+		order_id: entry.order_id ?? null,
+		channel: entry.channel || undefined,
+		tax: entry.tax || undefined,
+		party: entry.party || undefined,
+		memo: entry.memo || '',
+		attachments: entry.attachments ?? [],
+		labels: Array.isArray(entry.labels) ? entry.labels : [],
+		...(author ? { author } : {}),
+		created_at: entry.created_at ?? nowRfc3339(),
+		updated_at: nowRfc3339()
+	};
+	await putPath(
+		session,
+		`ledger/${next.id}/entry.json`,
+		'ledger',
+		JSON.stringify(next, null, 2)
+	);
+	return next;
+}
+
+/**
+ * @param {any} e
+ * @param {any[]} projectList
+ * @param {any[]} accountList
+ */
+export function toUiLedgerEntry(e, projectList, accountList) {
+	const byProject = new Map(projectList.map((p) => [p.id, p]));
+	const byAccount = new Map(accountList.map((a) => [a.id, a]));
+	const byCode = new Map(accountList.map((a) => [a.code, a]));
+	const account =
+		byAccount.get(e.account_id) || byCode.get(e.account_id) || null;
+	const occurredMs = e.occurred_at ? Date.parse(e.occurred_at) : 0;
+	return {
+		id: e.id,
+		occurredAt: Number.isFinite(occurredMs) ? occurredMs : 0,
+		occurred_at: e.occurred_at,
+		currency: e.currency || 'EUR',
+		amount_cents: e.amount_cents ?? 0,
+		direction: e.direction,
+		account_id: e.account_id,
+		account_code: account?.code ?? e.account_id,
+		account_title: account?.title ?? e.account_id,
+		kind: e.kind || 'actual',
+		cost_behavior: e.cost_behavior || 'none',
+		channel: e.channel || '',
+		memo: e.memo || '',
+		project_ids: e.project_ids ?? [],
+		task_ids: e.task_ids ?? [],
+		targets: (e.project_ids ?? []).map((id) => ({
+			id,
+			label: byProject.get(id)?.title ?? id
+		})),
+		tax: e.tax,
+		party: e.party,
+		labels: e.labels ?? [],
+		author: e.author || null,
+		_drive: e
+	};
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listActivities(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'activity' || path.endsWith('/activity.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createActivity(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const activity = {
+		schema: 'alpha.activity/1',
+		id,
+		title: input.title,
+		description: input.description || '',
+		status: input.status || 'draft',
+		project_ids: input.project_ids ?? [],
+		fixed_cost_cents_month: Math.max(0, Math.round(Number(input.fixed_cost_cents_month) || 0)),
+		variable_cost_per_unit_cents: Math.max(
+			0,
+			Math.round(Number(input.variable_cost_per_unit_cents) || 0)
+		),
+		unit_label: input.unit_label || '',
+		expected_units_month: Number(input.expected_units_month) || 0,
+		price_per_unit_cents: Math.max(0, Math.round(Number(input.price_per_unit_cents) || 0)),
+		channels: input.channels ?? [],
+		currency: input.currency || 'EUR',
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(
+		session,
+		`activities/${id}/activity.json`,
+		'activity',
+		JSON.stringify(activity, null, 2)
+	);
+	return activity;
+}

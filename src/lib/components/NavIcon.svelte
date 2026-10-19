@@ -113,6 +113,15 @@
 				stroke-linecap="round"
 			/>
 		</svg>
+	{:else if name === 'accounting'}
+		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<rect x="3.5" y="1.5" width="11" height="15" rx="1.5" stroke="currentColor" />
+			<path
+				d="M6.5 5.5h5M6.5 8.5h5M6.5 11.5h3"
+				stroke="currentColor"
+				stroke-linecap="round"
+			/>
+		</svg>
 	{:else}
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
 			<circle cx="9" cy="9" r="2" stroke="currentColor" />
