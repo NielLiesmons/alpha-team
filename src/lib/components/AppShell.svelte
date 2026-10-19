@@ -866,8 +866,8 @@
 
 		.list-top {
 			height: calc(88px + env(safe-area-inset-top, 0px));
-			padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 0 18px;
-			align-items: flex-start;
+			padding: calc(6px + env(safe-area-inset-top, 0px)) 14px 34px 18px;
+			align-items: center;
 			background: linear-gradient(
 				to bottom,
 				var(--chrome-fade) 0%,
@@ -877,7 +877,7 @@
 			);
 		}
 
-		/* Overlay fade — must not consume flex space or feeds never scroll under the nav */
+		/* Soft veil only — keep content readable through glass bottom nav */
 		.list-bottom-fade {
 			display: block;
 			position: absolute;
@@ -885,11 +885,11 @@
 			right: 0;
 			bottom: 0;
 			z-index: 5;
-			height: calc(100px + env(safe-area-inset-bottom, 0px));
+			height: calc(88px + env(safe-area-inset-bottom, 0px));
 			background: linear-gradient(
 				to top,
-				var(--chrome-fade) 0%,
-				color-mix(in srgb, var(--chrome-fade) 65%, transparent) 42%,
+				color-mix(in srgb, var(--chrome-fade) 55%, transparent) 0%,
+				color-mix(in srgb, var(--chrome-fade) 22%, transparent) 48%,
 				transparent 100%
 			);
 		}

@@ -30,7 +30,11 @@ const coverUrlCache = new Map();
 /** In-flight cover fetches (dedupe). */
 const coverInflight = new Map();
 /** Cap parallel decrypts — mass cover hydrate froze phones. */
-const COVER_CONCURRENCY = 1;
+const COVER_CONCURRENCY = 2;
+/** Paths that failed hydrate — show placeholder, never retry forever. */
+const coverFailed = new Set();
+/** Bumps when a cover fails so UI can drop infinite skeletons. */
+export const coverFailRev = $state({ n: 0 });
 let coverActive = 0;
 /** @type {(() => void)[]} */
 const coverWait = [];
@@ -1022,7 +1026,7 @@ function applyTrackLocal(next) {
  */
 async function hydrateCoverUrl(trackId, coverPath) {
 	const session = activeSession();
-	if (!session || !coverPath) return;
+	if (!session || !coverPath || coverFailed.has(coverPath)) return;
 
 	const cached = coverUrlCache.get(coverPath);
 	if (cached) {
@@ -1060,8 +1064,15 @@ async function hydrateCoverUrl(trackId, coverPath) {
 			tracks[idx] = { ...tracks[idx], cover_url: url };
 		}
 	} catch (e) {
+		coverFailed.add(coverPath);
+		coverFailRev.n += 1;
 		console.warn('Cover hydrate failed', coverPath, e);
 	}
+}
+
+/** @param {string | null | undefined} coverPath */
+export function isCoverFailed(coverPath) {
+	return Boolean(coverPath && coverFailed.has(coverPath));
 }
 
 /**
@@ -1440,5 +1451,8 @@ export function visibleTracks() {
 		const byId = new Map(tracks.map((t) => [t.id, t]));
 		return recent.map((r) => byId.get(r.id)).filter(Boolean);
 	}
-	return [...tracks].sort(compareTracks);
+	/* Songs library: A–Z by title */
+	return [...tracks].sort(
+		(a, b) => String(a.title ?? '').localeCompare(String(b.title ?? ''), undefined, { sensitivity: 'base' })
+	);
 }

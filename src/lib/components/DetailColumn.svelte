@@ -1321,14 +1321,10 @@
 			visibility: visible;
 		}
 
-		/* Songs / Artists list stays above the bottom nav + mini player */
+		/* Full-bleed under glass bottom nav so the feed can blur through */
 		.detail.player-mode {
 			z-index: 35;
-			bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-		}
-
-		.detail.player-mode.has-mini {
-			bottom: calc(72px + 8px + 52px + env(safe-area-inset-bottom, 0px));
+			bottom: 0;
 		}
 
 		.detail.open {
@@ -1348,11 +1344,11 @@
 			right: 0;
 			z-index: 8;
 			display: flex;
-			align-items: flex-start;
+			align-items: center;
 			justify-content: space-between;
 			gap: 12px;
 			height: calc(88px + env(safe-area-inset-top, 0px));
-			padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 0;
+			padding: calc(6px + env(safe-area-inset-top, 0px)) 14px 34px;
 			border-bottom: none;
 			flex-shrink: 0;
 			box-sizing: border-box;

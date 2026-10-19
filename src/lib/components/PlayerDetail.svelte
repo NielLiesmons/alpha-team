@@ -1,4 +1,5 @@
 <script>
+	import { tick } from 'svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
@@ -8,7 +9,9 @@
 		albumRows,
 		artistNames,
 		clearTrackSelection,
+		coverFailRev,
 		ensureTrackCover,
+		isCoverFailed,
 		openBulkTrackEdit,
 		openPlaylistCreate,
 		openTrackEdit,
@@ -23,26 +26,99 @@
 		tracks,
 		visibleTracks
 	} from '$lib/player.svelte.js';
+
+	const ALPHA = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
 	const connected = $derived(Boolean(activeSession()));
 	const list = $derived(visibleTracks());
 	const artists = $derived(artistNames());
 	const albums = $derived(albumRows());
+	const showAlpha = $derived(playerBrowse.mode === 'songs' && list.length > 0);
 
-	// Lazy-hydrate covers for visible rows only (queued inside ensureTrackCover).
-	$effect(() => {
-		const batch = list.slice(0, 24);
-		for (const t of batch) {
-			if (t.cover_path && !t.cover_url) void ensureTrackCover(t);
+	/** @param {string | undefined | null} title */
+	function titleLetter(title) {
+		const c = String(title ?? '')
+			.trim()
+			.charAt(0)
+			.toLocaleUpperCase();
+		return c >= 'A' && c <= 'Z' ? c : '#';
+	}
+
+	/** @type {{ letter: string, tracks: any[] }[]} */
+	const songGroups = $derived.by(() => {
+		if (!showAlpha) return [];
+		/** @type {Map<string, any[]>} */
+		const map = new Map();
+		for (const t of list) {
+			const L = titleLetter(t.title);
+			let bucket = map.get(L);
+			if (!bucket) {
+				bucket = [];
+				map.set(L, bucket);
+			}
+			bucket.push(t);
 		}
-		if (playerBrowse.mode === 'albums' && !playerBrowse.album) {
-			for (const row of albums.slice(0, 24)) {
-				if (row.cover_path && !row.cover_url && row.sampleId) {
-					const sample = tracks.find((t) => t.id === row.sampleId);
-					if (sample) void ensureTrackCover(sample);
-				}
+		return ALPHA.filter((L) => map.has(L)).map((letter) => ({
+			letter,
+			tracks: map.get(letter) ?? []
+		}));
+	});
+
+	const alphaLetters = $derived(songGroups.map((g) => g.letter));
+
+	/** @type {HTMLDivElement | undefined} */
+	let feedEl = $state();
+
+	// Viewport-aware cover hydrate — only decrypt art near the scroll window.
+	$effect(() => {
+		const root = feedEl;
+		// Rebind when the visible list changes
+		list.length;
+		playerBrowse.mode;
+		playerBrowse.album;
+		playerBrowse.artist;
+		if (!root || typeof IntersectionObserver === 'undefined') return;
+
+		/** @type {IntersectionObserver | undefined} */
+		let io;
+		let cancelled = false;
+
+		void tick().then(() => {
+			if (cancelled || !feedEl) return;
+			io = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						if (!entry.isIntersecting) continue;
+						const id = /** @type {HTMLElement} */ (entry.target).dataset.trackId;
+						if (!id) continue;
+						const t = tracks.find((x) => x.id === id);
+						if (t?.cover_path && !t.cover_url && !isCoverFailed(t.cover_path)) {
+							void ensureTrackCover(t);
+						}
+					}
+				},
+				{ root: feedEl, rootMargin: '280px 0px', threshold: 0 }
+			);
+			for (const node of feedEl.querySelectorAll('[data-track-id]')) io.observe(node);
+		});
+
+		return () => {
+			cancelled = true;
+			io?.disconnect();
+		};
+	});
+
+	// Album index: small leading batch only (grid cards aren't track-rows).
+	$effect(() => {
+		if (playerBrowse.mode !== 'albums' || playerBrowse.album) return;
+		for (const row of albums.slice(0, 24)) {
+			if (row.cover_path && !row.cover_url && row.sampleId && !isCoverFailed(row.cover_path)) {
+				const sample = tracks.find((t) => t.id === row.sampleId);
+				if (sample) void ensureTrackCover(sample);
 			}
 		}
 	});
+
 	const browsingIndex = $derived(
 		(playerBrowse.mode === 'artists' && !playerBrowse.artist) ||
 			(playerBrowse.mode === 'albums' && !playerBrowse.album)
@@ -57,6 +133,29 @@
 	let menuFor = $state(null);
 	/** @type {'root' | 'playlists'} */
 	let menuPanel = $state('root');
+
+	/** @param {string} letter */
+	function jumpToLetter(letter) {
+		const el = feedEl?.querySelector(`[data-letter="${letter}"]`);
+		el?.scrollIntoView({ block: 'start' });
+	}
+
+	/**
+	 * @param {PointerEvent} e
+	 * @param {HTMLElement} rail
+	 */
+	function scrubAlpha(e, rail) {
+		const y = e.clientY;
+		const buttons = rail.querySelectorAll('[data-alpha]');
+		for (const btn of buttons) {
+			const r = btn.getBoundingClientRect();
+			if (y >= r.top && y <= r.bottom) {
+				const letter = /** @type {HTMLElement} */ (btn).dataset.alpha;
+				if (letter) jumpToLetter(letter);
+				return;
+			}
+		}
+	}
 
 	/** @param {any} track */
 	function onRowClick(track) {
@@ -159,189 +258,219 @@
 		</div>
 	{/if}
 
-	<div class="feed">
-		{#if !connected}
-			<p class="empty">Connect Drive in Settings to use the Player.</p>
-		{:else if (!appBoot.listsReady || driveSession.loading) && tracks.length === 0}
-			<FeedSkeleton rows={10} withArt={true} />
-		{:else if playerBrowse.mode === 'artists' && !playerBrowse.artist}
-			{#if artists.length === 0}
-				<p class="empty">No artists yet. Upload audio to build your library.</p>
+	<div class="feed-wrap">
+		<div class="feed" bind:this={feedEl}>
+			{#if !connected}
+				<p class="empty">Connect Drive in Settings to use the Player.</p>
+			{:else if (!appBoot.listsReady || driveSession.loading) && tracks.length === 0}
+				<FeedSkeleton rows={10} withArt={true} />
+			{:else if playerBrowse.mode === 'artists' && !playerBrowse.artist}
+				{#if artists.length === 0}
+					<p class="empty">No artists yet. Upload audio to build your library.</p>
+				{:else}
+					<div class="card-stack">
+						{#each artists as name (name)}
+							<button
+								type="button"
+								class="artist-row"
+								onclick={() => setPlayerBrowse('artists', { artist: name })}
+							>
+								<span class="col title">{name}</span>
+								<span class="col meta"
+									>{tracks.filter((t) => (t.artists?.[0] || 'Unknown') === name).length}</span
+								>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			{:else if playerBrowse.mode === 'albums' && !playerBrowse.album}
+				{#if albums.length === 0}
+					<p class="empty">No albums yet. Upload audio to build your library.</p>
+				{:else}
+					<div class="album-grid">
+						{#each albums as row (row.album)}
+							{@const cover =
+								row.cover_url ||
+								tracks.find((t) => t.id === row.sampleId)?.cover_url ||
+								tracks.find((t) => t.cover_path && t.cover_path === row.cover_path)?.cover_url}
+							<button
+								type="button"
+								class="album-card"
+								onclick={() => setPlayerBrowse('albums', { album: row.album })}
+							>
+								<span class="album-art" aria-hidden="true">
+									{#if cover}
+										<img src={cover} alt="" />
+									{:else}
+										<span class="album-art-ph"></span>
+									{/if}
+								</span>
+								<span class="album-title">{row.album}</span>
+								<span class="album-artist">{row.artist}</span>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			{:else if list.length === 0}
+				<p class="empty">
+					{#if playerBrowse.mode === 'playlist'}
+						This playlist is empty.
+					{:else if playerBrowse.mode === 'played'}
+						Nothing played yet on this device for your account.
+					{:else}
+						No tracks yet. Upload audio to build your library.
+					{/if}
+				</p>
+			{:else if showAlpha}
+				<div class="card-stack songs-alpha">
+					{#each songGroups as group (group.letter)}
+						<div class="letter-block" data-letter={group.letter}>
+							<h3 class="letter-title">{group.letter}</h3>
+							{#each group.tracks as track (track.id)}
+								{@render trackRow(track)}
+							{/each}
+						</div>
+					{/each}
+				</div>
 			{:else}
 				<div class="card-stack">
-					{#each artists as name (name)}
-						<button
-							type="button"
-							class="artist-row"
-							onclick={() => setPlayerBrowse('artists', { artist: name })}
-						>
-							<span class="col title">{name}</span>
-							<span class="col meta"
-								>{tracks.filter((t) => (t.artists?.[0] || 'Unknown') === name).length}</span
-							>
-						</button>
+					{#each list as track (track.id)}
+						{@render trackRow(track)}
 					{/each}
 				</div>
 			{/if}
-		{:else if playerBrowse.mode === 'albums' && !playerBrowse.album}
-			{#if albums.length === 0}
-				<p class="empty">No albums yet. Upload audio to build your library.</p>
-			{:else}
-				<div class="album-grid">
-					{#each albums as row (row.album)}
-						{@const cover =
-							row.cover_url ||
-							tracks.find((t) => t.id === row.sampleId)?.cover_url ||
-							tracks.find((t) => t.cover_path && t.cover_path === row.cover_path)?.cover_url}
-						<button
-							type="button"
-							class="album-card"
-							onclick={() => setPlayerBrowse('albums', { album: row.album })}
-						>
-							<span class="album-art" aria-hidden="true">
-								{#if cover}
-									<img src={cover} alt="" />
-								{:else}
-									<span class="album-art-ph"></span>
-								{/if}
-							</span>
-							<span class="album-title">{row.album}</span>
-							<span class="album-artist">{row.artist}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		{:else if list.length === 0}
-			<p class="empty">
-				{#if playerBrowse.mode === 'playlist'}
-					This playlist is empty.
-				{:else if playerBrowse.mode === 'played'}
-					Nothing played yet on this device for your account.
-				{:else}
-					No tracks yet. Upload audio to build your library.
-				{/if}
-			</p>
-		{:else}
-			<div class="card-stack">
-				{#each list as track (track.id)}
-					{@const selected = playerUi.selectedIds.includes(track.id)}
-					{@const artist = track.artists?.join(', ') || '—'}
-					{@const album = track.album || '—'}
-					<div
-						class="track-row"
-						class:on={playerUi.currentId === track.id}
-						class:selected
-						class:selecting
-					>
-						{#if selecting}
-							<button
-								type="button"
-								class="check"
-								class:on={selected}
-								aria-label={selected ? 'Deselect' : 'Select'}
-								aria-pressed={selected}
-								onclick={() => toggleTrackSelected(track.id)}
-							>
-								<span class="check-dot"></span>
-							</button>
-						{/if}
-
-						<button type="button" class="main" onclick={() => onRowClick(track)}>
-							<span class="row-art" aria-hidden="true">
-								{#if track.cover_url}
-									<img src={track.cover_url} alt="" />
-								{:else if track.cover_path}
-									<span class="row-art-skel"><SkeletonLoader /></span>
-								{:else}
-									<span class="row-art-ph"></span>
-								{/if}
-							</span>
-							<span class="track-text">
-								<span class="line-primary">
-									<span class="col title">{track.title}</span>
-									<span class="col artist">{artist}</span>
-									<span class="col album">{album}</span>
-								</span>
-								<span class="line-secondary">
-									<span class="sub">{artist}</span>
-									{#if album && album !== '—'}
-										<span class="dot" aria-hidden="true">·</span>
-										<span class="sub">{album}</span>
-									{/if}
-								</span>
-							</span>
-						</button>
-
-						<div class="menu-wrap">
-							<button
-								type="button"
-								class="more-btn"
-								aria-label="More for {track.title}"
-								aria-expanded={menuFor === track.id}
-								onclick={() => openMenu(track.id)}
-							>
-								<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-									<circle cx="9" cy="4" r="1.35" fill="currentColor" />
-									<circle cx="9" cy="9" r="1.35" fill="currentColor" />
-									<circle cx="9" cy="14" r="1.35" fill="currentColor" />
-								</svg>
-							</button>
-							{#if menuFor === track.id}
-								<button type="button" class="menu-scrim" aria-label="Close menu" onclick={closeMenu}
-								></button>
-								<div class="more-menu" role="menu">
-									{#if menuPanel === 'playlists'}
-										<button
-											type="button"
-											role="menuitem"
-											class="menu-back"
-											onclick={() => (menuPanel = 'root')}>← Back</button
-										>
-										{#if playlists.length === 0}
-											<p class="menu-empty">No playlists yet</p>
-										{:else}
-											{#each playlists as pl (pl.id)}
-												<button
-													type="button"
-													role="menuitem"
-													onclick={() => onAddToPlaylist(track, pl.id)}>{pl.title}</button
-												>
-											{/each}
-										{/if}
-										<button
-											type="button"
-											role="menuitem"
-											onclick={() => onAddToNewPlaylist(track)}>New playlist…</button
-										>
-									{:else}
-										<button type="button" role="menuitem" onclick={() => onMenu(track, 'play')}
-											>Play</button
-										>
-										<button type="button" role="menuitem" onclick={() => onMenu(track, 'next')}
-											>Play next</button
-										>
-										<button type="button" role="menuitem" onclick={() => onMenu(track, 'add')}
-											>Add to playlist</button
-										>
-										<button type="button" role="menuitem" onclick={() => onMenu(track, 'select')}
-											>Select</button
-										>
-										<button type="button" role="menuitem" onclick={() => onMenu(track, 'edit')}
-											>Edit</button
-										>
-										<button type="button" role="menuitem" onclick={() => onMenu(track, 'delete')}
-											>Delete</button
-										>
-									{/if}
-								</div>
-							{/if}
-						</div>
-					</div>
+		</div>
+		{#if showAlpha && alphaLetters.length > 1}
+			<div
+				class="alpha-rail"
+				aria-label="Jump to letter"
+				onpointerdown={(e) => {
+					const rail = e.currentTarget;
+					rail.setPointerCapture(e.pointerId);
+					scrubAlpha(e, rail);
+				}}
+				onpointermove={(e) => {
+					if (e.currentTarget.hasPointerCapture(e.pointerId)) scrubAlpha(e, e.currentTarget);
+				}}
+			>
+				{#each alphaLetters as letter (letter)}
+					<button type="button" class="alpha-key" data-alpha={letter} tabindex="-1">{letter}</button>
 				{/each}
 			</div>
 		{/if}
 	</div>
 </div>
+
+{#snippet trackRow(track)}
+	{@const selected = playerUi.selectedIds.includes(track.id)}
+	{@const artist = track.artists?.join(', ') || '—'}
+	<div
+		class="track-row"
+		class:on={playerUi.currentId === track.id}
+		class:selected
+		class:selecting
+		data-track-id={track.id}
+	>
+		{#if selecting}
+			<button
+				type="button"
+				class="check"
+				class:on={selected}
+				aria-label={selected ? 'Deselect' : 'Select'}
+				aria-pressed={selected}
+				onclick={() => toggleTrackSelected(track.id)}
+			>
+				<span class="check-dot"></span>
+			</button>
+		{/if}
+
+		<button type="button" class="main" onclick={() => onRowClick(track)}>
+			<span class="row-art" aria-hidden="true">
+				{#if track.cover_url}
+					<img src={track.cover_url} alt="" />
+				{:else if track.cover_path && (coverFailRev.n, !isCoverFailed(track.cover_path))}
+					<span class="row-art-skel"><SkeletonLoader /></span>
+				{:else}
+					<span class="row-art-ph"></span>
+				{/if}
+			</span>
+			<span class="track-text">
+				<span class="line-primary">
+					<span class="col title">{track.title}</span>
+					<span class="col artist">{artist}</span>
+				</span>
+				<span class="line-secondary">
+					<span class="sub">{artist}</span>
+				</span>
+			</span>
+		</button>
+
+		<div class="menu-wrap">
+			<button
+				type="button"
+				class="more-btn"
+				aria-label="More for {track.title}"
+				aria-expanded={menuFor === track.id}
+				onclick={() => openMenu(track.id)}
+			>
+				<svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+					<circle cx="9" cy="4" r="1.55" fill="currentColor" />
+					<circle cx="9" cy="9" r="1.55" fill="currentColor" />
+					<circle cx="9" cy="14" r="1.55" fill="currentColor" />
+				</svg>
+			</button>
+			{#if menuFor === track.id}
+				<button type="button" class="menu-scrim" aria-label="Close menu" onclick={closeMenu}
+				></button>
+				<div class="more-menu" role="menu">
+					{#if menuPanel === 'playlists'}
+						<button
+							type="button"
+							role="menuitem"
+							class="menu-back"
+							onclick={() => (menuPanel = 'root')}>← Back</button
+						>
+						{#if playlists.length === 0}
+							<p class="menu-empty">No playlists yet</p>
+						{:else}
+							{#each playlists as pl (pl.id)}
+								<button
+									type="button"
+									role="menuitem"
+									onclick={() => onAddToPlaylist(track, pl.id)}>{pl.title}</button
+								>
+							{/each}
+						{/if}
+						<button
+							type="button"
+							role="menuitem"
+							onclick={() => onAddToNewPlaylist(track)}>New playlist…</button
+						>
+					{:else}
+						<button type="button" role="menuitem" onclick={() => onMenu(track, 'play')}
+							>Play</button
+						>
+						<button type="button" role="menuitem" onclick={() => onMenu(track, 'next')}
+							>Play next</button
+						>
+						<button type="button" role="menuitem" onclick={() => onMenu(track, 'add')}
+							>Add to playlist</button
+						>
+						<button type="button" role="menuitem" onclick={() => onMenu(track, 'select')}
+							>Select</button
+						>
+						<button type="button" role="menuitem" onclick={() => onMenu(track, 'edit')}
+							>Edit</button
+						>
+						<button type="button" role="menuitem" onclick={() => onMenu(track, 'delete')}
+							>Delete</button
+						>
+					{/if}
+				</div>
+			{/if}
+		</div>
+	</div>
+{/snippet}
 
 <style>
 	.player-detail {
@@ -404,6 +533,15 @@
 		color: var(--fg);
 	}
 
+	.feed-wrap {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+	}
+
 	.feed {
 		flex: 1;
 		min-height: 0;
@@ -417,10 +555,72 @@
 
 	@media (max-width: 767px) {
 		.feed {
-			/* Scroll under floating detail chrome; panel already clears bottom nav */
+			/* Scroll under top chrome + glass bottom nav / mini player */
 			padding-top: calc(64px + env(safe-area-inset-top, 0px));
-			padding-bottom: 24px;
+			padding-bottom: var(--feed-pad-bottom, calc(100px + env(safe-area-inset-bottom, 0px)));
 		}
+	}
+
+	.letter-block {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.letter-title {
+		margin: 0;
+		padding: 10px 14px 4px;
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		color: var(--fg-66);
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		background: linear-gradient(
+			to bottom,
+			var(--shell) 60%,
+			color-mix(in srgb, var(--shell) 0%, transparent)
+		);
+	}
+
+	.alpha-rail {
+		position: absolute;
+		top: 50%;
+		right: 2px;
+		transform: translateY(-50%);
+		z-index: 4;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0;
+		padding: 4px 0;
+		max-height: min(70vh, 520px);
+		touch-action: none;
+		user-select: none;
+		-webkit-user-select: none;
+		pointer-events: auto;
+	}
+
+	.alpha-key {
+		display: block;
+		margin: 0;
+		padding: 0 4px;
+		border: 0;
+		background: transparent;
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 9px;
+		font-weight: 650;
+		line-height: 1.15;
+		letter-spacing: -0.02em;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.alpha-key:active {
+		color: var(--fg);
 	}
 
 	.empty {
@@ -432,10 +632,14 @@
 	.card-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 6px;
+		gap: 0;
+		padding: 4px 6px;
 		width: 100%;
 		box-sizing: border-box;
+	}
+
+	.card-stack.songs-alpha {
+		padding-right: 18px;
 	}
 
 	.artist-row,
@@ -507,7 +711,7 @@
 		flex-direction: row;
 		align-items: center;
 		gap: 10px;
-		padding: 0.45rem 0.4rem 0.45rem 0.65rem;
+		padding: 0.28rem 0.3rem 0.28rem 0.55rem;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -522,8 +726,8 @@
 	.row-art {
 		display: none;
 		flex-shrink: 0;
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		border-radius: 10px;
 		overflow: hidden;
 		background: var(--fg-8);
@@ -570,20 +774,19 @@
 		min-width: 0;
 	}
 
-	/* Mobile: title + stacked artist/album — same size for density */
+	/* Mobile: title + artist */
 	.col.title {
 		flex: 1 1 auto;
 		max-width: 100%;
-		font-size: 12px;
-		font-weight: 500;
+		font-size: 13.5px;
+		font-weight: 550;
 		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.col.artist,
-	.col.album {
+	.col.artist {
 		display: none;
 	}
 
@@ -695,14 +898,14 @@
 	}
 
 	.more-btn {
-		width: 32px;
-		height: 32px;
+		width: 36px;
+		height: 36px;
 		display: grid;
 		place-items: center;
 		border: 0;
 		border-radius: 8px;
 		background: transparent;
-		color: var(--fg-33);
+		color: var(--fg-66);
 		padding: 0;
 		cursor: pointer;
 	}
@@ -783,7 +986,7 @@
 	}
 
 	@media (min-width: 768px) {
-		/* Desktop: title | artist | album columns — no thumbs */
+		/* Desktop: title | artist columns — no thumbs / no album */
 		.row-art {
 			display: none;
 		}
@@ -793,24 +996,12 @@
 		}
 
 		.col.title {
-			flex: 0 0 42%;
-			max-width: 42%;
-			font-size: 12px;
+			flex: 0 0 52%;
+			max-width: 52%;
+			font-size: 13px;
 		}
 
 		.col.artist {
-			display: block;
-			flex: 0 0 28%;
-			max-width: 28%;
-			font-size: 12px;
-			font-weight: 500;
-			color: var(--fg-33);
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-
-		.col.album {
 			display: block;
 			flex: 1 1 auto;
 			min-width: 0;
@@ -823,7 +1014,11 @@
 		}
 
 		.main {
-			padding: 0.5rem 0.5rem 0.5rem 0.85rem;
+			padding: 0.4rem 0.5rem 0.4rem 0.85rem;
+		}
+
+		.alpha-rail {
+			right: 6px;
 		}
 
 		.album-grid {
