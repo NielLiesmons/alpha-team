@@ -46,13 +46,20 @@
 	/* Selected list/card fill — quieter than --fg-8 */
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
-	/* Panels / modals — lifted glass fill at ~70% opacity + blur */
+	/* Panels / modals — barely lifted vs page; blur + shine do the work */
 	--surface: color-mix(in srgb, #161616 96%, var(--accent));
-	/* Dark mode: lighter than --bg so chrome reads as a sheet */
-	--glass-fill: color-mix(in srgb, var(--fg) 18%, var(--bg));
-	--glass: color-mix(in srgb, var(--glass-fill) 72%, transparent);
+	--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--bg));
+	--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
 	--glass-blur: 22px;
-	--glass-border: color-mix(in srgb, var(--fg) 16%, transparent);
+	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
+	/* Soft specular edge: brighter top-left, quieter bottom-right (no refraction) */
+	--glass-shine: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--fg) 32%, transparent) 0%,
+		color-mix(in srgb, var(--fg) 8%, transparent) 38%,
+		color-mix(in srgb, var(--fg) 4%, transparent) 62%,
+		color-mix(in srgb, var(--fg) 16%, transparent) 100%
+	);
 	--popover: var(--glass);
 	--modal-bg: var(--glass);
 	--hairline: var(--fg-11);
@@ -61,11 +68,8 @@
 	--shell: hsl(from var(--accent) h 10% 3.5%);
 	--shell-border: var(--hairline);
 
-	/*
-	 * Scrim/shadow always from the dark pole — same recipe light & dark
-	 * (matches Bley; never pure #000 with a different %).
-	 */
-	--scrim: color-mix(in srgb, var(--fg-raw) 64%, transparent);
+	/* Scrim from page surface (desktop --bg); mobile overrides to --shell */
+	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 
@@ -118,15 +122,23 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, #161616 96%, var(--accent));
-	--glass-fill: color-mix(in srgb, var(--fg) 18%, var(--bg));
-	--glass: color-mix(in srgb, var(--glass-fill) 72%, transparent);
+	--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--bg));
+	--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
 	--glass-blur: 22px;
-	--glass-border: color-mix(in srgb, var(--fg) 16%, transparent);
+	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
+	--glass-shine: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--fg) 32%, transparent) 0%,
+		color-mix(in srgb, var(--fg) 8%, transparent) 38%,
+		color-mix(in srgb, var(--fg) 4%, transparent) 62%,
+		color-mix(in srgb, var(--fg) 16%, transparent) 100%
+	);
 	--popover: var(--glass);
 	--modal-bg: var(--glass);
 	--hairline: var(--fg-11);
 	--shell: hsl(from var(--accent) h 10% 3.5%);
 	--shell-border: var(--hairline);
+	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--ink: var(--fg);
 	--ink66: var(--fg-66);
 	--ink33: var(--fg-33);
@@ -154,16 +166,27 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
-	/* Light mode: darker sheet than page bg */
-	--glass-fill: color-mix(in srgb, var(--fg) 10%, var(--bg));
-	--glass: color-mix(in srgb, var(--glass-fill) 78%, transparent);
+	/* Light: slight darkening vs page, still mostly translucent */
+	--glass-fill: color-mix(in srgb, var(--fg) 4%, var(--bg));
+	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
 	--glass-blur: 22px;
-	--glass-border: color-mix(in srgb, var(--fg) 14%, transparent);
+	--glass-border: color-mix(in srgb, var(--fg) 10%, transparent);
+	--glass-shine: linear-gradient(
+		135deg,
+		color-mix(in srgb, #fff 55%, transparent) 0%,
+		color-mix(in srgb, var(--fg) 6%, transparent) 40%,
+		color-mix(in srgb, var(--fg) 4%, transparent) 65%,
+		color-mix(in srgb, var(--fg) 12%, transparent) 100%
+	);
 	--popover: var(--glass);
 	--modal-bg: var(--glass);
 	--hairline: var(--fg-11);
 	--shell: hsl(from var(--accent) h 3% 96%);
 	--shell-border: var(--hairline);
+	/* Light mode: dim with ink, keyed off page surface */
+	--scrim: color-mix(in srgb, var(--fg) 42%, transparent);
+	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
+	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 	--ink: var(--fg);
 	--ink66: var(--fg-66);
 	--ink33: var(--fg-33);
@@ -177,17 +200,30 @@
 	--black: var(--bg);
 	--nav-plus-bg: color-mix(in srgb, var(--fg) 3.5%, transparent);
 	--nav-plus-fg: color-mix(in srgb, var(--fg) 42%, transparent);
-	/* Scrim stays on dark pole — color only, no blur */
-	--scrim: color-mix(in srgb, var(--fg-raw) 64%, transparent);
-	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
-	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 	color-scheme: light;
+}
+
+/* Mobile page surface is --shell — glass + scrim follow it */
+@media (max-width: 767px) {
+	:root,
+	:root[data-theme='dark'] {
+		--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--shell));
+		--glass: color-mix(in srgb, var(--glass-fill) 84%, transparent);
+		--scrim: color-mix(in srgb, var(--shell) 88%, transparent);
+	}
+
+	:root[data-theme='light'] {
+		--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--shell));
+		--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+		--scrim: color-mix(in srgb, var(--fg) 52%, transparent);
+	}
 }
 
 *,
 *::before,
 *::after {
 	box-sizing: border-box;
+	-webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -202,6 +238,16 @@ body {
 	font-size: 16px;
 	line-height: 1.45;
 	-webkit-font-smoothing: antialiased;
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* Kill Android/WebKit blue flash on tap */
+button,
+a,
+[role='button'],
+summary,
+label {
+	-webkit-tap-highlight-color: transparent;
 }
 
 /* Nav / progress counts — same Inter stack as body, no mono/tabular tricks */
@@ -723,7 +769,7 @@ table.data tr.selected td {
 	min-height: 0;
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
-	padding-top: var(--feed-pad-top, 44px);
+	padding-top: var(--feed-pad-top, 48px);
 	padding-bottom: var(--feed-pad-bottom, 36px);
 	box-sizing: border-box;
 }

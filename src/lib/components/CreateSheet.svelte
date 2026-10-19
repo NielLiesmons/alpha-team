@@ -82,10 +82,12 @@
 		height: auto;
 		max-height: min(92svh, 880px);
 		min-height: 0;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
+		border: 1px solid transparent;
 		border-bottom: none;
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
 		box-shadow: 0 16px 48px var(--shadow-strong);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
@@ -111,7 +113,7 @@
 			height: auto;
 			max-height: min(720px, 90svh);
 			border-radius: calc(var(--radius-hero) - 2px);
-			border-bottom: 1px solid var(--hairline);
+			border-bottom: 1px solid transparent;
 			padding: 0 0 14px;
 		}
 	}

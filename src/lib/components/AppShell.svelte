@@ -360,8 +360,8 @@
 
 <style>
 	.shell {
-		/* Pad < fade height so first rows sit in the soft end of the gradient */
-		--feed-pad-top: 44px;
+		/* Pad ≈ control row; fade is short/soft so content stays readable until the bar */
+		--feed-pad-top: 48px;
 		--feed-pad-bottom: 36px;
 		--chrome-fade: var(--bg);
 		display: flex;
@@ -485,9 +485,11 @@
 		z-index: 50;
 		min-width: 148px;
 		padding: 4px;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
+		border: 1px solid transparent;
 		border-radius: 12px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
 		box-shadow: 0 12px 32px var(--shadow-strong);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
@@ -698,7 +700,7 @@
 		overflow: hidden;
 	}
 
-	/* Floating header: taller than pad so rows scroll through a visible fade */
+	/* Floating header — soft short fade (not a solid veil over the list) */
 	.list-top {
 		position: absolute;
 		top: 0;
@@ -706,19 +708,18 @@
 		right: 0;
 		z-index: 6;
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
-		height: 72px;
-		padding: 10px 10px 0 16px;
+		height: 48px;
+		padding: 0 10px 0 16px;
 		border-bottom: none;
 		box-sizing: border-box;
 		pointer-events: none;
 		background: linear-gradient(
 			to bottom,
 			var(--chrome-fade) 0%,
-			color-mix(in srgb, var(--chrome-fade) 85%, transparent) 42%,
-			color-mix(in srgb, var(--chrome-fade) 40%, transparent) 72%,
+			color-mix(in srgb, var(--chrome-fade) 55%, transparent) 50%,
 			transparent 100%
 		);
 	}
@@ -728,19 +729,7 @@
 	}
 
 	.list-bottom-fade {
-		position: absolute;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		z-index: 5;
-		height: 56px;
-		pointer-events: none;
-		background: linear-gradient(
-			to top,
-			var(--chrome-fade) 0%,
-			color-mix(in srgb, var(--chrome-fade) 70%, transparent) 45%,
-			transparent 100%
-		);
+		display: none;
 	}
 
 	.list-title {
@@ -758,27 +747,34 @@
 		gap: 6px;
 	}
 
+	/* Desktop: squared chrome — circles are mobile-only */
 	.chrome-btn {
 		width: 30px;
 		height: 30px;
 		display: grid;
 		place-items: center;
 		padding: 0;
-		border: 1px solid var(--glass-border);
-		border-radius: 9999px;
-		background: var(--glass);
+		border: 1px solid transparent;
+		border-radius: 12px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
 		color: var(--fg-66);
 		cursor: pointer;
 		box-sizing: border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.chrome-btn:hover,
 	.chrome-btn.on,
 	.chrome-btn[aria-expanded='true'] {
 		color: var(--fg);
-		background: color-mix(in srgb, var(--bg) 78%, transparent);
+		background:
+			linear-gradient(color-mix(in srgb, var(--bg) 88%, transparent), color-mix(in srgb, var(--bg) 88%, transparent))
+				padding-box,
+			var(--glass-shine) border-box;
 	}
 
 	.chrome-ico {
@@ -856,18 +852,19 @@
 			background: linear-gradient(
 				to bottom,
 				var(--chrome-fade) 0%,
-				color-mix(in srgb, var(--chrome-fade) 88%, transparent) 38%,
-				color-mix(in srgb, var(--chrome-fade) 45%, transparent) 70%,
+				color-mix(in srgb, var(--chrome-fade) 75%, transparent) 42%,
+				color-mix(in srgb, var(--chrome-fade) 28%, transparent) 72%,
 				transparent 100%
 			);
 		}
 
 		.list-bottom-fade {
+			display: block;
 			height: calc(100px + env(safe-area-inset-bottom, 0px));
 			background: linear-gradient(
 				to top,
 				var(--chrome-fade) 0%,
-				color-mix(in srgb, var(--chrome-fade) 80%, transparent) 40%,
+				color-mix(in srgb, var(--chrome-fade) 65%, transparent) 42%,
 				transparent 100%
 			);
 		}
@@ -888,9 +885,11 @@
 			width: 44px;
 			height: 44px;
 			border-radius: 9999px;
-			background: var(--glass);
+			border: 1px solid transparent;
+			background:
+				linear-gradient(var(--glass), var(--glass)) padding-box,
+				var(--glass-shine) border-box;
 			color: var(--fg-66);
-			border: 1px solid var(--glass-border);
 			backdrop-filter: blur(var(--glass-blur));
 			-webkit-backdrop-filter: blur(var(--glass-blur));
 		}
@@ -899,12 +898,18 @@
 		.chrome-btn.on,
 		.chrome-btn[aria-expanded='true'] {
 			color: var(--fg);
-			background: color-mix(in srgb, var(--bg) 78%, transparent);
+			background:
+				linear-gradient(
+						color-mix(in srgb, var(--shell) 88%, transparent),
+						color-mix(in srgb, var(--shell) 88%, transparent)
+					)
+					padding-box,
+				var(--glass-shine) border-box;
 		}
 
 		.chrome-ico {
-			width: 20px;
-			height: 20px;
+			width: 24px;
+			height: 24px;
 		}
 
 		.pane {
@@ -927,8 +932,10 @@
 			max-width: 100%;
 			margin: 0 auto;
 			border-radius: 999px;
-			background: var(--glass);
-			border: 1px solid var(--glass-border);
+			border: 1px solid transparent;
+			background:
+				linear-gradient(var(--glass), var(--glass)) padding-box,
+				var(--glass-shine) border-box;
 			box-shadow: 0 8px 28px var(--shadow-strong);
 			overflow: hidden;
 			backdrop-filter: blur(var(--glass-blur));

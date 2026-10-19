@@ -332,11 +332,11 @@
 		<header class="mobile-bar">
 			<button
 				type="button"
-				class="chrome-btn"
+				class="chrome-btn chev-back"
 				aria-label="Back"
 				onclick={() => (isPlayer ? playerBack() : close())}
 			>
-				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+				<svg width="22" height="22" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 					<path
 						d="M11.5 3.5 6 9l5.5 5.5"
 						stroke="currentColor"
@@ -355,7 +355,7 @@
 					aria-expanded={menuOpen}
 					onclick={() => (menuOpen = !menuOpen)}
 				>
-					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+					<svg width="22" height="22" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 						<circle cx="9" cy="4" r="1.35" fill="currentColor" />
 						<circle cx="9" cy="9" r="1.35" fill="currentColor" />
 						<circle cx="9" cy="14" r="1.35" fill="currentColor" />
@@ -843,7 +843,7 @@
 		display: none;
 	}
 
-	/* Floating detail header — same fade recipe as list-top */
+	/* Floating detail header — soft short fade (match list-top) */
 	.detail-top {
 		position: absolute;
 		top: 0;
@@ -851,20 +851,19 @@
 		right: 0;
 		z-index: 6;
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
 		width: 100%;
-		height: 72px;
-		padding: 10px 8px 0 16px;
+		height: 48px;
+		padding: 0 8px 0 16px;
 		border-bottom: none;
 		box-sizing: border-box;
 		pointer-events: none;
 		background: linear-gradient(
 			to bottom,
 			var(--bg) 0%,
-			color-mix(in srgb, var(--bg) 85%, transparent) 42%,
-			color-mix(in srgb, var(--bg) 40%, transparent) 72%,
+			color-mix(in srgb, var(--bg) 55%, transparent) 50%,
 			transparent 100%
 		);
 	}
@@ -976,19 +975,25 @@
 		height: 30px;
 		display: grid;
 		place-items: center;
-		border: 1px solid var(--glass-border);
-		border-radius: 9999px;
-		background: var(--glass);
+		border: 1px solid transparent;
+		border-radius: 12px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
 		color: var(--fg-66);
 		padding: 0;
 		cursor: pointer;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.icon-hit:hover {
 		color: var(--fg);
-		background: color-mix(in srgb, var(--bg) 78%, transparent);
+		background:
+			linear-gradient(color-mix(in srgb, var(--bg) 88%, transparent), color-mix(in srgb, var(--bg) 88%, transparent))
+				padding-box,
+			var(--glass-shine) border-box;
 	}
 
 	.title-row {
@@ -1014,8 +1019,7 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		/* Pad < fade height so content sits in / scrolls through the gradient */
-		padding: 44px 0 24px;
+		padding: 48px 0 24px;
 		display: flex;
 		flex-direction: column;
 		gap: 0;
@@ -1263,9 +1267,11 @@
 		z-index: 50;
 		min-width: 140px;
 		padding: 4px;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
+		border: 1px solid transparent;
 		border-radius: 12px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
 		box-shadow: 0 12px 32px var(--shadow-strong);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
@@ -1344,8 +1350,8 @@
 			background: linear-gradient(
 				to bottom,
 				var(--shell) 0%,
-				color-mix(in srgb, var(--shell) 88%, transparent) 38%,
-				color-mix(in srgb, var(--shell) 45%, transparent) 70%,
+				color-mix(in srgb, var(--shell) 75%, transparent) 42%,
+				color-mix(in srgb, var(--shell) 28%, transparent) 72%,
 				transparent 100%
 			);
 		}
@@ -1374,9 +1380,11 @@
 			height: 44px;
 			display: grid;
 			place-items: center;
-			border: 1px solid var(--glass-border);
+			border: 1px solid transparent;
 			border-radius: 9999px;
-			background: var(--glass);
+			background:
+				linear-gradient(var(--glass), var(--glass)) padding-box,
+				var(--glass-shine) border-box;
 			color: var(--fg-66);
 			padding: 0;
 			cursor: pointer;
@@ -1384,17 +1392,30 @@
 			box-sizing: border-box;
 			backdrop-filter: blur(var(--glass-blur));
 			-webkit-backdrop-filter: blur(var(--glass-blur));
+			-webkit-tap-highlight-color: transparent;
 		}
 
 		.chrome-btn:hover,
 		.chrome-btn[aria-expanded='true'] {
 			color: var(--fg);
-			background: color-mix(in srgb, var(--bg) 78%, transparent);
+			background:
+				linear-gradient(
+						color-mix(in srgb, var(--shell) 88%, transparent),
+						color-mix(in srgb, var(--shell) 88%, transparent)
+					)
+					padding-box,
+				var(--glass-shine) border-box;
 		}
 
 		.chrome-btn :global(svg) {
-			width: 20px;
-			height: 20px;
+			width: 24px;
+			height: 24px;
+		}
+
+		/* Empty space on the side the chevron does not point toward */
+		.chrome-btn.chev-back :global(svg) {
+			padding-right: 2px;
+			box-sizing: content-box;
 		}
 
 		/* Keep equal-width side slots so the title stays optically centered */

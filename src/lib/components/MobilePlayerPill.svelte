@@ -87,13 +87,16 @@
 			align-items: center;
 			gap: 4px;
 			padding: 6px 8px 6px 6px;
-			border: 1px solid var(--glass-border);
+			border: 1px solid transparent;
 			border-radius: 999px;
-			background: var(--glass);
+			background:
+				linear-gradient(var(--glass), var(--glass)) padding-box,
+				var(--glass-shine) border-box;
 			box-shadow: 0 8px 28px var(--shadow-strong);
 			box-sizing: border-box;
 			backdrop-filter: blur(var(--glass-blur));
 			-webkit-backdrop-filter: blur(var(--glass-blur));
+			-webkit-tap-highlight-color: transparent;
 		}
 
 		.open {

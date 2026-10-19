@@ -27,10 +27,10 @@ export function applyBrand(next = brand) {
 	root.style.setProperty('--bg-raw', 'hsl(from var(--accent) h 4% 97%)');
 	root.style.setProperty('--ink-raw', 'var(--fg-raw)');
 
-	/* Scrim/shadow always from dark pole — never theme-dependent pure black % */
-	root.style.setProperty('--scrim', 'color-mix(in srgb, var(--fg-raw) 64%, transparent)');
+	/* Shadows from dark pole; scrim is theme/viewport CSS (--bg / --shell) */
 	root.style.setProperty('--shadow', 'color-mix(in srgb, var(--fg-raw) 22%, transparent)');
 	root.style.setProperty('--shadow-strong', 'color-mix(in srgb, var(--fg-raw) 32%, transparent)');
+	root.style.removeProperty('--scrim');
 
 	const warm = isWarmAccent(next.accent);
 	root.dataset.accentWarm = warm ? '1' : '0';

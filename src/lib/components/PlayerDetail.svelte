@@ -728,9 +728,11 @@
 		z-index: 50;
 		min-width: 148px;
 		padding: 4px;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
+		border: 1px solid transparent;
 		border-radius: 12px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
 		box-shadow: 0 12px 32px var(--shadow-strong);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
