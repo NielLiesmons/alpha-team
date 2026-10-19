@@ -29,14 +29,19 @@
 	} from '$lib/publications.svelte.js';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import { renderInlineLinks } from '$lib/note-text.js';
+	import { accountingBrowse } from '$lib/accounting.svelte.js';
+	import AccountingDetail from './AccountingDetail.svelte';
+	import EnterpriseSheet from './EnterpriseSheet.svelte';
 	import {
-		activities,
 		clearSelection,
+		costItems,
+		enterprises,
 		ledgerEntries,
 		notes,
 		openComposer,
 		patchProject,
 		projects,
+		salesLines,
 		saveNote,
 		selectEntity,
 		tasks,
@@ -79,8 +84,23 @@
 	const ledger = $derived(
 		selection?.kind === 'ledger' ? ledgerEntries.find((e) => e.id === selection.id) : null
 	);
-	const activity = $derived(
-		selection?.kind === 'activity' ? activities.find((a) => a.id === selection.id) : null
+	const costItem = $derived(
+		selection?.kind === 'cost' ? costItems.find((e) => e.id === selection.id) : null
+	);
+	const salesLine = $derived(
+		selection?.kind === 'sales' ? salesLines.find((e) => e.id === selection.id) : null
+	);
+	const enterprise = $derived(
+		selection?.kind === 'enterprise' ? enterprises.find((e) => e.id === selection.id) : null
+	);
+	const isAccounting = $derived($page.url.pathname.startsWith('/accounting'));
+	const accountingPanel = $derived(
+		isAccounting &&
+			accountingBrowse.mode !== 'home' &&
+			!ledger &&
+			!costItem &&
+			!salesLine &&
+			!enterprise
 	);
 	const newsletter = $derived(
 		selection?.kind === 'newsletter' ? campaigns.find((c) => c.id === selection.id) : null
@@ -176,7 +196,10 @@
 		if (project) return 'Project';
 		if (note) return 'Note';
 		if (ledger) return 'Ledger';
-		if (activity) return 'Activity';
+		if (costItem) return 'Cost';
+		if (salesLine) return 'Sales';
+		if (enterprise) return 'Enterprise';
+		if (accountingPanel) return 'Accounting';
 		if (newsletter) return 'Newsletter';
 		if (welcomeSelected) return 'Welcome';
 		if (selection?.kind === 'mail') return 'Mail';
@@ -191,7 +214,10 @@
 		if (project?.title) return project.title;
 		if (note?.title) return note.title;
 		if (ledger) return ledger.memo || ledger.account_title || 'Entry';
-		if (activity?.title) return activity.title;
+		if (costItem?.title) return costItem.title;
+		if (salesLine?.title) return salesLine.title;
+		if (enterprise?.title) return enterprise.title;
+		if (accountingPanel) return accountingBrowse.mode;
 		if (newsletter?.subject) return newsletter.subject;
 		if (welcomeSelected) return 'Welcome';
 		return typeLabel;
@@ -204,7 +230,10 @@
 				project ||
 				note ||
 				ledger ||
-				activity ||
+				costItem ||
+				salesLine ||
+				enterprise ||
+				accountingPanel ||
 				newsletter ||
 				welcomeSelected
 		)
@@ -218,7 +247,7 @@
 		if (path.startsWith('/accounting'))
 			return {
 				title: 'No entry selected',
-				body: 'Pick a ledger line or activity scenario to inspect it here.'
+				body: 'Open Ledger, Costs, Sales, or Enterprises — then pick a row.'
 			};
 		if (path.startsWith('/publications'))
 			return {
@@ -791,6 +820,8 @@
 			<h2 class="pub-title">{newsletter.subject}</h2>
 			<pre class="pub-body">{newsletter.body}</pre>
 		</div>
+	{:else if accountingPanel}
+		<AccountingDetail />
 	{:else if ledger}
 		<header class="detail-top desktop-head">
 			<span class="detail-top-label">Ledger</span>
@@ -828,43 +859,47 @@
 					Projects: {ledger.targets.map((/** @type {{ label: string }} */ t) => t.label).join(', ')}
 				</p>
 			{/if}
-			{#if ledger.task_ids?.length}
-				<p class="muted">Tasks: {ledger.task_ids.length} linked</p>
-			{/if}
 		</div>
-	{:else if activity}
+	{:else if costItem}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Activity</span>
+			<span class="detail-top-label">Cost</span>
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M4 4l8 8M12 4l-8 8"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-						/>
+						<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 					</svg>
 				</button>
 			</div>
 		</header>
 		<div class="body">
-			<p class="pub-kicker">{activity.status || 'draft'}</p>
-			<h2 class="pub-title">{activity.title}</h2>
-			{#if activity.description}
-				<p class="prose">{activity.description}</p>
-			{/if}
+			<p class="pub-kicker">{costItem.behavior}{#if costItem.period && costItem.behavior !== 'variable'} · {costItem.period}{/if}</p>
+			<h2 class="pub-title">{costItem.title}</h2>
 			<p class="muted">
-				Fixed {formatMoney(activity.fixed_cost_cents_month || 0, activity.currency || 'EUR')}/mo · Variable
-				{formatMoney(activity.variable_cost_per_unit_cents || 0, activity.currency || 'EUR')}/{activity.unit_label ||
-					'unit'} · Price {formatMoney(activity.price_per_unit_cents || 0, activity.currency || 'EUR')}
-			</p>
-			<p class="muted">
-				{activity.expected_units_month || 0}
-				{activity.unit_label || 'units'}/mo
-				{#if activity.channels?.length}· {activity.channels.join(', ')}{/if}
+				{formatMoney(costItem.amount_cents, costItem.currency)}
+				{#if costItem.unit_label}/ {costItem.unit_label}{/if}
 			</p>
 		</div>
+	{:else if salesLine}
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Sales</span>
+			<div class="detail-top-actions">
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+					</svg>
+				</button>
+			</div>
+		</header>
+		<div class="body">
+			<p class="pub-kicker">{salesLine.channel || 'channel'}</p>
+			<h2 class="pub-title">{salesLine.title}</h2>
+			<p class="muted">
+				{formatMoney(salesLine.price_cents, salesLine.currency)}
+				{#if salesLine.unit_label}/ {salesLine.unit_label}{/if}
+			</p>
+		</div>
+	{:else if enterprise}
+		<EnterpriseSheet {enterprise} />
 	{/if}
 {:else}
 	<div class="empty desktop-empty">

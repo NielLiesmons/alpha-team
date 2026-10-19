@@ -1,7 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { mobileNav, primaryNav } from '$lib/sections.js';
+	import { mobileNav, primaryNav, websiteChildren } from '$lib/sections.js';
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
 		forceClearSelection,
@@ -17,9 +17,11 @@
 		ensureDesktopPlayerDetail,
 		forceClosePlayerDetail
 	} from '$lib/player.svelte.js';
+	import { resetAccountingBrowse, setAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
-	import ActivityCreate from './ActivityCreate.svelte';
+	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
+	import EnterpriseCreate from './EnterpriseCreate.svelte';
 	import LedgerCreate from './LedgerCreate.svelte';
 	import MobilePlayerPill from './MobilePlayerPill.svelte';
 	import NavIcon from './NavIcon.svelte';
@@ -29,6 +31,7 @@
 	import PlayerEngine from './PlayerEngine.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import ProjectCreate from './ProjectCreate.svelte';
+	import SalesCreate from './SalesCreate.svelte';
 	import SidebarPlayer from './SidebarPlayer.svelte';
 	import TaskCreate from './TaskCreate.svelte';
 	import PlaylistCreate from './PlaylistCreate.svelte';
@@ -53,11 +56,17 @@
 		return path === href || path.startsWith(`${href}/`);
 	}
 
-	const activeItem = $derived(
-		primaryNav.find((item) => active(item.href)) ??
-			(active('/settings')
-				? { href: '/settings', label: 'Settings', icon: 'settings' }
-				: primaryNav[0])
+	const activeItem = $derived.by(() => {
+		const child = websiteChildren.find((item) => active(item.href));
+		if (child) return child;
+		const top = primaryNav.find((item) => active(item.href));
+		if (top) return top;
+		if (active('/settings')) return { href: '/settings', label: 'Settings', icon: 'settings' };
+		return primaryNav[0];
+	});
+
+	const websiteOpen = $derived(
+		active('/website') || active('/publications') || websiteChildren.some((c) => active(c.href))
 	);
 
 	const activeHref = $derived(activeItem.href);
@@ -94,6 +103,9 @@
 		} else {
 			forceClosePlayerDetail();
 		}
+		if (!p.startsWith('/accounting')) {
+			resetAccountingBrowse();
+		}
 	});
 
 	onMount(() =>
@@ -115,7 +127,7 @@
 		goto(href, { replaceState: replace });
 	}
 
-	/** @param {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'activity'} kind */
+	/** @param {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise'} kind */
 	function create(kind) {
 		createMenuOpen = false;
 		openComposer(kind);
@@ -123,7 +135,13 @@
 		else if (kind === 'project') go('/projects');
 		else if (kind === 'note') go('/notes');
 		else if (kind === 'newsletter') go('/publications');
-		else if (kind === 'ledger' || kind === 'activity') go('/accounting');
+		else if (kind === 'ledger' || kind === 'cost' || kind === 'sales' || kind === 'enterprise') {
+			if (kind === 'ledger') setAccountingBrowse('ledger');
+			else if (kind === 'cost') setAccountingBrowse('costs');
+			else if (kind === 'sales') setAccountingBrowse('sales');
+			else setAccountingBrowse('enterprises');
+			go('/accounting');
+		}
 	}
 
 	function onListPlus() {
@@ -199,8 +217,10 @@
 						<button type="button" role="menuitem" onclick={() => create('ledger')}
 							>New ledger entry</button
 						>
-						<button type="button" role="menuitem" onclick={() => create('activity')}
-							>New activity</button
+						<button type="button" role="menuitem" onclick={() => create('cost')}>New cost</button>
+						<button type="button" role="menuitem" onclick={() => create('sales')}>New sales line</button>
+						<button type="button" role="menuitem" onclick={() => create('enterprise')}
+							>New enterprise</button
 						>
 					</div>
 				{/if}
@@ -210,8 +230,19 @@
 		<nav class="sidebar-nav" aria-label="Sections">
 			{#each filteredNav as item (item.href)}
 				{@const count = item.countKey ? counts[item.countKey] : null}
-				<div class="nav-row" class:active={active(item.href)} class:creatable={Boolean(item.createKind)}>
-					<button type="button" class="nav-item" onclick={() => go(item.href)}>
+				{@const isWebsite = item.href === '/website'}
+				<div
+					class="nav-row"
+					class:active={!isWebsite && active(item.href)}
+					class:creatable={Boolean(item.createKind)}
+					class:parent-open={isWebsite && websiteOpen}
+				>
+					<button
+						type="button"
+						class="nav-item"
+						class:active={isWebsite ? websiteOpen : active(item.href)}
+						onclick={() => go(item.href)}
+					>
 						<span class="icon-wrap"><NavIcon name={item.icon} size={18} /></span>
 						<span class="nav-label">{item.label}</span>
 					</button>
@@ -245,6 +276,20 @@
 						</span>
 					{/if}
 				</div>
+				{#if isWebsite && websiteOpen && item.children?.length}
+					<div class="nav-sub" role="group" aria-label="Website">
+						{#each item.children as sub (sub.href)}
+							<button
+								type="button"
+								class="nav-sub-item"
+								class:active={active(sub.href)}
+								onclick={() => go(sub.href)}
+							>
+								<span class="nav-sub-label">{sub.label}</span>
+							</button>
+						{/each}
+					</div>
+				{/if}
 			{/each}
 		</nav>
 
@@ -343,7 +388,9 @@
 	<ProjectCreate />
 	<NoteCreate />
 	<LedgerCreate />
-	<ActivityCreate />
+	<CostCreate />
+	<SalesCreate />
+	<EnterpriseCreate />
 	<NewsletterCreate />
 	<WelcomeEdit />
 	<TrackEdit />
@@ -593,6 +640,42 @@
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
+	}
+
+	.nav-item.active {
+		color: var(--white);
+	}
+
+	.nav-sub {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 2px 8px 8px 36px;
+	}
+
+	.nav-sub-item {
+		display: block;
+		width: 100%;
+		padding: 6px 10px;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: var(--white66);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 13px;
+		font-weight: 500;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.nav-sub-item:hover {
+		background: var(--fg-4);
+		color: var(--white);
+	}
+
+	.nav-sub-item.active {
+		background: var(--fg-4);
+		color: var(--white);
 	}
 
 	.nav-row.creatable .nav-item,

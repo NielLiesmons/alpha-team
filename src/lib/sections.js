@@ -8,9 +8,17 @@
  *   label: string,
  *   icon: string,
  *   countKey?: 'tasks' | 'projects' | 'notes' | 'ledger',
- *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger'
+ *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise',
+ *   children?: NavItem[]
  * }} NavItem
  */
+
+/** Website subtree — desktop sidebar nests these; mobile uses /website hub. */
+export const websiteChildren = [
+	{ href: '/website/content', label: 'Content', icon: 'website' },
+	{ href: '/website/shop', label: 'Shop', icon: 'shop' },
+	{ href: '/publications', label: 'Publications', icon: 'publications', createKind: 'newsletter' }
+];
 
 /** @type {NavItem[]} */
 export const primaryNav = [
@@ -28,21 +36,19 @@ export const primaryNav = [
 		createKind: 'ledger'
 	},
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
-	{ href: '/website', label: 'Website', icon: 'website' },
+	{ href: '/player', label: 'Player', icon: 'player' },
 	{
-		href: '/publications',
-		label: 'Publications',
-		icon: 'publications',
-		createKind: 'newsletter'
-	},
-	{ href: '/player', label: 'Player', icon: 'player' }
+		href: '/website',
+		label: 'Website',
+		icon: 'website',
+		children: websiteChildren
+	}
 ];
 
 /**
- * Horizontal mobile pill — Chat centered; selection scrolls to active.
+ * Horizontal mobile pill — Chat centered; Website hub owns Content/Shop/Publications.
  */
 export const mobileNav = [
-	{ href: '/publications', label: 'Publications', icon: 'publications' },
 	{ href: '/website', label: 'Website', icon: 'website' },
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
 	{ href: '/accounting', label: 'Accounting', icon: 'accounting' },

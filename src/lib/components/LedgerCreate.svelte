@@ -18,7 +18,7 @@
 	let accountId = $state('');
 	let channel = $state('');
 	let costBehavior = $state(/** @type {'none' | 'fixed' | 'variable' | 'capex'} */ ('variable'));
-	let kind = $state(/** @type {'actual' | 'planned' | 'scenario'} */ ('actual'));
+	let kind = $state(/** @type {'actual' | 'planned'} */ ('actual'));
 	/** @type {string[]} */
 	let projectIds = $state([]);
 	/** @type {string[]} */
@@ -51,8 +51,7 @@
 
 	const KINDS = [
 		{ id: 'actual', label: 'Actual' },
-		{ id: 'planned', label: 'Planned' },
-		{ id: 'scenario', label: 'Scenario' }
+		{ id: 'planned', label: 'Planned' }
 	];
 
 	const open = $derived(ui.composer?.kind === 'ledger');

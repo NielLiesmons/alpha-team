@@ -3,8 +3,10 @@
  */
 
 import {
-	createActivity as driveCreateActivity,
+	createCostItem as driveCreateCostItem,
+	createEnterprise as driveCreateEnterprise,
 	createLedgerEntry as driveCreateLedgerEntry,
+	createSalesLine as driveCreateSalesLine,
 	createNote as driveCreateNote,
 	createProject as driveCreateProject,
 	createTask as driveCreateTask,
@@ -12,11 +14,14 @@ import {
 	ensureSpace,
 	fromUiNote,
 	fromUiTask,
-	listActivities,
+	listCostItems,
+	listEnterprises,
 	listLedgerEntries,
+	listSalesLines,
 	listNotes,
 	listProjects,
 	listTasks,
+	putEnterprise as drivePutEnterprise,
 	putLedgerEntry,
 	putNote,
 	putProject as drivePutProject,
@@ -44,7 +49,11 @@ export const accounts = $state([]);
 /** @type {any[]} */
 export const ledgerEntries = $state([]);
 /** @type {any[]} */
-export const activities = $state([]);
+export const costItems = $state([]);
+/** @type {any[]} */
+export const salesLines = $state([]);
+/** @type {any[]} */
+export const enterprises = $state([]);
 
 export const ui = $state({
 	/** @type {string | null} */
@@ -53,10 +62,10 @@ export const ui = $state({
 	noteId: null,
 	/**
 	 * Opened entity in the desktop detail column (view, not create).
-	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'activity', id: string }}
+	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise', id: string }}
 	 */
 	selection: null,
-	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'activity', id?: string, status?: string }} */
+	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise', id?: string, status?: string }} */
 	composer: null,
 	/** @type {'none' | 'drive'} */
 	source: 'none'
@@ -64,7 +73,7 @@ export const ui = $state({
 
 /**
  * Open an entity in the third column (does not open the create/edit modal).
- * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'activity'} kind
+ * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise'} kind
  * @param {string} id
  */
 export function selectEntity(kind, id) {
@@ -86,7 +95,7 @@ export function forceClearSelection() {
 }
 
 /**
- * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'activity'} kind
+ * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise'} kind
  * @param {string} [id]
  * @param {string} [status]
  */
@@ -112,7 +121,9 @@ function clearWorkspace() {
 	replaceArray(notes, []);
 	replaceArray(accounts, []);
 	replaceArray(ledgerEntries, []);
-	replaceArray(activities, []);
+	replaceArray(costItems, []);
+	replaceArray(salesLines, []);
+	replaceArray(enterprises, []);
 	ui.projectId = null;
 	ui.noteId = null;
 	ui.selection = null;
@@ -149,7 +160,15 @@ async function persistWorkspaceCache(session) {
 			const { _pending: _, ...rest } = e;
 			return rest;
 		}),
-		activities: activities.map((a) => {
+		costItems: costItems.map((a) => {
+			const { _pending: _, ...rest } = a;
+			return rest;
+		}),
+		salesLines: salesLines.map((a) => {
+			const { _pending: _, ...rest } = a;
+			return rest;
+		}),
+		enterprises: enterprises.map((a) => {
 			const { _pending: _, ...rest } = a;
 			return rest;
 		})
@@ -182,7 +201,9 @@ export async function hydrateWorkspaceFromCache() {
 	replaceArray(notes, Array.isArray(snap.notes) ? snap.notes : []);
 	replaceArray(accounts, Array.isArray(snap.accounts) ? snap.accounts : []);
 	replaceArray(ledgerEntries, Array.isArray(snap.ledgerEntries) ? snap.ledgerEntries : []);
-	replaceArray(activities, Array.isArray(snap.activities) ? snap.activities : []);
+	replaceArray(costItems, Array.isArray(snap.costItems) ? snap.costItems : []);
+	replaceArray(salesLines, Array.isArray(snap.salesLines) ? snap.salesLines : []);
+	replaceArray(enterprises, Array.isArray(snap.enterprises) ? snap.enterprises : []);
 	ui.source = 'drive';
 	return hasAny || Array.isArray(snap.tasks);
 }
@@ -198,18 +219,22 @@ export async function refreshFromDrive() {
 		projects.length > 0 ||
 		notes.length > 0 ||
 		ledgerEntries.length > 0 ||
-		activities.length > 0;
+		costItems.length > 0 ||
+		salesLines.length > 0 ||
+		enterprises.length > 0;
 	driveSession.loading = !hadLocal;
 	driveSession.error = null;
 	try {
 		await ensureSpace(session, 'Bley Family');
-		const [plist, tlist, nlist, alist, elist, actlist] = await Promise.all([
+		const [plist, tlist, nlist, alist, elist, costs, sales, ents] = await Promise.all([
 			listProjects(session),
 			listTasks(session),
 			listNotes(session),
 			ensureDefaultAccounts(session),
 			listLedgerEntries(session),
-			listActivities(session)
+			listCostItems(session),
+			listSalesLines(session),
+			listEnterprises(session)
 		]);
 		replaceArray(
 			projects,
@@ -238,7 +263,9 @@ export async function refreshFromDrive() {
 			ledgerEntries,
 			elist.map((e) => toUiLedgerEntry(e, plist, alist))
 		);
-		replaceArray(activities, actlist);
+		replaceArray(costItems, costs);
+		replaceArray(salesLines, sales);
+		replaceArray(enterprises, ents);
 		ui.source = 'drive';
 		void persistWorkspaceCache(session);
 	} catch (e) {
@@ -626,33 +653,117 @@ export async function saveLedgerEntry(draft, isNew) {
 }
 
 /**
- * Persist a new activity / scenario model.
  * @param {any} draft
  * @param {boolean} isNew
  */
-export async function saveActivity(draft, isNew) {
+export async function saveCostItem(draft, isNew) {
 	const session = activeSession();
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
 		const optimistic = { ...draft, id: tempId, _pending: Boolean(session) };
-		activities.unshift(optimistic);
-		ui.selection = { kind: 'activity', id: tempId };
+		costItems.unshift(optimistic);
+		ui.selection = { kind: 'cost', id: tempId };
 		scheduleWorkspacePersist();
 		if (!session) return optimistic;
 		try {
-			const created = await driveCreateActivity(session, draft);
-			const idx = activities.findIndex((a) => a.id === tempId);
-			if (idx >= 0) activities[idx] = created;
-			else activities.unshift(created);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'activity', id: created.id };
+			const created = await driveCreateCostItem(session, draft);
+			const idx = costItems.findIndex((a) => a.id === tempId);
+			if (idx >= 0) costItems[idx] = created;
+			else costItems.unshift(created);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'cost', id: created.id };
 			scheduleWorkspacePersist();
 			return created;
 		} catch (e) {
-			const idx = activities.findIndex((a) => a.id === tempId);
-			if (idx >= 0) activities.splice(idx, 1);
+			const idx = costItems.findIndex((a) => a.id === tempId);
+			if (idx >= 0) costItems.splice(idx, 1);
 			scheduleWorkspacePersist();
 			throw e;
 		}
 	}
 	return draft;
+}
+
+/**
+ * @param {any} draft
+ * @param {boolean} isNew
+ */
+export async function saveSalesLine(draft, isNew) {
+	const session = activeSession();
+	if (isNew) {
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = { ...draft, id: tempId, _pending: Boolean(session) };
+		salesLines.unshift(optimistic);
+		ui.selection = { kind: 'sales', id: tempId };
+		scheduleWorkspacePersist();
+		if (!session) return optimistic;
+		try {
+			const created = await driveCreateSalesLine(session, draft);
+			const idx = salesLines.findIndex((a) => a.id === tempId);
+			if (idx >= 0) salesLines[idx] = created;
+			else salesLines.unshift(created);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'sales', id: created.id };
+			scheduleWorkspacePersist();
+			return created;
+		} catch (e) {
+			const idx = salesLines.findIndex((a) => a.id === tempId);
+			if (idx >= 0) salesLines.splice(idx, 1);
+			scheduleWorkspacePersist();
+			throw e;
+		}
+	}
+	return draft;
+}
+
+/**
+ * @param {any} draft
+ * @param {boolean} isNew
+ */
+export async function saveEnterprise(draft, isNew) {
+	const session = activeSession();
+	if (isNew) {
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = { ...draft, id: tempId, _pending: Boolean(session) };
+		enterprises.unshift(optimistic);
+		ui.selection = { kind: 'enterprise', id: tempId };
+		scheduleWorkspacePersist();
+		if (!session) return optimistic;
+		try {
+			const created = await driveCreateEnterprise(session, draft);
+			const idx = enterprises.findIndex((a) => a.id === tempId);
+			if (idx >= 0) enterprises[idx] = created;
+			else enterprises.unshift(created);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'enterprise', id: created.id };
+			scheduleWorkspacePersist();
+			return created;
+		} catch (e) {
+			const idx = enterprises.findIndex((a) => a.id === tempId);
+			if (idx >= 0) enterprises.splice(idx, 1);
+			scheduleWorkspacePersist();
+			throw e;
+		}
+	}
+
+	const idx = enterprises.findIndex((a) => a.id === draft.id);
+	const prev = idx >= 0 ? { ...enterprises[idx] } : null;
+	if (idx >= 0) {
+		Object.assign(enterprises[idx], { ...draft, _pending: Boolean(session) });
+	}
+	scheduleWorkspacePersist();
+	if (!session) return draft;
+
+	try {
+		const saved = await drivePutEnterprise(session, {
+			...draft,
+			schema: 'alpha.enterprise/1'
+		});
+		const i = enterprises.findIndex((a) => a.id === saved.id);
+		if (i >= 0) Object.assign(enterprises[i], { ...saved, _pending: false });
+		else enterprises.unshift(saved);
+		scheduleWorkspacePersist();
+		return saved;
+	} catch (e) {
+		if (idx >= 0 && prev) Object.assign(enterprises[idx], prev);
+		scheduleWorkspacePersist();
+		throw e;
+	}
 }

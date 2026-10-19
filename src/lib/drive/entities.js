@@ -1311,3 +1311,185 @@ export async function createActivity(session, input) {
 	);
 	return activity;
 }
+
+/* ── Atomic costs / sales / enterprise sheets ── */
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listCostItems(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'cost_item' || path.endsWith('/cost_item.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createCostItem(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const doc = {
+		schema: 'alpha.cost_item/1',
+		id,
+		title: input.title,
+		behavior: input.behavior || 'variable',
+		amount_cents: Math.max(0, Math.round(Number(input.amount_cents) || 0)),
+		currency: input.currency || 'EUR',
+		unit_label: input.unit_label || '',
+		period: input.period || (input.behavior === 'fixed' ? 'month' : 'once'),
+		account_id: input.account_id ?? null,
+		project_ids: input.project_ids ?? [],
+		task_ids: input.task_ids ?? [],
+		labels: input.labels ?? [],
+		memo: input.memo || '',
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(
+		session,
+		`costs/${id}/cost_item.json`,
+		'cost_item',
+		JSON.stringify(doc, null, 2)
+	);
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listSalesLines(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'sales_line' || path.endsWith('/sales_line.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createSalesLine(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const doc = {
+		schema: 'alpha.sales_line/1',
+		id,
+		title: input.title,
+		price_cents: Math.max(0, Math.round(Number(input.price_cents) || 0)),
+		currency: input.currency || 'EUR',
+		unit_label: input.unit_label || '',
+		channel: input.channel || '',
+		product_id: input.product_id ?? null,
+		vat_rate_bp: input.vat_rate_bp ?? undefined,
+		project_ids: input.project_ids ?? [],
+		labels: input.labels ?? [],
+		memo: input.memo || '',
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(
+		session,
+		`sales/${id}/sales_line.json`,
+		'sales_line',
+		JSON.stringify(doc, null, 2)
+	);
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listEnterprises(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'enterprise' || path.endsWith('/enterprise.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createEnterprise(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const doc = {
+		schema: 'alpha.enterprise/1',
+		id,
+		title: input.title,
+		description: input.description || '',
+		status: input.status || 'draft',
+		project_ids: input.project_ids ?? [],
+		fixed_costs: input.fixed_costs ?? [],
+		variable_costs: input.variable_costs ?? [],
+		sales: input.sales ?? [],
+		output_unit_label: input.output_unit_label || '',
+		expected_output_units: Number(input.expected_output_units) || 0,
+		currency: input.currency || 'EUR',
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(
+		session,
+		`enterprises/${id}/enterprise.json`,
+		'enterprise',
+		JSON.stringify(doc, null, 2)
+	);
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} enterprise
+ */
+export async function putEnterprise(session, enterprise) {
+	const next = {
+		...enterprise,
+		schema: 'alpha.enterprise/1',
+		updated_at: nowRfc3339()
+	};
+	await putPath(
+		session,
+		`enterprises/${next.id}/enterprise.json`,
+		'enterprise',
+		JSON.stringify(next, null, 2)
+	);
+	return next;
+}

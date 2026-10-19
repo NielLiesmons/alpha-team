@@ -122,6 +122,19 @@
 				stroke-linecap="round"
 			/>
 		</svg>
+	{:else if name === 'shop'}
+		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<path
+				d="M3.5 5.5h11l-1 9.5H4.5l-1-9.5Z"
+				stroke="currentColor"
+				stroke-linejoin="round"
+			/>
+			<path
+				d="M6.5 5.5V4a2.5 2.5 0 0 1 5 0v1.5"
+				stroke="currentColor"
+				stroke-linecap="round"
+			/>
+		</svg>
 	{:else}
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
 			<circle cx="9" cy="9" r="2" stroke="currentColor" />
