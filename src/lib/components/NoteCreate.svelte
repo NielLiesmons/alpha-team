@@ -326,6 +326,15 @@
 		box-sizing: border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
+		transition: transform 0.2s var(--ease);
+	}
+
+	.publish-btn:hover:not(:disabled) {
+		transform: scale(1.015);
+	}
+
+	.publish-btn:active:not(:disabled) {
+		transform: scale(0.98);
 	}
 
 	.publish-btn:disabled {

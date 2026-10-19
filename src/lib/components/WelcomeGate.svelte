@@ -386,6 +386,15 @@
 		cursor: pointer;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
+		transition: transform 0.2s var(--ease);
+	}
+
+	.primary:hover:not(:disabled) {
+		transform: scale(1.015);
+	}
+
+	.primary:active:not(:disabled) {
+		transform: scale(0.98);
 	}
 
 	.primary:disabled {

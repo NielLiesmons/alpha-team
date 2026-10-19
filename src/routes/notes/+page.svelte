@@ -90,7 +90,7 @@
 	}
 
 	.row.on {
-		background: var(--fg-8);
+		background: var(--fg-4);
 	}
 
 	.title-row {

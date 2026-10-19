@@ -133,7 +133,7 @@
 	}
 
 	.task-card.selected {
-		background: var(--fg-8);
+		background: var(--fg-4);
 	}
 
 	.row-main {

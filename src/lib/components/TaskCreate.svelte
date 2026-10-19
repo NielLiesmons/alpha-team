@@ -392,7 +392,7 @@
 			addLabel();
 		}}
 	>
-		<input class="label-input" placeholder="New label" bind:value={labelDraft} aria-label="New label" />
+		<input class="text" placeholder="New label" bind:value={labelDraft} aria-label="New label" />
 		<button type="submit" class="publish-btn nested-add" disabled={!labelDraft.trim()}>Add</button>
 	</form>
 </CreateSheet>
@@ -417,16 +417,13 @@
 		padding: 12px 16px 4px;
 	}
 
-	.nested-label-form .label-input {
-		width: 100%;
-		height: 40px;
-		padding: 0 12px;
-		border: 1px solid var(--hairline);
-		border-radius: 10px;
-		background: var(--fg-4);
-		color: var(--fg);
+	.nested-label-form .text {
+		height: 42px;
+		padding: 0 14px;
+		border-radius: 12px;
 		font: inherit;
 		font-size: 15px;
+		color: var(--fg);
 		box-sizing: border-box;
 	}
 
@@ -858,6 +855,15 @@
 		box-sizing: border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
+		transition: transform 0.2s var(--ease);
+	}
+
+	.publish-btn:hover:not(:disabled) {
+		transform: scale(1.015);
+	}
+
+	.publish-btn:active:not(:disabled) {
+		transform: scale(0.98);
 	}
 
 	.publish-btn:disabled {

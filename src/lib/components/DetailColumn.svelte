@@ -817,6 +817,15 @@
 		cursor: pointer;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
+		transition: transform 0.2s var(--ease);
+	}
+
+	.send-chip:hover:not(:disabled) {
+		transform: scale(1.015);
+	}
+
+	.send-chip:active:not(:disabled) {
+		transform: scale(0.98);
 	}
 
 	.send-chip:disabled {

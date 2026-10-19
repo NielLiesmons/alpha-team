@@ -11,19 +11,14 @@
 	} from '$lib/sheet-stack.svelte.js';
 
 	/**
-	 * Create / edit overlay — Bley-style centered sheet (not a desktop side column).
-	 * Mobile: bottom sheet. Desktop: large centered card.
-	 * Nested: open another CreateSheet on top — parent scales down + darkens (Zapstore).
+	 * Create / edit overlay — mobile bottom sheet, desktop centered card.
+	 * Nested: open another CreateSheet with nested — parent scales under the SAME scrim
+	 * (Zapstore showInOtherModal: light barrier, no scrim color swap).
 	 */
 	let {
 		open = false,
 		label = 'Create',
-		/** Stable id for the sheet stack (auto if omitted) */
 		sheetId = '',
-		/**
-		 * When true, lighter scrim so the scaled parent stays visible underneath.
-		 * Prefer setting this for pickers opened from another sheet.
-		 */
 		nested = false,
 		onclose = () => {},
 		children
@@ -33,7 +28,6 @@
 	const depth = $derived(sheetIndex(id));
 	const covered = $derived(isSheetCovered(id));
 	const top = $derived(isTopSheet(id));
-	/** Keep stack reactivity live for derived covered/top */
 	const _stackLen = $derived(sheetStack.length);
 
 	$effect(() => {
@@ -55,19 +49,14 @@
 		}
 	}
 
-	/**
-	 * Mobile: slide up from bottom.
-	 * Desktop: short fade/rise (not a full bottom slide — nested sheets stay centered).
-	 */
 	function sheetSlide(_node, { duration = 320 } = {}) {
 		const mobile =
 			typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
 		if (!mobile) {
 			return {
-				duration: nested ? 260 : 240,
+				duration: 240,
 				easing: cubicOut,
-				css: (t, u) =>
-					`opacity: ${t}; transform: translate3d(0, ${u * (nested ? 10 : 14)}px, 0) scale(${0.98 + t * 0.02})`
+				css: (t, u) => `opacity: ${t}; transform: translate3d(0, ${u * 12}px, 0)`
 			};
 		}
 		return {
@@ -84,16 +73,22 @@
 <svelte:window onkeydown={onKey} />
 
 {#if open}
-	{#if top}
+	{#if !nested}
+		<!-- Base scrim stays for the whole stack — never swap color when nesting -->
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div
 			class="overlay"
-			class:nested
 			style:z-index={zOverlay}
-			onclick={close}
+			onclick={() => {
+				if (top) close();
+			}}
 			role="presentation"
 			transition:fade={{ duration: 180 }}
 		></div>
+	{:else if top}
+		<!-- Nested: invisible dismiss layer only — no extra darkening -->
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="hit" style:z-index={zOverlay} onclick={close} role="presentation"></div>
 	{/if}
 	<div
 		class="wrap"
@@ -122,9 +117,10 @@
 		background: var(--scrim);
 	}
 
-	.overlay.nested {
-		/* See the scaled parent through a lighter veil (Zapstore showInOtherModal) */
-		background: color-mix(in srgb, var(--bg) 42%, transparent);
+	.hit {
+		position: fixed;
+		inset: 0;
+		background: transparent;
 	}
 
 	.wrap {
@@ -162,14 +158,11 @@
 		padding: 0 0 calc(14px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 		transform-origin: 50% 100%;
-		transition:
-			transform 0.28s var(--ease),
-			filter 0.28s var(--ease);
+		transition: transform 0.28s var(--ease);
 	}
 
 	.sheet.covered {
-		transform: scale(0.94);
-		filter: brightness(0.72);
+		transform: scale(0.96);
 		pointer-events: none;
 	}
 
@@ -189,7 +182,8 @@
 		position: absolute;
 		inset: 0;
 		z-index: 2;
-		background: color-mix(in srgb, var(--bg) 28%, transparent);
+		/* Soft dim of the parent sheet only — not a second scrim */
+		background: color-mix(in srgb, var(--bg) 22%, transparent);
 		pointer-events: none;
 	}
 
@@ -200,6 +194,7 @@
 		}
 
 		.sheet {
+			/* Nested keeps the same width as the parent sheet */
 			width: min(640px, calc(100vw - 7.5rem));
 			max-width: min(640px, calc(100vw - 7.5rem));
 			height: auto;
@@ -211,13 +206,12 @@
 		}
 
 		.sheet.nested {
-			width: min(420px, calc(100vw - 7.5rem));
-			max-width: min(420px, calc(100vw - 7.5rem));
-			max-height: min(560px, 84svh);
+			/* Slightly taller is fine for pickers; not much narrower */
+			max-height: min(680px, 88svh);
 		}
 
 		.sheet.covered {
-			transform: scale(0.92);
+			transform: scale(0.95);
 		}
 	}
 </style>
