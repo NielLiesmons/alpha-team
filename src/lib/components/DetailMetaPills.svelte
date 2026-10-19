@@ -4,6 +4,7 @@
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import ProjectBox from './ProjectBox.svelte';
+	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import { patchNote, patchTask, people, projects, tasks } from '$lib/workspace.svelte.js';
 
@@ -271,23 +272,7 @@
 			aria-expanded={menu === 'projects'}
 			onclick={(e) => toggleMenu('projects', e)}
 		>
-			{#if targets.length === 0}
-				<span>Project</span>
-			{:else}
-				<span class="pill-projects">
-					{#each projectIds as pid (pid)}
-						{@const p = projects.find((x) => x.id === pid)}
-						<span class="pill-project">
-							<ProjectBox
-								state={p ? deriveProjectStatus(p.id, tasks) : 'planned'}
-								icon={p?.icon}
-								size={16}
-							/>
-							<span class="pill-project-name">{p?.title ?? pid}</span>
-						</span>
-					{/each}
-				</span>
-			{/if}
+			<ProjectPillsDisplay {projectIds} />
 		</button>
 		{#if menu === 'projects'}
 			<button type="button" class="menu-backdrop" aria-label="Close" onclick={closeMenu}></button>

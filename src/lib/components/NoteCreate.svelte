@@ -4,6 +4,7 @@
 	import NoteEditor from './NoteEditor.svelte';
 	import Spinner from './Spinner.svelte';
 	import ProjectBox from './ProjectBox.svelte';
+	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import { closeComposer, notes, projects, saveNote, tasks, ui } from '$lib/workspace.svelte.js';
 
@@ -113,23 +114,7 @@
 					aria-expanded={bottomMenu === 'projects'}
 					onclick={() => (bottomMenu = bottomMenu === 'projects' ? null : 'projects')}
 				>
-					{#if projectIds.length === 0}
-						<span>Project</span>
-					{:else}
-						<span class="pill-projects">
-							{#each projectIds as pid (pid)}
-								{@const p = projects.find((x) => x.id === pid)}
-								<span class="pill-project">
-									<ProjectBox
-										state={p ? deriveProjectStatus(p.id, tasks) : 'planned'}
-										icon={p?.icon}
-										size={16}
-									/>
-									<span>{p?.title ?? pid}</span>
-								</span>
-							{/each}
-						</span>
-					{/if}
+					<ProjectPillsDisplay {projectIds} />
 				</button>
 				{#if bottomMenu === 'projects'}
 					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
@@ -326,17 +311,21 @@
 		align-items: center;
 		justify-content: center;
 		gap: 8px;
-		background-image: var(--button-primary-bg);
-		background-color: transparent;
-		border: none;
+		border: 1px solid transparent;
 		border-radius: 9999px;
-		color: var(--whiteEnforced);
+		background:
+			var(--button-primary-bg) padding-box,
+			var(--glass-shine) border-box;
+		background-color: transparent;
+		color: var(--button-primary-fg);
 		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;
 		flex-shrink: 0;
 		margin-left: auto;
 		box-sizing: border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.publish-btn:disabled {

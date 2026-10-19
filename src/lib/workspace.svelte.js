@@ -177,8 +177,8 @@ export async function refreshFromDrive() {
 			plist.map((p) => ({
 				id: p.id,
 				title: p.title,
-				summary: p.description ?? '',
-				body: p.body ?? '',
+				/* Prefer description; legacy Drive docs may still carry body */
+				description: p.description || p.body || '',
 				status: p.status || 'planned',
 				icon: p.icon ?? null,
 				milestones: Array.isArray(p.milestones) ? p.milestones : [],
@@ -417,6 +417,8 @@ export async function saveNote(draft, isNew) {
  */
 export async function saveProject(draft, isNew) {
 	const session = activeSession();
+	const description =
+		draft.description ?? draft.summary ?? draft.body ?? '';
 	if (!session) {
 		if (isNew) {
 			const id = draft.id || crypto.randomUUID();
@@ -424,6 +426,7 @@ export async function saveProject(draft, isNew) {
 				...draft,
 				id,
 				slug: draft.slug,
+				description,
 				milestones: draft.milestones ?? [],
 				status: draft.status ?? 'planned',
 				icon: draft.icon ?? null
@@ -432,7 +435,7 @@ export async function saveProject(draft, isNew) {
 			ui.selection = { kind: 'project', id };
 		} else {
 			const idx = projects.findIndex((p) => p.id === draft.id);
-			if (idx >= 0) Object.assign(projects[idx], draft);
+			if (idx >= 0) Object.assign(projects[idx], { ...draft, description });
 			ui.projectId = draft.id;
 			ui.selection = { kind: 'project', id: draft.id };
 		}
@@ -442,8 +445,7 @@ export async function saveProject(draft, isNew) {
 	if (isNew) {
 		const created = await driveCreateProject(session, {
 			title: draft.title,
-			description: draft.summary || '',
-			body: draft.body || '',
+			description,
 			status: draft.status ?? 'planned',
 			icon: draft.icon || null,
 			milestones: draft.milestones ?? []
@@ -451,8 +453,7 @@ export async function saveProject(draft, isNew) {
 		const uiProj = {
 			id: created.id,
 			title: created.title,
-			summary: created.description ?? '',
-			body: created.body ?? '',
+			description: created.description ?? description,
 			status: created.status ?? draft.status ?? 'planned',
 			icon: created.icon ?? draft.icon ?? null,
 			milestones: created.milestones ?? [],
@@ -465,13 +466,13 @@ export async function saveProject(draft, isNew) {
 	} else {
 		const prev = projects.find((p) => p.id === draft.id);
 		const nextIcon = draft.icon === undefined ? (prev?.icon ?? null) : draft.icon;
+		const { body: _legacyBody, ...prevDrive } = prev?._drive ?? {};
 		const base = {
-			...(prev?._drive ?? {}),
+			...prevDrive,
 			id: draft.id,
 			slug: draft.slug || prev?.slug,
 			title: draft.title,
-			description: draft.summary ?? '',
-			body: draft.body ?? '',
+			description,
 			status: draft.status ?? prev?.status ?? 'planned',
 			icon: nextIcon || undefined,
 			milestones: draft.milestones ?? prev?.milestones ?? [],
@@ -481,8 +482,7 @@ export async function saveProject(draft, isNew) {
 		const uiProj = {
 			id: saved.id,
 			title: saved.title,
-			summary: saved.description ?? '',
-			body: saved.body ?? '',
+			description: saved.description ?? description,
 			status: saved.status ?? 'planned',
 			icon: saved.icon ?? nextIcon ?? null,
 			milestones: Array.isArray(saved.milestones) ? saved.milestones : [],

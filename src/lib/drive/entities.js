@@ -51,7 +51,6 @@ export async function initSpace(session, name) {
  *   title: string,
  *   slug?: string,
  *   description?: string,
- *   body?: string,
  *   status?: string,
  *   icon?: string | null,
  *   milestones?: { id: string, title: string, percentage?: number, sort?: number }[]
@@ -67,7 +66,6 @@ export async function createProject(session, input) {
 		slug: input.slug || slugify(input.title),
 		title: input.title,
 		description: input.description || undefined,
-		body: input.body || undefined,
 		status: input.status || 'planned',
 		icon: input.icon || undefined,
 		milestones: Array.isArray(input.milestones) ? input.milestones : [],
@@ -98,6 +96,8 @@ export async function putProject(session, project, patch = {}) {
 		id,
 		updated_at: nowRfc3339()
 	};
+	/* Projects use a single description — drop legacy body if present */
+	delete next.body;
 	if (!Array.isArray(next.milestones)) next.milestones = [];
 	if (!next.status) next.status = 'planned';
 	await putPath(session, `projects/${id}/project.json`, 'project', JSON.stringify(next, null, 2));

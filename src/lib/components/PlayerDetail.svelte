@@ -724,17 +724,16 @@
 
 	.more-menu {
 		position: absolute;
-		top: calc(100% + 4px);
+		top: calc(100% + 6px);
 		right: 0;
 		z-index: 50;
-		min-width: 148px;
-		padding: 4px;
-		border: 1px solid transparent;
+		min-width: 168px;
+		padding: 0;
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		box-shadow: 0 12px 32px var(--shadow-strong);
+		background: var(--glass);
+		overflow: hidden;
+		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
@@ -742,20 +741,24 @@
 	.more-menu button {
 		display: block;
 		width: 100%;
-		padding: 8px 10px;
+		padding: 8px 12px;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 0;
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.9375rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
 	}
 
+	.more-menu button:not(:last-child) {
+		border-bottom: 0.33px solid var(--fg-8);
+	}
+
 	.more-menu button:hover {
-		background: var(--fg-8);
+		background: var(--fg-4);
 		color: var(--fg);
 	}
 

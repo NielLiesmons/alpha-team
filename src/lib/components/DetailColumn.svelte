@@ -454,11 +454,10 @@
 					>
 						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 							<path
-								d="M8 2.5v8M4.5 6 8 2.5 11.5 6M3 12.5h10"
+								d="M8 3.25v9.5M3.25 8h9.5"
 								stroke="currentColor"
 								stroke-width="1.5"
 								stroke-linecap="round"
-								stroke-linejoin="round"
 							/>
 						</svg>
 					</button>
@@ -492,11 +491,8 @@
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
-							d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
+							fill="currentColor"
+							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
 						/>
 					</svg>
 				</button>
@@ -530,11 +526,8 @@
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
-							d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
+							fill="currentColor"
+							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
 						/>
 					</svg>
 				</button>
@@ -559,12 +552,9 @@
 				/>
 				<h2 class="title">{project.title}</h2>
 			</div>
-			{#if project.summary}
-				<p class="summary">{project.summary}</p>
-			{/if}
-			{#if project.body}
-				<p class="prose">{project.body}</p>
-			{:else if !project.summary}
+			{#if project.description}
+				<p class="prose">{project.description}</p>
+			{:else}
 				<p class="muted">No description yet.</p>
 			{/if}
 
@@ -715,11 +705,8 @@
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
-							d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5.4 12.84 2 13.5l.66-3.4L11.5 2.5Z"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
+							fill="currentColor"
+							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
 						/>
 					</svg>
 				</button>
@@ -817,15 +804,19 @@
 	.send-chip {
 		height: 28px;
 		padding: 0 12px;
-		border: 0;
+		border: 1px solid transparent;
 		border-radius: 8px;
-		background-image: var(--button-primary-bg);
+		background:
+			var(--button-primary-bg) padding-box,
+			var(--glass-shine) border-box;
 		background-color: transparent;
-		color: var(--whiteEnforced);
+		color: var(--button-primary-fg);
 		font: inherit;
 		font-size: 12px;
 		font-weight: 650;
 		cursor: pointer;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.send-chip:disabled {
@@ -1272,14 +1263,13 @@
 		top: calc(100% + 6px);
 		right: 0;
 		z-index: 50;
-		min-width: 140px;
-		padding: 4px;
-		border: 1px solid transparent;
+		min-width: 168px;
+		padding: 0;
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		box-shadow: 0 12px 32px var(--shadow-strong);
+		background: var(--glass);
+		overflow: hidden;
+		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
@@ -1287,21 +1277,25 @@
 	.more-menu button {
 		display: block;
 		width: 100%;
-		padding: 8px 10px;
+		padding: 8px 12px;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 0;
 		background: transparent;
-		color: var(--white66);
+		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.9375rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
 	}
 
+	.more-menu button:not(:last-child) {
+		border-bottom: 0.33px solid var(--fg-8);
+	}
+
 	.more-menu button:hover {
-		background: var(--white8);
-		color: var(--white);
+		background: var(--fg-4);
+		color: var(--fg);
 	}
 
 	@media (max-width: 767px) {
@@ -1409,8 +1403,8 @@
 		}
 
 		.chrome-btn :global(svg) {
-			width: 24px;
-			height: 24px;
+			width: 22px;
+			height: 22px;
 		}
 
 		/* Empty space on the side the chevron does not point toward */

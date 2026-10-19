@@ -84,7 +84,7 @@
 						title={project.title}
 						status={deriveProjectStatus(project.id, tasks)}
 						icon={project.icon}
-						summary={project.summary}
+						description={project.description}
 						milestones={project.milestones ?? []}
 						taskCount={taskCount(project.id)}
 						noteCount={noteCount(project.id)}

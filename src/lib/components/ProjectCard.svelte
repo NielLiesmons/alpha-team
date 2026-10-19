@@ -11,7 +11,7 @@
 		title = '',
 		status = 'planned',
 		icon = /** @type {string | null} */ (null),
-		summary = '',
+		description = '',
 		milestones = /** @type {{ id: string, title: string, percentage?: number }[]} */ ([]),
 		taskCount = 0,
 		noteCount = 0,
@@ -26,7 +26,7 @@
 	});
 
 	const hasBottom = $derived(
-		Boolean(summary) || milestones.length > 0 || taskCount > 0 || noteCount > 0
+		Boolean(description) || milestones.length > 0 || taskCount > 0 || noteCount > 0
 	);
 </script>
 
@@ -60,8 +60,8 @@
 				</svg>
 			</div>
 			<div class="bottom-items">
-				{#if summary}
-					<span class="sum">{summary}</span>
+				{#if description}
+					<span class="sum">{description}</span>
 				{/if}
 				{#if taskCount > 0 || noteCount > 0}
 					<span class="counts">
@@ -99,12 +99,7 @@
 	}
 
 	.project-card.selected {
-		border: 1px solid transparent;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+		background: var(--fg-8);
 	}
 
 	.row-main {

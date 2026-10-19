@@ -252,7 +252,7 @@
 								aria-haspopup="listbox"
 								onclick={() => (filterOpen = !filterOpen)}
 							>
-								<svg class="chrome-ico" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+								<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 									<path
 										d="M2.5 4h11M4.5 8h7M6.5 12h3"
 										stroke="currentColor"
@@ -303,11 +303,11 @@
 								aria-label="New {createKind}"
 								onclick={onListPlus}
 							>
-								<svg class="chrome-ico" width="18" height="18" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 									<path
-										d="M6 1.5v9M1.5 6h9"
+										d="M8 3.25v9.5M3.25 8h9.5"
 										stroke="currentColor"
-										stroke-width="1.6"
+										stroke-width="1.5"
 										stroke-linecap="round"
 									/>
 								</svg>
@@ -480,17 +480,16 @@
 	.create-menu,
 	.filter-menu {
 		position: absolute;
-		top: calc(100% + 8px);
+		top: calc(100% + 6px);
 		right: 0;
 		z-index: 50;
-		min-width: 148px;
-		padding: 4px;
-		border: 1px solid transparent;
+		min-width: 168px;
+		padding: 0;
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		box-shadow: 0 12px 32px var(--shadow-strong);
+		background: var(--glass);
+		overflow: hidden;
+		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
@@ -499,23 +498,32 @@
 	.filter-menu button {
 		display: block;
 		width: 100%;
-		padding: 8px 10px;
+		padding: 8px 12px;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 0;
 		background: transparent;
-		color: var(--white66);
+		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.9375rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
 	}
 
+	.create-menu button:not(:last-child),
+	.filter-menu button:not(:last-child) {
+		border-bottom: 0.33px solid var(--fg-8);
+	}
+
 	.create-menu button:hover,
 	.filter-menu button:hover,
 	.filter-menu button.on {
-		background: var(--white8);
-		color: var(--white);
+		background: var(--fg-4);
+		color: var(--fg);
+	}
+
+	.filter-menu button.on {
+		font-weight: 600;
 	}
 
 	.sidebar-nav {
@@ -786,6 +794,8 @@
 
 	.chrome-ico {
 		display: block;
+		width: 16px;
+		height: 16px;
 	}
 
 	.pane {
@@ -916,8 +926,8 @@
 		}
 
 		.chrome-ico {
-			width: 24px;
-			height: 24px;
+			width: 22px;
+			height: 22px;
 		}
 
 		.pane {

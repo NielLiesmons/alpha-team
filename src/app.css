@@ -33,8 +33,18 @@
 	--gradient-accent-3: radial-gradient(circle at top left, #ff4778 0%, #ff005e 100%);
 	--gradient-accent-3-16: radial-gradient(circle at top left, #ff477829 0%, #ff005e29 100%);
 
-	--button-primary-bg: var(--gradient-accent-1);
-	--button-primary-bg-hover: var(--gradient-accent-1-hover);
+	/* Glassy CTA — accent tint, not a solid gradient fill */
+	--button-primary-bg: linear-gradient(
+		180deg,
+		color-mix(in srgb, var(--accent-1) 28%, var(--glass-fill)) 0%,
+		color-mix(in srgb, var(--accent-1) 14%, var(--glass-fill)) 100%
+	);
+	--button-primary-bg-hover: linear-gradient(
+		180deg,
+		color-mix(in srgb, var(--accent-1) 36%, var(--glass-fill)) 0%,
+		color-mix(in srgb, var(--accent-1) 20%, var(--glass-fill)) 100%
+	);
+	--button-primary-fg: var(--fg);
 
 	/* Semantic aliases */
 	--accent: var(--accent-1);
@@ -66,14 +76,18 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
-	--surface: #161616;
+	--surface: #1a1a1a;
 	/* Small chrome (buttons): slight lift + shine border */
-	--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--bg));
-	--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
-	/* Large surfaces (modals, bottom nav): plain page @ 66% + blur */
-	--glass-panel: color-mix(in srgb, var(--bg) 66%, transparent);
+	--glass-fill: color-mix(in srgb, var(--fg) 7%, var(--bg));
+	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+	/* Large surfaces (modals / sheets): subtle lift over page, still dark */
+	--glass-panel: color-mix(
+		in srgb,
+		color-mix(in srgb, var(--fg) 9%, var(--bg)) 90%,
+		transparent
+	);
 	--glass-blur: 22px;
-	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
+	--glass-border: color-mix(in srgb, var(--fg) 14%, transparent);
 	/* Soft specular — buttons only (not modals / bottom nav) */
 	--glass-shine: linear-gradient(
 		135deg,
@@ -133,12 +147,16 @@
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
-	--surface: #161616;
-	--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--bg));
-	--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
-	--glass-panel: color-mix(in srgb, var(--bg) 66%, transparent);
+	--surface: #1a1a1a;
+	--glass-fill: color-mix(in srgb, var(--fg) 7%, var(--bg));
+	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+	--glass-panel: color-mix(
+		in srgb,
+		color-mix(in srgb, var(--fg) 9%, var(--bg)) 90%,
+		transparent
+	);
 	--glass-blur: 22px;
-	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
+	--glass-border: color-mix(in srgb, var(--fg) 14%, transparent);
 	--popover: var(--glass-panel);
 	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
@@ -212,9 +230,13 @@
 @media (max-width: 767px) {
 	:root,
 	:root[data-theme='dark'] {
-		--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--shell));
-		--glass: color-mix(in srgb, var(--glass-fill) 84%, transparent);
-		--glass-panel: color-mix(in srgb, var(--shell) 66%, transparent);
+		--glass-fill: color-mix(in srgb, var(--fg) 8%, var(--shell));
+		--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
+		--glass-panel: color-mix(
+			in srgb,
+			color-mix(in srgb, var(--fg) 11%, var(--shell)) 90%,
+			transparent
+		);
 		--scrim: color-mix(in srgb, var(--shell) 88%, transparent);
 	}
 
@@ -365,22 +387,33 @@ h2 {
 }
 
 .btn.primary {
-	background-image: var(--button-primary-bg);
+	border: 1px solid transparent;
+	background:
+		var(--button-primary-bg) padding-box,
+		var(--glass-shine) border-box;
 	background-color: transparent;
-	color: var(--whiteEnforced);
+	color: var(--button-primary-fg);
+	backdrop-filter: blur(var(--glass-blur));
+	-webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .btn.primary:hover:not(:disabled) {
-	background-image: var(--button-primary-bg-hover);
+	background:
+		var(--button-primary-bg-hover) padding-box,
+		var(--glass-shine) border-box;
 	transform: scale(1.015);
 }
 
-/* Shared create-sheet / modal primary CTA */
+/* Shared create-sheet / modal primary CTA — glassy accent, not solid fill */
 .publish-btn {
-	background-image: var(--button-primary-bg) !important;
+	border: 1px solid transparent !important;
+	background:
+		var(--button-primary-bg) padding-box,
+		var(--glass-shine) border-box !important;
 	background-color: transparent !important;
-	color: var(--whiteEnforced) !important;
-	border: none;
+	color: var(--button-primary-fg) !important;
+	backdrop-filter: blur(var(--glass-blur));
+	-webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .text-destructive {
@@ -763,10 +796,7 @@ table.data tr.selected td {
 	min-height: 36px;
 	max-height: 36px;
 	padding: 0 18px;
-	border: 0;
 	border-radius: 9999px;
-	background: var(--white);
-	color: var(--black);
 	font-size: 14px;
 	font-weight: 500;
 	line-height: 1;
@@ -823,16 +853,11 @@ table.data tr.selected td {
 	box-sizing: border-box;
 }
 
-/* Selected feed rows — glass plate (tasks, notes, projects, player rows) */
+/* Selected feed rows — quiet fill (nav column keeps glass separately) */
 .task-card.selected,
 .project-card.selected,
 .feed .row.on {
-	border: 1px solid transparent;
-	background:
-		linear-gradient(var(--glass), var(--glass)) padding-box,
-		var(--glass-shine) border-box;
-	backdrop-filter: blur(var(--glass-blur));
-	-webkit-backdrop-filter: blur(var(--glass-blur));
+	background: var(--fg-8);
 }
 
 @media (max-width: 767px) {

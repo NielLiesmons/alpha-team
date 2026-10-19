@@ -133,12 +133,7 @@
 	}
 
 	.task-card.selected {
-		border: 1px solid transparent;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+		background: var(--fg-8);
 	}
 
 	.row-main {

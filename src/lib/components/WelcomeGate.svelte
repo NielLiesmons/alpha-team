@@ -373,15 +373,19 @@
 		width: 100%;
 		height: 42px;
 		margin-top: 8px;
-		border: 0;
+		border: 1px solid transparent;
 		border-radius: 12px;
-		background-image: var(--button-primary-bg);
+		background:
+			var(--button-primary-bg) padding-box,
+			var(--glass-shine) border-box;
 		background-color: transparent;
-		color: var(--whiteEnforced);
+		color: var(--button-primary-fg);
 		font: inherit;
 		font-size: 14px;
 		font-weight: 600;
 		cursor: pointer;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.primary:disabled {
