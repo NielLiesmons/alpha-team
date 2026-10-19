@@ -73,7 +73,8 @@ export async function loadComments(type, entityId) {
  * @param {{
  *   body: string,
  *   kind?: 'comment' | 'chat',
- *   ref?: { type: string, id: string } | null
+ *   ref?: { type: string, id: string } | null,
+ *   reply_to?: string | null
  * }} input
  */
 export async function postChatMessage(input) {
@@ -93,6 +94,7 @@ export async function postChatMessage(input) {
 				body: input.body.trim(),
 				created_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
 				...(input.ref ? { ref: input.ref } : {}),
+				...(input.reply_to ? { reply_to: input.reply_to } : {}),
 				_local: true
 			};
 			chatFeed.unshift(local);
@@ -108,7 +110,8 @@ export async function postChatMessage(input) {
 			body: input.body.trim(),
 			author,
 			kind: input.kind || (input.ref ? 'comment' : 'chat'),
-			ref: input.ref ?? null
+			ref: input.ref ?? null,
+			reply_to: input.reply_to ?? null
 		});
 		chatFeed.unshift(created);
 		if (input.ref && (input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')) {

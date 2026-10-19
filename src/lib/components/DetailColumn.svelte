@@ -578,8 +578,8 @@
 			{:else}
 				<p class="muted">No description.</p>
 			{/if}
-			<CommentThread type="task" entityId={task.id} />
 		</div>
+		<CommentThread type="task" entityId={task.id} />
 	{:else if project}
 		<header class="detail-top desktop-head">
 			<span class="detail-top-label">Project</span>
@@ -758,8 +758,8 @@
 					<NoteEditor value={noteBody} editable={true} onChange={onNoteBodyChange} />
 				</div>
 			{/key}
-			<CommentThread type="note" entityId={note.id} />
 		</div>
+		<CommentThread type="note" entityId={note.id} />
 	{:else if welcomeSelected}
 		<header class="detail-top desktop-head">
 			<span class="detail-top-label">Welcome</span>

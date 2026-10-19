@@ -1587,7 +1587,8 @@ export async function listFeedMessages(session, limit = 80) {
  *   author: string,
  *   kind?: 'comment' | 'chat' | 'reaction',
  *   ref?: { type: string, id: string } | null,
- *   reaction?: string
+ *   reaction?: string,
+ *   reply_to?: string | null
  * }} input
  */
 export async function createChatMessage(session, input) {
@@ -1602,7 +1603,8 @@ export async function createChatMessage(session, input) {
 		body: input.body ?? '',
 		created_at: created,
 		...(input.ref ? { ref: { type: input.ref.type, id: input.ref.id } } : {}),
-		...(input.reaction ? { reaction: input.reaction } : {})
+		...(input.reaction ? { reaction: input.reaction } : {}),
+		...(input.reply_to ? { reply_to: input.reply_to } : {})
 	};
 
 	/** @type {{ path: string, kind: string, plaintext: string }[]} */
