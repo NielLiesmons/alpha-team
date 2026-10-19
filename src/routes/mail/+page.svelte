@@ -127,7 +127,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 8px;
+		padding: 6px;
 	}
 
 	.row {

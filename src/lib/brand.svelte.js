@@ -8,7 +8,7 @@ const KEY = 'alpha-admin-brand';
 
 /** @typedef {{ accent: string }} Brand */
 
-/** Fixed Zapstore blurple (read-only for Settings swatches). */
+/** Fixed accent-1 (read-only for Settings swatches). */
 export const brand = $state(/** @type {Brand} */ ({ accent: '#5A58FE' }));
 
 /** Apply / reset CSS variables on <html> — poles stay grayscale. */
@@ -16,7 +16,9 @@ export function applyBrand() {
 	const root = document.documentElement;
 	/* Drop legacy inline overrides from the old accent picker */
 	root.style.removeProperty('--accent');
+	root.style.removeProperty('--accent-1');
 	root.style.removeProperty('--accent-2');
+	root.style.removeProperty('--accent-3');
 	root.style.removeProperty('--accent-success');
 	root.style.removeProperty('--accent-progress');
 	root.style.removeProperty('--accent-success-66');

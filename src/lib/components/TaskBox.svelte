@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * Status box — --accent-success / --accent-progress.
+	 * Status box — accent-1 (closed) / accent-2 (progress).
 	 * `embedded`: glyph only (no plate) for use inside meta pills.
 	 */
 	/** @type {{ state?: string, size?: number, embedded?: boolean }} */
@@ -25,7 +25,7 @@
 			height={checkSize * (12 / 18)}
 			viewBox="-1 -1 20 14"
 			fill="none"
-			stroke={embedded ? 'var(--blurpleColor)' : 'var(--whiteEnforced)'}
+			stroke={embedded ? 'var(--accent-1)' : 'var(--whiteEnforced)'}
 			stroke-linecap="round"
 			stroke-linejoin="round"
 			aria-hidden="true"
@@ -36,7 +36,7 @@
 		<div class="icon-slot" style:padding-left={embedded ? '0' : `${progressPadding}px`}>
 			<svg width={iconSize} height={iconSize} viewBox="0 0 11 22" aria-hidden="true">
 				<path
-					fill="var(--goldColor)"
+					fill="var(--accent-2)"
 					d="M1.56676 21.7923C6.89979 21.0318 11 16.4462 11 10.903C11 5.35977 6.89979 0.774213 1.56676 0.0137178C0.70758 -0.108803 0 0.60654 0 1.47442V20.3316C0 21.1994 0.707579 21.9148 1.56676 21.7923Z"
 				/>
 			</svg>
@@ -45,7 +45,7 @@
 		<div class="icon-slot">
 			<svg width={iconSize} height={iconSize} viewBox="0 0 20 20" aria-hidden="true">
 				<path
-					fill="var(--blurpleColor)"
+					fill="var(--accent-1)"
 					d="M9.95571 20C15.503 20 20 15.503 20 9.95571C20 4.8941 16.256 0.706948 11.3863 0.012526C10.6018 -0.0993499 9.95571 0.553842 9.95571 1.34631V8.52081C9.95571 9.31328 9.31328 9.95571 8.52081 9.95571H1.34632C0.553842 9.95571 -0.0993498 10.6018 0.012526 11.3863C0.706948 16.256 4.8941 20 9.95571 20Z"
 				/>
 			</svg>
@@ -116,20 +116,20 @@
 		border: var(--task-box-stroke) solid var(--white33);
 	}
 
-	/* Zapstore closed: blurple radial gradient fill */
+	/* Closed: accent-1 radial gradient fill */
 	.state-closed {
-		background: var(--gradient-blurple);
+		background: var(--gradient-accent-1);
 		border: var(--task-box-stroke) solid transparent;
 	}
 
 	.state-inProgress {
 		background: var(--black33);
-		border: var(--task-box-stroke) solid var(--goldColor66);
+		border: var(--task-box-stroke) solid var(--accent-2-66);
 	}
 
 	.state-inReview {
 		background: var(--black33);
-		border: var(--task-box-stroke) solid var(--blurpleColor66);
+		border: var(--task-box-stroke) solid var(--accent-1-66);
 	}
 
 	.state-canceled {

@@ -167,10 +167,12 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		width: 100%;
-		padding: 6px 8px 4px 16px;
-		background: var(--fg-4);
+		margin: 0 6px;
+		padding: 6px 10px;
 		border: 0;
+		border-radius: 10px;
+		background: var(--fg-4);
+		width: auto;
 		box-sizing: border-box;
 	}
 
@@ -221,7 +223,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 4px 8px 10px;
+		padding: 4px 6px 10px;
 		box-sizing: border-box;
 	}
 

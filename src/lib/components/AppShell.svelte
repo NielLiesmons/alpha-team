@@ -361,7 +361,7 @@
 <style>
 	.shell {
 		/* Pad ≈ control row; fade is short/soft so content stays readable until the bar */
-		--feed-pad-top: 48px;
+		--feed-pad-top: 44px;
 		--feed-pad-bottom: 36px;
 		--chrome-fade: var(--bg);
 		display: flex;
@@ -811,7 +811,7 @@
 		/* Full-bleed shell — darker than desktop workspace; matches desktop sidebar */
 		.shell {
 			--chrome-fade: var(--shell);
-			--feed-pad-top: calc(56px + env(safe-area-inset-top, 0px));
+			--feed-pad-top: calc(52px + env(safe-area-inset-top, 0px));
 			--feed-pad-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 			flex-direction: column;
 			padding-bottom: 0;

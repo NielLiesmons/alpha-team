@@ -133,7 +133,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 8px;
+		padding: 6px;
 		box-sizing: border-box;
 	}
 

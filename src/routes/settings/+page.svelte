@@ -160,14 +160,15 @@
 <section class="block">
 	<p class="field-label">Brand</p>
 	<p class="hint">
-		Admin uses the Zapstore accent pair for now (no custom Space colors). Blurple for closed
-		tasks and primary CTAs; gold for in-progress / urgent.
+		Admin uses a fixed accent trio for now (no custom Space colors): primary CTAs / closed tasks,
+		progress, and urgent / destructive.
 	</p>
 	<p class="sample">
-		Zapstore
-		<span class="swatch" style="background: var(--blurpleColor)" title="blurple"></span>
-		<span class="swatch" style="background: var(--goldColor)" title="gold"></span>
-		<span class="swatch gradient" title="blurple gradient"></span>
+		Accents
+		<span class="swatch" style="background: var(--accent-1)" title="accent-1"></span>
+		<span class="swatch" style="background: var(--accent-2)" title="accent-2"></span>
+		<span class="swatch" style="background: var(--accent-3)" title="accent-3"></span>
+		<span class="swatch gradient" title="accent-1 gradient"></span>
 	</p>
 	<p class="hint">Admin stays Inter only — no display/serif face. Public sites may use Ovo separately.</p>
 </section>
@@ -320,6 +321,6 @@
 	}
 
 	.swatch.gradient {
-		background: var(--gradient-blurple);
+		background: var(--gradient-accent-1);
 	}
 </style>

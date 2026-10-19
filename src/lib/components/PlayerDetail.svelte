@@ -432,7 +432,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 8px;
+		padding: 6px;
 		width: 100%;
 		box-sizing: border-box;
 	}

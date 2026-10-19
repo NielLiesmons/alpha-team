@@ -13,30 +13,39 @@
 
 :root {
 	/*
-	 * Zapstore accent pair (hardcoded for Admin — no custom Space accents yet).
-	 * Blurple = success / closed / primary CTA; gold = progress / urgent.
+	 * Fixed accent trio (Zapstore palette, Admin names).
+	 * 1 = primary / closed / CTA · 2 = progress · 3 = urgent / destructive
 	 */
-	--blurpleLightColor: #8280ff;
-	--blurpleColor: #5a58fe;
-	--blurpleColor66: color-mix(in srgb, var(--blurpleColor) 66%, transparent);
-	--blurpleColor33: color-mix(in srgb, var(--blurpleColor) 33%, transparent);
-	--goldColor: #ffb338;
-	--goldColor66: color-mix(in srgb, var(--goldColor) 66%, transparent);
-	--goldColor33: color-mix(in srgb, var(--goldColor) 33%, transparent);
-	--gradient-blurple: radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%);
-	--gradient-blurple-hover: radial-gradient(circle at top left, #4245ff 0%, #2c29ff 100%);
-	--gradient-gold: radial-gradient(circle at top left, #ffc736 0%, #ffa037 100%);
-	--button-primary-bg: var(--gradient-blurple);
-	--button-primary-bg-hover: var(--gradient-blurple-hover);
+	--accent-1: #5a58fe;
+	--accent-1-66: color-mix(in srgb, var(--accent-1) 66%, transparent);
+	--accent-1-33: color-mix(in srgb, var(--accent-1) 33%, transparent);
+	--accent-2: #ffb338;
+	--accent-2-66: color-mix(in srgb, var(--accent-2) 66%, transparent);
+	--accent-2-33: color-mix(in srgb, var(--accent-2) 33%, transparent);
+	--accent-3: #ff4778;
+	--accent-3-66: color-mix(in srgb, var(--accent-3) 66%, transparent);
+	--accent-3-33: color-mix(in srgb, var(--accent-3) 33%, transparent);
+	--accent-3-16: color-mix(in srgb, var(--accent-3) 16%, transparent);
 
-	--accent: var(--blurpleColor);
-	--accent-2: var(--goldColor);
-	--accent-66: var(--blurpleColor66);
-	--accent-2-66: var(--goldColor66);
-	--accent-success: var(--blurpleColor);
-	--accent-progress: var(--goldColor);
-	--accent-success-66: var(--blurpleColor66);
-	--accent-progress-66: var(--goldColor66);
+	--gradient-accent-1: radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%);
+	--gradient-accent-1-hover: radial-gradient(circle at top left, #4245ff 0%, #2c29ff 100%);
+	--gradient-accent-2: radial-gradient(circle at top left, #ffc736 0%, #ffa037 100%);
+	--gradient-accent-3: radial-gradient(circle at top left, #ff4778 0%, #ff005e 100%);
+	--gradient-accent-3-16: radial-gradient(circle at top left, #ff477829 0%, #ff005e29 100%);
+
+	--button-primary-bg: var(--gradient-accent-1);
+	--button-primary-bg-hover: var(--gradient-accent-1-hover);
+
+	/* Semantic aliases */
+	--accent: var(--accent-1);
+	--accent-66: var(--accent-1-66);
+	--accent-success: var(--accent-1);
+	--accent-progress: var(--accent-2);
+	--accent-success-66: var(--accent-1-66);
+	--accent-progress-66: var(--accent-2-66);
+	--destructive: var(--accent-3);
+	--destructive-16: var(--accent-3-16);
+	--destructive-bg: var(--gradient-accent-3-16);
 
 	--icon-stroke: 1.4;
 	--task-box-stroke: 1.4px;
@@ -110,7 +119,6 @@
 
 	--nav-plus-bg: color-mix(in srgb, var(--fg) 3.5%, transparent);
 	--nav-plus-fg: color-mix(in srgb, var(--fg) 48%, transparent);
-	--destructive: var(--fg-33);
 
 	color-scheme: dark;
 }
@@ -367,12 +375,44 @@ h2 {
 	transform: scale(1.015);
 }
 
-/* Shared create-sheet / modal primary CTA (Zapstore blurple gradient) */
+/* Shared create-sheet / modal primary CTA */
 .publish-btn {
 	background-image: var(--button-primary-bg) !important;
 	background-color: transparent !important;
 	color: var(--whiteEnforced) !important;
 	border: none;
+}
+
+.text-destructive {
+	color: var(--destructive);
+}
+
+.btn-destructive {
+	background-image: var(--destructive-bg);
+	background-color: transparent;
+	color: var(--destructive);
+	border: 1px solid color-mix(in srgb, var(--accent-3) 30%, transparent);
+}
+
+/* Feed card columns + rounded section dividers (status / playlists / …) */
+.card-stack {
+	padding-left: 6px;
+	padding-right: 6px;
+	box-sizing: border-box;
+}
+
+.task-group-header,
+.group-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: auto;
+	margin: 0 6px;
+	padding: 6px 10px;
+	border: 0;
+	border-radius: 10px;
+	background: var(--fg-4);
+	box-sizing: border-box;
 }
 
 .btn.small {
@@ -778,14 +818,14 @@ table.data tr.selected td {
 	min-height: 0;
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
-	padding-top: var(--feed-pad-top, 48px);
+	padding-top: var(--feed-pad-top, 44px);
 	padding-bottom: var(--feed-pad-bottom, 36px);
 	box-sizing: border-box;
 }
 
 @media (max-width: 767px) {
 	.pane {
-		padding: var(--feed-pad-top, calc(56px + env(safe-area-inset-top, 0px))) 16px
+		padding: var(--feed-pad-top, calc(52px + env(safe-area-inset-top, 0px))) 16px
 			var(--feed-pad-bottom, calc(96px + env(safe-area-inset-bottom, 0px)));
 	}
 
