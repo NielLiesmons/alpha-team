@@ -25,7 +25,7 @@
 			height={checkSize * (12 / 18)}
 			viewBox="-1 -1 20 14"
 			fill="none"
-			stroke={embedded ? 'var(--accent-success)' : 'var(--white)'}
+			stroke={embedded ? 'var(--blurpleColor)' : 'var(--whiteEnforced)'}
 			stroke-linecap="round"
 			stroke-linejoin="round"
 			aria-hidden="true"
@@ -36,7 +36,7 @@
 		<div class="icon-slot" style:padding-left={embedded ? '0' : `${progressPadding}px`}>
 			<svg width={iconSize} height={iconSize} viewBox="0 0 11 22" aria-hidden="true">
 				<path
-					fill="var(--accent-progress)"
+					fill="var(--goldColor)"
 					d="M1.56676 21.7923C6.89979 21.0318 11 16.4462 11 10.903C11 5.35977 6.89979 0.774213 1.56676 0.0137178C0.70758 -0.108803 0 0.60654 0 1.47442V20.3316C0 21.1994 0.707579 21.9148 1.56676 21.7923Z"
 				/>
 			</svg>
@@ -45,7 +45,7 @@
 		<div class="icon-slot">
 			<svg width={iconSize} height={iconSize} viewBox="0 0 20 20" aria-hidden="true">
 				<path
-					fill="var(--accent-success)"
+					fill="var(--blurpleColor)"
 					d="M9.95571 20C15.503 20 20 15.503 20 9.95571C20 4.8941 16.256 0.706948 11.3863 0.012526C10.6018 -0.0993499 9.95571 0.553842 9.95571 1.34631V8.52081C9.95571 9.31328 9.31328 9.95571 8.52081 9.95571H1.34632C0.553842 9.95571 -0.0993498 10.6018 0.012526 11.3863C0.706948 16.256 4.8941 20 9.95571 20Z"
 				/>
 			</svg>
@@ -112,23 +112,24 @@
 	}
 
 	.state-open {
-		background: var(--white8);
+		background: var(--black33);
 		border: var(--task-box-stroke) solid var(--white33);
 	}
 
+	/* Zapstore closed: blurple radial gradient fill */
 	.state-closed {
-		background: var(--accent-success);
+		background: var(--gradient-blurple);
 		border: var(--task-box-stroke) solid transparent;
 	}
 
 	.state-inProgress {
-		background: color-mix(in srgb, var(--accent-progress) 20%, var(--black));
-		border: var(--task-box-stroke) solid var(--accent-progress-66);
+		background: var(--black33);
+		border: var(--task-box-stroke) solid var(--goldColor66);
 	}
 
 	.state-inReview {
-		background: color-mix(in srgb, var(--accent-success) 20%, var(--black));
-		border: var(--task-box-stroke) solid var(--accent-success-66);
+		background: var(--black33);
+		border: var(--task-box-stroke) solid var(--blurpleColor66);
 	}
 
 	.state-canceled {

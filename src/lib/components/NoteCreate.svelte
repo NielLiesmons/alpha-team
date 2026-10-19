@@ -292,10 +292,11 @@
 		align-items: center;
 		justify-content: center;
 		gap: 8px;
-		background: var(--fg);
+		background-image: var(--button-primary-bg);
+		background-color: transparent;
 		border: none;
 		border-radius: 9999px;
-		color: var(--bg);
+		color: var(--whiteEnforced);
 		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;

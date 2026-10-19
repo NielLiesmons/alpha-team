@@ -12,27 +12,39 @@
  */
 
 :root {
-	--accent: #dd8f87;
-	--accent-2: #6b9e8f;
-	--accent-2: oklch(from var(--accent) calc(l * 0.9) calc(c * 0.88) calc(h + 152));
-	--accent-66: color-mix(in srgb, var(--accent) 66%, transparent);
-	--accent-2-66: color-mix(in srgb, var(--accent-2) 66%, transparent);
-	--accent-success: var(--accent-2);
-	--accent-progress: var(--accent);
-	--accent-success-66: color-mix(in srgb, var(--accent-success) 66%, transparent);
-	--accent-progress-66: color-mix(in srgb, var(--accent-progress) 66%, transparent);
+	/*
+	 * Zapstore accent pair (hardcoded for Admin — no custom Space accents yet).
+	 * Blurple = success / closed / primary CTA; gold = progress / urgent.
+	 */
+	--blurpleLightColor: #8280ff;
+	--blurpleColor: #5a58fe;
+	--blurpleColor66: color-mix(in srgb, var(--blurpleColor) 66%, transparent);
+	--blurpleColor33: color-mix(in srgb, var(--blurpleColor) 33%, transparent);
+	--goldColor: #ffb338;
+	--goldColor66: color-mix(in srgb, var(--goldColor) 66%, transparent);
+	--goldColor33: color-mix(in srgb, var(--goldColor) 33%, transparent);
+	--gradient-blurple: radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%);
+	--gradient-blurple-hover: radial-gradient(circle at top left, #4245ff 0%, #2c29ff 100%);
+	--gradient-gold: radial-gradient(circle at top left, #ffc736 0%, #ffa037 100%);
+	--button-primary-bg: var(--gradient-blurple);
+	--button-primary-bg-hover: var(--gradient-blurple-hover);
+
+	--accent: var(--blurpleColor);
+	--accent-2: var(--goldColor);
+	--accent-66: var(--blurpleColor66);
+	--accent-2-66: var(--goldColor66);
+	--accent-success: var(--blurpleColor);
+	--accent-progress: var(--goldColor);
+	--accent-success-66: var(--blurpleColor66);
+	--accent-progress-66: var(--goldColor66);
 
 	--icon-stroke: 1.4;
 	--task-box-stroke: 1.4px;
 	--task-check-stroke: calc(var(--task-box-stroke) * 1.35);
 
-	/*
-	 * Two poles only (like Bley). Admin dark pole stays near Material #121212
-	 * (hsl(… 8%) was reading lighter than the old gray). Light pole keeps a
-	 * whisper of accent.
-	 */
+	/* Near-grayscale poles (Zapstore gray) — accent does not tint the page */
 	--fg-raw: #121212;
-	--bg-raw: color-mix(in srgb, #f8f8f8 97%, var(--accent));
+	--bg-raw: #f8f8f8;
 
 	/* Active pair — Admin defaults dark (operators); light flips below */
 	--bg: var(--fg-raw);
@@ -43,32 +55,31 @@
 	--fg-11: color-mix(in srgb, var(--fg) 12%, transparent);
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
-	/* Selected list/card fill — quieter than --fg-8 */
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
-	/* Panels / modals — barely lifted vs page; blur + shine do the work */
-	--surface: color-mix(in srgb, #161616 96%, var(--accent));
+	--surface: #161616;
+	/* Small chrome (buttons): slight lift + shine border */
 	--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--bg));
 	--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
+	/* Large surfaces (modals, bottom nav): plain page @ 66% + blur */
+	--glass-panel: color-mix(in srgb, var(--bg) 66%, transparent);
 	--glass-blur: 22px;
 	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
-	/* Soft specular edge: brighter top-left, quieter bottom-right (no refraction) */
+	/* Soft specular — buttons only (not modals / bottom nav) */
 	--glass-shine: linear-gradient(
 		135deg,
-		color-mix(in srgb, var(--fg) 32%, transparent) 0%,
-		color-mix(in srgb, var(--fg) 8%, transparent) 38%,
-		color-mix(in srgb, var(--fg) 4%, transparent) 62%,
-		color-mix(in srgb, var(--fg) 16%, transparent) 100%
+		color-mix(in srgb, var(--fg) 28%, transparent) 0%,
+		color-mix(in srgb, var(--fg) 10%, transparent) 45%,
+		color-mix(in srgb, var(--fg) 10%, transparent) 55%,
+		color-mix(in srgb, var(--fg) 22%, transparent) 100%
 	);
-	--popover: var(--glass);
-	--modal-bg: var(--glass);
+	--popover: var(--glass-panel);
+	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
 
-	/* Chrome behind nav + workspace gutter — darker than --bg (~#090909) */
-	--shell: hsl(from var(--accent) h 10% 3.5%);
+	--shell: #090909;
 	--shell-border: var(--hairline);
 
-	/* Scrim from page surface (desktop --bg); mobile overrides to --shell */
 	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
@@ -80,13 +91,11 @@
 	--radius-hero: 32px;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-	/* Bley-compatible aliases */
 	--ink: var(--fg);
 	--ink-raw: var(--fg-raw);
 	--ink66: var(--fg-66);
 	--ink33: var(--fg-33);
 
-	/* Legacy Zapstore aliases → migrate call sites to --fg / --bg */
 	--white: var(--fg);
 	--white66: var(--fg-66);
 	--white33: var(--fg-33);
@@ -101,11 +110,6 @@
 
 	--nav-plus-bg: color-mix(in srgb, var(--fg) 3.5%, transparent);
 	--nav-plus-fg: color-mix(in srgb, var(--fg) 48%, transparent);
-
-	--blurpleColor: var(--accent);
-	--blurpleColor66: var(--accent-66);
-	--goldColor: var(--accent-2);
-	--goldColor66: var(--accent-2-66);
 	--destructive: var(--fg-33);
 
 	color-scheme: dark;
@@ -121,22 +125,16 @@
 	--fg-8: color-mix(in srgb, var(--fg) 8%, transparent);
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
-	--surface: color-mix(in srgb, #161616 96%, var(--accent));
+	--surface: #161616;
 	--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--bg));
 	--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
+	--glass-panel: color-mix(in srgb, var(--bg) 66%, transparent);
 	--glass-blur: 22px;
 	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
-	--glass-shine: linear-gradient(
-		135deg,
-		color-mix(in srgb, var(--fg) 32%, transparent) 0%,
-		color-mix(in srgb, var(--fg) 8%, transparent) 38%,
-		color-mix(in srgb, var(--fg) 4%, transparent) 62%,
-		color-mix(in srgb, var(--fg) 16%, transparent) 100%
-	);
-	--popover: var(--glass);
-	--modal-bg: var(--glass);
+	--popover: var(--glass-panel);
+	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
-	--shell: hsl(from var(--accent) h 10% 3.5%);
+	--shell: #090909;
 	--shell-border: var(--hairline);
 	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--ink: var(--fg);
@@ -166,24 +164,23 @@
 	--fg-4: color-mix(in srgb, var(--fg) 4%, transparent);
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
-	/* Light: slight darkening vs page, still mostly translucent */
 	--glass-fill: color-mix(in srgb, var(--fg) 4%, var(--bg));
 	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+	--glass-panel: color-mix(in srgb, var(--bg) 66%, transparent);
 	--glass-blur: 22px;
 	--glass-border: color-mix(in srgb, var(--fg) 10%, transparent);
 	--glass-shine: linear-gradient(
 		135deg,
-		color-mix(in srgb, #fff 55%, transparent) 0%,
-		color-mix(in srgb, var(--fg) 6%, transparent) 40%,
-		color-mix(in srgb, var(--fg) 4%, transparent) 65%,
-		color-mix(in srgb, var(--fg) 12%, transparent) 100%
+		color-mix(in srgb, #fff 50%, transparent) 0%,
+		color-mix(in srgb, var(--fg) 8%, transparent) 45%,
+		color-mix(in srgb, var(--fg) 8%, transparent) 55%,
+		color-mix(in srgb, var(--fg) 16%, transparent) 100%
 	);
-	--popover: var(--glass);
-	--modal-bg: var(--glass);
+	--popover: var(--glass-panel);
+	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
-	--shell: hsl(from var(--accent) h 3% 96%);
+	--shell: #f4f4f4;
 	--shell-border: var(--hairline);
-	/* Light mode: dim with ink, keyed off page surface */
 	--scrim: color-mix(in srgb, var(--fg) 42%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
@@ -203,18 +200,20 @@
 	color-scheme: light;
 }
 
-/* Mobile page surface is --shell — glass + scrim follow it */
+/* Mobile page surface is --shell — panels/scrim follow it */
 @media (max-width: 767px) {
 	:root,
 	:root[data-theme='dark'] {
 		--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--shell));
 		--glass: color-mix(in srgb, var(--glass-fill) 84%, transparent);
+		--glass-panel: color-mix(in srgb, var(--shell) 66%, transparent);
 		--scrim: color-mix(in srgb, var(--shell) 88%, transparent);
 	}
 
 	:root[data-theme='light'] {
 		--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--shell));
 		--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+		--glass-panel: color-mix(in srgb, var(--shell) 66%, transparent);
 		--scrim: color-mix(in srgb, var(--fg) 52%, transparent);
 	}
 }
@@ -358,12 +357,22 @@ h2 {
 }
 
 .btn.primary {
-	background: var(--white);
-	color: var(--black);
+	background-image: var(--button-primary-bg);
+	background-color: transparent;
+	color: var(--whiteEnforced);
 }
 
 .btn.primary:hover:not(:disabled) {
-	opacity: 0.92;
+	background-image: var(--button-primary-bg-hover);
+	transform: scale(1.015);
+}
+
+/* Shared create-sheet / modal primary CTA (Zapstore blurple gradient) */
+.publish-btn {
+	background-image: var(--button-primary-bg) !important;
+	background-color: transparent !important;
+	color: var(--whiteEnforced) !important;
+	border: none;
 }
 
 .btn.small {

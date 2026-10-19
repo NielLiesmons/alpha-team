@@ -56,12 +56,10 @@
 	.sheet {
 		pointer-events: auto;
 		width: 100%;
-		border: 1px solid transparent;
+		border: 1px solid var(--glass-border);
 		border-bottom: none;
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
+		background: var(--glass-panel);
 		padding: 16px;
 		box-shadow: 0 16px 48px var(--shadow-strong);
 		backdrop-filter: blur(var(--glass-blur));
@@ -73,7 +71,7 @@
 			max-width: 560px;
 			margin-bottom: 16px;
 			border-radius: 28px;
-			border-bottom: 1px solid transparent;
+			border-bottom: 1px solid var(--glass-border);
 			padding: 12px;
 		}
 	}

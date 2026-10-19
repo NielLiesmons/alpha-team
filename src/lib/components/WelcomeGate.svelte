@@ -375,8 +375,9 @@
 		margin-top: 8px;
 		border: 0;
 		border-radius: 12px;
-		background: var(--white);
-		color: var(--black);
+		background-image: var(--button-primary-bg);
+		background-color: transparent;
+		color: var(--whiteEnforced);
 		font: inherit;
 		font-size: 14px;
 		font-weight: 600;

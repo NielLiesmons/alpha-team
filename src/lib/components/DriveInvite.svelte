@@ -263,8 +263,9 @@
 		padding: 0 1rem;
 		border-radius: 10px;
 		border: none;
-		background: var(--white);
-		color: var(--black);
+		background-image: var(--button-primary-bg);
+		background-color: transparent;
+		color: var(--whiteEnforced);
 		font: inherit;
 		font-weight: 600;
 		font-size: 14px;
@@ -277,6 +278,7 @@
 	}
 
 	.btn.ghost {
+		background-image: none;
 		background: transparent;
 		color: var(--white66);
 		border: 1px solid var(--white11);

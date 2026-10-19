@@ -814,8 +814,9 @@
 		padding: 0 12px;
 		border: 0;
 		border-radius: 8px;
-		background: var(--fg);
-		color: var(--bg);
+		background-image: var(--button-primary-bg);
+		background-color: transparent;
+		color: var(--whiteEnforced);
 		font: inherit;
 		font-size: 12px;
 		font-weight: 650;
@@ -971,12 +972,12 @@
 	}
 
 	.icon-hit {
-		width: 30px;
-		height: 30px;
+		width: 26px;
+		height: 26px;
 		display: grid;
 		place-items: center;
 		border: 1px solid transparent;
-		border-radius: 12px;
+		border-radius: 10px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -986,14 +987,15 @@
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		-webkit-tap-highlight-color: transparent;
+		transition: transform 0.15s var(--ease);
 	}
 
 	.icon-hit:hover {
-		color: var(--fg);
-		background:
-			linear-gradient(color-mix(in srgb, var(--bg) 88%, transparent), color-mix(in srgb, var(--bg) 88%, transparent))
-				padding-box,
-			var(--glass-shine) border-box;
+		transform: scale(1.06);
+	}
+
+	.icon-hit:active {
+		transform: scale(0.96);
 	}
 
 	.title-row {
@@ -1393,18 +1395,12 @@
 			backdrop-filter: blur(var(--glass-blur));
 			-webkit-backdrop-filter: blur(var(--glass-blur));
 			-webkit-tap-highlight-color: transparent;
+			transition: transform 0.15s var(--ease);
 		}
 
 		.chrome-btn:hover,
 		.chrome-btn[aria-expanded='true'] {
-			color: var(--fg);
-			background:
-				linear-gradient(
-						color-mix(in srgb, var(--shell) 88%, transparent),
-						color-mix(in srgb, var(--shell) 88%, transparent)
-					)
-					padding-box,
-				var(--glass-shine) border-box;
+			transform: scale(1.04);
 		}
 
 		.chrome-btn :global(svg) {

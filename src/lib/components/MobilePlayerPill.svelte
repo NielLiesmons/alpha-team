@@ -87,11 +87,9 @@
 			align-items: center;
 			gap: 4px;
 			padding: 6px 8px 6px 6px;
-			border: 1px solid transparent;
+			border: 1px solid var(--glass-border);
 			border-radius: 999px;
-			background:
-				linear-gradient(var(--glass), var(--glass)) padding-box,
-				var(--glass-shine) border-box;
+			background: var(--glass-panel);
 			box-shadow: 0 8px 28px var(--shadow-strong);
 			box-sizing: border-box;
 			backdrop-filter: blur(var(--glass-blur));

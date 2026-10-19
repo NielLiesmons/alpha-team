@@ -747,15 +747,15 @@
 		gap: 6px;
 	}
 
-	/* Desktop: squared chrome — circles are mobile-only */
+	/* Desktop: squared chrome — circles are mobile-only; hover = scale only */
 	.chrome-btn {
-		width: 30px;
-		height: 30px;
+		width: 26px;
+		height: 26px;
 		display: grid;
 		place-items: center;
 		padding: 0;
 		border: 1px solid transparent;
-		border-radius: 12px;
+		border-radius: 10px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -765,16 +765,17 @@
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		-webkit-tap-highlight-color: transparent;
+		transition: transform 0.15s var(--ease);
 	}
 
 	.chrome-btn:hover,
 	.chrome-btn.on,
 	.chrome-btn[aria-expanded='true'] {
-		color: var(--fg);
-		background:
-			linear-gradient(color-mix(in srgb, var(--bg) 88%, transparent), color-mix(in srgb, var(--bg) 88%, transparent))
-				padding-box,
-			var(--glass-shine) border-box;
+		transform: scale(1.06);
+	}
+
+	.chrome-btn:active {
+		transform: scale(0.96);
 	}
 
 	.chrome-ico {
@@ -897,14 +898,7 @@
 		.chrome-btn:hover,
 		.chrome-btn.on,
 		.chrome-btn[aria-expanded='true'] {
-			color: var(--fg);
-			background:
-				linear-gradient(
-						color-mix(in srgb, var(--shell) 88%, transparent),
-						color-mix(in srgb, var(--shell) 88%, transparent)
-					)
-					padding-box,
-				var(--glass-shine) border-box;
+			transform: scale(1.04);
 		}
 
 		.chrome-ico {
@@ -932,10 +926,8 @@
 			max-width: 100%;
 			margin: 0 auto;
 			border-radius: 999px;
-			border: 1px solid transparent;
-			background:
-				linear-gradient(var(--glass), var(--glass)) padding-box,
-				var(--glass-shine) border-box;
+			border: 1px solid var(--glass-border);
+			background: var(--glass-panel);
 			box-shadow: 0 8px 28px var(--shadow-strong);
 			overflow: hidden;
 			backdrop-filter: blur(var(--glass-blur));

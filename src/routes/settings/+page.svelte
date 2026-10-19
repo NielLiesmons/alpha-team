@@ -1,6 +1,5 @@
 <script>
 	import { onMount } from 'svelte';
-	import { brand, setBrand } from '$lib/brand.svelte.js';
 	import DriveInvite from '$lib/components/DriveInvite.svelte';
 	import { health } from '$lib/drive/client.js';
 	import {
@@ -101,7 +100,7 @@
 		<input type="password" bind:value={apiTokenDraft} autocomplete="off" spellcheck="false" />
 	</label>
 	<div class="actions">
-		<button type="button" class="btn" onclick={saveApiToken}>Save token</button>
+		<button type="button" class="btn primary" onclick={saveApiToken}>Save token</button>
 	</div>
 	{#if apiTokenMsg}
 		<p class="status on">{apiTokenMsg}</p>
@@ -133,7 +132,7 @@
 		<div class="actions">
 			<button
 				type="button"
-				class="btn"
+				class="btn primary"
 				disabled={busy || !token.trim() || !rootKey.trim()}
 				onclick={connect}
 			>
@@ -161,24 +160,16 @@
 <section class="block">
 	<p class="field-label">Brand</p>
 	<p class="hint">
-		Accent tints surfaces and marks selection. A second accent is derived automatically for Tasks
-		(progress / urgent). CTAs stay ink-on-bg — never accent fills.
+		Admin uses the Zapstore accent pair for now (no custom Space colors). Blurple for closed
+		tasks and primary CTAs; gold for in-progress / urgent.
 	</p>
-	<label class="row">
-		<span>Accent</span>
-		<input
-			type="color"
-			value={brand.accent}
-			oninput={(e) => setBrand({ accent: e.currentTarget.value })}
-		/>
-		<code>{brand.accent}</code>
-	</label>
-	<p class="hint">Admin stays Inter only — no display/serif face. Public sites may use Ovo separately.</p>
 	<p class="sample">
-		Accents
-		<span class="swatch" style="background: var(--accent)" title="accent"></span>
-		<span class="swatch" style="background: var(--accent-2)" title="accent-2"></span>
+		Zapstore
+		<span class="swatch" style="background: var(--blurpleColor)" title="blurple"></span>
+		<span class="swatch" style="background: var(--goldColor)" title="gold"></span>
+		<span class="swatch gradient" title="blurple gradient"></span>
 	</p>
+	<p class="hint">Admin stays Inter only — no display/serif face. Public sites may use Ovo separately.</p>
 </section>
 
 <section class="block">
@@ -282,8 +273,9 @@
 		padding: 0 1rem;
 		border-radius: 10px;
 		border: none;
-		background: var(--white);
-		color: var(--black);
+		background-image: var(--button-primary-bg);
+		background-color: transparent;
+		color: var(--whiteEnforced);
 		font: inherit;
 		font-weight: 600;
 		font-size: 14px;
@@ -296,6 +288,7 @@
 	}
 
 	.btn.ghost {
+		background-image: none;
 		background: transparent;
 		color: var(--white66);
 		border: 1px solid var(--white11);
@@ -324,5 +317,9 @@
 		width: 0.85rem;
 		height: 0.85rem;
 		border-radius: 999px;
+	}
+
+	.swatch.gradient {
+		background: var(--gradient-blurple);
 	}
 </style>
