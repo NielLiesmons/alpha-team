@@ -94,9 +94,11 @@
 	const enterprise = $derived(
 		selection?.kind === 'enterprise' ? enterprises.find((e) => e.id === selection.id) : null
 	);
-	const isAccounting = $derived($page.url.pathname.startsWith('/accounting'));
+	const isEntreprises = $derived(
+		$page.url.pathname.startsWith('/entreprises') || $page.url.pathname.startsWith('/accounting')
+	);
 	const accountingPanel = $derived(
-		isAccounting &&
+		isEntreprises &&
 			accountingBrowse.mode !== 'home' &&
 			!ledger &&
 			!costItem &&
@@ -200,7 +202,7 @@
 		if (costItem) return 'Cost';
 		if (salesLine) return 'Sales';
 		if (enterprise) return 'Enterprise';
-		if (accountingPanel) return 'Accounting';
+		if (accountingPanel) return 'Entreprises';
 		if (newsletter) return 'Newsletter';
 		if (welcomeSelected) return 'Welcome';
 		if (selection?.kind === 'mail') return 'Mail';
@@ -245,10 +247,10 @@
 		if (path.startsWith('/tasks')) return { title: 'No task selected', body: 'Pick a task from the list to read it here.' };
 		if (path.startsWith('/projects')) return { title: 'No project selected', body: 'Open a project to see its summary and notes.' };
 		if (path.startsWith('/notes')) return { title: 'No note selected', body: 'Choose a note to read it beside the list.' };
-		if (path.startsWith('/accounting'))
+		if (path.startsWith('/entreprises') || path.startsWith('/accounting'))
 			return {
 				title: 'No entry selected',
-				body: 'Open Ledger, Costs, Sales, or Enterprises — then pick a row.'
+				body: 'Open Entreprises, Costs, Sales, or Ledger — then pick a row.'
 			};
 		if (path.startsWith('/publications'))
 			return {

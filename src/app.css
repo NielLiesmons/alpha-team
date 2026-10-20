@@ -881,7 +881,7 @@ table.data tr.selected td {
 
 @media (max-width: 767px) {
 	.pane {
-		padding: var(--feed-pad-top, calc(56px + env(safe-area-inset-top, 0px))) 16px
+		padding: var(--feed-pad-top, calc(60px + env(safe-area-inset-top, 0px))) 16px
 			var(--feed-pad-bottom, calc(100px + env(safe-area-inset-bottom, 0px)));
 	}
 

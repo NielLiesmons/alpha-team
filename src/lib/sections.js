@@ -29,11 +29,11 @@ export const primaryNav = [
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
 	{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
 	{
-		href: '/accounting',
-		label: 'Accounting',
+		href: '/entreprises',
+		label: 'Entreprises',
 		icon: 'accounting',
 		countKey: 'ledger',
-		createKind: 'ledger'
+		createKind: 'enterprise'
 	},
 	{ href: '/planning', label: 'Planning', icon: 'calendar' },
 	{ href: '/player', label: 'Player', icon: 'player' },
@@ -51,7 +51,7 @@ export const primaryNav = [
 export const mobileNav = [
 	{ href: '/website', label: 'Website', icon: 'website' },
 	{ href: '/planning', label: 'Planning', icon: 'calendar' },
-	{ href: '/accounting', label: 'Accounting', icon: 'accounting' },
+	{ href: '/entreprises', label: 'Entreprises', icon: 'accounting' },
 	{ href: '/notes', label: 'Notes', icon: 'notes' },
 	{ href: '/projects', label: 'Projects', icon: 'projects' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },

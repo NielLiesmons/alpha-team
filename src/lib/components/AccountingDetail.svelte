@@ -38,8 +38,8 @@
 				: mode === 'sales'
 					? 'Sales'
 					: mode === 'enterprises'
-						? 'Enterprises'
-						: 'Accounting'
+						? 'Entreprises'
+						: 'Entreprises'
 	);
 
 	const sortedLedger = $derived(

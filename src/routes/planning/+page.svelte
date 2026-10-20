@@ -2,6 +2,7 @@
 	import EnterpriseBox from '$lib/components/EnterpriseBox.svelte';
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
+	import { stringToColor } from '$lib/color.js';
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import {
 		enterprises,
@@ -13,11 +14,9 @@
 
 	/** @type {Set<string>} */
 	let collapsed = $state(new Set());
-	/** @type {Set<string>} */
-	let collapsedProjects = $state(new Set());
 
 	const DAY_MS = 86_400_000;
-	const PX_PER_DAY = 6;
+	const PX_PER_DAY = 8;
 
 	const sortedEnterprises = $derived(
 		[...enterprises].sort(
@@ -25,7 +24,6 @@
 		)
 	);
 
-	/** Unassigned bucket when projects have no enterprise */
 	const UNASSIGNED = '__none__';
 
 	/**
@@ -36,6 +34,20 @@
 		if (!iso) return fallback;
 		const t = Date.parse(iso);
 		return Number.isFinite(t) ? t : fallback;
+	}
+
+	/** @param {any} p */
+	function projectTint(p) {
+		const seed = (p.icon && String(p.icon).trim()) || p.title || p.id || 'P';
+		const { r, g, b } = stringToColor(seed);
+		return `rgba(${r}, ${g}, ${b}, 0.22)`;
+	}
+
+	/** @param {any} p */
+	function projectTintStrong(p) {
+		const seed = (p.icon && String(p.icon).trim()) || p.title || p.id || 'P';
+		const { r, g, b } = stringToColor(seed);
+		return `rgba(${r}, ${g}, ${b}, 0.45)`;
 	}
 
 	const range = $derived.by(() => {
@@ -55,7 +67,6 @@
 			if (Number.isFinite(s)) min = Math.min(min, s);
 			if (Number.isFinite(e)) max = Math.max(max, e);
 		}
-		/* Snap to month starts */
 		const start = new Date(min);
 		start.setUTCDate(1);
 		start.setUTCHours(0, 0, 0, 0);
@@ -66,7 +77,7 @@
 	});
 
 	const totalDays = $derived(Math.max(1, Math.ceil((range.end - range.start) / DAY_MS)));
-	const chartWidth = $derived(Math.max(640, totalDays * PX_PER_DAY));
+	const chartWidth = $derived(Math.max(720, totalDays * PX_PER_DAY));
 
 	const months = $derived.by(() => {
 		/** @type {{ label: string, left: number, width: number }[]} */
@@ -91,20 +102,20 @@
 	 * @param {string | null | undefined} endIso
 	 * @param {number} [fallbackDays]
 	 */
-	function barStyle(startIso, endIso, fallbackDays = 7) {
+	function span(startIso, endIso, fallbackDays = 7) {
 		const hasStart = Boolean(startIso && Number.isFinite(Date.parse(startIso)));
 		const hasEnd = Boolean(endIso && Number.isFinite(Date.parse(endIso)));
-		if (!hasStart && !hasEnd) {
-			return { display: 'none' };
-		}
-		let s = hasStart ? Date.parse(/** @type {string} */ (startIso)) : Date.parse(/** @type {string} */ (endIso)) - fallbackDays * DAY_MS;
+		if (!hasStart && !hasEnd) return null;
+		let s = hasStart
+			? Date.parse(/** @type {string} */ (startIso))
+			: Date.parse(/** @type {string} */ (endIso)) - fallbackDays * DAY_MS;
 		let e = hasEnd ? Date.parse(/** @type {string} */ (endIso)) : s + fallbackDays * DAY_MS;
 		if (e < s) e = s + DAY_MS;
-		const left = ((s - range.start) / DAY_MS) * PX_PER_DAY;
-		const width = Math.max(PX_PER_DAY * 2, ((e - s) / DAY_MS) * PX_PER_DAY);
 		return {
-			left: `${left}px`,
-			width: `${width}px`
+			left: ((s - range.start) / DAY_MS) * PX_PER_DAY,
+			width: Math.max(PX_PER_DAY * 3, ((e - s) / DAY_MS) * PX_PER_DAY),
+			start: s,
+			end: e
 		};
 	}
 
@@ -118,16 +129,18 @@
 
 	/** @param {string} projectId */
 	function tasksForProject(projectId) {
-		return tasks.filter((t) => (t.project_ids ?? []).includes(projectId));
+		return tasks
+			.filter((t) => (t.project_ids ?? []).includes(projectId))
+			.filter((t) => t.start_at || t.end_at);
 	}
 
 	const rows = $derived.by(() => {
-		/** @type {{ kind: 'enterprise' | 'project' | 'task', id: string, title: string, entId?: string, projectId?: string, entity: any }[]} */
+		/** @type {{ kind: 'enterprise' | 'project', id: string, title: string, entity: any }[]} */
 		const out = [];
 		const ents =
 			sortedEnterprises.length > 0
 				? sortedEnterprises
-				: [{ id: UNASSIGNED, title: 'Projects', status: 'active', icon: null, kind: 'general' }];
+				: [{ id: UNASSIGNED, title: 'Projects', status: 'active', icon: null }];
 
 		const showUnassigned =
 			projects.some((p) => !(p.enterprise_ids ?? []).length) && sortedEnterprises.length > 0;
@@ -136,24 +149,7 @@
 			out.push({ kind: 'enterprise', id: ent.id, title: ent.title, entity: ent });
 			if (collapsed.has(ent.id)) continue;
 			for (const p of projectsForEnterprise(ent.id)) {
-				out.push({
-					kind: 'project',
-					id: p.id,
-					title: p.title,
-					entId: ent.id,
-					entity: p
-				});
-				if (collapsedProjects.has(p.id)) continue;
-				for (const t of tasksForProject(p.id)) {
-					out.push({
-						kind: 'task',
-						id: t.id,
-						title: t.title,
-						entId: ent.id,
-						projectId: p.id,
-						entity: t
-					});
-				}
+				out.push({ kind: 'project', id: p.id, title: p.title, entity: p });
 			}
 		}
 
@@ -166,18 +162,7 @@
 			});
 			if (!collapsed.has(UNASSIGNED)) {
 				for (const p of projectsForEnterprise(UNASSIGNED)) {
-					out.push({ kind: 'project', id: p.id, title: p.title, entId: UNASSIGNED, entity: p });
-					if (collapsedProjects.has(p.id)) continue;
-					for (const t of tasksForProject(p.id)) {
-						out.push({
-							kind: 'task',
-							id: t.id,
-							title: t.title,
-							entId: UNASSIGNED,
-							projectId: p.id,
-							entity: t
-						});
-					}
+					out.push({ kind: 'project', id: p.id, title: p.title, entity: p });
 				}
 			}
 		}
@@ -192,23 +177,14 @@
 		collapsed = next;
 	}
 
-	/** @param {string} id */
-	function toggleProject(id) {
-		const next = new Set(collapsedProjects);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		collapsedProjects = next;
-	}
-
 	function todayLeft() {
-		const left = ((Date.now() - range.start) / DAY_MS) * PX_PER_DAY;
-		return `${left}px`;
+		return `${((Date.now() - range.start) / DAY_MS) * PX_PER_DAY}px`;
 	}
 </script>
 
 <svelte:head><title>Planning</title></svelte:head>
 
-<div class="planning">
+<div class="feed planning">
 	<header class="toolbar">
 		<span class="eyebrow-label-xs">Retro-planning</span>
 		<div class="toolbar-actions">
@@ -223,120 +199,107 @@
 		<div class="empty">
 			<p class="empty-title">No enterprises yet</p>
 			<p class="empty-body">
-				Add farm lines (Eggs, Sheep, Mushrooms…) plus a General rollup — then attach projects with
-				start/end dates to see the Gantt.
+				Add farm lines (Eggs, Sheep…) plus General — then attach projects with start/end dates.
 			</p>
 			<button type="button" class="tool-btn primary" onclick={() => openComposer('enterprise')}
 				>New enterprise</button
 			>
 		</div>
 	{:else}
-		<div class="gantt" style:--label-w="200px">
-			<div class="gantt-scroll">
-				<div class="gantt-inner" style:width="calc(var(--label-w) + {chartWidth}px)">
-					<div class="month-row">
-						<div class="label-cell head"></div>
-						<div class="timeline-head" style:width="{chartWidth}px">
-							{#each months as m}
-								<span class="month" style:left="{m.left}px" style:width="{m.width}px">{m.label}</span>
-							{/each}
+		<div class="gantt-scroll">
+			<div class="gantt-inner" style:width="calc(var(--label-w) + {chartWidth}px)">
+				<div class="gantt-row head">
+					<div class="label-cell"></div>
+					<div class="timeline" style:width="{chartWidth}px">
+						{#each months as m}
+							<span class="month" style:left="{m.left}px" style:width="{m.width}px">{m.label}</span>
+						{/each}
+						<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
+					</div>
+				</div>
+
+				{#each rows as row (row.kind + ':' + row.id)}
+					<div class="gantt-row" class:ent={row.kind === 'enterprise'} class:proj={row.kind === 'project'}>
+						<div class="label-cell">
+							{#if row.kind === 'enterprise'}
+								<button type="button" class="twist" onclick={() => toggleEnt(row.id)} aria-label="Toggle">
+									{collapsed.has(row.id) ? '▸' : '▾'}
+								</button>
+								<EnterpriseBox state={row.entity.status || 'active'} icon={row.entity.icon} size={22} />
+								<button
+									type="button"
+									class="name ent-name"
+									onclick={() => {
+										if (row.id !== UNASSIGNED) selectEntity('enterprise', row.id);
+									}}>{row.title}</button
+								>
+							{:else}
+								<span class="indent"></span>
+								<ProjectBox
+									state={deriveProjectStatus(row.id, tasks)}
+									icon={row.entity.icon}
+									size={18}
+								/>
+								<button type="button" class="name" onclick={() => selectEntity('project', row.id)}
+									>{row.title}</button
+								>
+							{/if}
+						</div>
+						<div class="timeline" style:width="{chartWidth}px">
 							<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
+							{#if row.kind === 'enterprise'}
+								{@const kids = projectsForEnterprise(row.id)}
+								{@const starts = kids.map((p) => parseMs(p.start_at, NaN)).filter(Number.isFinite)}
+								{@const ends = kids
+									.map((p) => parseMs(p.end_at, parseMs(p.start_at, NaN) + 14 * DAY_MS))
+									.filter(Number.isFinite)}
+								{#if starts.length && ends.length}
+									{@const s = Math.min(...starts)}
+									{@const e = Math.max(...ends)}
+									<span
+										class="ent-span"
+										style:left="{( (s - range.start) / DAY_MS) * PX_PER_DAY}px"
+										style:width="{Math.max(PX_PER_DAY * 2, ((e - s) / DAY_MS) * PX_PER_DAY)}px"
+									></span>
+								{/if}
+							{:else}
+								{@const box = span(row.entity.start_at, row.entity.end_at, 14)}
+								{#if box}
+									{@const datedTasks = tasksForProject(row.id)}
+									<button
+										type="button"
+										class="proj-container"
+										style:left="{box.left}px"
+										style:width="{box.width}px"
+										style:background={projectTint(row.entity)}
+										style:border-color={projectTintStrong(row.entity)}
+										onclick={() => selectEntity('project', row.id)}
+										title={row.title}
+									>
+										{#each datedTasks as t (t.id)}
+											{@const ts = span(t.start_at, t.end_at, 3)}
+											{#if ts}
+												<span
+													class="task-inline"
+													style:left="{Math.max(0, ts.left - box.left)}px"
+													style:width="{Math.min(ts.width, box.width)}px"
+													role="presentation"
+												>
+													<span class="task-box-wrap">
+														<TaskBox state={t.status} size={14} />
+													</span>
+													<span class="task-line" title={t.title}></span>
+												</span>
+											{/if}
+										{/each}
+									</button>
+								{:else}
+									<span class="undated">Set dates</span>
+								{/if}
+							{/if}
 						</div>
 					</div>
-
-					{#each rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
-						<div class="gantt-row" class:ent={row.kind === 'enterprise'} class:proj={row.kind === 'project'} class:task={row.kind === 'task'}>
-							<div class="label-cell">
-								{#if row.kind === 'enterprise'}
-									<button type="button" class="twist" onclick={() => toggleEnt(row.id)} aria-label="Toggle">
-										{collapsed.has(row.id) ? '▸' : '▾'}
-									</button>
-									<EnterpriseBox state={row.entity.status || 'active'} icon={row.entity.icon} size={22} />
-									<button
-										type="button"
-										class="name ent-name"
-										onclick={() => {
-											if (row.id !== UNASSIGNED) selectEntity('enterprise', row.id);
-										}}
-										>{row.title}</button
-									>
-								{:else if row.kind === 'project'}
-									<span class="indent"></span>
-									<button
-										type="button"
-										class="twist"
-										onclick={() => toggleProject(row.id)}
-										aria-label="Toggle tasks"
-									>
-										{collapsedProjects.has(row.id) ? '▸' : '▾'}
-									</button>
-									<ProjectBox
-										state={deriveProjectStatus(row.id, tasks)}
-										icon={row.entity.icon}
-										size={18}
-									/>
-									<button
-										type="button"
-										class="name"
-										onclick={() => selectEntity('project', row.id)}>{row.title}</button
-									>
-								{:else}
-									<span class="indent deep"></span>
-									<TaskBox state={row.entity.status} size={16} />
-									<button type="button" class="name muted" onclick={() => selectEntity('task', row.id)}
-										>{row.title}</button
-									>
-								{/if}
-							</div>
-							<div class="timeline" style:width="{chartWidth}px">
-								<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
-								{#if row.kind === 'enterprise'}
-									<!-- enterprise span = union of child project bars (visual only if any dated) -->
-									{@const kids = projectsForEnterprise(row.id)}
-									{@const starts = kids.map((p) => parseMs(p.start_at, NaN)).filter(Number.isFinite)}
-									{@const ends = kids
-										.map((p) => parseMs(p.end_at, parseMs(p.start_at, NaN) + 14 * DAY_MS))
-										.filter(Number.isFinite)}
-									{#if starts.length && ends.length}
-										{@const s = Math.min(...starts)}
-										{@const e = Math.max(...ends)}
-										<span
-											class="bar ent-bar"
-											style:left="{( (s - range.start) / DAY_MS) * PX_PER_DAY}px"
-											style:width="{Math.max(PX_PER_DAY * 2, ((e - s) / DAY_MS) * PX_PER_DAY)}px"
-										></span>
-									{/if}
-								{:else if row.kind === 'project'}
-									{@const st = barStyle(row.entity.start_at, row.entity.end_at, 14)}
-									{#if st.display !== 'none'}
-										<button
-											type="button"
-											class="bar proj-bar"
-											style:left={st.left}
-											style:width={st.width}
-											onclick={() => selectEntity('project', row.id)}
-											title={row.title}
-										></button>
-									{:else}
-										<span class="undated">Set dates</span>
-									{/if}
-								{:else}
-									{@const st = barStyle(row.entity.start_at, row.entity.end_at, 3)}
-									{#if st.display !== 'none'}
-										<button
-											type="button"
-											class="bar task-bar"
-											style:left={st.left}
-											style:width={st.width}
-											onclick={() => selectEntity('task', row.id)}
-											title={row.title}
-										></button>
-									{/if}
-								{/if}
-							</div>
-						</div>
-					{/each}
-				</div>
+				{/each}
 			</div>
 		</div>
 	{/if}
@@ -347,8 +310,7 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		flex: 1;
-		overflow: hidden;
+		/* .feed already pads for list-top */
 	}
 
 	.toolbar {
@@ -356,8 +318,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		padding: 10px 14px;
-		border-bottom: 1px solid var(--fg-8);
+		padding: 0 14px 10px;
 		flex-shrink: 0;
 	}
 
@@ -387,7 +348,7 @@
 	}
 
 	.empty {
-		padding: 40px 24px;
+		padding: 24px;
 		max-width: 420px;
 	}
 
@@ -404,36 +365,38 @@
 		color: var(--fg-33);
 	}
 
-	.gantt {
+	.gantt-scroll {
 		flex: 1;
 		min-height: 0;
-		overflow: hidden;
-	}
-
-	.gantt-scroll {
-		height: 100%;
 		overflow: auto;
+		--label-w: 200px;
 	}
 
 	.gantt-inner {
 		min-width: 100%;
 	}
 
-	.month-row,
 	.gantt-row {
 		display: flex;
 		align-items: stretch;
-		min-height: 36px;
+		min-height: 40px;
 		border-bottom: 1px solid var(--fg-8);
 	}
 
-	.gantt-row.ent {
-		min-height: 42px;
-		background: color-mix(in srgb, var(--fg) 3%, transparent);
+	.gantt-row.head {
+		min-height: 32px;
+		position: sticky;
+		top: 0;
+		z-index: 3;
+		background: var(--bg);
 	}
 
-	.gantt-row.task {
-		min-height: 30px;
+	.gantt-row.ent {
+		min-height: 44px;
+	}
+
+	.gantt-row.proj {
+		min-height: 52px;
 	}
 
 	.label-cell {
@@ -446,15 +409,23 @@
 		align-items: center;
 		gap: 6px;
 		padding: 0 8px;
-		background: var(--bg, var(--shell, #111));
-		background: color-mix(in srgb, var(--shell, var(--bg)) 92%, transparent);
-		backdrop-filter: blur(8px);
-		border-right: 1px solid var(--fg-8);
 		box-sizing: border-box;
+		border-right: 1px solid var(--fg-8);
+		/* Match workspace plane (not a darker strip) */
+		background: var(--bg);
 	}
 
-	.label-cell.head {
-		z-index: 3;
+	.gantt-row.head,
+	.gantt-row.head .label-cell {
+		background: var(--bg);
+	}
+
+	@media (max-width: 767px) {
+		.label-cell,
+		.gantt-row.head,
+		.gantt-row.head .label-cell {
+			background: var(--shell);
+		}
 	}
 
 	.twist {
@@ -469,12 +440,8 @@
 	}
 
 	.indent {
-		width: 14px;
+		width: 18px;
 		flex-shrink: 0;
-	}
-
-	.indent.deep {
-		width: 36px;
 	}
 
 	.name {
@@ -493,17 +460,10 @@
 		padding: 0;
 	}
 
-	.name.muted {
-		font-weight: 500;
-		color: var(--fg-66);
-		font-size: 12px;
-	}
-
 	.ent-name {
 		font-size: 14px;
 	}
 
-	.timeline-head,
 	.timeline {
 		position: relative;
 		flex-shrink: 0;
@@ -531,38 +491,57 @@
 		bottom: 0;
 		width: 1px;
 		background: var(--accent-2, #c96);
-		opacity: 0.7;
+		opacity: 0.65;
 		pointer-events: none;
 		z-index: 1;
 	}
 
-	.bar {
+	.ent-span {
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
-		height: 14px;
-		border: 0;
-		border-radius: 4px;
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.ent-bar {
-		height: 10px;
-		background: color-mix(in srgb, var(--fg) 18%, transparent);
+		height: 8px;
 		border-radius: 3px;
+		background: color-mix(in srgb, var(--fg) 14%, transparent);
 		pointer-events: none;
 	}
 
-	.proj-bar {
-		height: 16px;
-		background: color-mix(in srgb, var(--accent-2, #c96) 55%, var(--fg-8));
+	.proj-container {
+		position: absolute;
+		top: 8px;
+		bottom: 8px;
+		border-radius: 12px;
+		border: 1px solid transparent;
+		cursor: pointer;
+		padding: 0;
+		overflow: hidden;
+		box-sizing: border-box;
 	}
 
-	.task-bar {
-		height: 10px;
-		background: color-mix(in srgb, var(--accent-1, #6a8) 50%, var(--fg-8));
-		border-radius: 3px;
+	.task-inline {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		height: 18px;
+		min-width: 28px;
+		pointer-events: none;
+	}
+
+	.task-box-wrap {
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
+	}
+
+	.task-line {
+		flex: 1;
+		min-width: 8px;
+		height: 3px;
+		border-radius: 2px;
+		background: color-mix(in srgb, var(--fg) 45%, transparent);
 	}
 
 	.undated {
@@ -572,5 +551,13 @@
 		transform: translateY(-50%);
 		font-size: 11px;
 		color: var(--fg-33);
+	}
+
+	.eyebrow-label-xs {
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--fg-66);
 	}
 </style>

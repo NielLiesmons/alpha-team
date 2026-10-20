@@ -158,7 +158,7 @@
 				></button>
 				<div class="bottom-menu">
 					{#if sortedEnterprises.length === 0}
-						<p class="menu-empty">Create an enterprise in Accounting first</p>
+						<p class="menu-empty">Create an enterprise in Entreprises first</p>
 					{:else}
 						{#each sortedEnterprises as e (e.id)}
 							<button

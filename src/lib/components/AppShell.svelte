@@ -103,10 +103,13 @@
 		} else {
 			forceClosePlayerDetail();
 		}
-		if (!p.startsWith('/accounting')) {
+		if (!p.startsWith('/entreprises') && !p.startsWith('/accounting')) {
 			resetAccountingBrowse();
 		}
 	});
+
+	/** Full-width list (no detail column) — Planning needs the whole workspace. */
+	const wideList = $derived(path.startsWith('/planning'));
 
 	onMount(() =>
 		bindDetailPopstate({
@@ -140,7 +143,7 @@
 			else if (kind === 'cost') setAccountingBrowse('costs');
 			else if (kind === 'sales') setAccountingBrowse('sales');
 			else setAccountingBrowse('enterprises');
-			go('/accounting');
+			go('/entreprises');
 		}
 	}
 
@@ -298,7 +301,7 @@
 
 	<div class="workspace-wrap">
 		<div class="workspace">
-			<section class="list-col" aria-label={activeItem.label}>
+			<section class="list-col" class:wide={wideList} aria-label={activeItem.label}>
 				<header class="list-top">
 					<h1 class="list-title">{activeItem.label}</h1>
 					<div class="list-actions">
@@ -380,7 +383,9 @@
 				</div>
 				<div class="list-bottom-fade" aria-hidden="true"></div>
 			</section>
-			<DetailColumn />
+			{#if !wideList}
+				<DetailColumn />
+			{/if}
 		</div>
 	</div>
 
@@ -813,6 +818,13 @@
 		overflow: hidden;
 	}
 
+	.list-col.wide {
+		flex: 1 1 auto;
+		width: auto;
+		min-width: 0;
+		border-right: 0;
+	}
+
 	/* Floating header — soft short fade (not a solid veil over the list) */
 	.list-top {
 		position: absolute;
@@ -929,7 +941,8 @@
 		/* Full-bleed shell — darker than desktop workspace; matches desktop sidebar */
 		.shell {
 			--chrome-fade: var(--shell);
-			--feed-pad-top: calc(56px + env(safe-area-inset-top, 0px));
+			/* +4px under title chrome vs previous so first row sits a bit lower */
+			--feed-pad-top: calc(60px + env(safe-area-inset-top, 0px));
 			--feed-pad-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 			flex-direction: column;
 			padding-bottom: 0;

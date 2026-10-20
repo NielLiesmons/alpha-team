@@ -108,25 +108,20 @@
 
 <svelte:head><title>Drive</title></svelte:head>
 
-<header class="page-head">
-	<div>
-		<h1>Drive</h1>
-		<p>
-			Column browser — content-type folders. Upload into the selected folder.
-		</p>
-	</div>
-	{#if ui.source === 'drive'}
-		<button type="button" class="new-btn" disabled={uploading} onclick={() => fileInput?.click()}>
-			{uploading ? 'Uploading…' : 'Upload'}
-		</button>
-		<input bind:this={fileInput} type="file" multiple hidden onchange={onFiles} />
-	{/if}
-</header>
+<div class="feed drive">
+	<header class="toolbar">
+		<p class="path">Upload → <code>{targetFolder}/</code></p>
+		{#if ui.source === 'drive'}
+			<button type="button" class="new-btn" disabled={uploading} onclick={() => fileInput?.click()}>
+				{uploading ? 'Uploading…' : 'Upload'}
+			</button>
+			<input bind:this={fileInput} type="file" multiple hidden onchange={onFiles} />
+		{/if}
+	</header>
 
 {#if ui.source !== 'drive'}
 	<p class="empty">Drive is disconnected. Connect in Settings, then browse here.</p>
 {:else}
-	<p class="path">Upload → <code>{targetFolder}/</code></p>
 	{#if err}
 		<p class="err">{err}</p>
 	{/if}
@@ -161,24 +156,22 @@
 		</div>
 	{/if}
 {/if}
+</div>
 
 <style>
-	.page-head {
+	.drive {
 		display: flex;
-		align-items: flex-start;
+		flex-direction: column;
+		min-height: 0;
+	}
+
+	.toolbar {
+		display: flex;
+		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		padding: 1rem 1rem 0.5rem;
-	}
-
-	.page-head p {
-		margin: 0.35rem 0 0;
-		font-size: 13px;
-		color: var(--white66);
-	}
-
-	.page-head a {
-		color: var(--white);
+		padding: 0 14px 10px;
+		flex-shrink: 0;
 	}
 
 	.new-btn {
@@ -187,8 +180,8 @@
 		padding: 0 1rem;
 		border: 0;
 		border-radius: 10px;
-		background: var(--white);
-		color: var(--black);
+		background: var(--fg);
+		color: var(--bg);
 		font: inherit;
 		font-size: 14px;
 		font-weight: 600;
@@ -202,9 +195,8 @@
 
 	.path {
 		margin: 0;
-		padding: 0 1rem 0.65rem;
 		font-size: 12px;
-		color: var(--white33);
+		color: var(--fg-33);
 	}
 
 	.path code {
