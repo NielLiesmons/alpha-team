@@ -1,8 +1,20 @@
 <script>
-	import SectionPlaceholder from '$lib/components/SectionPlaceholder.svelte';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+
+	onMount(() => {
+		void goto('/planning', { replaceState: true });
+	});
 </script>
 
-<SectionPlaceholder
-	title="Calendar"
-	body="Events and deadlines across Projects. Not in v0 — stub only."
-/>
+<svelte:head><title>Planning</title></svelte:head>
+
+<p class="redir">Moved to Planning…</p>
+
+<style>
+	.redir {
+		padding: 24px;
+		color: var(--fg-33);
+		font-size: 14px;
+	}
+</style>

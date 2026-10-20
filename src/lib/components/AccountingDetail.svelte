@@ -1,5 +1,6 @@
 <script>
 	import { accountingBrowse, enterpriseGross } from '$lib/accounting.svelte.js';
+	import EnterpriseBox from './EnterpriseBox.svelte';
 	import {
 		costItems,
 		enterprises,
@@ -162,6 +163,7 @@
 							onclick={() => selectEntity('enterprise', ent.id)}
 						>
 							<span class="title-row">
+								<EnterpriseBox state={ent.status || 'active'} icon={ent.icon} size={22} />
 								<span class="title">{ent.title}</span>
 								<span class="amt" class:in={gp.gross_cents >= 0}
 									>{formatMoney(gp.gross_cents, ent.currency || 'EUR')}</span

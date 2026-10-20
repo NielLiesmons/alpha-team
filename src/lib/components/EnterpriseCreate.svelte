@@ -111,7 +111,8 @@
 			const pending = saveEnterprise(
 				{
 					title: title.trim(),
-					status: 'draft',
+					status: 'active',
+					kind: 'activity',
 					project_ids: projectIds,
 					fixed_costs: fixedRows,
 					variable_costs: variableRows,
@@ -139,7 +140,7 @@
 		<input
 			bind:this={titleInput}
 			class="sheet-input"
-			placeholder="Enterprise sheet (e.g. Laying hens)"
+			placeholder="Enterprise (e.g. Eggs, Sheep, General)"
 			bind:value={title}
 		/>
 	</div>

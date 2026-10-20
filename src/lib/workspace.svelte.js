@@ -245,6 +245,10 @@ export async function refreshFromDrive() {
 				description: p.description || p.body || '',
 				status: p.status || 'planned',
 				icon: p.icon ?? null,
+				enterprise_ids: Array.isArray(p.enterprise_ids) ? p.enterprise_ids : [],
+				start_at: p.start_at ?? null,
+				end_at: p.end_at ?? null,
+				depends_on: Array.isArray(p.depends_on) ? p.depends_on : [],
 				milestones: Array.isArray(p.milestones) ? p.milestones : [],
 				slug: p.slug,
 				_drive: p
@@ -491,6 +495,13 @@ export async function saveProject(draft, isNew) {
 	const session = activeSession();
 	const description =
 		draft.description ?? draft.summary ?? draft.body ?? '';
+	const enterpriseIds = Array.isArray(draft.enterprise_ids)
+		? draft.enterprise_ids
+		: [];
+	const startAt = draft.start_at ?? null;
+	const endAt = draft.end_at ?? null;
+	const dependsOn = Array.isArray(draft.depends_on) ? draft.depends_on : [];
+
 	if (!session) {
 		if (isNew) {
 			const id = draft.id || crypto.randomUUID();
@@ -501,13 +512,25 @@ export async function saveProject(draft, isNew) {
 				description,
 				milestones: draft.milestones ?? [],
 				status: draft.status ?? 'planned',
-				icon: draft.icon ?? null
+				icon: draft.icon ?? null,
+				enterprise_ids: enterpriseIds,
+				start_at: startAt,
+				end_at: endAt,
+				depends_on: dependsOn
 			});
 			ui.projectId = id;
 			ui.selection = { kind: 'project', id };
 		} else {
 			const idx = projects.findIndex((p) => p.id === draft.id);
-			if (idx >= 0) Object.assign(projects[idx], { ...draft, description });
+			if (idx >= 0)
+				Object.assign(projects[idx], {
+					...draft,
+					description,
+					enterprise_ids: enterpriseIds,
+					start_at: startAt,
+					end_at: endAt,
+					depends_on: dependsOn
+				});
 			ui.projectId = draft.id;
 			ui.selection = { kind: 'project', id: draft.id };
 		}
@@ -520,7 +543,11 @@ export async function saveProject(draft, isNew) {
 			description,
 			status: draft.status ?? 'planned',
 			icon: draft.icon || null,
-			milestones: draft.milestones ?? []
+			milestones: draft.milestones ?? [],
+			enterprise_ids: enterpriseIds,
+			start_at: startAt,
+			end_at: endAt,
+			depends_on: dependsOn
 		});
 		const uiProj = {
 			id: created.id,
@@ -528,6 +555,10 @@ export async function saveProject(draft, isNew) {
 			description: created.description ?? description,
 			status: created.status ?? draft.status ?? 'planned',
 			icon: created.icon ?? draft.icon ?? null,
+			enterprise_ids: created.enterprise_ids ?? enterpriseIds,
+			start_at: created.start_at ?? startAt,
+			end_at: created.end_at ?? endAt,
+			depends_on: created.depends_on ?? dependsOn,
 			milestones: created.milestones ?? [],
 			slug: created.slug,
 			_drive: created
@@ -547,6 +578,10 @@ export async function saveProject(draft, isNew) {
 			description,
 			status: draft.status ?? prev?.status ?? 'planned',
 			icon: nextIcon || undefined,
+			enterprise_ids: enterpriseIds,
+			start_at: startAt,
+			end_at: endAt,
+			depends_on: dependsOn,
 			milestones: draft.milestones ?? prev?.milestones ?? [],
 			created_at: prev?._drive?.created_at
 		};
@@ -557,6 +592,10 @@ export async function saveProject(draft, isNew) {
 			description: saved.description ?? description,
 			status: saved.status ?? 'planned',
 			icon: saved.icon ?? nextIcon ?? null,
+			enterprise_ids: Array.isArray(saved.enterprise_ids) ? saved.enterprise_ids : enterpriseIds,
+			start_at: saved.start_at ?? startAt,
+			end_at: saved.end_at ?? endAt,
+			depends_on: Array.isArray(saved.depends_on) ? saved.depends_on : dependsOn,
 			milestones: Array.isArray(saved.milestones) ? saved.milestones : [],
 			slug: saved.slug,
 			_drive: saved

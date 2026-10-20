@@ -35,7 +35,7 @@ export const primaryNav = [
 		countKey: 'ledger',
 		createKind: 'ledger'
 	},
-	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
+	{ href: '/planning', label: 'Planning', icon: 'calendar' },
 	{ href: '/player', label: 'Player', icon: 'player' },
 	{
 		href: '/website',
@@ -50,7 +50,7 @@ export const primaryNav = [
  */
 export const mobileNav = [
 	{ href: '/website', label: 'Website', icon: 'website' },
-	{ href: '/calendar', label: 'Calendar', icon: 'calendar' },
+	{ href: '/planning', label: 'Planning', icon: 'calendar' },
 	{ href: '/accounting', label: 'Accounting', icon: 'accounting' },
 	{ href: '/notes', label: 'Notes', icon: 'notes' },
 	{ href: '/projects', label: 'Projects', icon: 'projects' },

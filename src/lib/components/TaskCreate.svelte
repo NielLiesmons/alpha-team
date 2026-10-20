@@ -36,6 +36,8 @@
 	let priority = $state('none');
 	let statusOpen = $state(false);
 	let priorityOpen = $state(false);
+	let startDate = $state('');
+	let endDate = $state('');
 	/** @type {string[]} */
 	let labels = $state([]);
 	/** @type {string[]} */
@@ -74,12 +76,28 @@
 		labels = [...(editing?.labels ?? [])];
 		projectIds = [...(editing?.project_ids ?? [])];
 		assignees = [...(editing?.assignees ?? [])];
+		startDate = toDateInput(editing?.start_at);
+		endDate = toDateInput(editing?.end_at);
 		statusOpen = false;
 		priorityOpen = false;
 		bottomMenu = null;
 		saving = false;
 		/* No autofocus — mobile PWAs scroll the sheet into the keyboard and hide chrome. */
 	});
+
+	/** @param {string | null | undefined} iso */
+	function toDateInput(iso) {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		return d.toISOString().slice(0, 10);
+	}
+
+	/** @param {string} ymd */
+	function fromDateInput(ymd) {
+		if (!ymd) return null;
+		return `${ymd}T12:00:00Z`;
+	}
 
 	/** @param {string} id */
 	function toggleProject(id) {
@@ -131,6 +149,9 @@
 				label: projects.find((p) => p.id === id)?.title ?? id
 			})),
 			project_ids: projectIds,
+			start_at: fromDateInput(startDate),
+			end_at: fromDateInput(endDate),
+			depends_on: editing?.depends_on ?? [],
 			author: editing?.author,
 			assignees,
 			commenters: editing?.commenters ?? [],
@@ -246,6 +267,17 @@
 
 	<textarea class="task-body" placeholder="Describe your task" bind:value={body} aria-label="Describe your task"
 	></textarea>
+
+	<div class="task-dates">
+		<label class="date-field">
+			<span class="date-label">Start</span>
+			<input class="date-input" type="date" bind:value={startDate} />
+		</label>
+		<label class="date-field">
+			<span class="date-label">End</span>
+			<input class="date-input" type="date" bind:value={endDate} />
+		</label>
+	</div>
 
 	<div class="post-action-row">
 		<div class="action-buttons-left">
@@ -586,6 +618,38 @@
 		height: 1.4px;
 		background: var(--fg-8);
 		flex-shrink: 0;
+	}
+
+	.task-dates {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px;
+		padding: 4px 16px 10px;
+	}
+
+	.date-field {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.date-label {
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--fg-33);
+	}
+
+	.date-input {
+		height: 36px;
+		padding: 0 10px;
+		border: 0;
+		border-radius: 10px;
+		background: var(--fg-4);
+		color: var(--fg);
+		font: inherit;
+		font-size: 14px;
 	}
 
 	.task-body {

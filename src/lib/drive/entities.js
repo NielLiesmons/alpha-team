@@ -68,6 +68,10 @@ export async function createProject(session, input) {
 		description: input.description || undefined,
 		status: input.status || 'planned',
 		icon: input.icon || undefined,
+		enterprise_ids: Array.isArray(input.enterprise_ids) ? input.enterprise_ids : [],
+		start_at: input.start_at ?? null,
+		end_at: input.end_at ?? null,
+		depends_on: Array.isArray(input.depends_on) ? input.depends_on : [],
 		milestones: Array.isArray(input.milestones) ? input.milestones : [],
 		created_at: created,
 		updated_at: created,
@@ -99,6 +103,8 @@ export async function putProject(session, project, patch = {}) {
 	/* Projects use a single description — drop legacy body if present */
 	delete next.body;
 	if (!Array.isArray(next.milestones)) next.milestones = [];
+	if (!Array.isArray(next.enterprise_ids)) next.enterprise_ids = [];
+	if (!Array.isArray(next.depends_on)) next.depends_on = [];
 	if (!next.status) next.status = 'planned';
 	await putPath(session, `projects/${id}/project.json`, 'project', JSON.stringify(next, null, 2));
 	return next;
@@ -218,6 +224,9 @@ export async function createTask(session, input) {
 		status: input.status ?? 'open',
 		priority: input.priority ?? 'none',
 		labels: input.labels ?? [],
+		start_at: input.start_at ?? null,
+		end_at: input.end_at ?? null,
+		depends_on: Array.isArray(input.depends_on) ? input.depends_on : [],
 		...(author ? { author } : {}),
 		created_at: created,
 		updated_at: created
@@ -991,6 +1000,9 @@ export function toUiTask(t, projectList) {
 			label: byId.get(id)?.title ?? id
 		})),
 		project_ids: t.project_ids ?? [],
+		start_at: t.start_at ?? null,
+		end_at: t.end_at ?? null,
+		depends_on: Array.isArray(t.depends_on) ? t.depends_on : [],
 		author: authorEmail || null,
 		assignees: [],
 		commenters: [],
@@ -1016,6 +1028,9 @@ export function fromUiTask(ui) {
 		status: ui.status,
 		priority: ui.priority ?? 'none',
 		labels: ui.labels ?? [],
+		start_at: ui.start_at ?? ui._drive?.start_at ?? null,
+		end_at: ui.end_at ?? ui._drive?.end_at ?? null,
+		depends_on: ui.depends_on ?? ui._drive?.depends_on ?? [],
 		...(author ? { author: String(author).toLowerCase() } : {}),
 		created_at: ui._drive?.created_at ?? nowRfc3339(),
 		updated_at: nowRfc3339()
@@ -1454,7 +1469,10 @@ export async function createEnterprise(session, input) {
 		id,
 		title: input.title,
 		description: input.description || '',
-		status: input.status || 'draft',
+		status: input.status || 'active',
+		kind: input.kind || 'activity',
+		icon: input.icon || undefined,
+		sort: Number.isFinite(Number(input.sort)) ? Number(input.sort) : 100,
 		project_ids: input.project_ids ?? [],
 		fixed_costs: input.fixed_costs ?? [],
 		variable_costs: input.variable_costs ?? [],
