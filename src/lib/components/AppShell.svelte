@@ -238,7 +238,6 @@
 					class="nav-row"
 					class:active={!isWebsite && active(item.href)}
 					class:creatable={Boolean(item.createKind)}
-					class:parent-open={isWebsite && websiteOpen}
 				>
 					<button
 						type="button"
@@ -279,20 +278,6 @@
 						</span>
 					{/if}
 				</div>
-				{#if isWebsite && websiteOpen && item.children?.length}
-					<div class="nav-sub" role="group" aria-label="Website">
-						{#each item.children as sub (sub.href)}
-							<button
-								type="button"
-								class="nav-sub-item"
-								class:active={active(sub.href)}
-								onclick={() => go(sub.href)}
-							>
-								<span class="nav-sub-label">{sub.label}</span>
-							</button>
-						{/each}
-					</div>
-				{/if}
 			{/each}
 		</nav>
 

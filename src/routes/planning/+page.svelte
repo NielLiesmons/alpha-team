@@ -14,6 +14,8 @@
 
 	/** @type {Set<string>} */
 	let collapsed = $state(new Set());
+	/** @type {Set<string>} */
+	let collapsedProjects = $state(new Set());
 
 	const DAY_MS = 86_400_000;
 	const PX_PER_DAY = 8;
@@ -129,13 +131,30 @@
 
 	/** @param {string} projectId */
 	function tasksForProject(projectId) {
-		return tasks
-			.filter((t) => (t.project_ids ?? []).includes(projectId))
-			.filter((t) => t.start_at || t.end_at);
+		return tasks.filter((t) => (t.project_ids ?? []).includes(projectId));
+	}
+
+	/** Status → bar fill (matches TaskBox accents) */
+	/** @param {string | undefined} status */
+	function taskBarColor(status) {
+		switch (status) {
+			case 'closed':
+				return 'color-mix(in srgb, var(--accent-1) 70%, transparent)';
+			case 'inProgress':
+				return 'color-mix(in srgb, var(--accent-2) 75%, transparent)';
+			case 'inReview':
+				return 'color-mix(in srgb, var(--accent-1) 45%, var(--fg-8))';
+			case 'canceled':
+				return 'color-mix(in srgb, var(--fg) 12%, transparent)';
+			case 'backlog':
+				return 'color-mix(in srgb, var(--fg) 16%, transparent)';
+			default:
+				return 'color-mix(in srgb, var(--fg) 28%, transparent)';
+		}
 	}
 
 	const rows = $derived.by(() => {
-		/** @type {{ kind: 'enterprise' | 'project', id: string, title: string, entity: any }[]} */
+		/** @type {{ kind: 'enterprise' | 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[]} */
 		const out = [];
 		const ents =
 			sortedEnterprises.length > 0
@@ -145,12 +164,27 @@
 		const showUnassigned =
 			projects.some((p) => !(p.enterprise_ids ?? []).length) && sortedEnterprises.length > 0;
 
+		/** @param {string} entId */
+		function pushProjects(entId) {
+			for (const p of projectsForEnterprise(entId)) {
+				out.push({ kind: 'project', id: p.id, title: p.title, entity: p });
+				if (collapsedProjects.has(p.id)) continue;
+				for (const t of tasksForProject(p.id)) {
+					out.push({
+						kind: 'task',
+						id: t.id,
+						title: t.title,
+						entity: t,
+						projectId: p.id
+					});
+				}
+			}
+		}
+
 		for (const ent of ents) {
 			out.push({ kind: 'enterprise', id: ent.id, title: ent.title, entity: ent });
 			if (collapsed.has(ent.id)) continue;
-			for (const p of projectsForEnterprise(ent.id)) {
-				out.push({ kind: 'project', id: p.id, title: p.title, entity: p });
-			}
+			pushProjects(ent.id);
 		}
 
 		if (showUnassigned) {
@@ -160,11 +194,7 @@
 				title: 'No enterprise',
 				entity: { id: UNASSIGNED, title: 'No enterprise', status: 'draft', icon: null }
 			});
-			if (!collapsed.has(UNASSIGNED)) {
-				for (const p of projectsForEnterprise(UNASSIGNED)) {
-					out.push({ kind: 'project', id: p.id, title: p.title, entity: p });
-				}
-			}
+			if (!collapsed.has(UNASSIGNED)) pushProjects(UNASSIGNED);
 		}
 		return out;
 	});
@@ -175,6 +205,14 @@
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
 		collapsed = next;
+	}
+
+	/** @param {string} id */
+	function toggleProject(id) {
+		const next = new Set(collapsedProjects);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		collapsedProjects = next;
 	}
 
 	function todayLeft() {
@@ -218,8 +256,13 @@
 					</div>
 				</div>
 
-				{#each rows as row (row.kind + ':' + row.id)}
-					<div class="gantt-row" class:ent={row.kind === 'enterprise'} class:proj={row.kind === 'project'}>
+				{#each rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
+					<div
+						class="gantt-row"
+						class:ent={row.kind === 'enterprise'}
+						class:proj={row.kind === 'project'}
+						class:task={row.kind === 'task'}
+					>
 						<div class="label-cell">
 							{#if row.kind === 'enterprise'}
 								<button type="button" class="twist" onclick={() => toggleEnt(row.id)} aria-label="Toggle">
@@ -233,14 +276,28 @@
 										if (row.id !== UNASSIGNED) selectEntity('enterprise', row.id);
 									}}>{row.title}</button
 								>
-							{:else}
+							{:else if row.kind === 'project'}
 								<span class="indent"></span>
+								<button
+									type="button"
+									class="twist"
+									onclick={() => toggleProject(row.id)}
+									aria-label="Toggle tasks"
+								>
+									{collapsedProjects.has(row.id) ? '▸' : '▾'}
+								</button>
 								<ProjectBox
 									state={deriveProjectStatus(row.id, tasks)}
 									icon={row.entity.icon}
 									size={18}
 								/>
 								<button type="button" class="name" onclick={() => selectEntity('project', row.id)}
+									>{row.title}</button
+								>
+							{:else}
+								<span class="indent deep"></span>
+								<TaskBox state={row.entity.status} size={16} />
+								<button type="button" class="name muted" onclick={() => selectEntity('task', row.id)}
 									>{row.title}</button
 								>
 							{/if}
@@ -262,10 +319,9 @@
 										style:width="{Math.max(PX_PER_DAY * 2, ((e - s) / DAY_MS) * PX_PER_DAY)}px"
 									></span>
 								{/if}
-							{:else}
+							{:else if row.kind === 'project'}
 								{@const box = span(row.entity.start_at, row.entity.end_at, 14)}
 								{#if box}
-									{@const datedTasks = tasksForProject(row.id)}
 									<button
 										type="button"
 										class="proj-container"
@@ -275,26 +331,22 @@
 										style:border-color={projectTintStrong(row.entity)}
 										onclick={() => selectEntity('project', row.id)}
 										title={row.title}
-									>
-										{#each datedTasks as t (t.id)}
-											{@const ts = span(t.start_at, t.end_at, 3)}
-											{#if ts}
-												<span
-													class="task-inline"
-													style:left="{Math.max(0, ts.left - box.left)}px"
-													style:width="{Math.min(ts.width, box.width)}px"
-													role="presentation"
-												>
-													<span class="task-box-wrap">
-														<TaskBox state={t.status} size={14} />
-													</span>
-													<span class="task-line" title={t.title}></span>
-												</span>
-											{/if}
-										{/each}
-									</button>
+									></button>
 								{:else}
 									<span class="undated">Set dates</span>
+								{/if}
+							{:else}
+								{@const box = span(row.entity.start_at, row.entity.end_at, 3)}
+								{#if box}
+									<button
+										type="button"
+										class="task-bar"
+										style:left="{box.left}px"
+										style:width="{box.width}px"
+										style:background={taskBarColor(row.entity.status)}
+										onclick={() => selectEntity('task', row.id)}
+										title={row.title}
+									></button>
 								{/if}
 							{/if}
 						</div>
@@ -396,7 +448,11 @@
 	}
 
 	.gantt-row.proj {
-		min-height: 52px;
+		min-height: 44px;
+	}
+
+	.gantt-row.task {
+		min-height: 32px;
 	}
 
 	.label-cell {
@@ -440,8 +496,12 @@
 	}
 
 	.indent {
-		width: 18px;
+		width: 10px;
 		flex-shrink: 0;
+	}
+
+	.indent.deep {
+		width: 36px;
 	}
 
 	.name {
@@ -458,6 +518,12 @@
 		white-space: nowrap;
 		min-width: 0;
 		padding: 0;
+	}
+
+	.name.muted {
+		font-weight: 500;
+		font-size: 12px;
+		color: var(--fg-66);
 	}
 
 	.ent-name {
@@ -508,40 +574,25 @@
 
 	.proj-container {
 		position: absolute;
-		top: 8px;
-		bottom: 8px;
-		border-radius: 12px;
+		top: 50%;
+		transform: translateY(-50%);
+		height: 18px;
+		border-radius: 10px;
 		border: 1px solid transparent;
 		cursor: pointer;
 		padding: 0;
-		overflow: hidden;
 		box-sizing: border-box;
 	}
 
-	.task-inline {
+	.task-bar {
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		height: 18px;
-		min-width: 28px;
-		pointer-events: none;
-	}
-
-	.task-box-wrap {
-		flex-shrink: 0;
-		display: grid;
-		place-items: center;
-	}
-
-	.task-line {
-		flex: 1;
-		min-width: 8px;
-		height: 3px;
-		border-radius: 2px;
-		background: color-mix(in srgb, var(--fg) 45%, transparent);
+		height: 12px;
+		border: 0;
+		border-radius: 4px;
+		cursor: pointer;
+		padding: 0;
 	}
 
 	.undated {

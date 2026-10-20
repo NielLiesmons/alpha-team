@@ -37,12 +37,7 @@ export const primaryNav = [
 	},
 	{ href: '/planning', label: 'Planning', icon: 'calendar' },
 	{ href: '/player', label: 'Player', icon: 'player' },
-	{
-		href: '/website',
-		label: 'Website',
-		icon: 'website',
-		children: websiteChildren
-	}
+	{ href: '/website', label: 'Website', icon: 'website' }
 ];
 
 /**
