@@ -5,10 +5,19 @@
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { openComposer, selectEntity, tasks, ui } from '$lib/workspace.svelte.js';
 
-	const STATUS_ORDER = ['inReview', 'inProgress', 'open', 'backlog', 'closed', 'canceled'];
+	const STATUS_ORDER = [
+		'inReview',
+		'inProgress',
+		'recurring',
+		'open',
+		'backlog',
+		'closed',
+		'canceled'
+	];
 	const STATUS_LABELS = {
 		inReview: 'IN REVIEW',
 		inProgress: 'IN PROGRESS',
+		recurring: 'RECURRING',
 		open: 'OPEN',
 		backlog: 'BACKLOG',
 		closed: 'CLOSED',
@@ -65,11 +74,6 @@
 						title={task.title}
 						status={task.status}
 						priority={task.priority}
-						labels={task.labels}
-						targets={task.targets}
-						author={task.author}
-						assignees={task.assignees}
-						commenters={task.commenters}
 						onclick={() => selectEntity('task', task.id)}
 						selected={ui.selection?.kind === 'task' && ui.selection.id === task.id}
 					/>

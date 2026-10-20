@@ -66,6 +66,26 @@
 				d="M12.7001 0.699299L6.70025 6.69916M6.70025 6.69916L0.700195 12.6992M6.70025 6.69916L12.7002 12.6991M6.70025 6.69916L0.700308 0.699219"
 			/>
 		</svg>
+	{:else if state === 'recurring'}
+		<div class="icon-slot">
+			<svg
+				width={iconSize}
+				height={iconSize}
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke={embedded ? 'var(--accent-2)' : 'var(--accent-2)'}
+				stroke-width="2.4"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
+				<!-- Circular refresh / going-round arrows -->
+				<path d="M20 11a8 8 0 0 0-13.66-4.5" />
+				<path d="M6.34 6.5 4 4v4.5h4.5" />
+				<path d="M4 13a8 8 0 0 0 13.66 4.5" />
+				<path d="M17.66 17.5 20 20v-4.5h-4.5" />
+			</svg>
+		</div>
 	{:else if embedded}
 		<!-- Open / backlog: tiny ring only — never a second plate inside the pill -->
 		<span
@@ -135,6 +155,11 @@
 	.state-canceled {
 		background: var(--white8);
 		border: var(--task-box-stroke) solid transparent;
+	}
+
+	.state-recurring {
+		background: var(--black33);
+		border: var(--task-box-stroke) solid var(--accent-2-66);
 	}
 
 	/* Glyph-only inside meta pills — zero plate chrome */

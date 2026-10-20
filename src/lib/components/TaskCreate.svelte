@@ -11,13 +11,22 @@
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import LabelsPicker from './LabelsPicker.svelte';
 	import { deriveProjectStatus } from '$lib/project-status.js';
-	import { closeComposer, people, projects, saveTask, tasks, ui } from '$lib/workspace.svelte.js';
+	import {
+		closeComposer,
+		moments,
+		people,
+		projects,
+		saveTask,
+		tasks,
+		ui
+	} from '$lib/workspace.svelte.js';
 
 	const statuses = [
 		{ value: 'backlog', label: 'Backlog' },
 		{ value: 'open', label: 'Open' },
 		{ value: 'inProgress', label: 'In progress' },
 		{ value: 'inReview', label: 'In review' },
+		{ value: 'recurring', label: 'Recurring' },
 		{ value: 'closed', label: 'Closed' },
 		{ value: 'canceled', label: 'Canceled' }
 	];
@@ -36,8 +45,9 @@
 	let priority = $state('none');
 	let statusOpen = $state(false);
 	let priorityOpen = $state(false);
-	let startDate = $state('');
-	let endDate = $state('');
+	let deadlineDate = $state('');
+	let scheduleStart = $state('');
+	let scheduleEnd = $state('');
 	/** @type {string[]} */
 	let labels = $state([]);
 	/** @type {string[]} */
@@ -76,8 +86,12 @@
 		labels = [...(editing?.labels ?? [])];
 		projectIds = [...(editing?.project_ids ?? [])];
 		assignees = [...(editing?.assignees ?? [])];
-		startDate = toDateInput(editing?.start_at);
-		endDate = toDateInput(editing?.end_at);
+		deadlineDate = toDateInput(editing?.deadline_at);
+		const linked = editing
+			? moments.find((m) => m.task_id === editing.id && !m.recurrence)
+			: null;
+		scheduleStart = toDateInput(linked?.start_at ?? editing?._schedule?.start_at);
+		scheduleEnd = toDateInput(linked?.end_at ?? editing?._schedule?.end_at);
 		statusOpen = false;
 		priorityOpen = false;
 		bottomMenu = null;
@@ -149,12 +163,18 @@
 				label: projects.find((p) => p.id === id)?.title ?? id
 			})),
 			project_ids: projectIds,
-			start_at: fromDateInput(startDate),
-			end_at: fromDateInput(endDate),
+			deadline_at: fromDateInput(deadlineDate),
 			depends_on: editing?.depends_on ?? [],
 			author: editing?.author,
 			assignees,
 			commenters: editing?.commenters ?? [],
+			_schedule:
+				scheduleStart || scheduleEnd
+					? {
+							start_at: fromDateInput(scheduleStart) || fromDateInput(scheduleEnd),
+							end_at: fromDateInput(scheduleEnd) || fromDateInput(scheduleStart)
+						}
+					: null,
 			_drive: editing?._drive
 		};
 		try {
@@ -270,12 +290,16 @@
 
 	<div class="task-dates">
 		<label class="date-field">
-			<span class="date-label">Start</span>
-			<input class="date-input" type="date" bind:value={startDate} />
+			<span class="date-label">Deadline</span>
+			<input class="date-input" type="date" bind:value={deadlineDate} />
 		</label>
 		<label class="date-field">
-			<span class="date-label">End</span>
-			<input class="date-input" type="date" bind:value={endDate} />
+			<span class="date-label">Schedule</span>
+			<input class="date-input" type="date" bind:value={scheduleStart} title="Moment start" />
+		</label>
+		<label class="date-field">
+			<span class="date-label">Until</span>
+			<input class="date-input" type="date" bind:value={scheduleEnd} title="Moment end" />
 		</label>
 	</div>
 
@@ -622,9 +646,15 @@
 
 	.task-dates {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr 1fr 1fr;
 		gap: 10px;
 		padding: 4px 16px 10px;
+	}
+
+	@media (max-width: 480px) {
+		.task-dates {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.date-field {

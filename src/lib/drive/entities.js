@@ -69,8 +69,6 @@ export async function createProject(session, input) {
 		status: input.status || 'planned',
 		icon: input.icon || undefined,
 		enterprise_ids: Array.isArray(input.enterprise_ids) ? input.enterprise_ids : [],
-		start_at: input.start_at ?? null,
-		end_at: input.end_at ?? null,
 		depends_on: Array.isArray(input.depends_on) ? input.depends_on : [],
 		milestones: Array.isArray(input.milestones) ? input.milestones : [],
 		created_at: created,
@@ -100,8 +98,10 @@ export async function putProject(session, project, patch = {}) {
 		id,
 		updated_at: nowRfc3339()
 	};
-	/* Projects use a single description — drop legacy body if present */
+	/* Projects use a single description — drop legacy body / dates if present */
 	delete next.body;
+	delete next.start_at;
+	delete next.end_at;
 	if (!Array.isArray(next.milestones)) next.milestones = [];
 	if (!Array.isArray(next.enterprise_ids)) next.enterprise_ids = [];
 	if (!Array.isArray(next.depends_on)) next.depends_on = [];
@@ -175,7 +175,7 @@ export async function listProjects(session) {
 }
 
 /**
- * Normalize legacy task/1 → task/2 shape.
+ * Normalize legacy task/1–2 → task/3 shape (deadline_at; no start/end bars).
  * @param {any} raw
  */
 export function normalizeTask(raw) {
@@ -191,9 +191,15 @@ export function normalizeTask(raw) {
 		cancelled: 'canceled'
 	};
 	if (statusMap[t.status]) t.status = statusMap[t.status];
-	t.schema = 'alpha.task/2';
+	t.schema = 'alpha.task/3';
 	t.labels = Array.isArray(t.labels) ? t.labels : [];
 	t.priority = t.priority ?? 'none';
+	t.depends_on = Array.isArray(t.depends_on) ? t.depends_on : [];
+	const deadline = t.deadline_at ?? t.due_at ?? null;
+	t.deadline_at = deadline;
+	delete t.due_at;
+	delete t.start_at;
+	delete t.end_at;
 	if (typeof t.author === 'string') t.author = t.author.trim().toLowerCase();
 	else if (t.author && typeof t.author === 'object') {
 		t.author = String(t.author.email || t.author.pubkey || '')
@@ -206,7 +212,7 @@ export function normalizeTask(raw) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {{ title: string, project_ids?: string[], description?: string, status?: string, priority?: string, labels?: string[], author?: string }} input
+ * @param {{ title: string, project_ids?: string[], description?: string, status?: string, priority?: string, labels?: string[], deadline_at?: string | null, author?: string }} input
  */
 export async function createTask(session, input) {
 	const id = newId();
@@ -216,7 +222,7 @@ export async function createTask(session, input) {
 			? input.author.trim().toLowerCase()
 			: undefined;
 	const task = {
-		schema: 'alpha.task/2',
+		schema: 'alpha.task/3',
 		id,
 		project_ids: input.project_ids ?? [],
 		title: input.title,
@@ -224,8 +230,7 @@ export async function createTask(session, input) {
 		status: input.status ?? 'open',
 		priority: input.priority ?? 'none',
 		labels: input.labels ?? [],
-		start_at: input.start_at ?? null,
-		end_at: input.end_at ?? null,
+		deadline_at: input.deadline_at ?? null,
 		depends_on: Array.isArray(input.depends_on) ? input.depends_on : [],
 		...(author ? { author } : {}),
 		created_at: created,
@@ -244,6 +249,92 @@ export async function putTask(session, task) {
 	t.updated_at = nowRfc3339();
 	await putPath(session, `tasks/${t.id}/task.json`, 'task', JSON.stringify(t, null, 2));
 	return t;
+}
+
+/**
+ * @param {any} raw
+ */
+export function normalizeMoment(raw) {
+	const m = { ...raw };
+	m.schema = 'alpha.moment/1';
+	m.task_id = m.task_id || null;
+	m.title = m.title ?? null;
+	m.end_at = m.end_at ?? null;
+	m.assignees = Array.isArray(m.assignees)
+		? m.assignees.map((a) => String(a).trim().toLowerCase()).filter(Boolean)
+		: [];
+	m.status = m.status || 'planned';
+	m.recurrence = m.recurrence ?? null;
+	m.recurrence_exception_of = m.recurrence_exception_of ?? null;
+	m.recurrence_instance = m.recurrence_instance ?? null;
+	return m;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {{
+ *   task_id?: string | null,
+ *   title?: string | null,
+ *   start_at: string,
+ *   end_at?: string | null,
+ *   assignees?: string[],
+ *   status?: string,
+ *   recurrence?: object | null
+ * }} input
+ */
+export async function createMoment(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const moment = normalizeMoment({
+		schema: 'alpha.moment/1',
+		id,
+		task_id: input.task_id ?? null,
+		title: input.title ?? null,
+		start_at: input.start_at,
+		end_at: input.end_at ?? null,
+		assignees: input.assignees ?? [],
+		status: input.status ?? 'planned',
+		recurrence: input.recurrence ?? null,
+		created_at: created,
+		updated_at: created
+	});
+	await putPath(session, `moments/${id}/moment.json`, 'moment', JSON.stringify(moment, null, 2));
+	return moment;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} moment
+ */
+export async function putMoment(session, moment) {
+	const m = normalizeMoment(moment);
+	if (!m.id) throw new Error('Moment missing id');
+	m.updated_at = nowRfc3339();
+	await putPath(session, `moments/${m.id}/moment.json`, 'moment', JSON.stringify(m, null, 2));
+	return m;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} [taskId] when set, only moments for that task
+ */
+export async function listMoments(session, taskId) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'moment' || path.endsWith('/moment.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				const m = normalizeMoment(JSON.parse(new TextDecoder().decode(bytes)));
+				if (!taskId || m.task_id === taskId) out.push(m);
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.start_at).localeCompare(String(b.start_at)));
+	return out;
 }
 
 /**
@@ -988,6 +1079,7 @@ export function toUiTask(t, projectList) {
 	const createdMs = t.created_at ? Date.parse(t.created_at) : 0;
 	const authorEmail =
 		typeof t.author === 'string' ? t.author : t.author?.email || t.author?.pubkey || '';
+	const deadline = t.deadline_at ?? t.due_at ?? null;
 	return {
 		id: t.id,
 		title: t.title,
@@ -1000,8 +1092,7 @@ export function toUiTask(t, projectList) {
 			label: byId.get(id)?.title ?? id
 		})),
 		project_ids: t.project_ids ?? [],
-		start_at: t.start_at ?? null,
-		end_at: t.end_at ?? null,
+		deadline_at: deadline,
 		depends_on: Array.isArray(t.depends_on) ? t.depends_on : [],
 		author: authorEmail || null,
 		assignees: [],
@@ -1020,7 +1111,7 @@ export function fromUiTask(ui) {
 			? ui.author
 			: ui.author?.email || ui._drive?.author || undefined;
 	return {
-		schema: 'alpha.task/2',
+		schema: 'alpha.task/3',
 		id: ui.id,
 		project_ids: ui.project_ids ?? (ui.targets ?? []).map((t) => t.id),
 		title: ui.title,
@@ -1028,8 +1119,7 @@ export function fromUiTask(ui) {
 		status: ui.status,
 		priority: ui.priority ?? 'none',
 		labels: ui.labels ?? [],
-		start_at: ui.start_at ?? ui._drive?.start_at ?? null,
-		end_at: ui.end_at ?? ui._drive?.end_at ?? null,
+		deadline_at: ui.deadline_at ?? ui._drive?.deadline_at ?? ui._drive?.due_at ?? null,
 		depends_on: ui.depends_on ?? ui._drive?.depends_on ?? [],
 		...(author ? { author: String(author).toLowerCase() } : {}),
 		created_at: ui._drive?.created_at ?? nowRfc3339(),

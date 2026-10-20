@@ -20,8 +20,6 @@
 	let iconOpen = $state(false);
 	/** @type {string[]} */
 	let enterpriseIds = $state([]);
-	let startDate = $state('');
-	let endDate = $state('');
 	/** @type {null | 'enterprises'} */
 	let bottomMenu = $state(null);
 	/** @type {HTMLButtonElement | undefined} */
@@ -42,25 +40,9 @@
 		description = editing?.description ?? editing?.summary ?? editing?.body ?? '';
 		icon = editing?.icon ?? null;
 		enterpriseIds = [...(editing?.enterprise_ids ?? [])];
-		startDate = toDateInput(editing?.start_at);
-		endDate = toDateInput(editing?.end_at);
 		iconOpen = false;
 		bottomMenu = null;
 	});
-
-	/** @param {string | null | undefined} iso */
-	function toDateInput(iso) {
-		if (!iso) return '';
-		const d = new Date(iso);
-		if (Number.isNaN(d.getTime())) return '';
-		return d.toISOString().slice(0, 10);
-	}
-
-	/** @param {string} ymd */
-	function fromDateInput(ymd) {
-		if (!ymd) return null;
-		return `${ymd}T12:00:00Z`;
-	}
 
 	/** @param {string} id */
 	function toggleEnterprise(id) {
@@ -82,8 +64,6 @@
 					milestones: editing?.milestones ?? [],
 					status: editing?.status ?? 'planned',
 					enterprise_ids: enterpriseIds,
-					start_at: fromDateInput(startDate),
-					end_at: fromDateInput(endDate),
 					depends_on: editing?.depends_on ?? []
 				},
 				!editing
@@ -127,17 +107,6 @@
 	</div>
 	<div class="form-divider"></div>
 	<textarea class="sheet-body" placeholder="Description" bind:value={description}></textarea>
-	<div class="form-divider"></div>
-	<div class="dates">
-		<label class="field">
-			<span class="field-label">Start</span>
-			<input class="field-input" type="date" bind:value={startDate} />
-		</label>
-		<label class="field">
-			<span class="field-label">End</span>
-			<input class="field-input" type="date" bind:value={endDate} />
-		</label>
-	</div>
 	<div class="form-divider"></div>
 	<div class="sheet-bottom">
 		<div class="pill-wrap">
@@ -213,38 +182,6 @@
 
 	.bare.on {
 		background: var(--float-trigger-on);
-	}
-
-	.dates {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 10px;
-		padding: 0 16px 4px;
-	}
-
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.field-label {
-		font-size: 11px;
-		font-weight: 600;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--fg-33);
-	}
-
-	.field-input {
-		height: 36px;
-		padding: 0 10px;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-4);
-		color: var(--fg);
-		font: inherit;
-		font-size: 14px;
 	}
 
 	.sheet-bottom {

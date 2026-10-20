@@ -9,6 +9,7 @@ import {
 	createSalesLine as driveCreateSalesLine,
 	createNote as driveCreateNote,
 	createProject as driveCreateProject,
+	createMoment as driveCreateMoment,
 	createTask as driveCreateTask,
 	ensureDefaultAccounts,
 	ensureSpace,
@@ -17,12 +18,14 @@ import {
 	listCostItems,
 	listEnterprises,
 	listLedgerEntries,
+	listMoments,
 	listSalesLines,
 	listNotes,
 	listProjects,
 	listTasks,
 	putEnterprise as drivePutEnterprise,
 	putLedgerEntry,
+	putMoment as drivePutMoment,
 	putNote,
 	putProject as drivePutProject,
 	putTask,
@@ -44,6 +47,9 @@ export const tasks = $state([]);
 export const projects = $state([]);
 /** @type {any[]} */
 export const notes = $state([]);
+/** Calendar / Planning slices (alpha.moment/1) — optional task_id */
+/** @type {any[]} */
+export const moments = $state([]);
 /** @type {any[]} */
 export const accounts = $state([]);
 /** @type {any[]} */
@@ -119,6 +125,7 @@ function clearWorkspace() {
 	replaceArray(tasks, []);
 	replaceArray(projects, []);
 	replaceArray(notes, []);
+	replaceArray(moments, []);
 	replaceArray(accounts, []);
 	replaceArray(ledgerEntries, []);
 	replaceArray(costItems, []);
@@ -150,6 +157,10 @@ async function persistWorkspaceCache(session) {
 		}),
 		notes: notes.map((n) => {
 			const { _pending: _, ...rest } = n;
+			return rest;
+		}),
+		moments: moments.map((m) => {
+			const { _pending: _, ...rest } = m;
 			return rest;
 		}),
 		accounts: accounts.map((a) => {
@@ -199,6 +210,7 @@ export async function hydrateWorkspaceFromCache() {
 	replaceArray(projects, Array.isArray(snap.projects) ? snap.projects : []);
 	replaceArray(tasks, Array.isArray(snap.tasks) ? snap.tasks : []);
 	replaceArray(notes, Array.isArray(snap.notes) ? snap.notes : []);
+	replaceArray(moments, Array.isArray(snap.moments) ? snap.moments : []);
 	replaceArray(accounts, Array.isArray(snap.accounts) ? snap.accounts : []);
 	replaceArray(ledgerEntries, Array.isArray(snap.ledgerEntries) ? snap.ledgerEntries : []);
 	replaceArray(costItems, Array.isArray(snap.costItems) ? snap.costItems : []);
@@ -226,10 +238,11 @@ export async function refreshFromDrive() {
 	driveSession.error = null;
 	try {
 		await ensureSpace(session, 'Bley Family');
-		const [plist, tlist, nlist, alist, elist, costs, sales, ents] = await Promise.all([
+		const [plist, tlist, nlist, mlist, alist, elist, costs, sales, ents] = await Promise.all([
 			listProjects(session),
 			listTasks(session),
 			listNotes(session),
+			listMoments(session),
 			ensureDefaultAccounts(session),
 			listLedgerEntries(session),
 			listCostItems(session),
@@ -246,8 +259,6 @@ export async function refreshFromDrive() {
 				status: p.status || 'planned',
 				icon: p.icon ?? null,
 				enterprise_ids: Array.isArray(p.enterprise_ids) ? p.enterprise_ids : [],
-				start_at: p.start_at ?? null,
-				end_at: p.end_at ?? null,
 				depends_on: Array.isArray(p.depends_on) ? p.depends_on : [],
 				milestones: Array.isArray(p.milestones) ? p.milestones : [],
 				slug: p.slug,
@@ -258,6 +269,7 @@ export async function refreshFromDrive() {
 			tasks,
 			tlist.map((t) => toUiTask(t, plist))
 		);
+		replaceArray(moments, mlist);
 		replaceArray(
 			notes,
 			nlist.map((n) => toUiNote(n, plist))
@@ -318,6 +330,43 @@ export async function patchProject(id, patch) {
  * @param {any} draft
  * @param {boolean} isNew
  */
+/**
+ * Upsert the first linked moment for a task from TaskCreate schedule fields.
+ * @param {import('./drive/client.js').DriveSession} session
+ * @param {string} taskId
+ * @param {{ start_at?: string | null, end_at?: string | null } | null | undefined} schedule
+ * @param {{ email?: string, name?: string }[]} [assigneePeople]
+ */
+async function syncTaskScheduleMoment(session, taskId, schedule, assigneePeople = []) {
+	if (!schedule?.start_at && !schedule?.end_at) return;
+	const start = schedule.start_at || schedule.end_at;
+	const end = schedule.end_at || schedule.start_at;
+	const assigneeEmails = assigneePeople
+		.map((a) => (a.email || '').trim().toLowerCase())
+		.filter(Boolean);
+	const existing = moments.find((m) => m.task_id === taskId && !m.recurrence);
+	if (existing) {
+		const saved = await drivePutMoment(session, {
+			...existing,
+			start_at: start,
+			end_at: end,
+			assignees: assigneeEmails.length ? assigneeEmails : existing.assignees ?? []
+		});
+		const i = moments.findIndex((m) => m.id === saved.id);
+		if (i >= 0) moments[i] = saved;
+		else moments.push(saved);
+		return saved;
+	}
+	const created = await driveCreateMoment(session, {
+		task_id: taskId,
+		start_at: /** @type {string} */ (start),
+		end_at: end,
+		assignees: assigneeEmails
+	});
+	moments.push(created);
+	return created;
+}
+
 export async function saveTask(draft, isNew) {
 	const session = activeSession();
 	const author = draft.author ?? activePerson().email;
@@ -333,6 +382,7 @@ export async function saveTask(draft, isNew) {
 			commenters: draft.commenters ?? [],
 			targets: draft.targets ?? [],
 			project_ids: draft.project_ids ?? [],
+			deadline_at: draft.deadline_at ?? null,
 			_pending: Boolean(session)
 		};
 		tasks.unshift(optimistic);
@@ -348,8 +398,10 @@ export async function saveTask(draft, isNew) {
 				priority: draft.priority,
 				labels: draft.labels,
 				project_ids: draft.project_ids ?? [],
+				deadline_at: draft.deadline_at ?? null,
 				author
 			});
+			await syncTaskScheduleMoment(session, created.id, draft._schedule, draft.assignees ?? []);
 			const plist = projects.map((p) => p._drive ?? p);
 			const uiTask = {
 				...toUiTask(created, plist),
@@ -380,6 +432,7 @@ export async function saveTask(draft, isNew) {
 	try {
 		const entity = fromUiTask({ ...draft, author });
 		const saved = await putTask(session, entity);
+		await syncTaskScheduleMoment(session, saved.id, draft._schedule, draft.assignees ?? []);
 		const plist = projects.map((p) => p._drive ?? p);
 		const uiTask = {
 			...toUiTask(saved, plist),
@@ -498,8 +551,6 @@ export async function saveProject(draft, isNew) {
 	const enterpriseIds = Array.isArray(draft.enterprise_ids)
 		? draft.enterprise_ids
 		: [];
-	const startAt = draft.start_at ?? null;
-	const endAt = draft.end_at ?? null;
 	const dependsOn = Array.isArray(draft.depends_on) ? draft.depends_on : [];
 
 	if (!session) {
@@ -514,8 +565,6 @@ export async function saveProject(draft, isNew) {
 				status: draft.status ?? 'planned',
 				icon: draft.icon ?? null,
 				enterprise_ids: enterpriseIds,
-				start_at: startAt,
-				end_at: endAt,
 				depends_on: dependsOn
 			});
 			ui.projectId = id;
@@ -527,8 +576,6 @@ export async function saveProject(draft, isNew) {
 					...draft,
 					description,
 					enterprise_ids: enterpriseIds,
-					start_at: startAt,
-					end_at: endAt,
 					depends_on: dependsOn
 				});
 			ui.projectId = draft.id;
@@ -545,8 +592,6 @@ export async function saveProject(draft, isNew) {
 			icon: draft.icon || null,
 			milestones: draft.milestones ?? [],
 			enterprise_ids: enterpriseIds,
-			start_at: startAt,
-			end_at: endAt,
 			depends_on: dependsOn
 		});
 		const uiProj = {
@@ -556,8 +601,6 @@ export async function saveProject(draft, isNew) {
 			status: created.status ?? draft.status ?? 'planned',
 			icon: created.icon ?? draft.icon ?? null,
 			enterprise_ids: created.enterprise_ids ?? enterpriseIds,
-			start_at: created.start_at ?? startAt,
-			end_at: created.end_at ?? endAt,
 			depends_on: created.depends_on ?? dependsOn,
 			milestones: created.milestones ?? [],
 			slug: created.slug,
@@ -569,7 +612,7 @@ export async function saveProject(draft, isNew) {
 	} else {
 		const prev = projects.find((p) => p.id === draft.id);
 		const nextIcon = draft.icon === undefined ? (prev?.icon ?? null) : draft.icon;
-		const { body: _legacyBody, ...prevDrive } = prev?._drive ?? {};
+		const { body: _legacyBody, start_at: _s, end_at: _e, ...prevDrive } = prev?._drive ?? {};
 		const base = {
 			...prevDrive,
 			id: draft.id,
@@ -579,12 +622,12 @@ export async function saveProject(draft, isNew) {
 			status: draft.status ?? prev?.status ?? 'planned',
 			icon: nextIcon || undefined,
 			enterprise_ids: enterpriseIds,
-			start_at: startAt,
-			end_at: endAt,
 			depends_on: dependsOn,
 			milestones: draft.milestones ?? prev?.milestones ?? [],
 			created_at: prev?._drive?.created_at
 		};
+		delete base.start_at;
+		delete base.end_at;
 		const saved = await drivePutProject(session, base);
 		const uiProj = {
 			id: saved.id,
@@ -593,8 +636,6 @@ export async function saveProject(draft, isNew) {
 			status: saved.status ?? 'planned',
 			icon: saved.icon ?? nextIcon ?? null,
 			enterprise_ids: Array.isArray(saved.enterprise_ids) ? saved.enterprise_ids : enterpriseIds,
-			start_at: saved.start_at ?? startAt,
-			end_at: saved.end_at ?? endAt,
 			depends_on: Array.isArray(saved.depends_on) ? saved.depends_on : dependsOn,
 			milestones: Array.isArray(saved.milestones) ? saved.milestones : [],
 			slug: saved.slug,

@@ -18,7 +18,8 @@ export function deriveProjectStatus(projectId, taskList) {
 	const allDone = statuses.every((s) => s === 'closed' || s === 'canceled');
 	if (allDone) return 'closed';
 
-	if (statuses.some((s) => s === 'inProgress' || s === 'inReview')) return 'inProgress';
+	if (statuses.some((s) => s === 'inProgress' || s === 'inReview' || s === 'recurring'))
+		return 'inProgress';
 	if (statuses.some((s) => s === 'open')) return 'planned';
 	if (statuses.some((s) => s === 'backlog')) return 'backlog';
 	return 'planned';

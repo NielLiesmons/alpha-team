@@ -17,6 +17,7 @@
 		{ value: 'open', label: 'Open' },
 		{ value: 'inProgress', label: 'In progress' },
 		{ value: 'inReview', label: 'In review' },
+		{ value: 'recurring', label: 'Recurring' },
 		{ value: 'closed', label: 'Closed' },
 		{ value: 'canceled', label: 'Canceled' }
 	];

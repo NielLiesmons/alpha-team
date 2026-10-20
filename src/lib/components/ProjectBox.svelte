@@ -96,8 +96,15 @@
 		display: block;
 	}
 
+	/* Color-emoji fonts sit optically left — nudge into hex center */
 	.icon-emoji {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		line-height: 1;
+		width: 1.15em;
+		margin-left: 0.12em;
+		text-align: center;
 		user-select: none;
 	}
 

@@ -6,6 +6,7 @@
 	import { deriveProjectStatus } from '$lib/project-status.js';
 	import {
 		enterprises,
+		moments,
 		openComposer,
 		projects,
 		selectEntity,
@@ -38,6 +39,14 @@
 		return Number.isFinite(t) ? t : fallback;
 	}
 
+	/** Active planning projects: not fully closed/canceled */
+	const planningProjects = $derived(
+		projects.filter((p) => {
+			const st = deriveProjectStatus(p.id, tasks);
+			return st !== 'closed' && st !== 'canceled';
+		})
+	);
+
 	/** @param {any} p */
 	function projectTint(p) {
 		const seed = (p.icon && String(p.icon).trim()) || p.title || p.id || 'P';
@@ -52,22 +61,63 @@
 		return `rgba(${r}, ${g}, ${b}, 0.45)`;
 	}
 
+	/** @param {string} taskId */
+	function momentsForTask(taskId) {
+		return moments.filter((m) => m.task_id === taskId && m.status !== 'canceled');
+	}
+
+	/**
+	 * Span from moments linked to a project's tasks.
+	 * @param {string} projectId
+	 */
+	function projectSpanFromMoments(projectId) {
+		const kids = tasksForProject(projectId);
+		/** @type {number[]} */
+		const starts = [];
+		/** @type {number[]} */
+		const ends = [];
+		for (const t of kids) {
+			for (const m of momentsForTask(t.id)) {
+				const s = parseMs(m.start_at, NaN);
+				const e = parseMs(m.end_at, NaN);
+				if (Number.isFinite(s)) starts.push(s);
+				if (Number.isFinite(e)) ends.push(e);
+				else if (Number.isFinite(s)) ends.push(s + 3 * DAY_MS);
+			}
+			const d = parseMs(t.deadline_at, NaN);
+			if (Number.isFinite(d)) {
+				starts.push(d);
+				ends.push(d);
+			}
+		}
+		if (!starts.length && !ends.length) return null;
+		const s = starts.length ? Math.min(...starts) : Math.min(...ends) - 3 * DAY_MS;
+		const e = ends.length ? Math.max(...ends) : Math.max(...starts) + 3 * DAY_MS;
+		return {
+			left: ((s - range.start) / DAY_MS) * PX_PER_DAY,
+			width: Math.max(PX_PER_DAY * 3, ((Math.max(e, s + DAY_MS) - s) / DAY_MS) * PX_PER_DAY),
+			start: s,
+			end: e
+		};
+	}
+
 	const range = $derived.by(() => {
 		const now = Date.now();
 		let min = now - 30 * DAY_MS;
 		let max = now + 120 * DAY_MS;
-		for (const p of projects) {
-			const s = parseMs(p.start_at, NaN);
-			const e = parseMs(p.end_at, NaN);
+		for (const m of moments) {
+			const s = parseMs(m.start_at, NaN);
+			const e = parseMs(m.end_at, NaN);
 			if (Number.isFinite(s)) min = Math.min(min, s);
 			if (Number.isFinite(e)) max = Math.max(max, e);
 			if (Number.isFinite(s) && !Number.isFinite(e)) max = Math.max(max, s + 14 * DAY_MS);
 		}
 		for (const t of tasks) {
-			const s = parseMs(t.start_at, NaN);
-			const e = parseMs(t.end_at, NaN);
-			if (Number.isFinite(s)) min = Math.min(min, s);
-			if (Number.isFinite(e)) max = Math.max(max, e);
+			const d = parseMs(t.deadline_at, NaN);
+			if (Number.isFinite(d)) {
+				min = Math.min(min, d);
+				max = Math.max(max, d);
+			}
 		}
 		const start = new Date(min);
 		start.setUTCDate(1);
@@ -124,14 +174,18 @@
 	/** @param {string} id */
 	function projectsForEnterprise(id) {
 		if (id === UNASSIGNED) {
-			return projects.filter((p) => !(p.enterprise_ids ?? []).length);
+			return planningProjects.filter((p) => !(p.enterprise_ids ?? []).length);
 		}
-		return projects.filter((p) => (p.enterprise_ids ?? []).includes(id));
+		return planningProjects.filter((p) => (p.enterprise_ids ?? []).includes(id));
 	}
 
 	/** @param {string} projectId */
 	function tasksForProject(projectId) {
-		return tasks.filter((t) => (t.project_ids ?? []).includes(projectId));
+		return tasks.filter((t) => {
+			if (!(t.project_ids ?? []).includes(projectId)) return false;
+			if (t.status === 'recurring') return true;
+			return t.status !== 'closed' && t.status !== 'canceled';
+		});
 	}
 
 	/** Status → bar fill (matches TaskBox accents) */
@@ -141,6 +195,7 @@
 			case 'closed':
 				return 'color-mix(in srgb, var(--accent-1) 70%, transparent)';
 			case 'inProgress':
+			case 'recurring':
 				return 'color-mix(in srgb, var(--accent-2) 75%, transparent)';
 			case 'inReview':
 				return 'color-mix(in srgb, var(--accent-1) 45%, var(--fg-8))';
@@ -162,7 +217,7 @@
 				: [{ id: UNASSIGNED, title: 'Projects', status: 'active', icon: null }];
 
 		const showUnassigned =
-			projects.some((p) => !(p.enterprise_ids ?? []).length) && sortedEnterprises.length > 0;
+			planningProjects.some((p) => !(p.enterprise_ids ?? []).length) && sortedEnterprises.length > 0;
 
 		/** @param {string} entId */
 		function pushProjects(entId) {
@@ -237,7 +292,7 @@
 		<div class="empty">
 			<p class="empty-title">No enterprises yet</p>
 			<p class="empty-body">
-				Add farm lines (Eggs, Sheep…) plus General — then attach projects with start/end dates.
+				Add farm lines (Eggs, Sheep…) plus General — then attach projects and date their tasks.
 			</p>
 			<button type="button" class="tool-btn primary" onclick={() => openComposer('enterprise')}
 				>New enterprise</button
@@ -306,21 +361,18 @@
 							<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
 							{#if row.kind === 'enterprise'}
 								{@const kids = projectsForEnterprise(row.id)}
-								{@const starts = kids.map((p) => parseMs(p.start_at, NaN)).filter(Number.isFinite)}
-								{@const ends = kids
-									.map((p) => parseMs(p.end_at, parseMs(p.start_at, NaN) + 14 * DAY_MS))
-									.filter(Number.isFinite)}
-								{#if starts.length && ends.length}
-									{@const s = Math.min(...starts)}
-									{@const e = Math.max(...ends)}
+								{@const spans = kids.map((p) => projectSpanFromMoments(p.id)).filter(Boolean)}
+								{#if spans.length}
+									{@const s = Math.min(...spans.map((b) => /** @type {{ start: number }} */ (b).start))}
+									{@const e = Math.max(...spans.map((b) => /** @type {{ end: number }} */ (b).end))}
 									<span
 										class="ent-span"
-										style:left="{( (s - range.start) / DAY_MS) * PX_PER_DAY}px"
+										style:left="{((s - range.start) / DAY_MS) * PX_PER_DAY}px"
 										style:width="{Math.max(PX_PER_DAY * 2, ((e - s) / DAY_MS) * PX_PER_DAY)}px"
 									></span>
 								{/if}
 							{:else if row.kind === 'project'}
-								{@const box = span(row.entity.start_at, row.entity.end_at, 14)}
+								{@const box = projectSpanFromMoments(row.id)}
 								{#if box}
 									<button
 										type="button"
@@ -332,21 +384,31 @@
 										onclick={() => selectEntity('project', row.id)}
 										title={row.title}
 									></button>
-								{:else}
-									<span class="undated">Set dates</span>
 								{/if}
 							{:else}
-								{@const box = span(row.entity.start_at, row.entity.end_at, 3)}
-								{#if box}
-									<button
-										type="button"
-										class="task-bar"
-										style:left="{box.left}px"
-										style:width="{box.width}px"
-										style:background={taskBarColor(row.entity.status)}
-										onclick={() => selectEntity('task', row.id)}
-										title={row.title}
-									></button>
+								{#each momentsForTask(row.id) as m (m.id)}
+									{@const box = span(m.start_at, m.end_at, 1)}
+									{#if box}
+										<button
+											type="button"
+											class="task-bar"
+											style:left="{box.left}px"
+											style:width="{box.width}px"
+											style:background={taskBarColor(row.entity.status)}
+											onclick={() => selectEntity('task', row.id)}
+											title={m.title || row.title}
+										></button>
+									{/if}
+								{/each}
+								{#if row.entity.deadline_at}
+									{@const d = parseMs(row.entity.deadline_at, NaN)}
+									{#if Number.isFinite(d)}
+										<span
+											class="deadline-mark"
+											style:left="{((d - range.start) / DAY_MS) * PX_PER_DAY}px"
+											title="Deadline"
+										></span>
+									{/if}
 								{/if}
 							{/if}
 						</div>
@@ -595,13 +657,16 @@
 		padding: 0;
 	}
 
-	.undated {
+	.deadline-mark {
 		position: absolute;
-		left: 8px;
-		top: 50%;
-		transform: translateY(-50%);
-		font-size: 11px;
-		color: var(--fg-33);
+		top: 4px;
+		bottom: 4px;
+		width: 2px;
+		margin-left: -1px;
+		background: var(--accent-1, #c66);
+		border-radius: 1px;
+		pointer-events: none;
+		opacity: 0.85;
 	}
 
 	.eyebrow-label-xs {
