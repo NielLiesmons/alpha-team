@@ -71,12 +71,8 @@
 	<title>Settings</title>
 </svelte:head>
 
-<header class="page-head">
-	<div>
-		<h1>Settings</h1>
-		<p>Accounts, Drive, Publications API, brand, and appearance.</p>
-	</div>
-</header>
+<div class="feed settings">
+<p class="lede">Accounts, Drive, Publications API, brand, and appearance.</p>
 
 <section class="block">
 	<p class="field-label">Accounts</p>
@@ -189,8 +185,21 @@
 		{/each}
 	</div>
 </section>
+</div>
 
 <style>
+	.settings {
+		padding-left: 16px;
+		padding-right: 16px;
+		box-sizing: border-box;
+	}
+
+	.lede {
+		margin: 0 0 1.25rem;
+		font-size: 13px;
+		color: var(--fg-33);
+	}
+
 	.block {
 		max-width: 520px;
 		margin-bottom: 1.75rem;
