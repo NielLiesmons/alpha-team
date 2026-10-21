@@ -31,7 +31,7 @@ export const primaryNav = [
 	{
 		href: '/entreprises',
 		label: 'Entreprises',
-		icon: 'accounting',
+		icon: 'enterprise',
 		countKey: 'ledger',
 		createKind: 'enterprise'
 	},
@@ -46,7 +46,7 @@ export const primaryNav = [
 export const mobileNav = [
 	{ href: '/website', label: 'Website', icon: 'website' },
 	{ href: '/planning', label: 'Planning', icon: 'calendar' },
-	{ href: '/entreprises', label: 'Entreprises', icon: 'accounting' },
+	{ href: '/entreprises', label: 'Entreprises', icon: 'enterprise' },
 	{ href: '/notes', label: 'Notes', icon: 'notes' },
 	{ href: '/projects', label: 'Projects', icon: 'projects' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },

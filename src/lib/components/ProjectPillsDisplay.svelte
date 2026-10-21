@@ -1,23 +1,26 @@
 <script>
 	/**
-	 * Compact project trigger: overlapping hex stack (like ProfilePicStack), then count.
+	 * Compact project trigger: empty hex when none, else overlapping hex stack + label.
 	 */
 	import ProjectBox from './ProjectBox.svelte';
-	import { deriveProjectStatus } from '$lib/project-status.js';
-	import { projects, tasks } from '$lib/workspace.svelte.js';
+	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
+	import { enterprises, projects, tasks } from '$lib/workspace.svelte.js';
 
-	/** @type {{ projectIds?: string[], size?: number }} */
-	let { projectIds = [], size = 22 } = $props();
+	/** @type {{ projectIds?: string[], size?: number, showEmptyLabel?: boolean }} */
+	let { projectIds = [], size = 22, showEmptyLabel = true } = $props();
 
 	const shown = $derived(projectIds.slice(0, 3));
 	const count = $derived(projectIds.length);
 	const overlap = $derived(Math.round(size * 0.38));
 </script>
 
-{#if count === 0}
-	<span>Project</span>
-{:else}
-	<span class="pill-projects">
+<span class="pill-projects">
+	{#if count === 0}
+		<ProjectBox state="planned" icon={null} {size} />
+		{#if showEmptyLabel}
+			<span class="count">Project</span>
+		{/if}
+	{:else}
 		<span class="hex-stack">
 			{#each shown as pid, i (pid)}
 				{@const p = projects.find((x) => x.id === pid)}
@@ -28,7 +31,7 @@
 				>
 					<ProjectBox
 						state={p ? deriveProjectStatus(p.id, tasks) : 'planned'}
-						icon={p?.icon}
+						icon={p ? projectDisplayIcon(p, enterprises) : null}
 						{size}
 					/>
 				</span>
@@ -42,8 +45,8 @@
 				<span class="count one">{p.title}</span>
 			{/if}
 		{/if}
-	</span>
-{/if}
+	{/if}
+</span>
 
 <style>
 	.pill-projects {

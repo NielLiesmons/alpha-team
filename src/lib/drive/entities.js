@@ -69,6 +69,10 @@ export async function createProject(session, input) {
 		status: input.status || 'planned',
 		icon: input.icon || undefined,
 		enterprise_ids: Array.isArray(input.enterprise_ids) ? input.enterprise_ids : [],
+		primary_enterprise_id:
+			input.primary_enterprise_id ||
+			(Array.isArray(input.enterprise_ids) && input.enterprise_ids[0]) ||
+			null,
 		depends_on: Array.isArray(input.depends_on) ? input.depends_on : [],
 		milestones: Array.isArray(input.milestones) ? input.milestones : [],
 		created_at: created,
@@ -78,6 +82,12 @@ export async function createProject(session, input) {
 			private_prefix: home
 		}
 	};
+	if (
+		project.primary_enterprise_id &&
+		!project.enterprise_ids.includes(project.primary_enterprise_id)
+	) {
+		project.enterprise_ids = [project.primary_enterprise_id, ...project.enterprise_ids];
+	}
 	await putPath(session, `projects/${id}/project.json`, 'project', JSON.stringify(project, null, 2));
 	return project;
 }
@@ -106,6 +116,15 @@ export async function putProject(session, project, patch = {}) {
 	if (!Array.isArray(next.enterprise_ids)) next.enterprise_ids = [];
 	if (!Array.isArray(next.depends_on)) next.depends_on = [];
 	if (!next.status) next.status = 'planned';
+	if (!next.primary_enterprise_id && next.enterprise_ids[0]) {
+		next.primary_enterprise_id = next.enterprise_ids[0];
+	}
+	if (
+		next.primary_enterprise_id &&
+		!next.enterprise_ids.includes(next.primary_enterprise_id)
+	) {
+		next.enterprise_ids = [next.primary_enterprise_id, ...next.enterprise_ids];
+	}
 	await putPath(session, `projects/${id}/project.json`, 'project', JSON.stringify(next, null, 2));
 	return next;
 }

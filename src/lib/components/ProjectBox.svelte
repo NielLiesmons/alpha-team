@@ -39,7 +39,7 @@
 	onkeydown={onclick ? (e) => e.key === 'Enter' && onclick(/** @type {any} */ (e)) : undefined}
 >
 	<svg viewBox="0 0 24 24" width={size} height={size} class="hex" aria-hidden="true">
-		<path d={PATH} fill="var(--fg-8)" stroke="none" />
+		<path d={PATH} fill="var(--box-plate)" stroke="none" />
 		<path
 			d={PATH}
 			fill="none"

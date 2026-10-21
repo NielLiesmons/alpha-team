@@ -1,9 +1,12 @@
 <script>
-	import EnterpriseBox from '$lib/components/EnterpriseBox.svelte';
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
 	import { stringToColor } from '$lib/color.js';
-	import { deriveProjectStatus } from '$lib/project-status.js';
+	import {
+		deriveProjectStatus,
+		primaryEnterpriseId,
+		projectDisplayIcon
+	} from '$lib/project-status.js';
 	import {
 		enterprises,
 		moments,
@@ -14,12 +17,14 @@
 	} from '$lib/workspace.svelte.js';
 
 	/** @type {Set<string>} */
-	let collapsed = $state(new Set());
-	/** @type {Set<string>} */
 	let collapsedProjects = $state(new Set());
 
 	const DAY_MS = 86_400_000;
 	const PX_PER_DAY = 8;
+	const ENT_RAIL_W = 28;
+	/** ~11px per letter + padding — readable stacked caps without huge type */
+	const LETTER_H = 11;
+	const ENT_MIN_PAD = 20;
 
 	const sortedEnterprises = $derived(
 		[...enterprises].sort(
@@ -49,16 +54,31 @@
 
 	/** @param {any} p */
 	function projectTint(p) {
-		const seed = (p.icon && String(p.icon).trim()) || p.title || p.id || 'P';
-		const { r, g, b } = stringToColor(seed);
+		const seed = projectDisplayIcon(p, enterprises) || p.title || p.id || 'P';
+		const { r, g, b } = stringToColor(String(seed));
 		return `rgba(${r}, ${g}, ${b}, 0.22)`;
 	}
 
 	/** @param {any} p */
 	function projectTintStrong(p) {
-		const seed = (p.icon && String(p.icon).trim()) || p.title || p.id || 'P';
-		const { r, g, b } = stringToColor(seed);
+		const seed = projectDisplayIcon(p, enterprises) || p.title || p.id || 'P';
+		const { r, g, b } = stringToColor(String(seed));
 		return `rgba(${r}, ${g}, ${b}, 0.45)`;
+	}
+
+	/** @param {string} title */
+	function enterpriseColor(title) {
+		const { r, g, b } = stringToColor(title || 'E');
+		return `rgb(${r}, ${g}, ${b})`;
+	}
+
+	/** @param {string} title */
+	function verticalLetters(title) {
+		return String(title || '')
+			.toUpperCase()
+			.replace(/[^A-Z0-9]+/g, '')
+			.split('')
+			.slice(0, 16);
 	}
 
 	/** @param {string} taskId */
@@ -67,7 +87,6 @@
 	}
 
 	/**
-	 * Span from moments linked to a project's tasks.
 	 * @param {string} projectId
 	 */
 	function projectSpanFromMoments(projectId) {
@@ -174,9 +193,9 @@
 	/** @param {string} id */
 	function projectsForEnterprise(id) {
 		if (id === UNASSIGNED) {
-			return planningProjects.filter((p) => !(p.enterprise_ids ?? []).length);
+			return planningProjects.filter((p) => !primaryEnterpriseId(p));
 		}
-		return planningProjects.filter((p) => (p.enterprise_ids ?? []).includes(id));
+		return planningProjects.filter((p) => primaryEnterpriseId(p) === id);
 	}
 
 	/** @param {string} projectId */
@@ -188,7 +207,6 @@
 		});
 	}
 
-	/** Status → bar fill (matches TaskBox accents) */
 	/** @param {string | undefined} status */
 	function taskBarColor(status) {
 		switch (status) {
@@ -208,8 +226,11 @@
 		}
 	}
 
-	const rows = $derived.by(() => {
-		/** @type {{ kind: 'enterprise' | 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[]} */
+	/**
+	 * Enterprise groups with project/task rows (enterprise is a rail, not a timeline row).
+	 */
+	const groups = $derived.by(() => {
+		/** @type {{ id: string, title: string, entity: any, letters: string[], minHeight: number, rows: { kind: 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[] }[]} */
 		const out = [];
 		const ents =
 			sortedEnterprises.length > 0
@@ -217,15 +238,17 @@
 				: [{ id: UNASSIGNED, title: 'Projects', status: 'active', icon: null }];
 
 		const showUnassigned =
-			planningProjects.some((p) => !(p.enterprise_ids ?? []).length) && sortedEnterprises.length > 0;
+			planningProjects.some((p) => !primaryEnterpriseId(p)) && sortedEnterprises.length > 0;
 
-		/** @param {string} entId */
-		function pushProjects(entId) {
-			for (const p of projectsForEnterprise(entId)) {
-				out.push({ kind: 'project', id: p.id, title: p.title, entity: p });
+		/** @param {any} ent */
+		function buildGroup(ent) {
+			/** @type {{ kind: 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[]} */
+			const rows = [];
+			for (const p of projectsForEnterprise(ent.id)) {
+				rows.push({ kind: 'project', id: p.id, title: p.title, entity: p });
 				if (collapsedProjects.has(p.id)) continue;
 				for (const t of tasksForProject(p.id)) {
-					out.push({
+					rows.push({
 						kind: 'task',
 						id: t.id,
 						title: t.title,
@@ -234,33 +257,29 @@
 					});
 				}
 			}
-		}
-
-		for (const ent of ents) {
-			out.push({ kind: 'enterprise', id: ent.id, title: ent.title, entity: ent });
-			if (collapsed.has(ent.id)) continue;
-			pushProjects(ent.id);
-		}
-
-		if (showUnassigned) {
+			const letters = verticalLetters(ent.title);
+			const minHeight = Math.max(96, letters.length * LETTER_H + ENT_MIN_PAD);
 			out.push({
-				kind: 'enterprise',
-				id: UNASSIGNED,
-				title: 'No enterprise',
-				entity: { id: UNASSIGNED, title: 'No enterprise', status: 'draft', icon: null }
+				id: ent.id,
+				title: ent.title,
+				entity: ent,
+				letters,
+				minHeight,
+				rows
 			});
-			if (!collapsed.has(UNASSIGNED)) pushProjects(UNASSIGNED);
+		}
+
+		for (const ent of ents) buildGroup(ent);
+		if (showUnassigned) {
+			buildGroup({
+				id: UNASSIGNED,
+				title: 'None',
+				status: 'draft',
+				icon: null
+			});
 		}
 		return out;
 	});
-
-	/** @param {string} id */
-	function toggleEnt(id) {
-		const next = new Set(collapsed);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		collapsed = next;
-	}
 
 	/** @param {string} id */
 	function toggleProject(id) {
@@ -299,9 +318,13 @@
 			>
 		</div>
 	{:else}
-		<div class="gantt-scroll">
-			<div class="gantt-inner" style:width="calc(var(--label-w) + {chartWidth}px)">
+		<div class="gantt-scroll" style:--ent-rail-w="{ENT_RAIL_W}px">
+			<div
+				class="gantt-inner"
+				style:width="calc(var(--ent-rail-w) + var(--label-w) + {chartWidth}px)"
+			>
 				<div class="gantt-row head">
+					<div class="ent-rail head-rail" aria-hidden="true"></div>
 					<div class="label-cell"></div>
 					<div class="timeline" style:width="{chartWidth}px">
 						{#each months as m}
@@ -311,105 +334,111 @@
 					</div>
 				</div>
 
-				{#each rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
-					<div
-						class="gantt-row"
-						class:ent={row.kind === 'enterprise'}
-						class:proj={row.kind === 'project'}
-						class:task={row.kind === 'task'}
-					>
-						<div class="label-cell">
-							{#if row.kind === 'enterprise'}
-								<button type="button" class="twist" onclick={() => toggleEnt(row.id)} aria-label="Toggle">
-									{collapsed.has(row.id) ? '▸' : '▾'}
-								</button>
-								<EnterpriseBox state={row.entity.status || 'active'} icon={row.entity.icon} size={22} />
-								<button
-									type="button"
-									class="name ent-name"
-									onclick={() => {
-										if (row.id !== UNASSIGNED) selectEntity('enterprise', row.id);
-									}}>{row.title}</button
-								>
-							{:else if row.kind === 'project'}
-								<span class="indent"></span>
-								<button
-									type="button"
-									class="twist"
-									onclick={() => toggleProject(row.id)}
-									aria-label="Toggle tasks"
-								>
-									{collapsedProjects.has(row.id) ? '▸' : '▾'}
-								</button>
-								<ProjectBox
-									state={deriveProjectStatus(row.id, tasks)}
-									icon={row.entity.icon}
-									size={18}
-								/>
-								<button type="button" class="name" onclick={() => selectEntity('project', row.id)}
-									>{row.title}</button
-								>
-							{:else}
-								<span class="indent deep"></span>
-								<TaskBox state={row.entity.status} size={16} />
-								<button type="button" class="name muted" onclick={() => selectEntity('task', row.id)}
-									>{row.title}</button
-								>
-							{/if}
-						</div>
-						<div class="timeline" style:width="{chartWidth}px">
-							<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
-							{#if row.kind === 'enterprise'}
-								{@const kids = projectsForEnterprise(row.id)}
-								{@const spans = kids.map((p) => projectSpanFromMoments(p.id)).filter(Boolean)}
-								{#if spans.length}
-									{@const s = Math.min(...spans.map((b) => /** @type {{ start: number }} */ (b).start))}
-									{@const e = Math.max(...spans.map((b) => /** @type {{ end: number }} */ (b).end))}
-									<span
-										class="ent-span"
-										style:left="{((s - range.start) / DAY_MS) * PX_PER_DAY}px"
-										style:width="{Math.max(PX_PER_DAY * 2, ((e - s) / DAY_MS) * PX_PER_DAY)}px"
-									></span>
-								{/if}
-							{:else if row.kind === 'project'}
-								{@const box = projectSpanFromMoments(row.id)}
-								{#if box}
-									<button
-										type="button"
-										class="proj-container"
-										style:left="{box.left}px"
-										style:width="{box.width}px"
-										style:background={projectTint(row.entity)}
-										style:border-color={projectTintStrong(row.entity)}
-										onclick={() => selectEntity('project', row.id)}
-										title={row.title}
-									></button>
-								{/if}
-							{:else}
-								{#each momentsForTask(row.id) as m (m.id)}
-									{@const box = span(m.start_at, m.end_at, 1)}
-									{#if box}
-										<button
-											type="button"
-											class="task-bar"
-											style:left="{box.left}px"
-											style:width="{box.width}px"
-											style:background={taskBarColor(row.entity.status)}
-											onclick={() => selectEntity('task', row.id)}
-											title={m.title || row.title}
-										></button>
-									{/if}
+				{#each groups as group (group.id)}
+					<div class="ent-group" style:min-height="{group.minHeight}px">
+						<button
+							type="button"
+							class="ent-rail"
+							style:color={enterpriseColor(group.title)}
+							title={group.title}
+							onclick={() => {
+								if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
+							}}
+						>
+							<span class="ent-letters">
+								{#each group.letters as ch, i (i)}
+									<span class="ent-ch">{ch}</span>
 								{/each}
-								{#if row.entity.deadline_at}
-									{@const d = parseMs(row.entity.deadline_at, NaN)}
-									{#if Number.isFinite(d)}
-										<span
-											class="deadline-mark"
-											style:left="{((d - range.start) / DAY_MS) * PX_PER_DAY}px"
-											title="Deadline"
-										></span>
-									{/if}
-								{/if}
+							</span>
+						</button>
+						<div class="ent-body">
+							{#if group.rows.length === 0}
+								<div class="gantt-row empty-ent">
+									<div class="label-cell">
+										<span class="name muted">No projects</span>
+									</div>
+									<div class="timeline" style:width="{chartWidth}px">
+										<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
+									</div>
+								</div>
+							{:else}
+								{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
+									<div class="gantt-row" class:proj={row.kind === 'project'} class:task={row.kind === 'task'}>
+										<div class="label-cell">
+											{#if row.kind === 'project'}
+												<button
+													type="button"
+													class="twist"
+													onclick={() => toggleProject(row.id)}
+													aria-label="Toggle tasks"
+												>
+													{collapsedProjects.has(row.id) ? '▸' : '▾'}
+												</button>
+												<ProjectBox
+													state={deriveProjectStatus(row.id, tasks)}
+													icon={projectDisplayIcon(row.entity, enterprises)}
+													size={18}
+												/>
+												<button
+													type="button"
+													class="name"
+													onclick={() => selectEntity('project', row.id)}>{row.title}</button
+												>
+											{:else}
+												<span class="indent deep"></span>
+												<TaskBox state={row.entity.status} size={16} />
+												<button
+													type="button"
+													class="name muted"
+													onclick={() => selectEntity('task', row.id)}>{row.title}</button
+												>
+											{/if}
+										</div>
+										<div class="timeline" style:width="{chartWidth}px">
+											<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
+											{#if row.kind === 'project'}
+												{@const box = projectSpanFromMoments(row.id)}
+												{#if box}
+													<button
+														type="button"
+														class="proj-container"
+														style:left="{box.left}px"
+														style:width="{box.width}px"
+														style:background={projectTint(row.entity)}
+														style:border-color={projectTintStrong(row.entity)}
+														onclick={() => selectEntity('project', row.id)}
+														title={row.title}
+													></button>
+												{/if}
+											{:else}
+												{#each momentsForTask(row.id) as m (m.id)}
+													{@const box = span(m.start_at, m.end_at, 1)}
+													{#if box}
+														<button
+															type="button"
+															class="task-bar"
+															style:left="{box.left}px"
+															style:width="{box.width}px"
+															style:background={taskBarColor(row.entity.status)}
+															onclick={() => selectEntity('task', row.id)}
+															title={m.title || row.title}
+														></button>
+													{/if}
+												{/each}
+												{#if row.entity.deadline_at}
+													{@const d = parseMs(row.entity.deadline_at, NaN)}
+													{#if Number.isFinite(d)}
+														<span
+															class="deadline-mark"
+															style:left="{((d - range.start) / DAY_MS) * PX_PER_DAY}px"
+															title="Deadline"
+														></span>
+													{/if}
+												{/if}
+											{/if}
+										</div>
+									</div>
+								{/each}
 							{/if}
 						</div>
 					</div>
@@ -424,7 +453,6 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		/* .feed already pads for list-top */
 	}
 
 	.toolbar {
@@ -483,11 +511,65 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		--label-w: 200px;
+		--label-w: 188px;
+		--ent-rail-w: 28px;
 	}
 
 	.gantt-inner {
 		min-width: 100%;
+	}
+
+	.ent-group {
+		display: flex;
+		align-items: stretch;
+		border-bottom: 1px solid var(--fg-8);
+	}
+
+	.ent-rail {
+		position: sticky;
+		left: 0;
+		z-index: 3;
+		width: var(--ent-rail-w);
+		flex-shrink: 0;
+		margin: 0;
+		padding: 10px 0;
+		border: 0;
+		border-right: 1px solid var(--fg-8);
+		background: var(--bg);
+		cursor: pointer;
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+		box-sizing: border-box;
+	}
+
+	.ent-rail.head-rail {
+		cursor: default;
+		padding: 0;
+		z-index: 4;
+	}
+
+	.ent-letters {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1px;
+		line-height: 1;
+	}
+
+	.ent-ch {
+		font-size: 9px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		line-height: 1.15;
+		user-select: none;
+	}
+
+	.ent-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.gantt-row {
@@ -497,16 +579,16 @@
 		border-bottom: 1px solid var(--fg-8);
 	}
 
+	.ent-body .gantt-row:last-child {
+		border-bottom: 0;
+	}
+
 	.gantt-row.head {
 		min-height: 32px;
 		position: sticky;
 		top: 0;
-		z-index: 3;
+		z-index: 4;
 		background: var(--bg);
-	}
-
-	.gantt-row.ent {
-		min-height: 44px;
 	}
 
 	.gantt-row.proj {
@@ -517,9 +599,14 @@
 		min-height: 32px;
 	}
 
+	.gantt-row.empty-ent {
+		flex: 1;
+		min-height: 72px;
+	}
+
 	.label-cell {
 		position: sticky;
-		left: 0;
+		left: var(--ent-rail-w);
 		z-index: 2;
 		width: var(--label-w);
 		flex-shrink: 0;
@@ -529,19 +616,21 @@
 		padding: 0 8px;
 		box-sizing: border-box;
 		border-right: 1px solid var(--fg-8);
-		/* Match workspace plane (not a darker strip) */
 		background: var(--bg);
 	}
 
 	.gantt-row.head,
-	.gantt-row.head .label-cell {
+	.gantt-row.head .label-cell,
+	.gantt-row.head .ent-rail {
 		background: var(--bg);
 	}
 
 	@media (max-width: 767px) {
 		.label-cell,
+		.ent-rail,
 		.gantt-row.head,
-		.gantt-row.head .label-cell {
+		.gantt-row.head .label-cell,
+		.gantt-row.head .ent-rail {
 			background: var(--shell);
 		}
 	}
@@ -557,13 +646,9 @@
 		flex-shrink: 0;
 	}
 
-	.indent {
-		width: 10px;
-		flex-shrink: 0;
-	}
-
 	.indent.deep {
-		width: 36px;
+		width: 24px;
+		flex-shrink: 0;
 	}
 
 	.name {
@@ -586,10 +671,6 @@
 		font-weight: 500;
 		font-size: 12px;
 		color: var(--fg-66);
-	}
-
-	.ent-name {
-		font-size: 14px;
 	}
 
 	.timeline {
@@ -622,16 +703,6 @@
 		opacity: 0.65;
 		pointer-events: none;
 		z-index: 1;
-	}
-
-	.ent-span {
-		position: absolute;
-		top: 50%;
-		transform: translateY(-50%);
-		height: 8px;
-		border-radius: 3px;
-		background: color-mix(in srgb, var(--fg) 14%, transparent);
-		pointer-events: none;
 	}
 
 	.proj-container {

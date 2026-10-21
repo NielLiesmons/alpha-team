@@ -5,6 +5,7 @@
 	 * Tune --icon-stroke in app.css.
 	 */
 	import BaseIcon from './icons/BaseIcon.svelte';
+	import { ENTERPRISE_STAR_18 } from '$lib/star-path.js';
 
 	/** @type {{ name?: string, size?: number }} */
 	let { name = 'dot', size = 22 } = $props();
@@ -120,6 +121,15 @@
 				d="M6.5 5.5h5M6.5 8.5h5M6.5 11.5h3"
 				stroke="currentColor"
 				stroke-linecap="round"
+			/>
+		</svg>
+	{:else if name === 'enterprise' || name === 'entreprises'}
+		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<path
+				d={ENTERPRISE_STAR_18}
+				stroke="currentColor"
+				stroke-linecap="round"
+				stroke-linejoin="round"
 			/>
 		</svg>
 	{:else if name === 'shop'}

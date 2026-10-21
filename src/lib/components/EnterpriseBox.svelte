@@ -1,56 +1,14 @@
 <script>
 	/**
-	 * Five-point rounded star for an Enterprise — shallow tips, soft corners
-	 * (stamp-adjacent, not a spiky badge).
+	 * Soft five-point star for an Enterprise (less sharp tips).
 	 */
 	import { isProjectImageIcon } from '$lib/project-status.js';
+	import { ENTERPRISE_STAR_24 } from '$lib/star-path.js';
 
 	/** @type {{ state?: string, icon?: string | null, size?: number, onclick?: ((e: MouseEvent) => void) | null }} */
 	let { state = 'active', icon = null, size = 24, onclick = null } = $props();
 
-	/**
-	 * Soft 5-point star: outer/inner close enough that tips aren’t sharp;
-	 * path uses short quadratic fillets at each vertex.
-	 */
-	const PATH = $derived.by(() => {
-		const cx = 12;
-		const cy = 12;
-		const spikes = 5;
-		const outer = 10.6;
-		const inner = 5.85;
-		const tipRound = 0.55;
-		const dentRound = 0.4;
-		/** @type {{ x: number, y: number, r: number }[]} */
-		const verts = [];
-		for (let i = 0; i < spikes * 2; i++) {
-			const r = i % 2 === 0 ? outer : inner;
-			const a = (Math.PI * i) / spikes - Math.PI / 2;
-			verts.push({
-				x: cx + r * Math.cos(a),
-				y: cy + r * Math.sin(a),
-				r: i % 2 === 0 ? tipRound : dentRound
-			});
-		}
-		/** @type {string[]} */
-		const parts = [];
-		for (let i = 0; i < verts.length; i++) {
-			const prev = verts[(i - 1 + verts.length) % verts.length];
-			const cur = verts[i];
-			const next = verts[(i + 1) % verts.length];
-			const toPrev = Math.hypot(prev.x - cur.x, prev.y - cur.y) || 1;
-			const toNext = Math.hypot(next.x - cur.x, next.y - cur.y) || 1;
-			const rr = Math.min(cur.r, toPrev * 0.35, toNext * 0.35);
-			const ax = cur.x + ((prev.x - cur.x) / toPrev) * rr;
-			const ay = cur.y + ((prev.y - cur.y) / toPrev) * rr;
-			const bx = cur.x + ((next.x - cur.x) / toNext) * rr;
-			const by = cur.y + ((next.y - cur.y) / toNext) * rr;
-			if (i === 0) parts.push(`M ${ax.toFixed(3)} ${ay.toFixed(3)}`);
-			else parts.push(`L ${ax.toFixed(3)} ${ay.toFixed(3)}`);
-			parts.push(`Q ${cur.x.toFixed(3)} ${cur.y.toFixed(3)} ${bx.toFixed(3)} ${by.toFixed(3)}`);
-		}
-		return `${parts.join(' ')} Z`;
-	});
-
+	const PATH = ENTERPRISE_STAR_24;
 	const sw = 1.4;
 	const hasIcon = $derived(Boolean(icon && String(icon).trim()));
 	const isImage = $derived(hasIcon && isProjectImageIcon(icon));
@@ -75,7 +33,7 @@
 	onkeydown={onclick ? (e) => e.key === 'Enter' && onclick(/** @type {any} */ (e)) : undefined}
 >
 	<svg viewBox="0 0 24 24" width={size} height={size} class="star" aria-hidden="true">
-		<path d={PATH} fill="var(--fg-8)" stroke="none" />
+		<path d={PATH} fill="var(--box-plate)" stroke="none" />
 		<path
 			d={PATH}
 			fill="none"

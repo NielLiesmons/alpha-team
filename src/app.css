@@ -108,6 +108,8 @@
 
 	--shell: #090909;
 	--shell-border: var(--hairline);
+	/* Shape fills: nav column on desktop; workspace (--bg) on mobile for contrast */
+	--box-plate: var(--shell);
 
 	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
@@ -168,6 +170,7 @@
 	--hairline: var(--fg-11);
 	--shell: #090909;
 	--shell-border: var(--hairline);
+	--box-plate: var(--shell);
 	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--ink: var(--fg);
 	--ink66: var(--fg-66);
@@ -217,6 +220,7 @@
 	--hairline: var(--fg-11);
 	--shell: #f4f4f4;
 	--shell-border: var(--hairline);
+	--box-plate: var(--shell);
 	--scrim: color-mix(in srgb, var(--fg) 42%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
@@ -238,6 +242,14 @@
 
 /* Mobile page surface is --shell — panels/scrim follow it */
 @media (max-width: 767px) {
+	:root,
+	:root[data-theme='dark'],
+	:root[data-theme='light'],
+	:root[data-theme='gray'] {
+		/* Desktop workspace color — contrasts with mobile shell chrome */
+		--box-plate: var(--bg);
+	}
+
 	:root,
 	:root[data-theme='dark'] {
 		--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--shell));

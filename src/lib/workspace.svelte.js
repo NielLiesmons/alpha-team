@@ -259,6 +259,10 @@ export async function refreshFromDrive() {
 				status: p.status || 'planned',
 				icon: p.icon ?? null,
 				enterprise_ids: Array.isArray(p.enterprise_ids) ? p.enterprise_ids : [],
+				primary_enterprise_id:
+					p.primary_enterprise_id ||
+					(Array.isArray(p.enterprise_ids) && p.enterprise_ids[0]) ||
+					null,
 				depends_on: Array.isArray(p.depends_on) ? p.depends_on : [],
 				milestones: Array.isArray(p.milestones) ? p.milestones : [],
 				slug: p.slug,
@@ -551,6 +555,8 @@ export async function saveProject(draft, isNew) {
 	const enterpriseIds = Array.isArray(draft.enterprise_ids)
 		? draft.enterprise_ids
 		: [];
+	const primaryEnterpriseId =
+		draft.primary_enterprise_id || enterpriseIds[0] || null;
 	const dependsOn = Array.isArray(draft.depends_on) ? draft.depends_on : [];
 
 	if (!session) {
@@ -565,6 +571,7 @@ export async function saveProject(draft, isNew) {
 				status: draft.status ?? 'planned',
 				icon: draft.icon ?? null,
 				enterprise_ids: enterpriseIds,
+				primary_enterprise_id: primaryEnterpriseId,
 				depends_on: dependsOn
 			});
 			ui.projectId = id;
@@ -576,6 +583,7 @@ export async function saveProject(draft, isNew) {
 					...draft,
 					description,
 					enterprise_ids: enterpriseIds,
+					primary_enterprise_id: primaryEnterpriseId,
 					depends_on: dependsOn
 				});
 			ui.projectId = draft.id;
@@ -592,6 +600,7 @@ export async function saveProject(draft, isNew) {
 			icon: draft.icon || null,
 			milestones: draft.milestones ?? [],
 			enterprise_ids: enterpriseIds,
+			primary_enterprise_id: primaryEnterpriseId,
 			depends_on: dependsOn
 		});
 		const uiProj = {
@@ -601,6 +610,7 @@ export async function saveProject(draft, isNew) {
 			status: created.status ?? draft.status ?? 'planned',
 			icon: created.icon ?? draft.icon ?? null,
 			enterprise_ids: created.enterprise_ids ?? enterpriseIds,
+			primary_enterprise_id: created.primary_enterprise_id ?? primaryEnterpriseId,
 			depends_on: created.depends_on ?? dependsOn,
 			milestones: created.milestones ?? [],
 			slug: created.slug,
@@ -622,6 +632,7 @@ export async function saveProject(draft, isNew) {
 			status: draft.status ?? prev?.status ?? 'planned',
 			icon: nextIcon || undefined,
 			enterprise_ids: enterpriseIds,
+			primary_enterprise_id: primaryEnterpriseId,
 			depends_on: dependsOn,
 			milestones: draft.milestones ?? prev?.milestones ?? [],
 			created_at: prev?._drive?.created_at
@@ -636,6 +647,7 @@ export async function saveProject(draft, isNew) {
 			status: saved.status ?? 'planned',
 			icon: saved.icon ?? nextIcon ?? null,
 			enterprise_ids: Array.isArray(saved.enterprise_ids) ? saved.enterprise_ids : enterpriseIds,
+			primary_enterprise_id: saved.primary_enterprise_id ?? primaryEnterpriseId,
 			depends_on: Array.isArray(saved.depends_on) ? saved.depends_on : dependsOn,
 			milestones: Array.isArray(saved.milestones) ? saved.milestones : [],
 			slug: saved.slug,

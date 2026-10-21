@@ -3,8 +3,9 @@
 	import ProjectCard from '$lib/components/ProjectCard.svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { deriveProjectStatus } from '$lib/project-status.js';
+	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
 	import {
+		enterprises,
 		notes,
 		openComposer,
 		projects,
@@ -83,7 +84,7 @@
 						id={project.id}
 						title={project.title}
 						status={deriveProjectStatus(project.id, tasks)}
-						icon={project.icon}
+						icon={projectDisplayIcon(project, enterprises)}
 						description={project.description}
 						milestones={project.milestones ?? []}
 						taskCount={taskCount(project.id)}

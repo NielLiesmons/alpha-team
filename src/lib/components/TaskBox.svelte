@@ -132,7 +132,7 @@
 	}
 
 	.state-open {
-		background: var(--black33);
+		background: var(--box-plate);
 		border: var(--task-box-stroke) solid var(--white33);
 	}
 
@@ -143,12 +143,12 @@
 	}
 
 	.state-inProgress {
-		background: var(--black33);
+		background: var(--box-plate);
 		border: var(--task-box-stroke) solid var(--accent-2-66);
 	}
 
 	.state-inReview {
-		background: var(--black33);
+		background: var(--box-plate);
 		border: var(--task-box-stroke) solid var(--accent-1-66);
 	}
 
@@ -158,7 +158,7 @@
 	}
 
 	.state-recurring {
-		background: var(--black33);
+		background: var(--box-plate);
 		border: var(--task-box-stroke) solid var(--accent-2-66);
 	}
 

@@ -5,7 +5,8 @@
 
 	const sizeMap = {
 		xs: { overlap: 7, height: 24, pic: 24 },
-		sm: { overlap: 8, height: 28, pic: 28 }
+		sm: { overlap: 8, height: 28, pic: 28 },
+		md: { overlap: 12, height: 36, pic: 36 }
 	};
 
 	const displayed = $derived(profiles.slice(0, 3));

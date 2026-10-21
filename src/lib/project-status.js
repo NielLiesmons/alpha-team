@@ -31,6 +31,29 @@ export function isProjectImageIcon(icon) {
 }
 
 /**
+ * Primary enterprise for a project (explicit field, else first of enterprise_ids).
+ * @param {{ primary_enterprise_id?: string | null, enterprise_ids?: string[] } | null | undefined} project
+ */
+export function primaryEnterpriseId(project) {
+	if (!project) return null;
+	if (project.primary_enterprise_id) return project.primary_enterprise_id;
+	const ids = project.enterprise_ids ?? [];
+	return ids[0] ?? null;
+}
+
+/**
+ * Display icon: project override, else primary enterprise icon.
+ * @param {{ icon?: string | null, primary_enterprise_id?: string | null, enterprise_ids?: string[] } | null | undefined} project
+ * @param {Array<{ id: string, icon?: string | null }>} enterpriseList
+ */
+export function projectDisplayIcon(project, enterpriseList) {
+	if (project?.icon && String(project.icon).trim()) return project.icon;
+	const eid = primaryEnterpriseId(project);
+	if (!eid) return null;
+	return enterpriseList.find((e) => e.id === eid)?.icon ?? null;
+}
+
+/**
  * Read a small square PNG/JPEG as a data URL (max edge ~64px).
  * @param {File} file
  * @returns {Promise<string>}

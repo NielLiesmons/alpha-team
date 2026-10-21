@@ -27,7 +27,7 @@
 		mailSettings,
 		persistSendCampaign
 	} from '$lib/publications.svelte.js';
-	import { deriveProjectStatus } from '$lib/project-status.js';
+	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
 	import { renderInlineLinks } from '$lib/note-text.js';
 	import { accountingBrowse } from '$lib/accounting.svelte.js';
 	import AccountingDetail from './AccountingDetail.svelte';
@@ -610,7 +610,7 @@
 			<div class="title-row">
 				<ProjectBox
 					state={deriveProjectStatus(project.id, tasks)}
-					icon={project.icon}
+					icon={projectDisplayIcon(project, enterprises)}
 					size={24}
 				/>
 				<h2 class="title">{project.title}</h2>

@@ -1,5 +1,4 @@
 <script>
-	import { activePerson } from '$lib/actor.svelte.js';
 	import CreateSheet from './CreateSheet.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import TaskBox from './TaskBox.svelte';
@@ -10,9 +9,11 @@
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import LabelsPicker from './LabelsPicker.svelte';
-	import { deriveProjectStatus } from '$lib/project-status.js';
+	import NavIcon from './NavIcon.svelte';
+	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
 	import {
 		closeComposer,
+		enterprises,
 		moments,
 		people,
 		projects,
@@ -54,8 +55,10 @@
 	let projectIds = $state([]);
 	/** @type {{ email?: string, name?: string }[]} */
 	let assignees = $state([]);
-	/** @type {null | 'assignees' | 'projects' | 'labels'} */
+	/** @type {null | 'schedule' | 'assignees' | 'projects' | 'labels'} */
 	let bottomMenu = $state(null);
+	/** @type {HTMLButtonElement | undefined} */
+	let scheduleBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let assigneeBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
@@ -63,7 +66,7 @@
 	/** @type {HTMLButtonElement | undefined} */
 	let labelsBtn = $state();
 	let saving = $state(false);
-	const me = $derived(activePerson());
+	const hasSchedule = $derived(Boolean(deadlineDate || scheduleStart || scheduleEnd));
 
 	/** Keep title/body keyboard open while tapping pills / menus. */
 	/** @param {PointerEvent} e */
@@ -141,7 +144,7 @@
 		else labels = [...labels, text];
 	}
 
-	/** @param {null | 'assignees' | 'projects' | 'labels'} next */
+	/** @param {null | 'schedule' | 'assignees' | 'projects' | 'labels'} next */
 	function toggleBottom(next) {
 		bottomMenu = bottomMenu === next ? null : next;
 	}
@@ -288,21 +291,6 @@
 	<textarea class="task-body" placeholder="Describe your task" bind:value={body} aria-label="Describe your task"
 	></textarea>
 
-	<div class="task-dates">
-		<label class="date-field">
-			<span class="date-label">Deadline</span>
-			<input class="date-input" type="date" bind:value={deadlineDate} />
-		</label>
-		<label class="date-field">
-			<span class="date-label">Schedule</span>
-			<input class="date-input" type="date" bind:value={scheduleStart} title="Moment start" />
-		</label>
-		<label class="date-field">
-			<span class="date-label">Until</span>
-			<input class="date-input" type="date" bind:value={scheduleEnd} title="Moment end" />
-		</label>
-	</div>
-
 	<div class="post-action-row">
 		<div class="action-buttons-left">
 			<button type="button" class="action-btn" aria-label="Add photo">
@@ -342,21 +330,35 @@
 		<div class="bottom-pills">
 			<div class="pill-wrap">
 				<button
+					bind:this={scheduleBtn}
+					type="button"
+					class="round-meta"
+					class:on={hasSchedule || bottomMenu === 'schedule'}
+					aria-label="Deadline and schedule"
+					aria-expanded={bottomMenu === 'schedule'}
+					onpointerdown={keepKeyboard}
+					onclick={() => toggleBottom('schedule')}
+				>
+					<NavIcon name="calendar" size={18} />
+				</button>
+			</div>
+
+			<div class="pill-wrap">
+				<button
 					bind:this={assigneeBtn}
 					type="button"
-					class="meta-pill"
-					class:empty={assignees.length === 0}
+					class="pfp-meta"
 					aria-label="Assignees"
 					aria-expanded={bottomMenu === 'assignees'}
 					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('assignees')}
 				>
 					{#if assignees.length === 0}
-						<ProfilePic name={me.name} size={22} />
-						<span>Assignee</span>
+						<ProfilePic name="" size={36} />
+					{:else if assignees.length === 1}
+						<ProfilePic name={assignees[0].name ?? ''} size={36} />
 					{:else}
-						<ProfilePicStack profiles={assignees} size="xs" />
-						<span class="pill-names">{assignees.map((a) => a.name).filter(Boolean).join(', ')}</span>
+						<ProfilePicStack profiles={assignees} size="md" />
 					{/if}
 				</button>
 			</div>
@@ -372,7 +374,7 @@
 					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('projects')}
 				>
-					<ProjectPillsDisplay {projectIds} />
+					<ProjectPillsDisplay {projectIds} size={22} />
 				</button>
 			</div>
 
@@ -409,6 +411,30 @@
 		</button>
 	</div>
 </CreateSheet>
+
+<FloatPanel
+	open={bottomMenu === 'schedule'}
+	anchor={scheduleBtn}
+	placement="above"
+	width={280}
+	maxHeight={320}
+	onclose={() => (bottomMenu = null)}
+>
+	<div class="schedule-panel">
+		<label class="date-field">
+			<span class="date-label">Deadline</span>
+			<input class="date-input" type="date" bind:value={deadlineDate} />
+		</label>
+		<label class="date-field">
+			<span class="date-label">Moment start</span>
+			<input class="date-input" type="date" bind:value={scheduleStart} />
+		</label>
+		<label class="date-field">
+			<span class="date-label">Moment end</span>
+			<input class="date-input" type="date" bind:value={scheduleEnd} />
+		</label>
+	</div>
+</FloatPanel>
 
 <FloatPanel
 	open={bottomMenu === 'assignees'}
@@ -457,7 +483,7 @@
 				<button type="button" class="option" class:active={on} onclick={() => toggleProject(project.id)}>
 					<ProjectBox
 						state={deriveProjectStatus(project.id, tasks)}
-						icon={project.icon}
+						icon={projectDisplayIcon(project, enterprises)}
 						size={18}
 					/>
 					<span class="option-text">{project.title}</span>
@@ -644,17 +670,11 @@
 		flex-shrink: 0;
 	}
 
-	.task-dates {
-		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
+	.schedule-panel {
+		display: flex;
+		flex-direction: column;
 		gap: 10px;
-		padding: 4px 16px 10px;
-	}
-
-	@media (max-width: 480px) {
-		.task-dates {
-			grid-template-columns: 1fr;
-		}
+		padding: 12px;
 	}
 
 	.date-field {
@@ -765,6 +785,47 @@
 		align-items: center;
 	}
 
+	.round-meta {
+		width: var(--ctrl-h);
+		height: var(--ctrl-h);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		border: 0;
+		border-radius: 9999px;
+		background: var(--fg-4);
+		color: var(--fg-33);
+		cursor: pointer;
+		box-sizing: border-box;
+	}
+
+	.round-meta:hover,
+	.round-meta.on,
+	.round-meta[aria-expanded='true'] {
+		background: var(--float-trigger-on);
+		color: var(--fg-66);
+	}
+
+	.pfp-meta {
+		width: var(--ctrl-h);
+		height: var(--ctrl-h);
+		padding: 0;
+		border: 0;
+		background: transparent;
+		border-radius: 9999px;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-sizing: border-box;
+	}
+
+	.pfp-meta[aria-expanded='true'] {
+		outline: 1.5px solid var(--fg-16);
+		outline-offset: 1px;
+	}
+
 	.meta-pill {
 		display: inline-flex;
 		align-items: center;
@@ -788,7 +849,7 @@
 
 	.meta-pill.empty {
 		color: var(--fg-33);
-		padding-left: 12px;
+		padding-left: 8px;
 	}
 
 	.meta-pill:hover {
@@ -799,13 +860,6 @@
 	.labels-trigger[aria-expanded='true'] {
 		background: var(--float-trigger-on);
 		--trigger-bg: var(--float-trigger-on);
-	}
-
-	.pill-names {
-		max-width: 110px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.pill-projects {
