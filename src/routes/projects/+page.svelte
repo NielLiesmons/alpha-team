@@ -39,16 +39,47 @@
 		}));
 	});
 
-	/** @param {string} projectId */
-	function taskCount(projectId) {
-		return tasks.filter((t) =>
-			(t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? []).includes(projectId)
-		).length;
+	const NEW_WINDOW_MS = 7 * 86_400_000;
+
+	/** @param {string | undefined | null} iso */
+	function isRecent(iso) {
+		if (!iso) return false;
+		const t = Date.parse(iso);
+		if (!Number.isFinite(t)) return false;
+		return Date.now() - t < NEW_WINDOW_MS;
 	}
 
 	/** @param {string} projectId */
-	function noteCount(projectId) {
-		return notes.filter((n) => (n.project_ids ?? []).includes(projectId)).length;
+	function newCount(projectId) {
+		let n = 0;
+		for (const t of tasks) {
+			const ids = t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? [];
+			if (ids.includes(projectId) && isRecent(t.created_at ?? t._drive?.created_at)) n += 1;
+		}
+		for (const note of notes) {
+			if (
+				(note.project_ids ?? []).includes(projectId) &&
+				isRecent(note.created_at ?? note._drive?.created_at)
+			) {
+				n += 1;
+			}
+		}
+		return n;
+	}
+
+	/** @param {string} projectId */
+	function assigneesFor(projectId) {
+		/** @type {Map<string, { email?: string, name?: string }>} */
+		const map = new Map();
+		for (const t of tasks) {
+			const ids = t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? [];
+			if (!ids.includes(projectId)) continue;
+			for (const a of t.assignees ?? []) {
+				const key = (a.email || a.name || '').toLowerCase();
+				if (key && !map.has(key)) map.set(key, a);
+			}
+		}
+		return [...map.values()];
 	}
 </script>
 
@@ -85,10 +116,8 @@
 						title={project.title}
 						status={deriveProjectStatus(project.id, tasks)}
 						icon={projectDisplayIcon(project, enterprises)}
-						description={project.description}
-						milestones={project.milestones ?? []}
-						taskCount={taskCount(project.id)}
-						noteCount={noteCount(project.id)}
+						newCount={newCount(project.id)}
+						assignees={assigneesFor(project.id)}
 						onclick={() => selectEntity('project', project.id)}
 						selected={ui.selection?.kind === 'project' && ui.selection.id === project.id}
 					/>

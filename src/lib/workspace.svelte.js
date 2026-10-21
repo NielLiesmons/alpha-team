@@ -11,6 +11,7 @@ import {
 	createProject as driveCreateProject,
 	createMoment as driveCreateMoment,
 	createTask as driveCreateTask,
+	deleteEntity as driveDeleteEntity,
 	ensureDefaultAccounts,
 	ensureSpace,
 	fromUiNote,
@@ -111,6 +112,32 @@ export function openComposer(kind, id, status) {
 		...(id ? { id } : {}),
 		...(status ? { status } : {})
 	};
+}
+
+/**
+ * Delete a Drive entity and drop it from local workspace state.
+ * @param {'task' | 'project' | 'note' | 'enterprise'} kind
+ * @param {string} id
+ */
+export async function deleteWorkspaceEntity(kind, id) {
+	const session = activeSession();
+	const list =
+		kind === 'task' ? tasks : kind === 'project' ? projects : kind === 'note' ? notes : enterprises;
+	const idx = list.findIndex((x) => x.id === id);
+	const prev = idx >= 0 ? list[idx] : null;
+	if (idx >= 0) list.splice(idx, 1);
+	if (ui.selection?.kind === kind && ui.selection.id === id) forceClearSelection();
+	if (ui.composer?.kind === kind && ui.composer.id === id) closeComposer();
+	scheduleWorkspacePersist();
+	if (!session) return;
+	try {
+		await driveDeleteEntity(session, kind, id);
+		scheduleWorkspacePersist();
+	} catch (e) {
+		if (idx >= 0 && prev) list.splice(idx, 0, prev);
+		scheduleWorkspacePersist();
+		throw e;
+	}
 }
 
 export function closeComposer() {

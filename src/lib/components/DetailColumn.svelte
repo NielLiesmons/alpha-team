@@ -1,13 +1,13 @@
 <script>
 	import { page } from '$app/stores';
-	import StatusBox from './StatusBox.svelte';
 	import ProjectBox from './ProjectBox.svelte';
-	import MilestoneBox from './MilestoneBox.svelte';
+	import EnterpriseBox from './EnterpriseBox.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import PlayerDetail from './PlayerDetail.svelte';
 	import DetailMetaPills from './DetailMetaPills.svelte';
+	import FloatPanel from './FloatPanel.svelte';
 	import {
 		closePlayerDetail,
 		currentTrack,
@@ -27,20 +27,23 @@
 		mailSettings,
 		persistSendCampaign
 	} from '$lib/publications.svelte.js';
-	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
+	import {
+		deriveProjectStatus,
+		primaryEnterpriseId,
+		projectDisplayIcon
+	} from '$lib/project-status.js';
 	import { renderInlineLinks } from '$lib/note-text.js';
 	import { accountingBrowse } from '$lib/accounting.svelte.js';
 	import AccountingDetail from './AccountingDetail.svelte';
 	import CommentThread from './CommentThread.svelte';
-	import EnterpriseSheet from './EnterpriseSheet.svelte';
 	import {
 		clearSelection,
 		costItems,
+		deleteWorkspaceEntity,
 		enterprises,
 		ledgerEntries,
 		notes,
 		openComposer,
-		patchProject,
 		projects,
 		salesLines,
 		saveNote,
@@ -135,41 +138,36 @@
 		return notes.filter((n) => (n.project_ids ?? []).includes(id));
 	});
 
-	async function addMilestone() {
-		if (!project) return;
-		const title = prompt('Milestone title');
-		if (!title?.trim()) return;
-		const milestones = [
-			...(project.milestones ?? []),
-			{
-				id: crypto.randomUUID(),
-				title: title.trim(),
-				percentage: 0,
-				sort: (project.milestones ?? []).length
-			}
-		];
-		try {
-			await patchProject(project.id, { milestones });
-		} catch (e) {
-			alert(e instanceof Error ? e.message : String(e));
-		}
-	}
+	/** Projects whose primary enterprise is this one */
+	const enterpriseProjects = $derived.by(() => {
+		if (!enterprise) return [];
+		return projects.filter((p) => primaryEnterpriseId(p) === enterprise.id);
+	});
 
-	/**
-	 * @param {string} milestoneId
-	 * @param {number} percentage
-	 */
-	async function setMilestonePct(milestoneId, percentage) {
-		if (!project) return;
-		const milestones = (project.milestones ?? []).map((m) =>
-			m.id === milestoneId ? { ...m, percentage } : m
+	const enterpriseProjectIds = $derived(new Set(enterpriseProjects.map((p) => p.id)));
+
+	const enterpriseTasks = $derived.by(() => {
+		if (!enterprise) return [];
+		return tasks.filter((t) => {
+			const ids = t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? [];
+			return ids.some((id) => enterpriseProjectIds.has(id));
+		});
+	});
+
+	const enterpriseNotes = $derived.by(() => {
+		if (!enterprise) return [];
+		return notes.filter((n) =>
+			(n.project_ids ?? []).some((id) => enterpriseProjectIds.has(id))
 		);
-		try {
-			await patchProject(project.id, { milestones });
-		} catch (e) {
-			alert(e instanceof Error ? e.message : String(e));
-		}
-	}
+	});
+
+	/** @type {HTMLButtonElement | undefined} */
+	let moreBtn = $state();
+
+	const canEdit = $derived(
+		Boolean(task || project || note || enterprise || newsletter || welcomeSelected)
+	);
+	const canDelete = $derived(Boolean(task || project || note || enterprise));
 
 	/**
 	 * Prefer entity author; fall back to signed-in actor (never legacy "You").
@@ -334,10 +332,33 @@
 		if (
 			selection.kind === 'task' ||
 			selection.kind === 'project' ||
+			selection.kind === 'enterprise' ||
+			selection.kind === 'note' ||
 			selection.kind === 'newsletter' ||
 			selection.kind === 'welcome'
 		) {
 			openComposer(selection.kind, selection.id);
+		}
+	}
+
+	async function deleteCurrent() {
+		menuOpen = false;
+		if (!selection) return;
+		const kind = selection.kind;
+		if (kind !== 'task' && kind !== 'project' && kind !== 'note' && kind !== 'enterprise') return;
+		const label =
+			kind === 'task'
+				? 'task'
+				: kind === 'project'
+					? 'project'
+					: kind === 'note'
+						? 'note'
+						: 'enterprise';
+		if (!confirm(`Delete this ${label}? This cannot be undone.`)) return;
+		try {
+			await deleteWorkspaceEntity(kind, selection.id);
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
 		}
 	}
 
@@ -412,25 +433,33 @@
 			<span class="mobile-title">{mobileTitle}</span>
 			<div class="menu-wrap">
 				<button
+					bind:this={moreBtn}
 					type="button"
-					class="chrome-btn"
+					class="chrome-btn more-btn"
 					aria-label="More"
 					aria-expanded={menuOpen}
 					onclick={() => (menuOpen = !menuOpen)}
 				>
-					<svg width="22" height="22" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-						<circle cx="9" cy="4" r="1.35" fill="currentColor" />
-						<circle cx="9" cy="9" r="1.35" fill="currentColor" />
-						<circle cx="9" cy="14" r="1.35" fill="currentColor" />
+					<svg width="26" height="26" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+						<circle cx="9" cy="3.75" r="1.65" fill="currentColor" />
+						<circle cx="9" cy="9" r="1.65" fill="currentColor" />
+						<circle cx="9" cy="14.25" r="1.65" fill="currentColor" />
 					</svg>
 				</button>
-				{#if menuOpen}
-					<button type="button" class="menu-scrim" aria-label="Close menu" onclick={() => (menuOpen = false)}
-					></button>
-					<div class="more-menu" role="menu">
+				<FloatPanel
+					open={menuOpen}
+					anchor={moreBtn}
+					placement="below"
+					align="end"
+					width={200}
+					maxHeight={280}
+					onclose={() => (menuOpen = false)}
+				>
+					<div class="float-list" role="menu">
 						{#if isPlayer && playerConnected}
 							<button
 								type="button"
+								class="menu-item"
 								role="menuitem"
 								onclick={() => {
 									menuOpen = false;
@@ -439,19 +468,33 @@
 								}}>{uploadUi.active ? 'Uploads' : 'Upload'}</button
 							>
 						{/if}
-						{#if task || project}
-							<button type="button" role="menuitem" onclick={editCurrent}>Edit</button>
+						{#if canEdit}
+							<button type="button" class="menu-item" role="menuitem" onclick={editCurrent}>
+								<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<path
+										fill="currentColor"
+										d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
+									/>
+								</svg>
+								Edit
+							</button>
 						{/if}
-						<button
-							type="button"
-							role="menuitem"
-							onclick={() => {
-								menuOpen = false;
-								isPlayer ? closePlayerDetail() : close();
-							}}>Close</button
-						>
+						{#if canDelete}
+							<button type="button" class="menu-item danger" role="menuitem" onclick={deleteCurrent}>
+								<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<path
+										d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
+										stroke="currentColor"
+										stroke-width="1.4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								Delete
+							</button>
+						{/if}
 					</div>
-				{/if}
+				</FloatPanel>
 			</div>
 		</header>
 
@@ -558,13 +601,14 @@
 						/>
 					</svg>
 				</button>
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
-							d="M4 4l8 8M12 4l-8 8"
+							d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
 							stroke="currentColor"
-							stroke-width="1.5"
+							stroke-width="1.4"
 							stroke-linecap="round"
+							stroke-linejoin="round"
 						/>
 					</svg>
 				</button>
@@ -594,13 +638,14 @@
 						/>
 					</svg>
 				</button>
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
-							d="M4 4l8 8M12 4l-8 8"
+							d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
 							stroke="currentColor"
-							stroke-width="1.5"
+							stroke-width="1.4"
 							stroke-linecap="round"
+							stroke-linejoin="round"
 						/>
 					</svg>
 				</button>
@@ -621,102 +666,81 @@
 				<p class="muted">No description yet.</p>
 			{/if}
 
-			<section class="proj-section">
-				<div class="proj-section-head">
-					<span class="eyebrow-label-xs">Milestones</span>
-					<span class="proj-section-count">{project.milestones?.length ?? 0}</span>
-					<button type="button" class="proj-add" aria-label="Add milestone" onclick={addMilestone}>
-						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-							<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-						</svg>
-					</button>
-				</div>
-				{#if (project.milestones?.length ?? 0) === 0}
-					<p class="muted tight">No milestones yet.</p>
-				{:else}
-					<ul class="mile-list">
-						{#each project.milestones as mile (mile.id)}
-							<li class="mile-row">
-								<button
-									type="button"
-									class="mile-box-hit"
-									aria-label="Advance {mile.title}"
-									onclick={() =>
-										setMilestonePct(
-											mile.id,
-											mile.percentage >= 100 ? 0 : Math.min(100, (mile.percentage || 0) + 25)
-										)}
-								>
-									<MilestoneBox percentage={mile.percentage || 0} size={22} />
-								</button>
-								<span class="mile-title">{mile.title}</span>
-								<span class="mile-pct">{mile.percentage || 0}%</span>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</section>
+			<div class="bento">
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Tasks</span>
+						<span class="bento-count">{projectTasks.length}</span>
+						<button
+							type="button"
+							class="proj-add"
+							aria-label="Add task"
+							onclick={() => openComposer('task', undefined, 'open')}
+						>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					{#if projectTasks.length === 0}
+						<p class="muted tight">No tasks yet.</p>
+					{:else}
+						<ul class="linked-list">
+							{#each projectTasks as t (t.id)}
+								<li>
+									<button type="button" class="linked-row" onclick={() => selectEntity('task', t.id)}>
+										<TaskBox state={t.status} size={18} />
+										<span class="linked-title">{t.title}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</section>
 
-			<section class="proj-section">
-				<div class="proj-section-head">
-					<span class="eyebrow-label-xs">Tasks</span>
-					<span class="proj-section-count">{projectTasks.length}</span>
-					<button
-						type="button"
-						class="proj-add"
-						aria-label="Add task"
-						onclick={() => openComposer('task', undefined, 'open')}
-					>
-						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-							<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-						</svg>
-					</button>
-				</div>
-				{#if projectTasks.length === 0}
-					<p class="muted tight">No tasks tagged with this project.</p>
-				{:else}
-					<ul class="linked-list">
-						{#each projectTasks as t (t.id)}
-							<li>
-								<button type="button" class="linked-row" onclick={() => selectEntity('task', t.id)}>
-									<TaskBox state={t.status} size={18} />
-									<span class="linked-title">{t.title}</span>
-								</button>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</section>
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Notes</span>
+						<span class="bento-count">{projectNotes.length}</span>
+						<button
+							type="button"
+							class="proj-add"
+							aria-label="Add note"
+							onclick={() => openComposer('note')}
+						>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					{#if projectNotes.length === 0}
+						<p class="muted tight">No notes yet.</p>
+					{:else}
+						<ul class="linked-list">
+							{#each projectNotes as n (n.id)}
+								<li>
+									<button type="button" class="linked-row" onclick={() => selectEntity('note', n.id)}>
+										<span class="linked-title">{n.title || 'Untitled'}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</section>
 
-			<section class="proj-section">
-				<div class="proj-section-head">
-					<span class="eyebrow-label-xs">Notes</span>
-					<span class="proj-section-count">{projectNotes.length}</span>
-					<button
-						type="button"
-						class="proj-add"
-						aria-label="Add note"
-						onclick={() => openComposer('note')}
-					>
-						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-							<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-						</svg>
-					</button>
-				</div>
-				{#if projectNotes.length === 0}
-					<p class="muted tight">No notes tagged with this project.</p>
-				{:else}
-					<ul class="linked-list">
-						{#each projectNotes as n (n.id)}
-							<li>
-								<button type="button" class="linked-row" onclick={() => selectEntity('note', n.id)}>
-									<span class="linked-title">{n.title || 'Untitled'}</span>
-								</button>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</section>
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Files</span>
+						<span class="bento-count">0</span>
+						<button type="button" class="proj-add" aria-label="Add file" disabled>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					<p class="muted tight">No files yet.</p>
+				</section>
+			</div>
 		</div>
 	{:else if note}
 		<header class="detail-top desktop-head">
@@ -732,13 +756,22 @@
 				{#if noteSaving}
 					<span class="save-hint">Saving…</span>
 				{/if}
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
-							d="M4 4l8 8M12 4l-8 8"
+							fill="currentColor"
+							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
+						/>
+					</svg>
+				</button>
+				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
 							stroke="currentColor"
-							stroke-width="1.5"
+							stroke-width="1.4"
 							stroke-linecap="round"
+							stroke-linejoin="round"
 						/>
 					</svg>
 				</button>
@@ -904,7 +937,117 @@
 			</p>
 		</div>
 	{:else if enterprise}
-		<EnterpriseSheet {enterprise} />
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Enterprise</span>
+			<div class="detail-top-actions">
+				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							fill="currentColor"
+							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
+						/>
+					</svg>
+				</button>
+				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
+							stroke="currentColor"
+							stroke-width="1.4"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+			</div>
+		</header>
+		<div class="body">
+			<div class="title-row">
+				<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={24} />
+				<h2 class="title">{enterprise.title}</h2>
+			</div>
+			{#if enterprise.description}
+				<p class="prose">{@html renderInlineLinks(enterprise.description)}</p>
+			{:else}
+				<p class="muted">No description yet.</p>
+			{/if}
+
+			<div class="bento">
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Tasks</span>
+						<span class="bento-count">{enterpriseTasks.length}</span>
+						<button
+							type="button"
+							class="proj-add"
+							aria-label="Add task"
+							onclick={() => openComposer('task', undefined, 'open')}
+						>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					{#if enterpriseTasks.length === 0}
+						<p class="muted tight">No tasks yet.</p>
+					{:else}
+						<ul class="linked-list">
+							{#each enterpriseTasks as t (t.id)}
+								<li>
+									<button type="button" class="linked-row" onclick={() => selectEntity('task', t.id)}>
+										<TaskBox state={t.status} size={18} />
+										<span class="linked-title">{t.title}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</section>
+
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Notes</span>
+						<span class="bento-count">{enterpriseNotes.length}</span>
+						<button
+							type="button"
+							class="proj-add"
+							aria-label="Add note"
+							onclick={() => openComposer('note')}
+						>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					{#if enterpriseNotes.length === 0}
+						<p class="muted tight">No notes yet.</p>
+					{:else}
+						<ul class="linked-list">
+							{#each enterpriseNotes as n (n.id)}
+								<li>
+									<button type="button" class="linked-row" onclick={() => selectEntity('note', n.id)}>
+										<span class="linked-title">{n.title || 'Untitled'}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</section>
+
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Files</span>
+						<span class="bento-count">0</span>
+						<button type="button" class="proj-add" aria-label="Add file" disabled>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					<p class="muted tight">No files yet.</p>
+				</section>
+			</div>
+		</div>
 	{/if}
 {:else}
 	<div class="empty desktop-empty">
@@ -1196,7 +1339,7 @@
 	}
 
 	.title-row {
-		padding-top: 14px;
+		padding-top: 8px;
 		padding-bottom: 10px;
 	}
 
@@ -1239,22 +1382,31 @@
 	}
 
 	.muted.tight {
-		padding: 4px 16px 8px;
+		padding: 4px 0 8px;
+		margin: 0;
 	}
 
-	.proj-section {
-		margin-top: 20px;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
+	.bento {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+		padding: 16px 16px 8px;
+		box-sizing: border-box;
 	}
 
-	.proj-section-head {
+	.bento-panel {
+		min-width: 0;
+		padding: 12px 12px 8px;
+		border-radius: 16px;
+		background: var(--fg-4);
+		box-sizing: border-box;
+	}
+
+	.bento-head {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 6px 8px 4px 16px;
-		background: var(--fg-4);
+		gap: 8px;
+		padding: 0 0 6px;
 		box-sizing: border-box;
 	}
 
@@ -1266,7 +1418,7 @@
 		color: var(--fg-66);
 	}
 
-	.proj-section-count {
+	.bento-count {
 		font-family: var(--font);
 		font-size: 11px;
 		font-weight: 500;
@@ -1288,28 +1440,31 @@
 		cursor: pointer;
 	}
 
-	.proj-add:hover {
+	.proj-add:hover:not(:disabled) {
 		color: var(--fg);
 		background: var(--fg-8);
 	}
 
-	.mile-list,
+	.proj-add:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
+
 	.linked-list {
 		list-style: none;
 		margin: 0;
-		padding: 4px 8px 0;
+		padding: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
 	}
 
-	.mile-row,
 	.linked-row {
 		display: flex;
 		align-items: center;
 		gap: 12px;
 		width: 100%;
-		padding: 10px 12px;
+		padding: 10px 8px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -1317,27 +1472,13 @@
 		text-align: left;
 		font: inherit;
 		box-sizing: border-box;
-	}
-
-	.linked-row {
 		cursor: pointer;
 	}
 
-	.linked-row:hover,
-	.mile-row:hover {
-		background: var(--fg-4);
+	.linked-row:hover {
+		background: var(--fg-8);
 	}
 
-	.mile-box-hit {
-		display: flex;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		cursor: pointer;
-		flex-shrink: 0;
-	}
-
-	.mile-title,
 	.linked-title {
 		flex: 1;
 		min-width: 0;
@@ -1349,12 +1490,49 @@
 		white-space: nowrap;
 	}
 
-	.mile-pct {
-		flex-shrink: 0;
-		font-size: 12px;
+	.float-list {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow: auto;
+		padding: 4px 0;
+	}
+
+	.menu-item {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 10px 14px;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 0.9375rem;
 		font-weight: 500;
-		color: var(--fg-33);
-		font-family: var(--font);
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.menu-item:hover {
+		background: var(--fg-4);
+		color: var(--fg);
+	}
+
+	.menu-item.danger {
+		color: var(--destructive);
+	}
+
+	.menu-item.danger:hover {
+		background: var(--destructive-16);
+		color: var(--destructive);
+	}
+
+	.menu-item svg {
+		flex-shrink: 0;
+		opacity: 0.85;
 	}
 
 	.block {
@@ -1412,54 +1590,6 @@
 
 	.menu-wrap {
 		position: relative;
-	}
-
-	.menu-scrim {
-		position: fixed;
-		inset: 0;
-		z-index: 40;
-		border: 0;
-		background: transparent;
-	}
-
-	.more-menu {
-		position: absolute;
-		top: calc(100% + 6px);
-		right: 0;
-		z-index: 50;
-		min-width: 168px;
-		padding: 0;
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		background: var(--glass);
-		overflow: hidden;
-		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-	}
-
-	.more-menu button {
-		display: block;
-		width: 100%;
-		padding: 8px 12px;
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.more-menu button:not(:last-child) {
-		border-bottom: 0.33px solid var(--fg-8);
-	}
-
-	.more-menu button:hover {
-		background: var(--fg-4);
-		color: var(--fg);
 	}
 
 	@media (max-width: 767px) {
@@ -1565,6 +1695,21 @@
 		.chrome-btn :global(svg) {
 			width: 22px;
 			height: 22px;
+		}
+
+		.chrome-btn.more-btn :global(svg) {
+			width: 26px;
+			height: 26px;
+		}
+
+		.title-row {
+			padding-top: 10px;
+		}
+
+		.bento {
+			grid-template-columns: 1fr;
+			padding: 12px 12px 8px;
+			gap: 10px;
 		}
 
 		/* Empty space on the side the chevron does not point toward */

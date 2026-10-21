@@ -1,5 +1,6 @@
 <script>
 	import CreateSheet from './CreateSheet.svelte';
+	import FloatPanel from './FloatPanel.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
 	import {
@@ -21,6 +22,8 @@
 	let enterpriseIds = $state([]);
 	/** @type {null | 'enterprises'} */
 	let bottomMenu = $state(null);
+	/** @type {HTMLButtonElement | undefined} */
+	let enterpriseBtn = $state();
 	const editing = $derived(
 		ui.composer?.kind === 'project' ? projects.find((item) => item.id === ui.composer.id) : null
 	);
@@ -115,47 +118,21 @@
 	<textarea class="sheet-body" placeholder="Description" bind:value={description}></textarea>
 	<div class="form-divider"></div>
 	<div class="sheet-bottom">
-		<div class="pill-wrap">
-			<button
-				type="button"
-				class="meta-pill"
-				class:empty={!primaryId}
-				onclick={() => (bottomMenu = bottomMenu === 'enterprises' ? null : 'enterprises')}
-			>
-				{#if primaryId}
-					{sortedEnterprises.find((e) => e.id === primaryId)?.title ?? 'Enterprise'}
-				{:else}
-					Primary enterprise
-				{/if}
-			</button>
-			{#if bottomMenu === 'enterprises'}
-				<button
-					type="button"
-					class="menu-backdrop"
-					aria-label="Close"
-					onclick={() => (bottomMenu = null)}
-				></button>
-				<div class="bottom-menu">
-					{#if sortedEnterprises.length === 0}
-						<p class="menu-empty">Create an enterprise in Entreprises first</p>
-					{:else}
-						{#each sortedEnterprises as e (e.id)}
-							<button
-								type="button"
-								class="option"
-								class:active={primaryId === e.id}
-								onclick={() => pickPrimary(e.id)}
-							>
-								{e.title}
-								{#if primaryId === e.id}
-									<span class="primary-tag">primary</span>
-								{/if}
-							</button>
-						{/each}
-					{/if}
-				</div>
+		<button
+			bind:this={enterpriseBtn}
+			type="button"
+			class="meta-pill"
+			class:empty={!primaryId}
+			class:on={bottomMenu === 'enterprises'}
+			aria-expanded={bottomMenu === 'enterprises'}
+			onclick={() => (bottomMenu = bottomMenu === 'enterprises' ? null : 'enterprises')}
+		>
+			{#if primaryId}
+				{sortedEnterprises.find((e) => e.id === primaryId)?.title ?? 'Enterprise'}
+			{:else}
+				Primary enterprise
 			{/if}
-		</div>
+		</button>
 		<button
 			type="button"
 			class="publish-btn"
@@ -166,6 +143,35 @@
 		</button>
 	</div>
 </CreateSheet>
+
+<FloatPanel
+	open={bottomMenu === 'enterprises'}
+	anchor={enterpriseBtn}
+	placement="above"
+	width={240}
+	maxHeight={280}
+	onclose={() => (bottomMenu = null)}
+>
+	<div class="float-list" role="listbox">
+		{#if sortedEnterprises.length === 0}
+			<p class="menu-empty">Create an enterprise in Entreprises first</p>
+		{:else}
+			{#each sortedEnterprises as e (e.id)}
+				<button
+					type="button"
+					class="option"
+					class:active={primaryId === e.id}
+					onclick={() => pickPrimary(e.id)}
+				>
+					<span class="option-text">{e.title}</span>
+					{#if primaryId === e.id}
+						<span class="primary-tag">primary</span>
+					{/if}
+				</button>
+			{/each}
+		{/if}
+	</div>
+</FloatPanel>
 
 <style>
 	.icon-preview {
@@ -180,10 +186,6 @@
 		align-items: center;
 		gap: 8px;
 		padding: 12px 16px 0;
-	}
-
-	.pill-wrap {
-		position: relative;
 	}
 
 	.meta-pill {
@@ -203,26 +205,16 @@
 		color: var(--fg-33);
 	}
 
-	.menu-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 40;
-		border: 0;
-		background: transparent;
+	.meta-pill.on {
+		background: var(--float-trigger-on);
 	}
 
-	.bottom-menu {
-		position: absolute;
-		bottom: calc(100% + 6px);
-		left: 0;
-		z-index: 50;
-		min-width: 200px;
-		max-height: 220px;
+	.float-list {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
 		overflow: auto;
-		padding: 4px;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
+		padding: 4px 0;
 	}
 
 	.option {
@@ -231,9 +223,9 @@
 		justify-content: space-between;
 		gap: 8px;
 		width: 100%;
-		padding: 8px 10px;
+		padding: 8px 12px;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 0;
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
@@ -242,10 +234,18 @@
 		cursor: pointer;
 	}
 
-	.option.active,
-	.option:hover {
-		background: var(--fg-8);
+	.option:hover,
+	.option.active {
+		background: var(--fg-4);
 		color: var(--fg);
+	}
+
+	.option-text {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.primary-tag {
@@ -258,7 +258,7 @@
 
 	.menu-empty {
 		margin: 0;
-		padding: 10px;
+		padding: 10px 12px;
 		font-size: 13px;
 		color: var(--fg-33);
 	}

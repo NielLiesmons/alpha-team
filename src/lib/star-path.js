@@ -44,12 +44,12 @@ export function softStarPath(opts = {}) {
 /** Shared 24×24 path for EnterpriseBox */
 export const ENTERPRISE_STAR_24 = softStarPath();
 
-/** Shared 18×18 path for nav Entreprises icon */
+/** Shared 18×18 path for nav Entreprises icon — slightly larger optical mass */
 export const ENTERPRISE_STAR_18 = softStarPath({
 	cx: 9,
 	cy: 9,
-	outer: 7.45,
-	inner: 5.15,
-	tipRound: 0.95,
-	dentRound: 0.65
+	outer: 8.15,
+	inner: 5.55,
+	tipRound: 1.05,
+	dentRound: 0.72
 });

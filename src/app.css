@@ -13,25 +13,25 @@
 
 :root {
 	/*
-	 * Fixed accent trio (Zapstore palette, Admin names).
-	 * 1 = primary / closed / CTA · 2 = progress · 3 = urgent / destructive
+	 * Two accents: 1 = primary / closed / CTA · 2 = progress / urgency / destructive
 	 */
 	--accent-1: #5a58fe;
 	--accent-1-66: color-mix(in srgb, var(--accent-1) 66%, transparent);
 	--accent-1-33: color-mix(in srgb, var(--accent-1) 33%, transparent);
-	--accent-2: #ffb338;
+	--accent-2: #ed5e44;
 	--accent-2-66: color-mix(in srgb, var(--accent-2) 66%, transparent);
 	--accent-2-33: color-mix(in srgb, var(--accent-2) 33%, transparent);
-	--accent-3: #ff4778;
-	--accent-3-66: color-mix(in srgb, var(--accent-3) 66%, transparent);
-	--accent-3-33: color-mix(in srgb, var(--accent-3) 33%, transparent);
-	--accent-3-16: color-mix(in srgb, var(--accent-3) 16%, transparent);
+	/* Second accent doubles as urgent / destructive */
+	--accent-3: var(--accent-2);
+	--accent-3-66: var(--accent-2-66);
+	--accent-3-33: var(--accent-2-33);
+	--accent-3-16: color-mix(in srgb, var(--accent-2) 16%, transparent);
 
 	--gradient-accent-1: radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%);
 	--gradient-accent-1-hover: radial-gradient(circle at top left, #4245ff 0%, #2c29ff 100%);
-	--gradient-accent-2: radial-gradient(circle at top left, #ffc736 0%, #ffa037 100%);
-	--gradient-accent-3: radial-gradient(circle at top left, #ff4778 0%, #ff005e 100%);
-	--gradient-accent-3-16: radial-gradient(circle at top left, #ff477829 0%, #ff005e29 100%);
+	--gradient-accent-2: radial-gradient(circle at top left, #f37450 0%, #e74939 100%);
+	--gradient-accent-3: var(--gradient-accent-2);
+	--gradient-accent-3-16: radial-gradient(circle at top left, #f3745029 0%, #e7493929 100%);
 
 	/* CTA — ~8% white base + very light accent tint for contrast on dark panels */
 	--button-primary-bg: linear-gradient(
@@ -108,8 +108,8 @@
 
 	--shell: #090909;
 	--shell-border: var(--hairline);
-	/* Shape fills: nav column on desktop; workspace (--bg) on mobile for contrast */
-	--box-plate: var(--shell);
+	/* Task / project / enterprise shape fill — always workspace surface */
+	--box-plate: var(--bg);
 
 	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
@@ -170,7 +170,7 @@
 	--hairline: var(--fg-11);
 	--shell: #090909;
 	--shell-border: var(--hairline);
-	--box-plate: var(--shell);
+	--box-plate: var(--bg);
 	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--ink: var(--fg);
 	--ink66: var(--fg-66);
@@ -220,7 +220,7 @@
 	--hairline: var(--fg-11);
 	--shell: #f4f4f4;
 	--shell-border: var(--hairline);
-	--box-plate: var(--shell);
+	--box-plate: var(--bg);
 	--scrim: color-mix(in srgb, var(--fg) 42%, transparent);
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
@@ -243,14 +243,6 @@
 /* Mobile page surface is --shell — panels/scrim follow it */
 @media (max-width: 767px) {
 	:root,
-	:root[data-theme='dark'],
-	:root[data-theme='light'],
-	:root[data-theme='gray'] {
-		/* Desktop workspace color — contrasts with mobile shell chrome */
-		--box-plate: var(--bg);
-	}
-
-	:root,
 	:root[data-theme='dark'] {
 		--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--shell));
 		--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
@@ -259,6 +251,9 @@
 			color-mix(in srgb, var(--fg) 5.5%, var(--shell)) 92%,
 			transparent
 		);
+		/* Float panels sit on shell — slightly stronger frost than desktop workspace */
+		--float-panel-bg: color-mix(in srgb, #ffffff 11%, transparent);
+		--float-trigger-on: color-mix(in srgb, #ffffff 11%, transparent);
 		--scrim: color-mix(in srgb, var(--shell) 88%, transparent);
 	}
 
@@ -266,6 +261,8 @@
 		--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--shell));
 		--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
 		--glass-panel: color-mix(in srgb, var(--shell) 66%, transparent);
+		--float-panel-bg: color-mix(in srgb, #000000 7%, transparent);
+		--float-trigger-on: color-mix(in srgb, #000000 7%, transparent);
 		--scrim: color-mix(in srgb, var(--fg) 52%, transparent);
 	}
 }

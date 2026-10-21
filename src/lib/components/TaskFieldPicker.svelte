@@ -1,4 +1,5 @@
 <script>
+	import FloatPanel from './FloatPanel.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import { patchTask } from '$lib/workspace.svelte.js';
@@ -32,6 +33,8 @@
 
 	let open = $state(false);
 	let saving = $state(false);
+	/** @type {HTMLButtonElement | undefined} */
+	let hitBtn = $state();
 
 	const options = $derived(field === 'status' ? STATUSES : PRIORITIES);
 	const ariaLabel = $derived(field === 'status' ? 'Set task status' : 'Set task priority');
@@ -65,18 +68,11 @@
 			saving = false;
 		}
 	}
-
-	/**
-	 * @param {MouseEvent} e
-	 */
-	function close(e) {
-		e.stopPropagation();
-		open = false;
-	}
 </script>
 
 <div class="picker" class:align-right={align === 'right'} class:pill={variant === 'pill'}>
 	<button
+		bind:this={hitBtn}
 		type="button"
 		class="hit"
 		class:icon-hit={variant === 'icon'}
@@ -95,9 +91,16 @@
 			<span class="pill-text">{valueLabel}</span>
 		{/if}
 	</button>
-	{#if open}
-		<button type="button" class="menu-backdrop" aria-label="Close menu" onclick={close}></button>
-		<div class="menu" class:menu-right={align === 'right'} role="listbox">
+	<FloatPanel
+		{open}
+		anchor={hitBtn}
+		placement="below"
+		align={align === 'right' ? 'end' : 'start'}
+		width={180}
+		maxHeight={320}
+		onclose={() => (open = false)}
+	>
+		<div class="float-list" role="listbox">
 			{#each options as opt (opt.value)}
 				<button
 					type="button"
@@ -114,7 +117,7 @@
 				</button>
 			{/each}
 		</div>
-	{/if}
+	</FloatPanel>
 </div>
 
 <style>
@@ -168,34 +171,12 @@
 		cursor: wait;
 	}
 
-	.menu-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 19;
-		border: 0;
-		padding: 0;
-		background: transparent;
-		cursor: default;
-	}
-
-	.menu {
-		position: absolute;
-		top: calc(100% + 6px);
-		left: 0;
-		z-index: 20;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		overflow: hidden;
-		min-width: 168px;
-		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-	}
-
-	.menu-right {
-		left: auto;
-		right: 0;
+	.float-list {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow: auto;
+		padding: 4px 0;
 	}
 
 	.option {
@@ -210,24 +191,21 @@
 		border-radius: 0;
 		cursor: pointer;
 		text-align: left;
-	}
-
-	.option:not(:last-child) {
-		border-bottom: 0.33px solid var(--fg-8);
+		font: inherit;
 	}
 
 	.option:hover {
 		background: var(--fg-4);
 	}
 
-	.option-label {
-		font-size: 0.9375rem;
-		font-weight: 500;
-		color: var(--fg-66);
-	}
-
 	.option.active .option-label {
 		color: var(--fg);
 		font-weight: 600;
+	}
+
+	.option-label {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-66);
 	}
 </style>

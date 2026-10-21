@@ -1,7 +1,5 @@
 <script>
-	import { activePerson } from '$lib/actor.svelte.js';
 	import ProfilePic from './ProfilePic.svelte';
-	import ProfilePicStack from './ProfilePicStack.svelte';
 	import LabelPill from './LabelPill.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
@@ -9,8 +7,16 @@
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import LabelsPicker from './LabelsPicker.svelte';
+	import NavIcon from './NavIcon.svelte';
 	import { deriveProjectStatus } from '$lib/project-status.js';
-	import { patchNote, patchTask, people, projects, tasks } from '$lib/workspace.svelte.js';
+	import {
+		moments,
+		patchNote,
+		patchTask,
+		people,
+		projects,
+		tasks
+	} from '$lib/workspace.svelte.js';
 
 	const STATUSES = [
 		{ value: 'backlog', label: 'Backlog' },
@@ -36,22 +42,27 @@
 	 */
 	let { entity, kind } = $props();
 
-	/** @type {null | 'status' | 'priority' | 'assignees' | 'projects' | 'labels'} */
+	/** @type {null | 'status' | 'priority' | 'schedule' | 'projects' | 'labels'} */
 	let menu = $state(null);
 	let saving = $state(false);
+	let deadlineDate = $state('');
+	let scheduleStart = $state('');
+	let scheduleEnd = $state('');
+	/** @type {{ email?: string, name?: string }[]} */
+	let scheduleAssignees = $state([]);
 
 	/** @type {HTMLButtonElement | undefined} */
 	let statusBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let priorityBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
-	let assigneeBtn = $state();
+	let scheduleBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let projectsBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let labelsBtn = $state();
 	const showStatusPriority = $derived(kind === 'task');
-	const showAssignees = $derived(kind === 'task');
+	const showSchedule = $derived(kind === 'task');
 	const assignees = $derived(entity?.assignees ?? []);
 	const targets = $derived(entity?.targets ?? []);
 	const labels = $derived(entity?.labels ?? []);
@@ -62,15 +73,45 @@
 	const priorityLabel = $derived(
 		PRIORITIES.find((p) => p.value === entity?.priority)?.label ?? entity?.priority ?? 'None'
 	);
-	const me = $derived(activePerson());
+	const linkedMoment = $derived(
+		kind === 'task' && entity?.id
+			? moments.find((m) => m.task_id === entity.id && !m.recurrence)
+			: null
+	);
+	const hasSchedule = $derived(
+		Boolean(entity?.deadline_at || linkedMoment?.start_at || linkedMoment?.end_at || assignees.length)
+	);
+
+	/** @param {string | null | undefined} iso */
+	function toDateInput(iso) {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		return d.toISOString().slice(0, 10);
+	}
+
+	/** @param {string} ymd */
+	function fromDateInput(ymd) {
+		if (!ymd) return null;
+		return `${ymd}T12:00:00Z`;
+	}
+
+	function loadScheduleDraft() {
+		deadlineDate = toDateInput(entity?.deadline_at);
+		scheduleStart = toDateInput(linkedMoment?.start_at);
+		scheduleEnd = toDateInput(linkedMoment?.end_at);
+		scheduleAssignees = [...(entity?.assignees ?? [])];
+	}
 
 	/**
-	 * @param {null | 'status' | 'priority' | 'assignees' | 'projects' | 'labels'} next
+	 * @param {null | 'status' | 'priority' | 'schedule' | 'projects' | 'labels'} next
 	 * @param {MouseEvent} [e]
 	 */
 	function toggleMenu(next, e) {
 		e?.stopPropagation();
-		menu = menu === next ? null : next;
+		const opening = menu !== next;
+		menu = opening ? next : null;
+		if (opening && next === 'schedule') loadScheduleDraft();
 	}
 
 	function closeMenu() {
@@ -120,6 +161,20 @@
 		await apply({ priority: value });
 	}
 
+	async function persistSchedule() {
+		await apply({
+			deadline_at: fromDateInput(deadlineDate),
+			assignees: scheduleAssignees,
+			_schedule:
+				scheduleStart || scheduleEnd
+					? {
+							start_at: fromDateInput(scheduleStart) || fromDateInput(scheduleEnd),
+							end_at: fromDateInput(scheduleEnd) || fromDateInput(scheduleStart)
+						}
+					: null
+		});
+	}
+
 	/**
 	 * @param {{ email: string, name: string }} person
 	 * @param {MouseEvent} e
@@ -127,11 +182,15 @@
 	async function toggleAssignee(person, e) {
 		e.stopPropagation();
 		const key = person.email;
-		const has = assignees.some((/** @type {any} */ a) => (a.email || a.name) === key);
-		const next = has
-			? assignees.filter((/** @type {any} */ a) => (a.email || a.name) !== key)
-			: [...assignees, person];
-		await apply({ assignees: next });
+		const has = scheduleAssignees.some((a) => (a.email || a.name) === key);
+		scheduleAssignees = has
+			? scheduleAssignees.filter((a) => (a.email || a.name) !== key)
+			: [...scheduleAssignees, person];
+		await persistSchedule();
+	}
+
+	async function onScheduleDateChange() {
+		await persistSchedule();
 	}
 
 	/**
@@ -207,26 +266,30 @@
 		</div>
 	{/if}
 
-	{#if showAssignees}
+	{#if showSchedule}
 		<div class="meta-item" role="listitem">
 			<button
-				bind:this={assigneeBtn}
+				bind:this={scheduleBtn}
 				type="button"
 				class="meta-pill"
-				class:empty={assignees.length === 0}
-				aria-label="Assignees"
-				aria-expanded={menu === 'assignees'}
+				class:empty={!hasSchedule}
+				aria-label="Deadline, moment, and assignees"
+				aria-expanded={menu === 'schedule'}
 				onpointerdown={keepKeyboard}
-				onclick={(e) => toggleMenu('assignees', e)}
+				onclick={(e) => toggleMenu('schedule', e)}
 			>
-				{#if assignees.length === 0}
-					<ProfilePic name={me.name} size={20} />
-					<span>Assignee</span>
-				{:else}
-					<ProfilePicStack profiles={assignees} size="xs" />
-					<span class="pill-names">
-						{assignees.map((/** @type {any} */ a) => a.name).filter(Boolean).join(', ')}
+				{#if assignees.length > 0}
+					<span class="schedule-pfps">
+						{#each assignees.slice(0, 2) as a, i (a.email ?? a.name ?? i)}
+							<span class="schedule-pfp" style:z-index={2 - i}>
+								<ProfilePic name={a.name ?? ''} size={16} />
+							</span>
+						{/each}
 					</span>
+					<span>Planning</span>
+				{:else}
+					<NavIcon name="calendar" size={16} />
+					<span>Planning</span>
 				{/if}
 			</button>
 		</div>
@@ -351,39 +414,71 @@
 	</FloatPanel>
 {/if}
 
-{#if showAssignees}
+{#if showSchedule}
 	<FloatPanel
-		open={menu === 'assignees'}
-		anchor={assigneeBtn}
+		open={menu === 'schedule'}
+		anchor={scheduleBtn}
 		placement="below"
-		width={220}
-		maxHeight={280}
+		width={280}
+		maxHeight={420}
 		onclose={closeMenu}
 	>
-		<div class="float-list" role="listbox">
-			{#each people as person (person.email)}
-				{@const on = assignees.some((/** @type {any} */ a) => a.email === person.email)}
-				<button
-					type="button"
-					class="option"
-					class:active={on}
-					onclick={(e) => toggleAssignee(person, e)}
-				>
-					<ProfilePic name={person.name} size={20} />
-					<span class="option-text">{person.name}</span>
-					{#if on}
-						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path
-								d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
-								stroke="currentColor"
-								stroke-width="1.8"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-					{/if}
-				</button>
-			{/each}
+		<div class="schedule-panel">
+			<label class="date-field">
+				<span class="date-label">Deadline</span>
+				<input
+					class="date-input"
+					type="date"
+					bind:value={deadlineDate}
+					onchange={onScheduleDateChange}
+				/>
+			</label>
+			<label class="date-field">
+				<span class="date-label">Moment start</span>
+				<input
+					class="date-input"
+					type="date"
+					bind:value={scheduleStart}
+					onchange={onScheduleDateChange}
+				/>
+			</label>
+			<label class="date-field">
+				<span class="date-label">Moment end</span>
+				<input
+					class="date-input"
+					type="date"
+					bind:value={scheduleEnd}
+					onchange={onScheduleDateChange}
+				/>
+			</label>
+			<div class="assignee-block">
+				<span class="date-label">Assignees</span>
+				<div class="float-list assignee-list" role="listbox">
+					{#each people as person (person.email)}
+						{@const on = scheduleAssignees.some((a) => a.email === person.email)}
+						<button
+							type="button"
+							class="option"
+							class:active={on}
+							onclick={(e) => toggleAssignee(person, e)}
+						>
+							<ProfilePic name={person.name} size={20} />
+							<span class="option-text">{person.name}</span>
+							{#if on}
+								<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<path
+										d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+										stroke="currentColor"
+										stroke-width="1.8"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			</div>
 		</div>
 	</FloatPanel>
 {/if}
@@ -605,6 +700,67 @@
 	.option-check {
 		flex-shrink: 0;
 		color: var(--fg-66);
+	}
+
+	.schedule-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 12px;
+		min-height: 0;
+		overflow: auto;
+	}
+
+	.date-field {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.date-label {
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--fg-33);
+	}
+
+	.date-input {
+		height: 36px;
+		padding: 0 10px;
+		border: 0;
+		border-radius: 10px;
+		background: var(--fg-4);
+		color: var(--fg);
+		font: inherit;
+		font-size: 14px;
+	}
+
+	.assignee-block {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-height: 0;
+	}
+
+	.assignee-list {
+		max-height: 160px;
+		border-radius: 10px;
+		background: var(--fg-4);
+	}
+
+	.schedule-pfps {
+		display: flex;
+		align-items: center;
+	}
+
+	.schedule-pfp {
+		display: flex;
+		margin-left: -5px;
+	}
+
+	.schedule-pfp:first-child {
+		margin-left: 0;
 	}
 
 	@media (max-width: 767px) {

@@ -1,33 +1,36 @@
 <script>
 	/**
-	 * Feed row: ProjectBox | title | milestone summary
-	 * Row 2: linked task/note counts (optional)
+	 * Feed row: ProjectBox | title
+	 * Row 2: pills aligned with title (Planning + new activity)
 	 */
+	import { goto } from '$app/navigation';
+	import ProfilePic from './ProfilePic.svelte';
 	import ProjectBox from './ProjectBox.svelte';
-	import MilestoneBox from './MilestoneBox.svelte';
 
 	let {
 		id = '',
 		title = '',
 		status = 'planned',
 		icon = /** @type {string | null} */ (null),
-		description = '',
-		milestones = /** @type {{ id: string, title: string, percentage?: number }[]} */ ([]),
-		taskCount = 0,
-		noteCount = 0,
+		newCount = 0,
+		assignees = /** @type {{ email?: string, name?: string }[]} */ ([]),
 		selected = false,
 		onclick = () => {}
 	} = $props();
 
-	const avgPct = $derived.by(() => {
-		if (!milestones.length) return 0;
-		const sum = milestones.reduce((a, m) => a + (Number(m.percentage) || 0), 0);
-		return Math.round(sum / milestones.length);
-	});
+	/** @param {MouseEvent} e */
+	function openPlanning(e) {
+		e.stopPropagation();
+		e.preventDefault();
+		goto('/planning');
+	}
 
-	const hasBottom = $derived(
-		Boolean(description) || milestones.length > 0 || taskCount > 0 || noteCount > 0
-	);
+	/** @param {MouseEvent} e */
+	function openNew(e) {
+		e.stopPropagation();
+		e.preventDefault();
+		onclick();
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role a11y_click_events_have_key_events -->
@@ -45,36 +48,27 @@
 			<ProjectBox state={status} {icon} size={24} />
 		</div>
 		<span class="title" class:done={status === 'closed' || status === 'canceled'}>{title}</span>
-		{#if milestones.length > 0}
-			<div class="mile-col" title="{milestones.length} milestone{milestones.length === 1 ? '' : 's'}">
-				<MilestoneBox percentage={avgPct} size={20} />
-			</div>
-		{/if}
 	</div>
 
-	{#if hasBottom}
-		<div class="row-bottom">
-			<div class="connector-col">
-				<svg viewBox="0 0 22 22" width="22" height="22" fill="none" aria-hidden="true">
-					<path d="M1 0 L1 9 Q1 21 10 21 L22 21" stroke="var(--white16)" stroke-width="1.5" fill="none" />
-				</svg>
-			</div>
-			<div class="bottom-items">
-				{#if description}
-					<span class="sum">{description}</span>
-				{/if}
-				{#if taskCount > 0 || noteCount > 0}
-					<span class="counts">
-						{#if taskCount > 0}{taskCount} task{taskCount === 1 ? '' : 's'}{/if}
-						{#if taskCount > 0 && noteCount > 0}
-							<span class="dot">·</span>
-						{/if}
-						{#if noteCount > 0}{noteCount} note{noteCount === 1 ? '' : 's'}{/if}
-					</span>
-				{/if}
-			</div>
-		</div>
-	{/if}
+	<div class="pill-row">
+		<button type="button" class="card-pill planning" onclick={openPlanning}>
+			{#if assignees.length > 0}
+				<span class="pill-pfps">
+					{#each assignees.slice(0, 3) as a, i (a.email ?? a.name ?? i)}
+						<span class="pill-pfp" style:z-index={3 - i}>
+							<ProfilePic name={a.name ?? ''} size={14} />
+						</span>
+					{/each}
+				</span>
+			{/if}
+			<span>Planning</span>
+		</button>
+		{#if newCount > 0}
+			<button type="button" class="card-pill new" onclick={openNew} aria-label="{newCount} new items">
+				{newCount} new
+			</button>
+		{/if}
+	</div>
 </article>
 
 <style>
@@ -133,56 +127,64 @@
 		color: var(--white66);
 	}
 
-	.mile-col {
-		flex-shrink: 0;
+	.pill-row {
 		display: flex;
-		align-items: center;
-	}
-
-	.row-bottom {
-		display: flex;
-		align-items: flex-start;
-		margin-left: 12px;
-		width: calc(100% - 12px);
-	}
-
-	.connector-col {
-		width: 22px;
-		flex-shrink: 0;
-		display: flex;
-		align-items: flex-start;
-	}
-
-	.bottom-items {
-		display: flex;
-		flex-direction: row;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 8px;
-		flex: 1;
+		gap: 6px;
+		padding: 8px 0 0;
+		margin-left: 36px;
 		min-width: 0;
-		padding-top: 7px;
 	}
 
-	.sum {
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--white66);
-		overflow: hidden;
-		text-overflow: ellipsis;
+	.card-pill {
+		height: 22px;
+		padding: 0 10px;
+		border: 0;
+		border-radius: 9999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 11px;
+		font-weight: 550;
+		letter-spacing: 0.01em;
+		cursor: pointer;
 		white-space: nowrap;
-		min-width: 0;
-		max-width: 70%;
+		line-height: 1;
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
 	}
 
-	.counts {
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--white33);
-		white-space: nowrap;
+	.card-pill.planning {
+		padding-left: 8px;
 	}
 
-	.dot {
-		margin: 0 0.2em;
+	.card-pill:hover {
+		background: var(--fg-11);
+		color: var(--fg);
+	}
+
+	.card-pill.new {
+		background: color-mix(in srgb, var(--accent-2) 18%, transparent);
+		color: var(--accent-2);
+	}
+
+	.card-pill.new:hover {
+		background: color-mix(in srgb, var(--accent-2) 28%, transparent);
+	}
+
+	.pill-pfps {
+		display: flex;
+		align-items: center;
+	}
+
+	.pill-pfp {
+		display: flex;
+		margin-left: -4px;
+	}
+
+	.pill-pfp:first-child {
+		margin-left: 0;
 	}
 </style>

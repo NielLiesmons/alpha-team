@@ -1,145 +1,201 @@
 <script>
-	import { accountingBrowse, setAccountingBrowse } from '$lib/accounting.svelte.js';
+	import EnterpriseCard from '$lib/components/EnterpriseCard.svelte';
+	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
+	import { appBoot } from '$lib/boot.svelte.js';
+	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { primaryEnterpriseId } from '$lib/project-status.js';
 	import {
-		costItems,
 		enterprises,
-		ledgerEntries,
+		notes,
 		openComposer,
-		salesLines
+		projects,
+		selectEntity,
+		tasks,
+		ui
 	} from '$lib/workspace.svelte.js';
 
-	const cats = $derived([
-		{
-			id: 'enterprises',
-			label: 'Entreprises',
-			count: enterprises.length,
-			create: 'enterprise',
-			hint: 'Farm lines — Eggs, Sheep, General… + P&L sheets'
-		},
-		{
-			id: 'costs',
-			label: 'Costs',
-			count: costItems.length,
-			create: 'cost',
-			hint: 'Atomic fixed, variable, and build costs'
-		},
-		{
-			id: 'sales',
-			label: 'Sales',
-			count: salesLines.length,
-			create: 'sales',
-			hint: 'Price lines and channels'
-		},
-		{
-			id: 'ledger',
-			label: 'Ledger',
-			count: ledgerEntries.length,
-			create: 'ledger',
-			hint: 'Actual money in and out'
+	const STATUS_ORDER = ['active', 'draft', 'paused', 'closed'];
+	const STATUS_LABELS = {
+		active: 'ACTIVE',
+		draft: 'DRAFT',
+		paused: 'PAUSED',
+		closed: 'CLOSED'
+	};
+
+	const NEW_WINDOW_MS = 7 * 86_400_000;
+
+	const groups = $derived.by(() => {
+		/** @type {Map<string, typeof enterprises>} */
+		const map = new Map();
+		const sorted = [...enterprises].sort(
+			(a, b) => (a.sort ?? 100) - (b.sort ?? 100) || String(a.title).localeCompare(String(b.title))
+		);
+		for (const ent of sorted) {
+			const key = STATUS_ORDER.includes(ent.status) ? ent.status : 'active';
+			if (!map.has(key)) map.set(key, []);
+			map.get(key).push(ent);
 		}
-	]);
+		return STATUS_ORDER.filter((key) => (map.get(key)?.length ?? 0) > 0).map((key) => ({
+			key,
+			label: STATUS_LABELS[key],
+			items: map.get(key)
+		}));
+	});
+
+	/** @param {string} enterpriseId */
+	function projectIdsFor(enterpriseId) {
+		return projects
+			.filter((p) => primaryEnterpriseId(p) === enterpriseId)
+			.map((p) => p.id);
+	}
+
+	/** @param {string | undefined | null} iso */
+	function isRecent(iso) {
+		if (!iso) return false;
+		const t = Date.parse(iso);
+		if (!Number.isFinite(t)) return false;
+		return Date.now() - t < NEW_WINDOW_MS;
+	}
+
+	/** @param {string} enterpriseId */
+	function newCount(enterpriseId) {
+		const ids = new Set(projectIdsFor(enterpriseId));
+		if (ids.size === 0) return 0;
+		let n = 0;
+		for (const t of tasks) {
+			const pids = t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? [];
+			if (pids.some((id) => ids.has(id)) && isRecent(t.created_at ?? t._drive?.created_at)) n += 1;
+		}
+		for (const note of notes) {
+			if (
+				(note.project_ids ?? []).some((id) => ids.has(id)) &&
+				isRecent(note.created_at ?? note._drive?.created_at)
+			) {
+				n += 1;
+			}
+		}
+		return n;
+	}
+
+	/** @param {string} enterpriseId */
+	function assigneesFor(enterpriseId) {
+		const ids = new Set(projectIdsFor(enterpriseId));
+		/** @type {Map<string, { email?: string, name?: string }>} */
+		const map = new Map();
+		for (const t of tasks) {
+			const pids = t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? [];
+			if (!pids.some((id) => ids.has(id))) continue;
+			for (const a of t.assignees ?? []) {
+				const key = (a.email || a.name || '').toLowerCase();
+				if (key && !map.has(key)) map.set(key, a);
+			}
+		}
+		return [...map.values()];
+	}
 </script>
 
 <svelte:head><title>Entreprises</title></svelte:head>
 
-<nav class="feed" aria-label="Entreprises">
-	<div class="card-stack top">
-		{#each cats as cat (cat.id)}
-			<button
-				type="button"
-				class="row"
-				class:on={accountingBrowse.mode === cat.id}
-				onclick={() => setAccountingBrowse(/** @type {any} */ (cat.id))}
-			>
-				<span class="title">{cat.label}</span>
-				{#if cat.count}
-					<span class="count">{cat.count}</span>
-				{/if}
-			</button>
-		{/each}
-	</div>
-
-	<div class="group-header">
-		<span class="eyebrow-label-xs">Quick add</span>
-		<button
-			type="button"
-			class="group-add-btn"
-			aria-label="New enterprise"
-			onclick={() => {
-				setAccountingBrowse('enterprises');
-				openComposer('enterprise');
-			}}
-		>
-			<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-				<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-			</svg>
+<div class="feed">
+	{#if driveSession.error}
+		<p class="banner"><span class="err">{driveSession.error}</span></p>
+	{/if}
+	{#if !appBoot.listsReady && enterprises.length === 0}
+		<FeedSkeleton rows={6} />
+	{:else if enterprises.length === 0}
+		<p class="empty">No Entreprises yet</p>
+		<button type="button" class="empty-add" onclick={() => openComposer('enterprise')}>
+			Create enterprise
 		</button>
-	</div>
-	<p class="hint">
-		Create enterprises for each farm activity, attach projects, then compose costs and sales on each
-		enterprise sheet for gross profit.
-	</p>
-</nav>
+	{:else}
+		{#each groups as group (group.key)}
+			<div class="task-group-header">
+				<span class="eyebrow-label-xs">{group.label}</span>
+				<span class="task-group-count">{group.items.length}</span>
+				<button
+					type="button"
+					class="task-group-add-btn"
+					aria-label="Add enterprise"
+					onclick={() => openComposer('enterprise')}
+				>
+					<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+						<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+					</svg>
+				</button>
+			</div>
+			<div class="card-stack">
+				{#each group.items as ent (ent.id)}
+					<EnterpriseCard
+						id={ent.id}
+						title={ent.title}
+						status={ent.status ?? 'active'}
+						icon={ent.icon}
+						newCount={newCount(ent.id)}
+						assignees={assigneesFor(ent.id)}
+						onclick={() => selectEntity('enterprise', ent.id)}
+						selected={ui.selection?.kind === 'enterprise' && ui.selection.id === ent.id}
+					/>
+				{/each}
+			</div>
+		{/each}
+	{/if}
+</div>
 
 <style>
 	.feed {
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+		overflow: auto;
+	}
+
+	.banner {
+		margin: 0;
+		padding: 10px 16px;
+		font-size: 13px;
+		color: var(--fg-66);
+	}
+
+	.empty {
+		padding: 48px 16px 12px;
+		color: var(--fg-66);
+		margin: 0;
+	}
+
+	.empty-add {
+		margin: 0 16px 24px;
+		height: 36px;
+		padding: 0 16px;
+		border: 0;
+		border-radius: 9999px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 550;
+		cursor: pointer;
+		align-self: flex-start;
+	}
+
+	.task-group-header {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 0 6px;
+		padding: 6px 10px;
+		border: 0;
+		border-radius: 10px;
+		background: var(--fg-4);
+		width: auto;
+		box-sizing: border-box;
 	}
 
 	.card-stack {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 6px;
-	}
-
-	.card-stack.top {
-		padding-top: 4px;
-	}
-
-	.row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		padding: 12px 14px;
-		border: 0;
-		border-radius: 12px;
-		background: transparent;
-		color: inherit;
-		text-align: left;
-		cursor: pointer;
-		font: inherit;
-	}
-
-	.row:hover,
-	.row.on {
-		background: var(--fg-4);
-	}
-
-	.title {
-		flex: 1;
-		font-size: 15px;
-		font-weight: 600;
-	}
-
-	.count {
-		font-size: 12px;
-		font-weight: 600;
-		color: var(--fg-33);
-		font-variant-numeric: tabular-nums;
-	}
-
-	.group-header {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		margin: 12px 6px 0;
-		padding: 6px 10px;
-		border-radius: 10px;
-		background: var(--fg-4);
+		padding: 4px 6px 10px;
+		box-sizing: border-box;
 	}
 
 	.eyebrow-label-xs {
@@ -150,23 +206,29 @@
 		color: var(--fg-66);
 	}
 
-	.group-add-btn {
+	.task-group-count {
+		font-family: var(--font);
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	.task-group-add-btn {
 		margin-left: auto;
-		width: 24px;
-		height: 24px;
-		display: grid;
-		place-items: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		padding: 0;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 6px;
 		background: transparent;
-		color: var(--fg-66);
+		color: var(--fg-33);
 		cursor: pointer;
 	}
 
-	.hint {
-		margin: 10px 16px 24px;
-		font-size: 13px;
-		line-height: 1.45;
-		color: var(--fg-33);
+	.task-group-add-btn:hover {
+		color: var(--fg-66);
 	}
 </style>

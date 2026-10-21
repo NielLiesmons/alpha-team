@@ -37,8 +37,14 @@
 			/>
 		</svg>
 	{:else if name === 'tasks'}
+		<!-- Checkmark (Bley Check glyph, stroke for nav weight) -->
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
-			<rect x="1.5" y="1.5" width="15" height="15" rx="4.5" stroke="currentColor" />
+			<path
+				d="M3.2 9.4 L7.1 13.1 L14.8 4.4"
+				stroke="currentColor"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
 		</svg>
 	{:else if name === 'projects'}
 		<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -82,12 +88,19 @@
 				/>
 			</g>
 		</svg>
-	{:else if name === 'website'}
+	{:else if name === 'website' || name === 'link'}
+		<!-- Link / chain -->
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
-			<circle cx="9" cy="9" r="7.5" stroke="currentColor" />
 			<path
-				d="M1.5 9h15M9 1.5c2.2 2.4 3.3 5 3.3 7.5S11.2 14.1 9 16.5C6.8 14.1 5.7 11.5 5.7 9S6.8 3.9 9 1.5Z"
+				d="M7.4 10.6a3.25 3.25 0 0 0 4.6 0l1.85-1.85a3.25 3.25 0 1 0-4.6-4.6L8.4 5"
 				stroke="currentColor"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+			<path
+				d="M10.6 7.4a3.25 3.25 0 0 0-4.6 0L4.15 9.25a3.25 3.25 0 1 0 4.6 4.6L9.6 13"
+				stroke="currentColor"
+				stroke-linecap="round"
 				stroke-linejoin="round"
 			/>
 		</svg>

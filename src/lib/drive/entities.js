@@ -1621,6 +1621,23 @@ export async function putEnterprise(session, enterprise) {
 	return next;
 }
 
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {'task' | 'project' | 'note' | 'enterprise'} kind
+ * @param {string} id
+ */
+export async function deleteEntity(session, kind, id) {
+	const path =
+		kind === 'task'
+			? `tasks/${id}/task.json`
+			: kind === 'project'
+				? `projects/${id}/project.json`
+				: kind === 'note'
+					? `notes/${id}/note.json`
+					: `enterprises/${id}/enterprise.json`;
+	await deletePaths(session, [path]);
+}
+
 /* ── Chat messages + per-entity comment indexes ── */
 
 const FEED_MAX = 200;

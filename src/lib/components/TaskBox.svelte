@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * Status box — accent-1 (closed) / accent-2 (progress).
+	 * Status box — accent-1 (closed) / accent-2 (progress / recurring).
 	 * `embedded`: glyph only (no plate) for use inside meta pills.
 	 */
 	/** @type {{ state?: string, size?: number, embedded?: boolean }} */
@@ -11,6 +11,50 @@
 	const crossSize = $derived(Math.round(size * 0.4));
 	const progressPadding = $derived(Math.round(size * 0.25));
 	const ring = $derived(Math.max(10, Math.round(size * 0.72)));
+
+	/**
+	 * Recurring: two perimeter stroke segments + inward half-arrows (no center glyph).
+	 * ViewBox 0..100 so paths scale cleanly with size.
+	 */
+	const recurStroke = $derived(Math.max(5.5, 100 * (1.4 / Math.max(size, 1))));
+	const recurGeom = $derived.by(() => {
+		const inset = recurStroke / 2 + 0.4;
+		const x0 = inset;
+		const y0 = inset;
+		const x1 = 100 - inset;
+		const y1 = 100 - inset;
+		const r = Math.min((100 - 2 * inset) / 3, (x1 - x0) / 2, (y1 - y0) / 2);
+		const midY = 50;
+		const gap = Math.max(6, recurStroke * 1.1);
+		const tip = Math.max(5.5, Math.min(8.5, size * 0.28));
+		/* Segment A: mid-left (below gap) → up → top → mid-right (above gap) */
+		const aStartY = midY + gap / 2;
+		const aEndY = midY - gap / 2;
+		const segA = [
+			`M ${x0} ${aStartY}`,
+			`L ${x0} ${y0 + r}`,
+			`Q ${x0} ${y0} ${x0 + r} ${y0}`,
+			`L ${x1 - r} ${y0}`,
+			`Q ${x1} ${y0} ${x1} ${y0 + r}`,
+			`L ${x1} ${aEndY}`
+		].join(' ');
+		/* Half-arrow at mid-right end → inward (left) */
+		const arrowA = `M ${x1} ${aEndY} L ${x1 - tip} ${aEndY + tip * 0.55}`;
+		/* Segment B: mid-right (below gap) → down → bottom → mid-left (above gap) */
+		const bStartY = midY + gap / 2;
+		const bEndY = midY - gap / 2;
+		const segB = [
+			`M ${x1} ${bStartY}`,
+			`L ${x1} ${y1 - r}`,
+			`Q ${x1} ${y1} ${x1 - r} ${y1}`,
+			`L ${x0 + r} ${y1}`,
+			`Q ${x0} ${y1} ${x0} ${y1 - r}`,
+			`L ${x0} ${bEndY}`
+		].join(' ');
+		/* Half-arrow at mid-left end → inward (right) */
+		const arrowB = `M ${x0} ${bEndY} L ${x0 + tip} ${bEndY + tip * 0.55}`;
+		return { segA, arrowA, segB, arrowB };
+	});
 </script>
 
 <div
@@ -67,25 +111,43 @@
 			/>
 		</svg>
 	{:else if state === 'recurring'}
-		<div class="icon-slot">
-			<svg
-				width={iconSize}
-				height={iconSize}
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke={embedded ? 'var(--accent-2)' : 'var(--accent-2)'}
-				stroke-width="2.4"
+		<svg
+			class="recur-stroke"
+			viewBox="0 0 100 100"
+			width={size}
+			height={size}
+			fill="none"
+			aria-hidden="true"
+		>
+			<path
+				d={recurGeom.segA}
+				stroke="var(--accent-2-66)"
+				stroke-width={recurStroke}
 				stroke-linecap="round"
 				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				<!-- Circular refresh / going-round arrows -->
-				<path d="M20 11a8 8 0 0 0-13.66-4.5" />
-				<path d="M6.34 6.5 4 4v4.5h4.5" />
-				<path d="M4 13a8 8 0 0 0 13.66 4.5" />
-				<path d="M17.66 17.5 20 20v-4.5h-4.5" />
-			</svg>
-		</div>
+			/>
+			<path
+				d={recurGeom.arrowA}
+				stroke="var(--accent-2-66)"
+				stroke-width={recurStroke}
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+			<path
+				d={recurGeom.segB}
+				stroke="var(--accent-2-66)"
+				stroke-width={recurStroke}
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+			<path
+				d={recurGeom.arrowB}
+				stroke="var(--accent-2-66)"
+				stroke-width={recurStroke}
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		</svg>
 	{:else if embedded}
 		<!-- Open / backlog: tiny ring only — never a second plate inside the pill -->
 		<span
@@ -106,6 +168,7 @@
 		flex-shrink: 0;
 		box-sizing: border-box;
 		overflow: visible;
+		position: relative;
 	}
 
 	.check {
@@ -124,6 +187,13 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	.recur-stroke {
+		display: block;
+		position: absolute;
+		inset: 0;
+		overflow: visible;
 	}
 
 	.state-backlog {
@@ -159,7 +229,7 @@
 
 	.state-recurring {
 		background: var(--box-plate);
-		border: var(--task-box-stroke) solid var(--accent-2-66);
+		border: none;
 	}
 
 	/* Glyph-only inside meta pills — zero plate chrome */

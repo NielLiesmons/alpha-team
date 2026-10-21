@@ -7,7 +7,7 @@
  *   href: string,
  *   label: string,
  *   icon: string,
- *   countKey?: 'tasks' | 'projects' | 'notes' | 'ledger',
+ *   countKey?: 'tasks' | 'projects' | 'notes' | 'enterprises' | 'ledger',
  *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise',
  *   children?: NavItem[]
  * }} NavItem
@@ -32,19 +32,19 @@ export const primaryNav = [
 		href: '/entreprises',
 		label: 'Entreprises',
 		icon: 'enterprise',
-		countKey: 'ledger',
+		countKey: 'enterprises',
 		createKind: 'enterprise'
 	},
 	{ href: '/planning', label: 'Planning', icon: 'calendar' },
 	{ href: '/player', label: 'Player', icon: 'player' },
-	{ href: '/website', label: 'Website', icon: 'website' }
+	{ href: '/website', label: 'Website', icon: 'link' }
 ];
 
 /**
  * Horizontal mobile pill — Chat centered; Website hub owns Content/Shop/Publications.
  */
 export const mobileNav = [
-	{ href: '/website', label: 'Website', icon: 'website' },
+	{ href: '/website', label: 'Website', icon: 'link' },
 	{ href: '/planning', label: 'Planning', icon: 'calendar' },
 	{ href: '/entreprises', label: 'Entreprises', icon: 'enterprise' },
 	{ href: '/notes', label: 'Notes', icon: 'notes' },

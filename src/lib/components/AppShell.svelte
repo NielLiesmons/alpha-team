@@ -4,6 +4,7 @@
 	import { mobileNav, primaryNav, websiteChildren } from '$lib/sections.js';
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
+		enterprises,
 		forceClearSelection,
 		ledgerEntries,
 		notes,
@@ -75,6 +76,7 @@
 		tasks: tasks.length,
 		projects: projects.length,
 		notes: notes.length,
+		enterprises: enterprises.length,
 		ledger: ledgerEntries.length
 	});
 
@@ -103,9 +105,7 @@
 		} else {
 			forceClosePlayerDetail();
 		}
-		if (!p.startsWith('/entreprises') && !p.startsWith('/accounting')) {
-			resetAccountingBrowse();
-		}
+		resetAccountingBrowse();
 	});
 
 	/** Full-width list (no detail column) — Planning needs the whole workspace. */

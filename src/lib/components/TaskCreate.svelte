@@ -4,7 +4,6 @@
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
 	import ProfilePic from './ProfilePic.svelte';
-	import ProfilePicStack from './ProfilePicStack.svelte';
 	import Spinner from './Spinner.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
@@ -46,6 +45,10 @@
 	let priority = $state('none');
 	let statusOpen = $state(false);
 	let priorityOpen = $state(false);
+	/** @type {HTMLButtonElement | undefined} */
+	let statusBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let priorityBtn = $state();
 	let deadlineDate = $state('');
 	let scheduleStart = $state('');
 	let scheduleEnd = $state('');
@@ -55,18 +58,18 @@
 	let projectIds = $state([]);
 	/** @type {{ email?: string, name?: string }[]} */
 	let assignees = $state([]);
-	/** @type {null | 'schedule' | 'assignees' | 'projects' | 'labels'} */
+	/** @type {null | 'schedule' | 'projects' | 'labels'} */
 	let bottomMenu = $state(null);
 	/** @type {HTMLButtonElement | undefined} */
 	let scheduleBtn = $state();
-	/** @type {HTMLButtonElement | undefined} */
-	let assigneeBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let projectsBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let labelsBtn = $state();
 	let saving = $state(false);
-	const hasSchedule = $derived(Boolean(deadlineDate || scheduleStart || scheduleEnd));
+	const hasSchedule = $derived(
+		Boolean(deadlineDate || scheduleStart || scheduleEnd || assignees.length)
+	);
 
 	/** Keep title/body keyboard open while tapping pills / menus. */
 	/** @param {PointerEvent} e */
@@ -144,7 +147,7 @@
 		else labels = [...labels, text];
 	}
 
-	/** @param {null | 'schedule' | 'assignees' | 'projects' | 'labels'} next */
+	/** @param {null | 'schedule' | 'projects' | 'labels'} next */
 	function toggleBottom(next) {
 		bottomMenu = bottomMenu === next ? null : next;
 	}
@@ -206,9 +209,11 @@
 	<div class="task-title-row">
 		<div class="status-wrapper">
 			<button
+				bind:this={statusBtn}
 				type="button"
 				class="icon-hit"
 				aria-label="Set task status"
+				aria-expanded={statusOpen}
 				onpointerdown={keepKeyboard}
 				onclick={() => {
 					statusOpen = !statusOpen;
@@ -217,26 +222,6 @@
 			>
 				<TaskBox state={status} size={24} />
 			</button>
-			{#if statusOpen}
-				<button type="button" class="menu-backdrop" aria-label="Close status menu" onclick={() => (statusOpen = false)}
-				></button>
-				<div class="status-menu" role="listbox">
-					{#each statuses as opt (opt.value)}
-						<button
-							type="button"
-							class="status-option"
-							class:active={status === opt.value}
-							onclick={() => {
-								status = opt.value;
-								statusOpen = false;
-							}}
-						>
-							<TaskBox state={opt.value} size={18} />
-							<span class="status-label">{opt.label}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
 		</div>
 
 		<input
@@ -248,9 +233,11 @@
 
 		<div class="priority-wrapper">
 			<button
+				bind:this={priorityBtn}
 				type="button"
 				class="icon-hit"
 				aria-label="Set task priority"
+				aria-expanded={priorityOpen}
 				onpointerdown={keepKeyboard}
 				onclick={() => {
 					priorityOpen = !priorityOpen;
@@ -259,30 +246,6 @@
 			>
 				<PriorityBox {priority} size={22} />
 			</button>
-			{#if priorityOpen}
-				<button
-					type="button"
-					class="menu-backdrop"
-					aria-label="Close priority menu"
-					onclick={() => (priorityOpen = false)}
-				></button>
-				<div class="status-menu priority-menu" role="listbox">
-					{#each priorities as opt (opt.value)}
-						<button
-							type="button"
-							class="status-option"
-							class:active={priority === opt.value}
-							onclick={() => {
-								priority = opt.value;
-								priorityOpen = false;
-							}}
-						>
-							<PriorityBox priority={opt.value} size={18} />
-							<span class="status-label">{opt.label}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
 		</div>
 	</div>
 
@@ -334,31 +297,21 @@
 					type="button"
 					class="round-meta"
 					class:on={hasSchedule || bottomMenu === 'schedule'}
-					aria-label="Deadline and schedule"
+					aria-label="Deadline, moment, and assignees"
 					aria-expanded={bottomMenu === 'schedule'}
 					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('schedule')}
 				>
-					<NavIcon name="calendar" size={18} />
-				</button>
-			</div>
-
-			<div class="pill-wrap">
-				<button
-					bind:this={assigneeBtn}
-					type="button"
-					class="pfp-meta"
-					aria-label="Assignees"
-					aria-expanded={bottomMenu === 'assignees'}
-					onpointerdown={keepKeyboard}
-					onclick={() => toggleBottom('assignees')}
-				>
-					{#if assignees.length === 0}
-						<ProfilePic name="" size={36} />
-					{:else if assignees.length === 1}
-						<ProfilePic name={assignees[0].name ?? ''} size={36} />
+					{#if assignees.length > 0}
+						<span class="schedule-pfps">
+							{#each assignees.slice(0, 2) as a, i (a.email ?? a.name ?? i)}
+								<span class="schedule-pfp" style:z-index={2 - i}>
+									<ProfilePic name={a.name ?? ''} size={18} />
+								</span>
+							{/each}
+						</span>
 					{:else}
-						<ProfilePicStack profiles={assignees} size="md" />
+						<NavIcon name="calendar" size={18} />
 					{/if}
 				</button>
 			</div>
@@ -413,11 +366,64 @@
 </CreateSheet>
 
 <FloatPanel
+	open={statusOpen}
+	anchor={statusBtn}
+	placement="below"
+	width={200}
+	maxHeight={320}
+	onclose={() => (statusOpen = false)}
+>
+	<div class="float-list" role="listbox">
+		{#each statuses as opt (opt.value)}
+			<button
+				type="button"
+				class="option"
+				class:active={status === opt.value}
+				onclick={() => {
+					status = opt.value;
+					statusOpen = false;
+				}}
+			>
+				<TaskBox state={opt.value} size={18} />
+				<span class="option-text">{opt.label}</span>
+			</button>
+		{/each}
+	</div>
+</FloatPanel>
+
+<FloatPanel
+	open={priorityOpen}
+	anchor={priorityBtn}
+	placement="below"
+	align="end"
+	width={180}
+	maxHeight={280}
+	onclose={() => (priorityOpen = false)}
+>
+	<div class="float-list" role="listbox">
+		{#each priorities as opt (opt.value)}
+			<button
+				type="button"
+				class="option"
+				class:active={priority === opt.value}
+				onclick={() => {
+					priority = opt.value;
+					priorityOpen = false;
+				}}
+			>
+				<PriorityBox priority={opt.value} size={18} />
+				<span class="option-text">{opt.label}</span>
+			</button>
+		{/each}
+	</div>
+</FloatPanel>
+
+<FloatPanel
 	open={bottomMenu === 'schedule'}
 	anchor={scheduleBtn}
 	placement="above"
 	width={280}
-	maxHeight={320}
+	maxHeight={420}
 	onclose={() => (bottomMenu = null)}
 >
 	<div class="schedule-panel">
@@ -433,36 +439,29 @@
 			<span class="date-label">Moment end</span>
 			<input class="date-input" type="date" bind:value={scheduleEnd} />
 		</label>
-	</div>
-</FloatPanel>
-
-<FloatPanel
-	open={bottomMenu === 'assignees'}
-	anchor={assigneeBtn}
-	placement="above"
-	width={220}
-	maxHeight={280}
-	onclose={() => (bottomMenu = null)}
->
-	<div class="float-list" role="listbox">
-		{#each people as person (person.email)}
-			{@const on = assignees.some((a) => a.email === person.email)}
-			<button type="button" class="option" class:active={on} onclick={() => toggleAssignee(person)}>
-				<ProfilePic name={person.name} size={20} />
-				<span class="option-text">{person.name}</span>
-				{#if on}
-					<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
-							stroke="currentColor"
-							stroke-width="1.8"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-				{/if}
-			</button>
-		{/each}
+		<div class="assignee-block">
+			<span class="date-label">Assignees</span>
+			<div class="float-list assignee-list" role="listbox">
+				{#each people as person (person.email)}
+					{@const on = assignees.some((a) => a.email === person.email)}
+					<button type="button" class="option" class:active={on} onclick={() => toggleAssignee(person)}>
+						<ProfilePic name={person.name} size={20} />
+						<span class="option-text">{person.name}</span>
+						{#if on}
+							<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+								<path
+									d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+									stroke="currentColor"
+									stroke-width="1.8"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						{/if}
+					</button>
+				{/each}
+			</div>
+		</div>
 	</div>
 </FloatPanel>
 
@@ -553,30 +552,6 @@
 		cursor: default;
 	}
 
-	.status-menu,
-	.bottom-menu {
-		position: absolute;
-		z-index: 20;
-		background: var(--glass);
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		overflow: hidden;
-		min-width: 168px;
-		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-	}
-
-	.status-menu {
-		top: calc(100% + 8px);
-		left: 0;
-	}
-
-	.priority-menu {
-		left: auto;
-		right: 0;
-	}
-
 	.float-list {
 		display: flex;
 		flex-direction: column;
@@ -592,7 +567,6 @@
 		color: var(--fg-33);
 	}
 
-	.status-option,
 	.option {
 		display: flex;
 		flex-direction: row;
@@ -611,17 +585,14 @@
 		color: var(--fg);
 	}
 
-	.status-option:not(:last-child),
 	.option:not(:last-child) {
 		border-bottom: 0.33px solid var(--fg-8);
 	}
 
-	.status-option:hover,
 	.option:hover {
 		background: var(--fg-4);
 	}
 
-	.status-label,
 	.option-text {
 		flex: 1;
 		min-width: 0;
@@ -633,7 +604,6 @@
 		white-space: nowrap;
 	}
 
-	.status-option.active .status-label,
 	.option.active .option-text {
 		color: var(--fg);
 		font-weight: 600;
@@ -675,6 +645,8 @@
 		flex-direction: column;
 		gap: 10px;
 		padding: 12px;
+		min-height: 0;
+		overflow: auto;
 	}
 
 	.date-field {
@@ -700,6 +672,35 @@
 		color: var(--fg);
 		font: inherit;
 		font-size: 14px;
+	}
+
+	.assignee-block {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-height: 0;
+		margin-top: 2px;
+	}
+
+	.assignee-list {
+		max-height: 160px;
+		border-radius: 10px;
+		background: var(--fg-4);
+	}
+
+	.schedule-pfps {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.schedule-pfp {
+		display: flex;
+		margin-left: -6px;
+	}
+
+	.schedule-pfp:first-child {
+		margin-left: 0;
 	}
 
 	.task-body {
@@ -805,25 +806,6 @@
 	.round-meta[aria-expanded='true'] {
 		background: var(--float-trigger-on);
 		color: var(--fg-66);
-	}
-
-	.pfp-meta {
-		width: var(--ctrl-h);
-		height: var(--ctrl-h);
-		padding: 0;
-		border: 0;
-		background: transparent;
-		border-radius: 9999px;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		box-sizing: border-box;
-	}
-
-	.pfp-meta[aria-expanded='true'] {
-		outline: 1.5px solid var(--fg-16);
-		outline-offset: 1px;
 	}
 
 	.meta-pill {
