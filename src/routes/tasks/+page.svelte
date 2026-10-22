@@ -8,7 +8,7 @@
 	const STATUS_ORDER = [
 		'inReview',
 		'inProgress',
-		'recurring',
+		'planned',
 		'open',
 		'backlog',
 		'closed',
@@ -17,7 +17,7 @@
 	const STATUS_LABELS = {
 		inReview: 'IN REVIEW',
 		inProgress: 'IN PROGRESS',
-		recurring: 'RECURRING',
+		planned: 'PLANNED',
 		open: 'OPEN',
 		backlog: 'BACKLOG',
 		closed: 'CLOSED',

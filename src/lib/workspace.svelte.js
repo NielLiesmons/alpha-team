@@ -401,6 +401,35 @@ async function syncTaskScheduleMoment(session, taskId, schedule, assigneePeople 
 }
 
 /**
+ * When a task has moments: planned until the first start, then inProgress.
+ * Leaves closed / canceled / inReview alone. Manual inProgress without moments is fine.
+ * @param {string | null | undefined} taskId
+ */
+export async function syncTaskStatusFromMoments(taskId) {
+	if (!taskId) return;
+	const t = tasks.find((x) => x.id === taskId);
+	if (!t) return;
+	const locked = t.status === 'closed' || t.status === 'canceled' || t.status === 'inReview';
+	if (locked) return;
+
+	const kids = moments.filter((m) => m.task_id === taskId && m.status !== 'canceled');
+	if (!kids.length) return;
+
+	let earliest = Infinity;
+	for (const m of kids) {
+		const s = m.start_at ? Date.parse(m.start_at) : NaN;
+		if (Number.isFinite(s)) earliest = Math.min(earliest, s);
+	}
+	if (!Number.isFinite(earliest)) return;
+
+	const next = Date.now() >= earliest ? 'inProgress' : 'planned';
+	if (t.status === next) return;
+	/* Only auto-promote from open / backlog / planned / inProgress */
+	if (!['open', 'backlog', 'planned', 'inProgress'].includes(t.status)) return;
+	await patchTask(taskId, { status: next });
+}
+
+/**
  * Create or update a planning moment (optimistic).
  * @param {any} draft
  * @param {boolean} isNew
@@ -418,7 +447,10 @@ export async function saveMoment(draft, isNew) {
 		};
 		moments.push(optimistic);
 		scheduleWorkspacePersist();
-		if (!session) return optimistic;
+		if (!session) {
+			await syncTaskStatusFromMoments(draft.task_id);
+			return optimistic;
+		}
 		try {
 			const created = await driveCreateMoment(session, {
 				task_id: draft.task_id ?? null,
@@ -433,6 +465,7 @@ export async function saveMoment(draft, isNew) {
 			if (i >= 0) moments[i] = created;
 			else moments.push(created);
 			scheduleWorkspacePersist();
+			await syncTaskStatusFromMoments(created.task_id ?? draft.task_id);
 			return created;
 		} catch (e) {
 			const i = moments.findIndex((m) => m.id === tempId);
@@ -447,13 +480,17 @@ export async function saveMoment(draft, isNew) {
 	if (idx >= 0) Object.assign(moments[idx], { ...draft, _pending: Boolean(session) });
 	else moments.push({ ...draft });
 	scheduleWorkspacePersist();
-	if (!session) return draft;
+	if (!session) {
+		await syncTaskStatusFromMoments(draft.task_id);
+		return draft;
+	}
 	try {
 		const saved = await drivePutMoment(session, draft);
 		const i = moments.findIndex((m) => m.id === saved.id);
 		if (i >= 0) moments[i] = saved;
 		else moments.push(saved);
 		scheduleWorkspacePersist();
+		await syncTaskStatusFromMoments(saved.task_id ?? draft.task_id);
 		return saved;
 	} catch (e) {
 		if (idx >= 0 && prev) Object.assign(moments[idx], prev);

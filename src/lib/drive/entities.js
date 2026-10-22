@@ -207,7 +207,8 @@ export function normalizeTask(raw) {
 		todo: 'open',
 		doing: 'inProgress',
 		done: 'closed',
-		cancelled: 'canceled'
+		cancelled: 'canceled',
+		recurring: 'planned'
 	};
 	if (statusMap[t.status]) t.status = statusMap[t.status];
 	t.schema = 'alpha.task/3';

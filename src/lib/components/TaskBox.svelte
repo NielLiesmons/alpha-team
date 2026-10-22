@@ -1,7 +1,7 @@
 <script>
 	/**
 	 * Status box — accent-1 (closed) / accent-2 (progress).
-	 * Recurring: split perimeter stroke + inward half-arrows (CTA-tint stroke).
+	 * Planned: grayscale plate + calendar glyph (matches Planning nav icon).
 	 * `embedded`: glyph only (no plate) for use inside meta pills.
 	 */
 	/** @type {{ state?: string, size?: number, embedded?: boolean }} */
@@ -12,58 +12,7 @@
 	const crossSize = $derived(Math.round(size * 0.4));
 	const progressPadding = $derived(Math.round(size * 0.25));
 	const ring = $derived(Math.max(10, Math.round(size * 0.72)));
-
-	/** Stable per-instance gradient id (avoid collisions when many boxes mount). */
-	const gradId = `recur-cta-${Math.random().toString(36).slice(2, 9)}`;
-
-	/**
-	 * Recurring outline in viewBox 0..100.
-	 * One continuous path per half (segment + half-arrow) so joins don’t double-paint.
-	 * Left: A starts high, B ends low (clear gap). Right arrow tilts up + inward.
-	 */
-	const recurStroke = $derived(Math.max(5.2, 100 * (1.45 / Math.max(size, 1))));
-	const recurGeom = $derived.by(() => {
-		const sw = recurStroke;
-		const inset = sw / 2 + 0.8;
-		const x0 = inset;
-		const y0 = inset;
-		const x1 = 100 - inset;
-		const y1 = 100 - inset;
-		const r = Math.min((100 - 2 * inset) / 3, (x1 - x0) / 2, (y1 - y0) / 2);
-		const midY = 50;
-		/* Gap larger than stroke + caps so halves never fuse */
-		const gap = Math.max(sw * 3.2, 22);
-		const tip = Math.max(16, Math.min(24, size * 0.85));
-		const tipRise = tip * 0.78;
-
-		/* A: left UPPER → top → right UPPER; arrow inward + UP */
-		const aStartY = midY - gap / 2;
-		const aEndY = midY - gap / 2;
-		const pathA = [
-			`M ${x0} ${aStartY}`,
-			`L ${x0} ${y0 + r}`,
-			`Q ${x0} ${y0} ${x0 + r} ${y0}`,
-			`L ${x1 - r} ${y0}`,
-			`Q ${x1} ${y0} ${x1} ${y0 + r}`,
-			`L ${x1} ${aEndY}`,
-			`L ${x1 - tip} ${aEndY - tipRise}`
-		].join(' ');
-
-		/* B: right LOWER → bottom → left LOWER; arrow inward (tip sits low) */
-		const bStartY = midY + gap / 2;
-		const bEndY = midY + gap / 2;
-		const pathB = [
-			`M ${x1} ${bStartY}`,
-			`L ${x1} ${y1 - r}`,
-			`Q ${x1} ${y1} ${x1 - r} ${y1}`,
-			`L ${x0 + r} ${y1}`,
-			`Q ${x0} ${y1} ${x0} ${y1 - r}`,
-			`L ${x0} ${bEndY}`,
-			`L ${x0 + tip} ${bEndY - tipRise * 0.35}`
-		].join(' ');
-
-		return { pathA, pathB, sw };
-	});
+	const planIcon = $derived(Math.round(size * 0.55));
 </script>
 
 <div
@@ -119,35 +68,28 @@
 				d="M12.7001 0.699299L6.70025 6.69916M6.70025 6.69916L0.700195 12.6992M6.70025 6.69916L12.7002 12.6991M6.70025 6.69916L0.700308 0.699219"
 			/>
 		</svg>
-	{:else if state === 'recurring'}
+	{:else if state === 'planned'}
 		<svg
-			class="recur-stroke"
-			viewBox="0 0 100 100"
-			width={size}
-			height={size}
+			width={planIcon}
+			height={planIcon}
+			viewBox="0 0 18 18"
 			fill="none"
 			aria-hidden="true"
 		>
-			<defs>
-				<!-- Match CTA --button-primary-bg (accent-1 tinted glass) -->
-				<linearGradient id={gradId} x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
-					<stop offset="0%" stop-color="color-mix(in srgb, var(--accent-1) 42%, var(--fg-33))" />
-					<stop offset="100%" stop-color="color-mix(in srgb, var(--accent-1) 22%, var(--fg-33))" />
-				</linearGradient>
-			</defs>
-			<path
-				d={recurGeom.pathA}
-				stroke="url(#{gradId})"
-				stroke-width={recurGeom.sw}
-				stroke-linecap="round"
-				stroke-linejoin="round"
+			<rect
+				x="1.5"
+				y="1.5"
+				width="15"
+				height="15"
+				rx="4"
+				stroke={embedded ? 'var(--fg-33)' : 'var(--fg-66)'}
+				stroke-width="1.5"
 			/>
 			<path
-				d={recurGeom.pathB}
-				stroke="url(#{gradId})"
-				stroke-width={recurGeom.sw}
+				d="M4.5 6.5h9"
+				stroke={embedded ? 'var(--fg-33)' : 'var(--fg-66)'}
+				stroke-width="1.5"
 				stroke-linecap="round"
-				stroke-linejoin="round"
 			/>
 		</svg>
 	{:else if embedded}
@@ -190,13 +132,6 @@
 		justify-content: center;
 	}
 
-	.recur-stroke {
-		display: block;
-		position: absolute;
-		inset: 0;
-		overflow: visible;
-	}
-
 	.state-backlog {
 		background: transparent;
 		border: var(--task-box-stroke) dashed var(--white33);
@@ -205,6 +140,11 @@
 	.state-open {
 		background: var(--box-plate);
 		border: var(--task-box-stroke) solid var(--white33);
+	}
+
+	.state-planned {
+		background: var(--box-plate);
+		border: var(--task-box-stroke) solid var(--fg-16);
 	}
 
 	.state-closed {
@@ -225,11 +165,6 @@
 	.state-canceled {
 		background: var(--white8);
 		border: var(--task-box-stroke) solid transparent;
-	}
-
-	.state-recurring {
-		background: var(--box-plate);
-		border: none;
 	}
 
 	.task-box.embedded {

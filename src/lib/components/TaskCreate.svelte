@@ -24,9 +24,9 @@
 	const statuses = [
 		{ value: 'backlog', label: 'Backlog' },
 		{ value: 'open', label: 'Open' },
+		{ value: 'planned', label: 'Planned' },
 		{ value: 'inProgress', label: 'In progress' },
 		{ value: 'inReview', label: 'In review' },
-		{ value: 'recurring', label: 'Recurring' },
 		{ value: 'closed', label: 'Closed' },
 		{ value: 'canceled', label: 'Canceled' }
 	];

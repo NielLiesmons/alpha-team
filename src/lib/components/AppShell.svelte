@@ -286,85 +286,83 @@
 
 	<div class="workspace-wrap">
 		<div class="workspace">
-			<section class="list-col" class:wide={wideList} class:bare-top={wideList} aria-label={activeItem.label}>
-				{#if !wideList}
-					<header class="list-top">
-						<h1 class="list-title">{activeItem.label}</h1>
-						<div class="list-actions">
-							<div class="filter-wrap">
+			<section class="list-col" class:wide={wideList} aria-label={activeItem.label}>
+				<header class="list-top">
+					<h1 class="list-title">{activeItem.label}</h1>
+					<div class="list-actions">
+						<div class="filter-wrap">
+							<button
+								type="button"
+								class="chrome-btn"
+								class:on={filter !== 'all'}
+								aria-label="Filter"
+								aria-expanded={filterOpen}
+								aria-haspopup="listbox"
+								onclick={() => (filterOpen = !filterOpen)}
+							>
+								<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<path
+										d="M2.5 4h11M4.5 8h7M6.5 12h3"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+									/>
+								</svg>
+							</button>
+							{#if filterOpen}
 								<button
 									type="button"
-									class="chrome-btn"
-									class:on={filter !== 'all'}
-									aria-label="Filter"
-									aria-expanded={filterOpen}
-									aria-haspopup="listbox"
-									onclick={() => (filterOpen = !filterOpen)}
-								>
-									<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-										<path
-											d="M2.5 4h11M4.5 8h7M6.5 12h3"
-											stroke="currentColor"
-											stroke-width="1.5"
-											stroke-linecap="round"
-										/>
-									</svg>
-								</button>
-								{#if filterOpen}
+									class="menu-scrim"
+									aria-label="Close filter"
+									onclick={() => (filterOpen = false)}
+								></button>
+								<div class="filter-menu" role="listbox">
 									<button
 										type="button"
-										class="menu-scrim"
-										aria-label="Close filter"
-										onclick={() => (filterOpen = false)}
-									></button>
-									<div class="filter-menu" role="listbox">
-										<button
-											type="button"
-											class:on={filter === 'all'}
-											onclick={() => {
-												filter = 'all';
-												filterOpen = false;
-											}}>All</button
-										>
-										<button
-											type="button"
-											class:on={filter === 'open'}
-											onclick={() => {
-												filter = 'open';
-												filterOpen = false;
-											}}>Open</button
-										>
-										<button
-											type="button"
-											class:on={filter === 'done'}
-											onclick={() => {
-												filter = 'done';
-												filterOpen = false;
-											}}>Done</button
-										>
-									</div>
-								{/if}
-							</div>
-							{#if createKind}
-								<button
-									type="button"
-									class="chrome-btn list-plus"
-									aria-label="New {createKind}"
-									onclick={onListPlus}
-								>
-									<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-										<path
-											d="M8 3.25v9.5M3.25 8h9.5"
-											stroke="currentColor"
-											stroke-width="1.5"
-											stroke-linecap="round"
-										/>
-									</svg>
-								</button>
+										class:on={filter === 'all'}
+										onclick={() => {
+											filter = 'all';
+											filterOpen = false;
+										}}>All</button
+									>
+									<button
+										type="button"
+										class:on={filter === 'open'}
+										onclick={() => {
+											filter = 'open';
+											filterOpen = false;
+										}}>Open</button
+									>
+									<button
+										type="button"
+										class:on={filter === 'done'}
+										onclick={() => {
+											filter = 'done';
+											filterOpen = false;
+										}}>Done</button
+									>
+								</div>
 							{/if}
 						</div>
-					</header>
-				{/if}
+						{#if createKind}
+							<button
+								type="button"
+								class="chrome-btn list-plus"
+								aria-label="New {createKind}"
+								onclick={onListPlus}
+							>
+								<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<path
+										d="M8 3.25v9.5M3.25 8h9.5"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+									/>
+								</svg>
+							</button>
+						{/if}
+					</div>
+				</header>
 				<div class="pane">
 					{@render children()}
 				</div>
@@ -812,10 +810,6 @@
 		border-right: 0;
 	}
 
-	.list-col.bare-top .pane {
-		/* Planning owns its own chrome — no floating list-top */
-		padding-top: 0;
-	}
 
 	/* Floating header — soft short fade (not a solid veil over the list) */
 	.list-top {

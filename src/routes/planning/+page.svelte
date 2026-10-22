@@ -218,9 +218,35 @@
 	function tasksForProject(projectId) {
 		return tasks.filter((t) => {
 			if (!(t.project_ids ?? []).includes(projectId)) return false;
-			if (t.status === 'recurring') return true;
 			return t.status !== 'closed' && t.status !== 'canceled';
 		});
+	}
+
+	/** Bar fill from task status. */
+	/** @param {string | undefined} status */
+	function barTone(status) {
+		if (status === 'closed') return 'done';
+		if (status === 'inProgress' || status === 'inReview') return 'progress';
+		return 'planned';
+	}
+
+	/**
+	 * Earliest moment end (for dep out) / start (for dep in) in chart coords.
+	 * @param {string} taskId
+	 * @param {'start' | 'end'} edge
+	 */
+	function taskEdgeX(taskId, edge) {
+		const ms = momentsForTask(taskId);
+		if (!ms.length) return null;
+		/** @type {number[]} */
+		const vals = [];
+		for (const m of ms) {
+			const box = span(m.start_at, m.end_at, 1);
+			if (!box) continue;
+			vals.push(edge === 'start' ? box.left : box.left + box.width);
+		}
+		if (!vals.length) return null;
+		return edge === 'start' ? Math.min(...vals) : Math.max(...vals);
 	}
 
 	const groups = $derived.by(() => {
@@ -436,24 +462,56 @@
 		}
 	}
 
-	/**
-	 * Deadline marker left — nest at moment end when aligned.
-	 * @param {any} task
-	 */
+	/** @param {any} task */
 	function deadlineLeft(task) {
 		const d = parseMs(task.deadline_at, NaN);
 		if (!Number.isFinite(d)) return null;
-		const ms = momentsForTask(task.id);
-		for (const m of ms) {
-			const box = span(m.start_at, m.end_at, 1);
-			if (!box) continue;
-			const end = box.end ?? parseMs(m.end_at, NaN);
-			if (Number.isFinite(end) && Math.abs(end - d) < DAY_MS * 1.5) {
-				return box.left + box.width;
-			}
-		}
 		return ((d - range.start) / DAY_MS) * PX_PER_DAY;
 	}
+
+	/** Dependency arrows across visible rows (coords relative to `.gantt-body`). */
+	const depLinks = $derived.by(() => {
+		/** @type {{ x1: number, y1: number, x2: number, y2: number }[]} */
+		const links = [];
+		const ROW_H = { eyebrow: 28, proj: 44, task: 36, empty: 48 };
+		let y = 0;
+		/** @type {Map<string, number>} */
+		const taskMidY = new Map();
+
+		for (const group of groups) {
+			y += ROW_H.eyebrow;
+			if (group.rows.length === 0) {
+				y += ROW_H.empty;
+				continue;
+			}
+			for (const row of group.rows) {
+				const h = row.kind === 'project' ? ROW_H.proj : ROW_H.task;
+				if (row.kind === 'task') taskMidY.set(row.id, y + h / 2);
+				y += h;
+			}
+		}
+
+		for (const t of tasks) {
+			const deps = Array.isArray(t.depends_on) ? t.depends_on : [];
+			if (!deps.length) continue;
+			const y2 = taskMidY.get(t.id);
+			const x2raw = taskEdgeX(t.id, 'start');
+			if (y2 == null || x2raw == null) continue;
+			for (const depId of deps) {
+				const y1 = taskMidY.get(depId);
+				const x1raw = taskEdgeX(depId, 'end');
+				if (y1 == null || x1raw == null) continue;
+				/* Dots sit 12px inset from bar edges */
+				links.push({
+					x1: x1raw - 12,
+					y1,
+					x2: x2raw + 12,
+					y2
+				});
+			}
+		}
+		return links;
+	});
 
 	/**
 	 * @param {string} enterpriseId
@@ -522,33 +580,68 @@
 					</div>
 				</div>
 
-				{#each groups as group (group.id)}
-					<div class="ent-section">
-						<div class="ent-eyebrow">
-							<button
-								type="button"
-								class="ent-name"
-								onclick={() => {
-									if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
-								}}
-							>
-								<span class="eyebrow-label-xs">{group.title}</span>
-							</button>
-							<button
-								type="button"
-								class="eyebrow-plus"
-								aria-label="Add project to {group.title}"
-								onclick={() => addProject(group.id)}
-							>
-								<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-									<path
-										d="M6 1v10M1 6h10"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-									/>
-								</svg>
-							</button>
+				<div class="gantt-body" style:width="calc(var(--label-w) + {chartWidth}px)">
+					{#if depLinks.length}
+						<svg
+							class="deps-layer"
+							width={chartWidth}
+							height="100%"
+							style:left="var(--label-w)"
+							aria-hidden="true"
+						>
+							{#each depLinks as link, i (i)}
+								{@const mx = (link.x1 + link.x2) / 2}
+								<path
+									class="dep-path"
+									d="M {link.x1} {link.y1} C {mx} {link.y1}, {mx} {link.y2}, {link.x2} {link.y2}"
+									marker-end="url(#dep-arrow)"
+								/>
+							{/each}
+							<defs>
+								<marker
+									id="dep-arrow"
+									viewBox="0 0 8 8"
+									refX="7"
+									refY="4"
+									markerWidth="6"
+									markerHeight="6"
+									orient="auto"
+								>
+									<path d="M0 0 L8 4 L0 8 Z" fill="var(--fg-33)" />
+								</marker>
+							</defs>
+						</svg>
+					{/if}
+
+					{#each groups as group (group.id)}
+						<div class="gantt-row eyebrow-row">
+							<div class="label-cell eyebrow-cell">
+								<button
+									type="button"
+									class="ent-name"
+									onclick={() => {
+										if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
+									}}
+								>
+									<span class="eyebrow-label-xs">{group.title}</span>
+								</button>
+								<button
+									type="button"
+									class="eyebrow-plus"
+									aria-label="Add project to {group.title}"
+									onclick={() => addProject(group.id)}
+								>
+									<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+										<path
+											d="M6 1v10M1 6h10"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+										/>
+									</svg>
+								</button>
+							</div>
+							<div class="timeline" style:width="{chartWidth}px" aria-hidden="true"></div>
 						</div>
 
 						{#if group.rows.length === 0}
@@ -567,7 +660,7 @@
 									class:proj={row.kind === 'project'}
 									class:task={row.kind === 'task'}
 								>
-									<div class="label-cell">
+									<div class="label-cell" class:proj-label={row.kind === 'project'}>
 										{#if row.kind === 'project'}
 											<button
 												type="button"
@@ -584,10 +677,7 @@
 													viewBox="0 0 12 12"
 													aria-hidden="true"
 												>
-													<path
-														d="M3.2 2.2 L9.2 6 L3.2 9.8 Z"
-														fill="currentColor"
-													/>
+													<path d="M2.4 1.8 L9.6 6 L2.4 10.2 Z" fill="currentColor" />
 												</svg>
 											</button>
 											<ProjectBox
@@ -654,7 +744,7 @@
 												{@const box = span(m.start_at, m.end_at, 1)}
 												{#if box}
 													<div
-														class="task-bar"
+														class="task-bar tone-{barTone(row.entity.status)}"
 														style:left="{box.left}px"
 														style:width="{box.width}px"
 														role="button"
@@ -669,9 +759,10 @@
 															class="bar-handle start"
 															onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
 														></span>
-														<span class="bar-icon">
-															<TaskBox state={row.entity.status} size={14} embedded />
-														</span>
+														{#if box.width >= 28}
+															<span class="dep-dot start" aria-hidden="true"></span>
+															<span class="dep-dot end" aria-hidden="true"></span>
+														{/if}
 														<span
 															class="bar-handle end"
 															onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
@@ -688,19 +779,21 @@
 													PX_PER_DAY,
 													(Math.abs(draftDraw.endMs - draftDraw.startMs) / DAY_MS) * PX_PER_DAY
 												)}
-												<div class="task-bar draft" style:left="{left}px" style:width="{width}px"></div>
+												<div
+													class="task-bar draft tone-planned"
+													style:left="{left}px"
+													style:width="{width}px"
+												></div>
 											{/if}
 											{#if row.entity.deadline_at}
 												{@const dl = deadlineLeft(row.entity)}
 												{#if dl != null}
 													<span
-														class="deadline-flag"
+														class="deadline-line"
 														style:left="{dl}px"
 														title="Deadline"
 														aria-hidden="true"
-													>
-														<span class="flag-circle">🏁</span>
-													</span>
+													></span>
 												{/if}
 											{/if}
 										{/if}
@@ -708,8 +801,8 @@
 								</div>
 							{/each}
 						{/if}
-					</div>
-				{/each}
+					{/each}
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -720,7 +813,7 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		padding-top: 8px;
+		padding-top: 0;
 	}
 
 	.tool-btn {
@@ -773,52 +866,24 @@
 		min-width: 100%;
 	}
 
-	.ent-section {
-		display: flex;
-		flex-direction: column;
-		margin-bottom: 4px;
+	.gantt-body {
+		position: relative;
+		min-width: 100%;
 	}
 
-	.ent-eyebrow {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin: 10px 8px 4px;
-		padding: 5px 8px;
-		border-radius: 10px;
-		background: var(--fg-4);
-		position: sticky;
-		left: 0;
-		z-index: 3;
-		width: fit-content;
-		min-width: calc(var(--label-w) - 16px);
-		box-sizing: border-box;
+	.deps-layer {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		pointer-events: none;
+		z-index: 1;
+		overflow: visible;
 	}
 
-	.ent-name {
-		border: 0;
-		background: transparent;
-		padding: 0;
-		cursor: pointer;
-		color: inherit;
-	}
-
-	.eyebrow-plus {
-		margin-left: auto;
-		width: 20px;
-		height: 20px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		border-radius: 6px;
-		background: transparent;
-		color: var(--fg-33);
-		cursor: pointer;
-	}
-
-	.eyebrow-plus:hover {
-		color: var(--fg);
-		background: var(--fg-8);
+	.dep-path {
+		fill: none;
+		stroke: var(--fg-33);
+		stroke-width: 1.25;
 	}
 
 	.gantt-row {
@@ -834,6 +899,11 @@
 		top: 0;
 		z-index: 5;
 		background: var(--bg);
+	}
+
+	.gantt-row.eyebrow-row {
+		min-height: 28px;
+		border-bottom: 0;
 	}
 
 	.gantt-row.proj {
@@ -867,6 +937,46 @@
 		background: var(--bg);
 	}
 
+	.label-cell.proj-label {
+		gap: 2px;
+		padding-left: 2px;
+	}
+
+	.eyebrow-cell {
+		gap: 6px;
+		padding: 4px 8px 2px 10px;
+		border-bottom: 0;
+		align-items: center;
+	}
+
+	.ent-name {
+		border: 0;
+		background: transparent;
+		padding: 0;
+		cursor: pointer;
+		color: inherit;
+		min-width: 0;
+	}
+
+	.eyebrow-plus {
+		margin-left: auto;
+		width: 18px;
+		height: 18px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 5px;
+		background: transparent;
+		color: var(--fg-33);
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.eyebrow-plus:hover {
+		color: var(--fg);
+		background: var(--fg-8);
+	}
+
 	.head-label {
 		padding-left: 8px;
 	}
@@ -879,8 +989,7 @@
 	@media (max-width: 767px) {
 		.label-cell,
 		.gantt-row.head,
-		.gantt-row.head .label-cell,
-		.ent-eyebrow {
+		.gantt-row.head .label-cell {
 			background: var(--shell);
 		}
 
@@ -917,8 +1026,8 @@
 	}
 
 	.twist {
-		width: 22px;
-		height: 22px;
+		width: 20px;
+		height: 20px;
 		display: grid;
 		place-items: center;
 		border: 0;
@@ -927,11 +1036,12 @@
 		cursor: pointer;
 		padding: 0;
 		flex-shrink: 0;
-		margin-left: 0;
+		margin: 0;
 	}
 
 	.twist-tri {
 		display: block;
+		border-radius: 2px;
 		transition: transform 0.15s var(--ease, ease);
 		transform: rotate(90deg);
 	}
@@ -941,7 +1051,7 @@
 	}
 
 	.indent.deep {
-		width: 28px;
+		width: 20px;
 		flex-shrink: 0;
 	}
 
@@ -1041,33 +1151,66 @@
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
-		height: 22px;
-		border: var(--task-box-stroke, 1.4px) solid var(--white33);
-		border-radius: 9999px;
-		background: var(--box-plate);
+		height: 14px;
+		border: 0;
+		border-radius: 4px;
 		cursor: grab;
-		padding: 0 6px 0 4px;
+		padding: 0;
 		box-sizing: border-box;
-		display: flex;
-		align-items: center;
 		z-index: 2;
-		min-width: 22px;
+		min-width: 4px;
+	}
+
+	.task-bar.tone-planned {
+		background: var(--fg-16);
+	}
+
+	.task-bar.tone-progress {
+		background: var(--accent-2);
+	}
+
+	.task-bar.tone-done {
+		background: var(--accent-1);
 	}
 
 	.task-bar.draft {
-		opacity: 0.55;
+		opacity: 0.45;
 		pointer-events: none;
-		border-style: dashed;
+		outline: 1px dashed var(--fg-33);
+		outline-offset: -1px;
 	}
 
 	.task-bar:active {
 		cursor: grabbing;
 	}
 
-	.bar-icon {
-		display: flex;
-		flex-shrink: 0;
+	.dep-dot {
+		position: absolute;
+		top: 50%;
+		width: 6px;
+		height: 6px;
+		border-radius: 9999px;
+		background: var(--bg);
+		border: 1.5px solid var(--fg-33);
+		transform: translate(-50%, -50%);
 		pointer-events: none;
+		z-index: 4;
+		box-sizing: border-box;
+	}
+
+	.task-bar.tone-progress .dep-dot,
+	.task-bar.tone-done .dep-dot {
+		border-color: color-mix(in srgb, var(--fg) 55%, transparent);
+	}
+
+	.dep-dot.start {
+		left: 12px;
+	}
+
+	.dep-dot.end {
+		left: auto;
+		right: 12px;
+		transform: translate(50%, -50%);
 	}
 
 	.bar-handle {
@@ -1087,24 +1230,16 @@
 		right: 0;
 	}
 
-	.deadline-flag {
+	.deadline-line {
 		position: absolute;
-		top: 50%;
-		transform: translate(-50%, -50%);
-		z-index: 3;
+		top: 0;
+		bottom: 0;
+		width: 2px;
+		background: var(--accent-2);
+		opacity: 0.9;
 		pointer-events: none;
-	}
-
-	.flag-circle {
-		display: grid;
-		place-items: center;
-		width: 22px;
-		height: 22px;
-		border-radius: 9999px;
-		background: color-mix(in srgb, var(--fg) 6%, transparent);
-		border: 1px solid var(--fg-8);
-		font-size: 11px;
-		line-height: 1;
+		z-index: 3;
+		transform: translateX(-50%);
 	}
 
 	.eyebrow-label-xs {
