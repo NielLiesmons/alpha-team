@@ -34,6 +34,11 @@
 	 */
 	let drag = $state(null);
 
+	/** @type {HTMLDivElement | undefined} */
+	let scrollEl = $state();
+	/** @type {null | { x: number, y: number, left: number, top: number }} */
+	let pan = $state(null);
+
 	const DAY_MS = 86_400_000;
 	const UNASSIGNED = '__none__';
 
@@ -425,12 +430,57 @@
 
 	/** @param {WheelEvent} e */
 	function onWheelZoom(e) {
-		if (!e.ctrlKey && !e.metaKey) return;
+		if (e.ctrlKey || e.metaKey) {
+			e.preventDefault();
+			const levels = /** @type {const} */ (['day', 'week', 'month']);
+			const i = levels.indexOf(zoom);
+			if (e.deltaY < 0 && i > 0) zoom = levels[i - 1];
+			else if (e.deltaY > 0 && i < levels.length - 1) zoom = levels[i + 1];
+			return;
+		}
+		/* Kill native sideways wheel / shift-scroll — pan X with middle-drag instead */
+		if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+			e.preventDefault();
+		}
+	}
+
+	/** Middle-mouse drag pans the gantt. */
+	/** @param {PointerEvent} e */
+	function onPanDown(e) {
+		if (e.button !== 1 || !scrollEl) return;
 		e.preventDefault();
-		const levels = /** @type {const} */ (['day', 'week', 'month']);
-		const i = levels.indexOf(zoom);
-		if (e.deltaY < 0 && i > 0) zoom = levels[i - 1];
-		else if (e.deltaY > 0 && i < levels.length - 1) zoom = levels[i + 1];
+		pan = {
+			x: e.clientX,
+			y: e.clientY,
+			left: scrollEl.scrollLeft,
+			top: scrollEl.scrollTop
+		};
+		scrollEl.setPointerCapture(e.pointerId);
+		scrollEl.classList.add('panning');
+	}
+
+	/** @param {PointerEvent} e */
+	function onPanMove(e) {
+		if (!pan || !scrollEl) return;
+		scrollEl.scrollLeft = pan.left - (e.clientX - pan.x);
+		scrollEl.scrollTop = pan.top - (e.clientY - pan.y);
+	}
+
+	/** @param {PointerEvent} e */
+	function onPanUp(e) {
+		if (!pan || !scrollEl) return;
+		try {
+			scrollEl.releasePointerCapture(e.pointerId);
+		} catch {
+			/* */
+		}
+		scrollEl.classList.remove('panning');
+		pan = null;
+	}
+
+	/** @param {MouseEvent} e */
+	function onAuxClick(e) {
+		if (e.button === 1) e.preventDefault();
 	}
 
 	let pinchDist = $state(0);
@@ -502,10 +552,11 @@
 				const x1raw = taskEdgeX(depId, 'end');
 				if (y1 == null || x1raw == null) continue;
 				/* Dots sit 12px inset from bar edges */
+				/* Dots sit just outside bar ends */
 				links.push({
-					x1: x1raw - 12,
+					x1: x1raw + 5,
 					y1,
-					x2: x2raw + 12,
+					x2: x2raw - 5,
 					y2
 				});
 			}
@@ -550,8 +601,22 @@
 			>
 		</div>
 	{:else}
-		<div class="gantt-scroll">
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="gantt-scroll"
+			bind:this={scrollEl}
+			onpointerdown={onPanDown}
+			onpointermove={onPanMove}
+			onpointerup={onPanUp}
+			onpointercancel={onPanUp}
+			onauxclick={onAuxClick}
+		>
 			<div class="gantt-inner" style:width="calc(var(--label-w) + {chartWidth}px)">
+				<span
+					class="today-line"
+					style:left="calc(var(--label-w) + {todayLeft()})"
+					aria-hidden="true"
+				></span>
 				<div class="gantt-row head">
 					<div class="label-cell head-label">
 						<div class="zoom-seg" role="group" aria-label="Timeline zoom">
@@ -576,7 +641,6 @@
 						{#each ticks as t}
 							<span class="tick" style:left="{t.left}px" style:width="{t.width}px">{t.label}</span>
 						{/each}
-						<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
 					</div>
 				</div>
 
@@ -644,16 +708,7 @@
 							<div class="timeline" style:width="{chartWidth}px" aria-hidden="true"></div>
 						</div>
 
-						{#if group.rows.length === 0}
-							<div class="gantt-row empty-ent">
-								<div class="label-cell">
-									<span class="name muted">No projects</span>
-								</div>
-								<div class="timeline" style:width="{chartWidth}px">
-									<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
-								</div>
-							</div>
-						{:else}
+						{#if group.rows.length > 0}
 							{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
 								<div
 									class="gantt-row"
@@ -672,12 +727,16 @@
 												<svg
 													class="twist-tri"
 													class:collapsed={collapsedProjects.has(row.id)}
-													width="12"
-													height="12"
+													width="11"
+													height="11"
 													viewBox="0 0 12 12"
 													aria-hidden="true"
 												>
-													<path d="M2.4 1.8 L9.6 6 L2.4 10.2 Z" fill="currentColor" />
+													<!-- Rounded-corner play triangle -->
+													<path
+														d="M3.2 2.6C3.2 2.15 3.7 1.88 4.08 2.12L9.55 5.52C9.9 5.74 9.9 6.26 9.55 6.48L4.08 9.88C3.7 10.12 3.2 9.85 3.2 9.4Z"
+														fill="currentColor"
+													/>
 												</svg>
 											</button>
 											<ProjectBox
@@ -726,7 +785,6 @@
 										onpointermove={row.kind === 'task' ? onTimelineMove : undefined}
 										onpointerup={row.kind === 'task' ? onTimelineUp : undefined}
 									>
-										<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
 										{#if row.kind === 'project'}
 											{@const box = projectSpanFromMoments(row.id)}
 											{#if box}
@@ -759,10 +817,8 @@
 															class="bar-handle start"
 															onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
 														></span>
-														{#if box.width >= 28}
-															<span class="dep-dot start" aria-hidden="true"></span>
-															<span class="dep-dot end" aria-hidden="true"></span>
-														{/if}
+														<span class="dep-dot start" aria-hidden="true"></span>
+														<span class="dep-dot end" aria-hidden="true"></span>
 														<span
 															class="bar-handle end"
 															onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
@@ -859,11 +915,31 @@
 		min-height: 0;
 		overflow: auto;
 		--label-w: 200px;
-		touch-action: pan-x pan-y;
+		/* Vertical trackpad/wheel only; X via middle-drag */
+		touch-action: pan-y;
+		overscroll-behavior-x: none;
+	}
+
+	.gantt-scroll.panning {
+		cursor: grabbing;
+		user-select: none;
 	}
 
 	.gantt-inner {
+		position: relative;
 		min-width: 100%;
+	}
+
+	.today-line {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 2px;
+		background: var(--accent-1);
+		opacity: 1;
+		pointer-events: none;
+		z-index: 6;
+		transform: translateX(-50%);
 	}
 
 	.gantt-body {
@@ -918,10 +994,6 @@
 		min-height: 36px;
 	}
 
-	.gantt-row.empty-ent {
-		min-height: 48px;
-	}
-
 	.label-cell {
 		position: sticky;
 		left: 0;
@@ -939,7 +1011,7 @@
 
 	.label-cell.proj-label {
 		gap: 2px;
-		padding-left: 2px;
+		padding-left: 4px;
 	}
 
 	.eyebrow-cell {
@@ -1026,22 +1098,25 @@
 	}
 
 	.twist {
-		width: 20px;
-		height: 20px;
+		width: 18px;
+		height: 18px;
 		display: grid;
 		place-items: center;
 		border: 0;
 		background: transparent;
-		color: var(--fg-33);
+		color: var(--fg-16);
 		cursor: pointer;
 		padding: 0;
 		flex-shrink: 0;
-		margin: 0;
+		margin: 0 0 0 2px;
+	}
+
+	.twist:hover {
+		color: var(--fg-33);
 	}
 
 	.twist-tri {
 		display: block;
-		border-radius: 2px;
 		transition: transform 0.15s var(--ease, ease);
 		transform: rotate(90deg);
 	}
@@ -1051,7 +1126,7 @@
 	}
 
 	.indent.deep {
-		width: 20px;
+		width: 22px;
 		flex-shrink: 0;
 	}
 
@@ -1123,17 +1198,6 @@
 		overflow: hidden;
 	}
 
-	.today {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 1px;
-		background: var(--fg-33);
-		opacity: 0.55;
-		pointer-events: none;
-		z-index: 1;
-	}
-
 	.proj-line {
 		position: absolute;
 		top: 50%;
@@ -1159,22 +1223,23 @@
 		box-sizing: border-box;
 		z-index: 2;
 		min-width: 4px;
+		overflow: visible;
 	}
 
 	.task-bar.tone-planned {
-		background: var(--fg-16);
+		background: var(--fg-33);
 	}
 
 	.task-bar.tone-progress {
-		background: var(--accent-2);
+		background: var(--accent-2-66);
 	}
 
 	.task-bar.tone-done {
-		background: var(--accent-1);
+		background: var(--accent-1-66);
 	}
 
 	.task-bar.draft {
-		opacity: 0.45;
+		opacity: 0.35;
 		pointer-events: none;
 		outline: 1px dashed var(--fg-33);
 		outline-offset: -1px;
@@ -1187,30 +1252,31 @@
 	.dep-dot {
 		position: absolute;
 		top: 50%;
-		width: 6px;
-		height: 6px;
+		width: 7px;
+		height: 7px;
 		border-radius: 9999px;
 		background: var(--bg);
 		border: 1.5px solid var(--fg-33);
-		transform: translate(-50%, -50%);
 		pointer-events: none;
 		z-index: 4;
 		box-sizing: border-box;
+		opacity: 0;
+		transition: opacity 0.12s ease;
 	}
 
-	.task-bar.tone-progress .dep-dot,
-	.task-bar.tone-done .dep-dot {
-		border-color: color-mix(in srgb, var(--fg) 55%, transparent);
+	.task-bar:hover .dep-dot {
+		opacity: 1;
 	}
 
 	.dep-dot.start {
-		left: 12px;
+		left: 0;
+		transform: translate(calc(-100% - 3px), -50%);
 	}
 
 	.dep-dot.end {
 		left: auto;
-		right: 12px;
-		transform: translate(50%, -50%);
+		right: 0;
+		transform: translate(calc(100% + 3px), -50%);
 	}
 
 	.bar-handle {
