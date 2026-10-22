@@ -18,8 +18,14 @@
 
 	/** @type {Set<string>} */
 	let collapsedProjects = $state(new Set());
+	/** @type {Set<string>} */
+	let collapsedEnterprises = $state(new Set());
 	/** @type {'day' | 'week' | 'month'} */
 	let zoom = $state('week');
+
+	/** Shared rounded play-triangle path (viewBox 0 0 12 12). */
+	const TWIST_PATH =
+		'M3.15 2.35C3.15 1.72 3.82 1.35 4.35 1.7L9.85 5.35C10.32 5.66 10.32 6.34 9.85 6.65L4.35 10.3C3.82 10.65 3.15 10.28 3.15 9.65Z';
 
 	/** @type {null | { taskId: string, startMs: number, endMs: number }} */
 	let draftDraw = $state(null);
@@ -269,17 +275,19 @@
 		function buildGroup(ent) {
 			/** @type {{ kind: 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[]} */
 			const rows = [];
-			for (const p of projectsForEnterprise(ent.id)) {
-				rows.push({ kind: 'project', id: p.id, title: p.title, entity: p });
-				if (collapsedProjects.has(p.id)) continue;
-				for (const t of tasksForProject(p.id)) {
-					rows.push({
-						kind: 'task',
-						id: t.id,
-						title: t.title,
-						entity: t,
-						projectId: p.id
-					});
+			if (!collapsedEnterprises.has(ent.id)) {
+				for (const p of projectsForEnterprise(ent.id)) {
+					rows.push({ kind: 'project', id: p.id, title: p.title, entity: p });
+					if (collapsedProjects.has(p.id)) continue;
+					for (const t of tasksForProject(p.id)) {
+						rows.push({
+							kind: 'task',
+							id: t.id,
+							title: t.title,
+							entity: t,
+							projectId: p.id
+						});
+					}
 				}
 			}
 			out.push({ id: ent.id, title: ent.title, entity: ent, rows });
@@ -298,6 +306,14 @@
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
 		collapsedProjects = next;
+	}
+
+	/** @param {string} id */
+	function toggleEnterprise(id) {
+		const next = new Set(collapsedEnterprises);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		collapsedEnterprises = next;
 	}
 
 	function todayLeft() {
@@ -682,6 +698,24 @@
 							<div class="label-cell eyebrow-cell">
 								<button
 									type="button"
+									class="twist ent-twist"
+									onclick={() => toggleEnterprise(group.id)}
+									aria-label="Toggle projects"
+									aria-expanded={!collapsedEnterprises.has(group.id)}
+								>
+									<svg
+										class="twist-tri"
+										class:collapsed={collapsedEnterprises.has(group.id)}
+										width="11"
+										height="11"
+										viewBox="0 0 12 12"
+										aria-hidden="true"
+									>
+										<path d={TWIST_PATH} fill="currentColor" />
+									</svg>
+								</button>
+								<button
+									type="button"
 									class="ent-name"
 									onclick={() => {
 										if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
@@ -732,11 +766,7 @@
 													viewBox="0 0 12 12"
 													aria-hidden="true"
 												>
-													<!-- Rounded-corner play triangle -->
-													<path
-														d="M3.2 2.6C3.2 2.15 3.7 1.88 4.08 2.12L9.55 5.52C9.9 5.74 9.9 6.26 9.55 6.48L4.08 9.88C3.7 10.12 3.2 9.85 3.2 9.4Z"
-														fill="currentColor"
-													/>
+													<path d={TWIST_PATH} fill="currentColor" />
 												</svg>
 											</button>
 											<ProjectBox
@@ -934,11 +964,11 @@
 		position: absolute;
 		top: 0;
 		bottom: 0;
-		width: 2px;
-		background: var(--fg);
+		width: 1px;
+		background: var(--fg-66);
 		opacity: 1;
 		pointer-events: none;
-		z-index: 6;
+		z-index: 3;
 		transform: translateX(-50%);
 	}
 
@@ -982,6 +1012,10 @@
 		border-bottom: 0;
 	}
 
+	.gantt-row.eyebrow-row:hover .eyebrow-plus {
+		opacity: 1;
+	}
+
 	.gantt-row.proj {
 		min-height: 44px;
 	}
@@ -997,7 +1031,7 @@
 	.label-cell {
 		position: sticky;
 		left: 0;
-		z-index: 2;
+		z-index: 5;
 		width: var(--label-w);
 		flex-shrink: 0;
 		display: flex;
@@ -1006,7 +1040,9 @@
 		padding: 0 8px 0 4px;
 		box-sizing: border-box;
 		border-right: 1px solid var(--fg-8);
-		background: var(--bg);
+		/* Opaque plate so timeline bars can't bleed through while scrolling */
+		background-color: var(--bg);
+		isolation: isolate;
 	}
 
 	.label-cell.proj-label {
@@ -1015,8 +1051,8 @@
 	}
 
 	.eyebrow-cell {
-		gap: 6px;
-		padding: 4px 8px 2px 10px;
+		gap: 4px;
+		padding: 4px 8px 2px 4px;
 		border-bottom: 0;
 		align-items: center;
 	}
@@ -1028,6 +1064,8 @@
 		cursor: pointer;
 		color: inherit;
 		min-width: 0;
+		flex: 1;
+		text-align: left;
 	}
 
 	.eyebrow-plus {
@@ -1042,6 +1080,8 @@
 		color: var(--fg-33);
 		cursor: pointer;
 		flex-shrink: 0;
+		opacity: 0;
+		transition: opacity 0.12s ease;
 	}
 
 	.eyebrow-plus:hover {
@@ -1053,20 +1093,24 @@
 		padding-left: 8px;
 	}
 
+	.gantt-row.head {
+		z-index: 6;
+	}
+
 	.gantt-row.head,
 	.gantt-row.head .label-cell {
-		background: var(--bg);
+		background-color: var(--bg);
 	}
 
 	@media (max-width: 767px) {
 		.label-cell,
 		.gantt-row.head,
 		.gantt-row.head .label-cell {
-			background: var(--shell);
+			background-color: var(--shell);
 		}
 
 		.gantt-row.head {
-			background: var(--shell);
+			background-color: var(--shell);
 		}
 	}
 
