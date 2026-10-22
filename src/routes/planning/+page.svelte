@@ -935,7 +935,7 @@
 		top: 0;
 		bottom: 0;
 		width: 2px;
-		background: var(--accent-1);
+		background: var(--fg);
 		opacity: 1;
 		pointer-events: none;
 		z-index: 6;
@@ -1252,31 +1252,46 @@
 	.dep-dot {
 		position: absolute;
 		top: 50%;
-		width: 7px;
-		height: 7px;
+		width: 22px;
+		height: 22px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		background: transparent;
+		padding: 0;
+		/* Pointer events on so the outside hit target keeps parent :hover alive */
+		pointer-events: auto;
+		z-index: 4;
+		opacity: 0;
+		transition: opacity 0.12s ease;
+		cursor: pointer;
+	}
+
+	.dep-dot::after {
+		content: '';
+		width: 9px;
+		height: 9px;
 		border-radius: 9999px;
 		background: var(--bg);
 		border: 1.5px solid var(--fg-33);
-		pointer-events: none;
-		z-index: 4;
 		box-sizing: border-box;
-		opacity: 0;
-		transition: opacity 0.12s ease;
+		pointer-events: none;
 	}
 
-	.task-bar:hover .dep-dot {
+	.task-bar:hover .dep-dot,
+	.dep-dot:hover {
 		opacity: 1;
 	}
 
 	.dep-dot.start {
 		left: 0;
-		transform: translate(calc(-100% - 3px), -50%);
+		transform: translate(calc(-100% - 1px), -50%);
 	}
 
 	.dep-dot.end {
 		left: auto;
 		right: 0;
-		transform: translate(calc(100% + 3px), -50%);
+		transform: translate(calc(100% + 1px), -50%);
 	}
 
 	.bar-handle {

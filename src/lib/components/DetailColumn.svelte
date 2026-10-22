@@ -1408,7 +1408,7 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 10px;
 	}
 
 	.linked-row {
@@ -1416,9 +1416,9 @@
 		align-items: center;
 		gap: 12px;
 		width: 100%;
-		padding: 10px 8px;
+		padding: 0;
 		border: 0;
-		border-radius: 12px;
+		border-radius: 0;
 		background: transparent;
 		color: inherit;
 		text-align: left;
@@ -1428,7 +1428,7 @@
 	}
 
 	.linked-row:hover {
-		background: var(--fg-8);
+		background: transparent;
 	}
 
 	.linked-title {

@@ -14,39 +14,17 @@
 		ui
 	} from '$lib/workspace.svelte.js';
 
-	const STATUS_ORDER = ['active', 'draft', 'paused', 'closed'];
-	const STATUS_LABELS = {
-		active: 'ACTIVE',
-		draft: 'DRAFT',
-		paused: 'PAUSED',
-		closed: 'CLOSED'
-	};
-
 	const NEW_WINDOW_MS = 7 * 86_400_000;
 
-	const groups = $derived.by(() => {
-		/** @type {Map<string, typeof enterprises>} */
-		const map = new Map();
-		const sorted = [...enterprises].sort(
+	const sorted = $derived(
+		[...enterprises].sort(
 			(a, b) => (a.sort ?? 100) - (b.sort ?? 100) || String(a.title).localeCompare(String(b.title))
-		);
-		for (const ent of sorted) {
-			const key = STATUS_ORDER.includes(ent.status) ? ent.status : 'active';
-			if (!map.has(key)) map.set(key, []);
-			map.get(key).push(ent);
-		}
-		return STATUS_ORDER.filter((key) => (map.get(key)?.length ?? 0) > 0).map((key) => ({
-			key,
-			label: STATUS_LABELS[key],
-			items: map.get(key)
-		}));
-	});
+		)
+	);
 
 	/** @param {string} enterpriseId */
 	function projectIdsFor(enterpriseId) {
-		return projects
-			.filter((p) => primaryEnterpriseId(p) === enterpriseId)
-			.map((p) => p.id);
+		return projects.filter((p) => primaryEnterpriseId(p) === enterpriseId).map((p) => p.id);
 	}
 
 	/** @param {string | undefined | null} iso */
@@ -76,22 +54,6 @@
 		}
 		return n;
 	}
-
-	/** @param {string} enterpriseId */
-	function assigneesFor(enterpriseId) {
-		const ids = new Set(projectIdsFor(enterpriseId));
-		/** @type {Map<string, { email?: string, name?: string }>} */
-		const map = new Map();
-		for (const t of tasks) {
-			const pids = t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? [];
-			if (!pids.some((id) => ids.has(id))) continue;
-			for (const a of t.assignees ?? []) {
-				const key = (a.email || a.name || '').toLowerCase();
-				if (key && !map.has(key)) map.set(key, a);
-			}
-		}
-		return [...map.values()];
-	}
 </script>
 
 <svelte:head><title>Entreprises</title></svelte:head>
@@ -108,36 +70,19 @@
 			Create enterprise
 		</button>
 	{:else}
-		{#each groups as group (group.key)}
-			<div class="task-group-header">
-				<span class="eyebrow-label-xs">{group.label}</span>
-				<span class="task-group-count">{group.items.length}</span>
-				<button
-					type="button"
-					class="task-group-add-btn"
-					aria-label="Add enterprise"
-					onclick={() => openComposer('enterprise')}
-				>
-					<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-						<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-					</svg>
-				</button>
-			</div>
-			<div class="card-stack">
-				{#each group.items as ent (ent.id)}
-					<EnterpriseCard
-						id={ent.id}
-						title={ent.title}
-						status={ent.status ?? 'active'}
-						icon={ent.icon}
-						newCount={newCount(ent.id)}
-						assignees={assigneesFor(ent.id)}
-						onclick={() => selectEntity('enterprise', ent.id)}
-						selected={ui.selection?.kind === 'enterprise' && ui.selection.id === ent.id}
-					/>
-				{/each}
-			</div>
-		{/each}
+		<div class="card-stack">
+			{#each sorted as ent (ent.id)}
+				<EnterpriseCard
+					id={ent.id}
+					title={ent.title}
+					status={ent.status ?? 'active'}
+					icon={ent.icon}
+					newCount={newCount(ent.id)}
+					onclick={() => selectEntity('enterprise', ent.id)}
+					selected={ui.selection?.kind === 'enterprise' && ui.selection.id === ent.id}
+				/>
+			{/each}
+		</div>
 	{/if}
 </div>
 
@@ -177,58 +122,11 @@
 		align-self: flex-start;
 	}
 
-	.task-group-header {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		margin: 0 6px;
-		padding: 6px 10px;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-4);
-		width: auto;
-		box-sizing: border-box;
-	}
-
 	.card-stack {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
 		padding: 4px 6px 10px;
 		box-sizing: border-box;
-	}
-
-	.eyebrow-label-xs {
-		font-size: 10px;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.18em;
-		color: var(--fg-66);
-	}
-
-	.task-group-count {
-		font-family: var(--font);
-		font-size: 11px;
-		font-weight: 500;
-		color: var(--fg-33);
-	}
-
-	.task-group-add-btn {
-		margin-left: auto;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 22px;
-		height: 22px;
-		padding: 0;
-		border: 0;
-		border-radius: 6px;
-		background: transparent;
-		color: var(--fg-33);
-		cursor: pointer;
-	}
-
-	.task-group-add-btn:hover {
-		color: var(--fg-66);
 	}
 </style>
