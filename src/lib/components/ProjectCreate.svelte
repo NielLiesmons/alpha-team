@@ -2,7 +2,7 @@
 	import CreateSheet from './CreateSheet.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import ProjectBox from './ProjectBox.svelte';
-	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
+	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
 		closeComposer,
 		enterprises,
@@ -14,21 +14,23 @@
 
 	let title = $state('');
 	let description = $state('');
-	/** Optional override; display inherits primary enterprise icon when null */
 	/** @type {string | null} */
 	let icon = $state(null);
-	/** Index 0 = primary; further ids are secondary */
+	/** Index 0 = primary; further ids are ordered secondaries */
 	/** @type {string[]} */
 	let enterpriseIds = $state([]);
-	/** @type {null | 'enterprises'} */
-	let bottomMenu = $state(null);
+	/** @type {'active' | 'archived'} */
+	let lifecycle = $state('active');
+	let enterprisesOpen = $state(false);
 	/** @type {HTMLButtonElement | undefined} */
-	let enterpriseBtn = $state();
+	let boxBtn = $state();
 	const editing = $derived(
 		ui.composer?.kind === 'project' ? projects.find((item) => item.id === ui.composer.id) : null
 	);
 	const open = $derived(ui.composer?.kind === 'project');
-	const previewStatus = $derived(editing ? deriveProjectStatus(editing.id, tasks) : 'planned');
+	const previewStatus = $derived(
+		editing ? projectLifecycle(editing, tasks) : lifecycle
+	);
 	const primaryId = $derived(enterpriseIds[0] ?? null);
 	const displayIcon = $derived(
 		projectDisplayIcon(
@@ -46,6 +48,7 @@
 		title = editing?.title ?? '';
 		description = editing?.description ?? editing?.summary ?? editing?.body ?? '';
 		icon = editing?.icon ?? null;
+		lifecycle = editing ? projectLifecycle(editing, tasks) : 'active';
 		const primary = editing?.primary_enterprise_id;
 		const ids = [...(editing?.enterprise_ids ?? [])];
 		if (primary && ids.includes(primary)) {
@@ -55,24 +58,31 @@
 		} else {
 			enterpriseIds = ids;
 		}
-		bottomMenu = null;
+		enterprisesOpen = false;
 	});
 
-	/** Click an enterprise → make it primary (keeps other memberships as secondary). */
+	/** Toggle membership; order = selection order (1 = primary). Unselecting renumbers. */
 	/** @param {string} id */
-	function pickPrimary(id) {
-		if (primaryId === id) {
-			enterpriseIds = enterpriseIds.slice(1);
+	function toggleEnterprise(id) {
+		const i = enterpriseIds.indexOf(id);
+		if (i >= 0) {
+			enterpriseIds = enterpriseIds.filter((x) => x !== id);
 			return;
 		}
-		enterpriseIds = [id, ...enterpriseIds.filter((x) => x !== id)];
+		enterpriseIds = [...enterpriseIds, id];
+	}
+
+	/** @param {string} id */
+	function rankOf(id) {
+		const i = enterpriseIds.indexOf(id);
+		return i >= 0 ? i + 1 : 0;
 	}
 
 	async function save() {
 		const nextTitle = title.trim();
 		if (!nextTitle) return;
 		if (sortedEnterprises.length > 0 && !enterpriseIds[0]) {
-			alert('Pick a primary enterprise for this project');
+			alert('Pick at least one enterprise for this project');
 			return;
 		}
 		try {
@@ -83,7 +93,7 @@
 					description,
 					icon,
 					milestones: editing?.milestones ?? [],
-					status: editing?.status ?? 'planned',
+					status: lifecycle,
 					enterprise_ids: enterpriseIds,
 					primary_enterprise_id: enterpriseIds[0] ?? null,
 					depends_on: editing?.depends_on ?? []
@@ -101,17 +111,25 @@
 	{open}
 	label={editing ? 'Edit project' : 'New project'}
 	onclose={() => {
-		if (bottomMenu) {
-			bottomMenu = null;
+		if (enterprisesOpen) {
+			enterprisesOpen = false;
 			return;
 		}
 		closeComposer();
 	}}
 >
 	<div class="sheet-title-row">
-		<span class="icon-preview" title="Icon from primary enterprise">
+		<button
+			bind:this={boxBtn}
+			type="button"
+			class="box-hit"
+			class:on={enterprisesOpen}
+			aria-label="Enterprises"
+			aria-expanded={enterprisesOpen}
+			onclick={() => (enterprisesOpen = !enterprisesOpen)}
+		>
 			<ProjectBox state={previewStatus} icon={displayIcon} size={28} />
-		</span>
+		</button>
 		<input class="sheet-input" placeholder="Project title" bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
@@ -119,19 +137,12 @@
 	<div class="form-divider"></div>
 	<div class="sheet-bottom">
 		<button
-			bind:this={enterpriseBtn}
 			type="button"
 			class="meta-pill"
-			class:empty={!primaryId}
-			class:on={bottomMenu === 'enterprises'}
-			aria-expanded={bottomMenu === 'enterprises'}
-			onclick={() => (bottomMenu = bottomMenu === 'enterprises' ? null : 'enterprises')}
+			class:on={lifecycle === 'archived'}
+			onclick={() => (lifecycle = lifecycle === 'archived' ? 'active' : 'archived')}
 		>
-			{#if primaryId}
-				{sortedEnterprises.find((e) => e.id === primaryId)?.title ?? 'Enterprise'}
-			{:else}
-				Primary enterprise
-			{/if}
+			{lifecycle === 'archived' ? 'Archived' : 'Active'}
 		</button>
 		<button
 			type="button"
@@ -145,27 +156,28 @@
 </CreateSheet>
 
 <FloatPanel
-	open={bottomMenu === 'enterprises'}
-	anchor={enterpriseBtn}
-	placement="above"
-	width={240}
-	maxHeight={280}
-	onclose={() => (bottomMenu = null)}
+	open={enterprisesOpen}
+	anchor={boxBtn}
+	placement="below"
+	width={260}
+	maxHeight={320}
+	onclose={() => (enterprisesOpen = false)}
 >
 	<div class="float-list" role="listbox">
 		{#if sortedEnterprises.length === 0}
 			<p class="menu-empty">Create an enterprise in Entreprises first</p>
 		{:else}
 			{#each sortedEnterprises as e (e.id)}
+				{@const rank = rankOf(e.id)}
 				<button
 					type="button"
 					class="option"
-					class:active={primaryId === e.id}
-					onclick={() => pickPrimary(e.id)}
+					class:active={rank > 0}
+					onclick={() => toggleEnterprise(e.id)}
 				>
 					<span class="option-text">{e.title}</span>
-					{#if primaryId === e.id}
-						<span class="primary-tag">primary</span>
+					{#if rank > 0}
+						<span class="rank">{rank}</span>
 					{/if}
 				</button>
 			{/each}
@@ -174,11 +186,19 @@
 </FloatPanel>
 
 <style>
-	.icon-preview {
+	.box-hit {
 		display: grid;
 		place-items: center;
 		padding: 4px;
 		flex-shrink: 0;
+		border: 0;
+		border-radius: 10px;
+		background: transparent;
+		cursor: pointer;
+	}
+
+	.box-hit.on {
+		background: var(--float-trigger-on);
 	}
 
 	.sheet-bottom {
@@ -201,12 +221,9 @@
 		cursor: pointer;
 	}
 
-	.meta-pill.empty {
-		color: var(--fg-33);
-	}
-
 	.meta-pill.on {
 		background: var(--float-trigger-on);
+		color: var(--fg);
 	}
 
 	.float-list {
@@ -248,12 +265,14 @@
 		white-space: nowrap;
 	}
 
-	.primary-tag {
-		font-size: 10px;
-		font-weight: 600;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--fg-33);
+	.rank {
+		flex-shrink: 0;
+		min-width: 1.25rem;
+		text-align: center;
+		font-size: 13px;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+		color: var(--fg);
 	}
 
 	.menu-empty {

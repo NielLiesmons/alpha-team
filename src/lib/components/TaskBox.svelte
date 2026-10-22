@@ -1,6 +1,7 @@
 <script>
 	/**
-	 * Status box — accent-1 (closed) / accent-2 (progress / recurring).
+	 * Status box — accent-1 (closed) / accent-2 (progress).
+	 * Recurring: split perimeter stroke + inward half-arrows (CTA-tint stroke).
 	 * `embedded`: glyph only (no plate) for use inside meta pills.
 	 */
 	/** @type {{ state?: string, size?: number, embedded?: boolean }} */
@@ -12,22 +13,28 @@
 	const progressPadding = $derived(Math.round(size * 0.25));
 	const ring = $derived(Math.max(10, Math.round(size * 0.72)));
 
+	/** Stable per-instance gradient id (avoid collisions when many boxes mount). */
+	const gradId = `recur-cta-${Math.random().toString(36).slice(2, 9)}`;
+
 	/**
-	 * Recurring: two perimeter stroke segments + inward half-arrows (no center glyph).
-	 * ViewBox 0..100 so paths scale cleanly with size.
+	 * Recurring outline in viewBox 0..100.
+	 * Gaps must exceed stroke + round caps or halves look fused.
 	 */
-	const recurStroke = $derived(Math.max(5.5, 100 * (1.4 / Math.max(size, 1))));
+	const recurStroke = $derived(Math.max(5.2, 100 * (1.45 / Math.max(size, 1))));
 	const recurGeom = $derived.by(() => {
-		const inset = recurStroke / 2 + 0.4;
+		const sw = recurStroke;
+		const inset = sw / 2 + 0.6;
 		const x0 = inset;
 		const y0 = inset;
 		const x1 = 100 - inset;
 		const y1 = 100 - inset;
 		const r = Math.min((100 - 2 * inset) / 3, (x1 - x0) / 2, (y1 - y0) / 2);
 		const midY = 50;
-		const gap = Math.max(6, recurStroke * 1.1);
-		const tip = Math.max(5.5, Math.min(8.5, size * 0.28));
-		/* Segment A: mid-left (below gap) → up → top → mid-right (above gap) */
+		/* Visible gap after round caps: need > stroke width */
+		const gap = Math.max(sw * 2.6, 16);
+		const tip = Math.max(14, Math.min(22, 100 * (0.42)));
+		const tipDrop = tip * 0.72;
+
 		const aStartY = midY + gap / 2;
 		const aEndY = midY - gap / 2;
 		const segA = [
@@ -38,9 +45,9 @@
 			`Q ${x1} ${y0} ${x1} ${y0 + r}`,
 			`L ${x1} ${aEndY}`
 		].join(' ');
-		/* Half-arrow at mid-right end → inward (left) */
-		const arrowA = `M ${x1} ${aEndY} L ${x1 - tip} ${aEndY + tip * 0.55}`;
-		/* Segment B: mid-right (below gap) → down → bottom → mid-left (above gap) */
+		/* Half-arrow at mid-right end → deep inward (left + slightly down) */
+		const arrowA = `M ${x1} ${aEndY} L ${x1 - tip} ${aEndY + tipDrop}`;
+
 		const bStartY = midY + gap / 2;
 		const bEndY = midY - gap / 2;
 		const segB = [
@@ -51,9 +58,10 @@
 			`Q ${x0} ${y1} ${x0} ${y1 - r}`,
 			`L ${x0} ${bEndY}`
 		].join(' ');
-		/* Half-arrow at mid-left end → inward (right) */
-		const arrowB = `M ${x0} ${bEndY} L ${x0 + tip} ${bEndY + tip * 0.55}`;
-		return { segA, arrowA, segB, arrowB };
+		/* Half-arrow at mid-left end → deep inward (right + slightly down) */
+		const arrowB = `M ${x0} ${bEndY} L ${x0 + tip} ${bEndY + tipDrop}`;
+
+		return { segA, arrowA, segB, arrowB, sw };
 	});
 </script>
 
@@ -119,37 +127,43 @@
 			fill="none"
 			aria-hidden="true"
 		>
+			<defs>
+				<!-- Match CTA --button-primary-bg (accent-1 tinted glass) -->
+				<linearGradient id={gradId} x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+					<stop offset="0%" stop-color="color-mix(in srgb, var(--accent-1) 42%, var(--fg-33))" />
+					<stop offset="100%" stop-color="color-mix(in srgb, var(--accent-1) 22%, var(--fg-33))" />
+				</linearGradient>
+			</defs>
 			<path
 				d={recurGeom.segA}
-				stroke="var(--accent-2-66)"
-				stroke-width={recurStroke}
+				stroke="url(#{gradId})"
+				stroke-width={recurGeom.sw}
 				stroke-linecap="round"
 				stroke-linejoin="round"
 			/>
 			<path
 				d={recurGeom.arrowA}
-				stroke="var(--accent-2-66)"
-				stroke-width={recurStroke}
+				stroke="url(#{gradId})"
+				stroke-width={recurGeom.sw}
 				stroke-linecap="round"
 				stroke-linejoin="round"
 			/>
 			<path
 				d={recurGeom.segB}
-				stroke="var(--accent-2-66)"
-				stroke-width={recurStroke}
+				stroke="url(#{gradId})"
+				stroke-width={recurGeom.sw}
 				stroke-linecap="round"
 				stroke-linejoin="round"
 			/>
 			<path
 				d={recurGeom.arrowB}
-				stroke="var(--accent-2-66)"
-				stroke-width={recurStroke}
+				stroke="url(#{gradId})"
+				stroke-width={recurGeom.sw}
 				stroke-linecap="round"
 				stroke-linejoin="round"
 			/>
 		</svg>
 	{:else if embedded}
-		<!-- Open / backlog: tiny ring only — never a second plate inside the pill -->
 		<span
 			class="bare-ring"
 			class:dashed={state === 'backlog'}
@@ -206,7 +220,6 @@
 		border: var(--task-box-stroke) solid var(--white33);
 	}
 
-	/* Closed: accent-1 radial gradient fill */
 	.state-closed {
 		background: var(--gradient-accent-1);
 		border: var(--task-box-stroke) solid transparent;
@@ -232,7 +245,6 @@
 		border: none;
 	}
 
-	/* Glyph-only inside meta pills — zero plate chrome */
 	.task-box.embedded {
 		background: transparent !important;
 		border: none !important;

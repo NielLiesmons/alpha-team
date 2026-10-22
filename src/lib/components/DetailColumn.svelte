@@ -8,6 +8,9 @@
 	import PlayerDetail from './PlayerDetail.svelte';
 	import DetailMetaPills from './DetailMetaPills.svelte';
 	import FloatPanel from './FloatPanel.svelte';
+	import TaskFieldPicker from './TaskFieldPicker.svelte';
+	import Pen from './icons/Pen.svelte';
+	import Trash from './icons/Trash.svelte';
 	import {
 		closePlayerDetail,
 		currentTrack,
@@ -28,7 +31,7 @@
 		persistSendCampaign
 	} from '$lib/publications.svelte.js';
 	import {
-		deriveProjectStatus,
+		projectLifecycle,
 		primaryEnterpriseId,
 		projectDisplayIcon
 	} from '$lib/project-status.js';
@@ -470,26 +473,13 @@
 						{/if}
 						{#if canEdit}
 							<button type="button" class="menu-item" role="menuitem" onclick={editCurrent}>
-								<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-									<path
-										fill="currentColor"
-										d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
-									/>
-								</svg>
+								<Pen size={14} />
 								Edit
 							</button>
 						{/if}
 						{#if canDelete}
 							<button type="button" class="menu-item danger" role="menuitem" onclick={deleteCurrent}>
-								<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-									<path
-										d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
-										stroke="currentColor"
-										stroke-width="1.4"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
+								<Trash size={14} />
 								Delete
 							</button>
 						{/if}
@@ -594,29 +584,24 @@
 			{/if}
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							fill="currentColor"
-							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
-						/>
-					</svg>
+					<Pen size={15} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
+					<Trash size={15} />
 				</button>
 			</div>
 		</header>
 		<div class="body">
-			<div class="title-row">
+			<div class="title-row task-title-row">
+				<TaskFieldPicker taskId={task.id} field="status" value={task.status} size={24} />
 				<h2 class="title">{task.title}</h2>
+				<TaskFieldPicker
+					taskId={task.id}
+					field="priority"
+					value={task.priority ?? 'none'}
+					size={22}
+					align="right"
+				/>
 			</div>
 			<DetailMetaPills entity={task} kind="task" />
 			{#if task.body}
@@ -631,30 +616,17 @@
 			<span class="detail-top-label">Project</span>
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							fill="currentColor"
-							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
-						/>
-					</svg>
+					<Pen size={15} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
+					<Trash size={15} />
 				</button>
 			</div>
 		</header>
 		<div class="body">
 			<div class="title-row">
 				<ProjectBox
-					state={deriveProjectStatus(project.id, tasks)}
+					state={projectLifecycle(project, tasks)}
 					icon={projectDisplayIcon(project, enterprises)}
 					size={24}
 				/>
@@ -757,23 +729,10 @@
 					<span class="save-hint">Saving…</span>
 				{/if}
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							fill="currentColor"
-							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
-						/>
-					</svg>
+					<Pen size={15} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
+					<Trash size={15} />
 				</button>
 			</div>
 		</header>
@@ -800,12 +759,7 @@
 			<span class="detail-top-label">Welcome</span>
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							fill="currentColor"
-							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
-						/>
-					</svg>
+					<Pen size={15} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -941,23 +895,10 @@
 			<span class="detail-top-label">Enterprise</span>
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							fill="currentColor"
-							d="M11.35 2.2a1.65 1.65 0 0 1 2.33 2.33L5.55 12.66 2.1 13.4l.74-3.45L11.35 2.2Z"
-						/>
-					</svg>
+					<Pen size={15} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M3.5 4.5h9M6 4.5V3.25A1.25 1.25 0 0 1 7.25 2h1.5A1.25 1.25 0 0 1 10 3.25V4.5m-5.5 0 0.6 8.25A1.25 1.25 0 0 0 6.35 14h3.3a1.25 1.25 0 0 0 1.25-1.25L11.5 4.5"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
+					<Trash size={15} />
 				</button>
 			</div>
 		</header>
@@ -1294,6 +1235,17 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
+		min-width: 0;
+	}
+
+	.task-title-row {
+		/* Match TaskCreate: status | title | priority */
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+
+	.task-title-row .title {
+		flex: 1;
 		min-width: 0;
 	}
 

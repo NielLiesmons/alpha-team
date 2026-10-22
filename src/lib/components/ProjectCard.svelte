@@ -47,7 +47,7 @@
 		<div class="box-col">
 			<ProjectBox state={status} {icon} size={24} />
 		</div>
-		<span class="title" class:done={status === 'closed' || status === 'canceled'}>{title}</span>
+		<span class="title" class:done={status === 'archived'}>{title}</span>
 	</div>
 
 	<div class="pill-row">

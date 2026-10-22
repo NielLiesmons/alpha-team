@@ -3,7 +3,7 @@
 	import TaskBox from '$lib/components/TaskBox.svelte';
 	import { stringToColor } from '$lib/color.js';
 	import {
-		deriveProjectStatus,
+		projectLifecycle,
 		primaryEnterpriseId,
 		projectDisplayIcon
 	} from '$lib/project-status.js';
@@ -47,8 +47,7 @@
 	/** Active planning projects: not fully closed/canceled */
 	const planningProjects = $derived(
 		projects.filter((p) => {
-			const st = deriveProjectStatus(p.id, tasks);
-			return st !== 'closed' && st !== 'canceled';
+			return projectLifecycle(p, tasks) !== 'archived';
 		})
 	);
 
@@ -375,7 +374,7 @@
 													{collapsedProjects.has(row.id) ? '▸' : '▾'}
 												</button>
 												<ProjectBox
-													state={deriveProjectStatus(row.id, tasks)}
+													state={projectLifecycle(row.entity ?? { id: row.id }, tasks)}
 													icon={projectDisplayIcon(row.entity, enterprises)}
 													size={18}
 												/>

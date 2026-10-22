@@ -9,7 +9,7 @@
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import LabelsPicker from './LabelsPicker.svelte';
 	import NavIcon from './NavIcon.svelte';
-	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
+	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
 		closeComposer,
 		enterprises,
@@ -481,7 +481,7 @@
 				{@const on = projectIds.includes(project.id)}
 				<button type="button" class="option" class:active={on} onclick={() => toggleProject(project.id)}>
 					<ProjectBox
-						state={deriveProjectStatus(project.id, tasks)}
+						state={projectLifecycle(project, tasks)}
 						icon={projectDisplayIcon(project, enterprises)}
 						size={18}
 					/>

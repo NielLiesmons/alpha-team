@@ -1,6 +1,7 @@
 <script>
 	/**
-	 * Soft five-point star for an Enterprise (less sharp tips).
+	 * Soft five-point star for an Enterprise.
+	 * Stroke is always neutral (no accent) — dashed when not active.
 	 */
 	import { isProjectImageIcon } from '$lib/project-status.js';
 	import { ENTERPRISE_STAR_24 } from '$lib/star-path.js';
@@ -13,13 +14,11 @@
 	const hasIcon = $derived(Boolean(icon && String(icon).trim()));
 	const isImage = $derived(hasIcon && isProjectImageIcon(icon));
 	const glyphSize = $derived(Math.round(size * 0.46));
-	const stroke = $derived.by(() => {
-		if (state === 'draft' || state === 'paused') return 'var(--white33)';
-		if (state === 'closed') return 'var(--accent-1-66)';
-		if (state === 'active') return 'var(--accent-2-66)';
-		return 'var(--white33)';
-	});
-	const dash = $derived(state === 'draft' ? '3.5 2.5' : undefined);
+	const muted = $derived(
+		state === 'draft' || state === 'paused' || state === 'closed' || state === 'archived'
+	);
+	const stroke = $derived(muted ? 'var(--white16)' : 'var(--white33)');
+	const dash = $derived(muted ? '3.5 2.5' : undefined);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

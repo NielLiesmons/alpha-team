@@ -1,12 +1,12 @@
 <script>
 	/**
-	 * Pointy-top hexagon for a project — outline encodes derived status;
-	 * center shows emoji / image icon when set.
+	 * Pointy-top hexagon for a project.
+	 * Lifecycle: active | archived — stroke is always neutral (no accent).
 	 */
 	import { isProjectImageIcon } from '$lib/project-status.js';
 
 	/** @type {{ state?: string, icon?: string | null, size?: number, onclick?: ((e: MouseEvent) => void) | null }} */
-	let { state = 'planned', icon = null, size = 24, onclick = null } = $props();
+	let { state = 'active', icon = null, size = 24, onclick = null } = $props();
 
 	const PATH = $derived(
 		size >= 32
@@ -18,14 +18,11 @@
 	const hasIcon = $derived(Boolean(icon && String(icon).trim()));
 	const isImage = $derived(hasIcon && isProjectImageIcon(icon));
 	const glyphSize = $derived(Math.round(size * 0.48));
-	const stroke = $derived.by(() => {
-		if (state === 'backlog') return 'var(--white33)';
-		if (state === 'inProgress') return 'var(--accent-2-66)';
-		if (state === 'closed') return 'var(--accent-1-66)';
-		if (state === 'canceled') return 'var(--white16)';
-		return 'var(--white33)';
-	});
-	const dash = $derived(state === 'backlog' ? '3.5 2.5' : undefined);
+	const archived = $derived(
+		state === 'archived' || state === 'closed' || state === 'canceled'
+	);
+	const stroke = $derived(archived ? 'var(--white16)' : 'var(--white33)');
+	const dash = $derived(archived ? '3.5 2.5' : undefined);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -96,7 +93,6 @@
 		display: block;
 	}
 
-	/* Color-emoji fonts sit optically left — nudge into hex center */
 	.icon-emoji {
 		display: flex;
 		align-items: center;

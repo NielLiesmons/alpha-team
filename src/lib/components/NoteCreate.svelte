@@ -5,7 +5,7 @@
 	import Spinner from './Spinner.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
-	import { deriveProjectStatus } from '$lib/project-status.js';
+	import { projectLifecycle } from '$lib/project-status.js';
 	import { closeComposer, notes, projects, saveNote, tasks, ui } from '$lib/workspace.svelte.js';
 
 	let title = $state('');
@@ -161,7 +161,7 @@
 				{@const on = projectIds.includes(project.id)}
 				<button type="button" class="option" class:active={on} onclick={() => toggleProject(project.id)}>
 					<ProjectBox
-						state={deriveProjectStatus(project.id, tasks)}
+						state={projectLifecycle(project, tasks)}
 						icon={project.icon}
 						size={18}
 					/>

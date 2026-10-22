@@ -3,7 +3,7 @@
 	 * Compact project trigger: empty hex when none, else overlapping hex stack + label.
 	 */
 	import ProjectBox from './ProjectBox.svelte';
-	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
+	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import { enterprises, projects, tasks } from '$lib/workspace.svelte.js';
 
 	/** @type {{ projectIds?: string[], size?: number, showEmptyLabel?: boolean }} */
@@ -30,7 +30,7 @@
 					style:margin-left={i === 0 ? '0' : `-${overlap}px`}
 				>
 					<ProjectBox
-						state={p ? deriveProjectStatus(p.id, tasks) : 'planned'}
+						state={p ? projectLifecycle(p, tasks) : 'active'}
 						icon={p ? projectDisplayIcon(p, enterprises) : null}
 						{size}
 					/>

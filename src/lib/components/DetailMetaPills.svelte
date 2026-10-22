@@ -8,7 +8,7 @@
 	import FloatPanel from './FloatPanel.svelte';
 	import LabelsPicker from './LabelsPicker.svelte';
 	import NavIcon from './NavIcon.svelte';
-	import { deriveProjectStatus } from '$lib/project-status.js';
+	import { projectLifecycle } from '$lib/project-status.js';
 	import {
 		moments,
 		patchNote,
@@ -61,7 +61,8 @@
 	let projectsBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let labelsBtn = $state();
-	const showStatusPriority = $derived(kind === 'task');
+	/* Status + priority live in the open-task title row */
+	const showStatusPriority = $derived(false);
 	const showSchedule = $derived(kind === 'task');
 	const assignees = $derived(entity?.assignees ?? []);
 	const targets = $derived(entity?.targets ?? []);
@@ -504,7 +505,7 @@
 					onclick={(e) => toggleProject(project.id, e)}
 				>
 					<ProjectBox
-						state={deriveProjectStatus(project.id, tasks)}
+						state={projectLifecycle(project, tasks)}
 						icon={project.icon}
 						size={18}
 					/>

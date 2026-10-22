@@ -3,7 +3,7 @@
 	import ProjectCard from '$lib/components/ProjectCard.svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { deriveProjectStatus, projectDisplayIcon } from '$lib/project-status.js';
+	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
 		enterprises,
 		notes,
@@ -14,13 +14,10 @@
 		ui
 	} from '$lib/workspace.svelte.js';
 
-	const STATUS_ORDER = ['inProgress', 'planned', 'backlog', 'closed', 'canceled'];
+	const STATUS_ORDER = ['active', 'archived'];
 	const STATUS_LABELS = {
-		inProgress: 'IN PROGRESS',
-		planned: 'PLANNED',
-		backlog: 'BACKLOG',
-		closed: 'COMPLETED',
-		canceled: 'CANCELED'
+		active: 'ACTIVE',
+		archived: 'ARCHIVED'
 	};
 
 	const groups = $derived.by(() => {
@@ -28,7 +25,7 @@
 		const map = new Map();
 		const sorted = [...projects].sort((a, b) => String(a.title).localeCompare(String(b.title)));
 		for (const project of sorted) {
-			const key = deriveProjectStatus(project.id, tasks);
+			const key = projectLifecycle(project, tasks);
 			if (!map.has(key)) map.set(key, []);
 			map.get(key).push(project);
 		}
@@ -114,7 +111,7 @@
 					<ProjectCard
 						id={project.id}
 						title={project.title}
-						status={deriveProjectStatus(project.id, tasks)}
+						status={projectLifecycle(project, tasks)}
 						icon={projectDisplayIcon(project, enterprises)}
 						newCount={newCount(project.id)}
 						assignees={assigneesFor(project.id)}

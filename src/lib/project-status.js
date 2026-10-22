@@ -1,28 +1,36 @@
 /**
- * Derive project status from linked tasks (not a stored project field).
- * @param {string} projectId
- * @param {Array<{ status?: string, project_ids?: string[], targets?: { id: string }[] }>} taskList
- * @returns {'backlog' | 'planned' | 'inProgress' | 'closed' | 'canceled'}
+ * Project lifecycle for lists / boxes: active vs archived.
+ * Prefer stored project.status; fall back to task-derived archive when all linked tasks are done.
+ * @param {{ id?: string, status?: string } | null | undefined} project
+ * @param {Array<{ status?: string, project_ids?: string[], targets?: { id: string }[] }>} [taskList]
+ * @returns {'active' | 'archived'}
  */
-export function deriveProjectStatus(projectId, taskList) {
+export function projectLifecycle(project, taskList = []) {
+	const raw = String(project?.status || '').toLowerCase();
+	if (raw === 'archived' || raw === 'closed' || raw === 'canceled') return 'archived';
+	if (raw === 'active' || raw === 'planned' || raw === 'inprogress' || raw === 'backlog') {
+		return raw === 'archived' ? 'archived' : 'active';
+	}
+	const projectId = project?.id;
+	if (!projectId) return 'active';
 	const related = (taskList ?? []).filter((t) => {
 		const ids = t.project_ids ?? t.targets?.map((x) => x.id) ?? [];
 		return ids.includes(projectId);
 	});
-	if (related.length === 0) return 'planned';
-
+	if (related.length === 0) return 'active';
 	const statuses = related.map((t) => t.status || 'open');
-	const allCanceled = statuses.every((s) => s === 'canceled');
-	if (allCanceled) return 'canceled';
-
 	const allDone = statuses.every((s) => s === 'closed' || s === 'canceled');
-	if (allDone) return 'closed';
+	return allDone ? 'archived' : 'active';
+}
 
-	if (statuses.some((s) => s === 'inProgress' || s === 'inReview' || s === 'recurring'))
-		return 'inProgress';
-	if (statuses.some((s) => s === 'open')) return 'planned';
-	if (statuses.some((s) => s === 'backlog')) return 'backlog';
-	return 'planned';
+/**
+ * @deprecated Prefer projectLifecycle — kept as alias for call sites mid-migration.
+ * @param {string} projectId
+ * @param {Array<{ status?: string, project_ids?: string[], targets?: { id: string }[] }>} taskList
+ * @returns {'active' | 'archived'}
+ */
+export function deriveProjectStatus(projectId, taskList) {
+	return projectLifecycle({ id: projectId }, taskList);
 }
 
 /** @param {string | null | undefined} icon */
