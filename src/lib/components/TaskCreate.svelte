@@ -90,7 +90,10 @@
 		status = editing?.status ?? ui.composer?.status ?? 'open';
 		priority = editing?.priority ?? 'none';
 		labels = [...(editing?.labels ?? [])];
-		projectIds = [...(editing?.project_ids ?? [])];
+		projectIds = [
+			...(editing?.project_ids ??
+				(Array.isArray(ui.composer?.project_ids) ? ui.composer.project_ids : []))
+		];
 		assignees = [...(editing?.assignees ?? [])];
 		deadlineDate = toDateInput(editing?.deadline_at);
 		const linked = editing

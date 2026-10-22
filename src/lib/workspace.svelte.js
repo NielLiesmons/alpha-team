@@ -105,12 +105,14 @@ export function forceClearSelection() {
  * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise'} kind
  * @param {string} [id]
  * @param {string} [status]
+ * @param {Record<string, unknown>} [seed] extra fields (e.g. project_ids, primary_enterprise_id)
  */
-export function openComposer(kind, id, status) {
+export function openComposer(kind, id, status, seed = {}) {
 	ui.composer = {
 		kind,
 		...(id ? { id } : {}),
-		...(status ? { status } : {})
+		...(status ? { status } : {}),
+		...seed
 	};
 }
 
@@ -396,6 +398,68 @@ async function syncTaskScheduleMoment(session, taskId, schedule, assigneePeople 
 	});
 	moments.push(created);
 	return created;
+}
+
+/**
+ * Create or update a planning moment (optimistic).
+ * @param {any} draft
+ * @param {boolean} isNew
+ */
+export async function saveMoment(draft, isNew) {
+	const session = activeSession();
+	if (isNew) {
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = {
+			...draft,
+			id: tempId,
+			schema: 'alpha.moment/1',
+			status: draft.status ?? 'planned',
+			_pending: Boolean(session)
+		};
+		moments.push(optimistic);
+		scheduleWorkspacePersist();
+		if (!session) return optimistic;
+		try {
+			const created = await driveCreateMoment(session, {
+				task_id: draft.task_id ?? null,
+				title: draft.title ?? null,
+				start_at: draft.start_at,
+				end_at: draft.end_at ?? null,
+				assignees: draft.assignees ?? [],
+				status: draft.status ?? 'planned',
+				recurrence: draft.recurrence ?? null
+			});
+			const i = moments.findIndex((m) => m.id === tempId);
+			if (i >= 0) moments[i] = created;
+			else moments.push(created);
+			scheduleWorkspacePersist();
+			return created;
+		} catch (e) {
+			const i = moments.findIndex((m) => m.id === tempId);
+			if (i >= 0) moments.splice(i, 1);
+			scheduleWorkspacePersist();
+			throw e;
+		}
+	}
+
+	const idx = moments.findIndex((m) => m.id === draft.id);
+	const prev = idx >= 0 ? { ...moments[idx] } : null;
+	if (idx >= 0) Object.assign(moments[idx], { ...draft, _pending: Boolean(session) });
+	else moments.push({ ...draft });
+	scheduleWorkspacePersist();
+	if (!session) return draft;
+	try {
+		const saved = await drivePutMoment(session, draft);
+		const i = moments.findIndex((m) => m.id === saved.id);
+		if (i >= 0) moments[i] = saved;
+		else moments.push(saved);
+		scheduleWorkspacePersist();
+		return saved;
+	} catch (e) {
+		if (idx >= 0 && prev) Object.assign(moments[idx], prev);
+		scheduleWorkspacePersist();
+		throw e;
+	}
 }
 
 export async function saveTask(draft, isNew) {

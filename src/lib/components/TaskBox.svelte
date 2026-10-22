@@ -18,50 +18,51 @@
 
 	/**
 	 * Recurring outline in viewBox 0..100.
-	 * Gaps must exceed stroke + round caps or halves look fused.
+	 * One continuous path per half (segment + half-arrow) so joins don’t double-paint.
+	 * Left: A starts high, B ends low (clear gap). Right arrow tilts up + inward.
 	 */
 	const recurStroke = $derived(Math.max(5.2, 100 * (1.45 / Math.max(size, 1))));
 	const recurGeom = $derived.by(() => {
 		const sw = recurStroke;
-		const inset = sw / 2 + 0.6;
+		const inset = sw / 2 + 0.8;
 		const x0 = inset;
 		const y0 = inset;
 		const x1 = 100 - inset;
 		const y1 = 100 - inset;
 		const r = Math.min((100 - 2 * inset) / 3, (x1 - x0) / 2, (y1 - y0) / 2);
 		const midY = 50;
-		/* Visible gap after round caps: need > stroke width */
-		const gap = Math.max(sw * 2.6, 16);
-		const tip = Math.max(14, Math.min(22, 100 * (0.42)));
-		const tipDrop = tip * 0.72;
+		/* Gap larger than stroke + caps so halves never fuse */
+		const gap = Math.max(sw * 3.2, 22);
+		const tip = Math.max(16, Math.min(24, size * 0.85));
+		const tipRise = tip * 0.78;
 
-		const aStartY = midY + gap / 2;
+		/* A: left UPPER → top → right UPPER; arrow inward + UP */
+		const aStartY = midY - gap / 2;
 		const aEndY = midY - gap / 2;
-		const segA = [
+		const pathA = [
 			`M ${x0} ${aStartY}`,
 			`L ${x0} ${y0 + r}`,
 			`Q ${x0} ${y0} ${x0 + r} ${y0}`,
 			`L ${x1 - r} ${y0}`,
 			`Q ${x1} ${y0} ${x1} ${y0 + r}`,
-			`L ${x1} ${aEndY}`
+			`L ${x1} ${aEndY}`,
+			`L ${x1 - tip} ${aEndY - tipRise}`
 		].join(' ');
-		/* Half-arrow at mid-right end → deep inward (left + slightly down) */
-		const arrowA = `M ${x1} ${aEndY} L ${x1 - tip} ${aEndY + tipDrop}`;
 
+		/* B: right LOWER → bottom → left LOWER; arrow inward (tip sits low) */
 		const bStartY = midY + gap / 2;
-		const bEndY = midY - gap / 2;
-		const segB = [
+		const bEndY = midY + gap / 2;
+		const pathB = [
 			`M ${x1} ${bStartY}`,
 			`L ${x1} ${y1 - r}`,
 			`Q ${x1} ${y1} ${x1 - r} ${y1}`,
 			`L ${x0 + r} ${y1}`,
 			`Q ${x0} ${y1} ${x0} ${y1 - r}`,
-			`L ${x0} ${bEndY}`
+			`L ${x0} ${bEndY}`,
+			`L ${x0 + tip} ${bEndY - tipRise * 0.35}`
 		].join(' ');
-		/* Half-arrow at mid-left end → deep inward (right + slightly down) */
-		const arrowB = `M ${x0} ${bEndY} L ${x0 + tip} ${bEndY + tipDrop}`;
 
-		return { segA, arrowA, segB, arrowB, sw };
+		return { pathA, pathB, sw };
 	});
 </script>
 
@@ -135,28 +136,14 @@
 				</linearGradient>
 			</defs>
 			<path
-				d={recurGeom.segA}
+				d={recurGeom.pathA}
 				stroke="url(#{gradId})"
 				stroke-width={recurGeom.sw}
 				stroke-linecap="round"
 				stroke-linejoin="round"
 			/>
 			<path
-				d={recurGeom.arrowA}
-				stroke="url(#{gradId})"
-				stroke-width={recurGeom.sw}
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			/>
-			<path
-				d={recurGeom.segB}
-				stroke="url(#{gradId})"
-				stroke-width={recurGeom.sw}
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			/>
-			<path
-				d={recurGeom.arrowB}
+				d={recurGeom.pathB}
 				stroke="url(#{gradId})"
 				stroke-width={recurGeom.sw}
 				stroke-linecap="round"

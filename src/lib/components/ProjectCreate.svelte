@@ -49,8 +49,12 @@
 		description = editing?.description ?? editing?.summary ?? editing?.body ?? '';
 		icon = editing?.icon ?? null;
 		lifecycle = editing ? projectLifecycle(editing, tasks) : 'active';
-		const primary = editing?.primary_enterprise_id;
-		const ids = [...(editing?.enterprise_ids ?? [])];
+		const seedPrimary =
+			typeof ui.composer?.primary_enterprise_id === 'string'
+				? ui.composer.primary_enterprise_id
+				: null;
+		const primary = editing?.primary_enterprise_id ?? seedPrimary;
+		const ids = [...(editing?.enterprise_ids ?? (seedPrimary ? [seedPrimary] : []))];
 		if (primary && ids.includes(primary)) {
 			enterpriseIds = [primary, ...ids.filter((x) => x !== primary)];
 		} else if (primary) {

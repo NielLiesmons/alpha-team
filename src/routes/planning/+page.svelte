@@ -1,7 +1,6 @@
 <script>
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
-	import { stringToColor } from '$lib/color.js';
 	import {
 		projectLifecycle,
 		primaryEnterpriseId,
@@ -12,27 +11,39 @@
 		moments,
 		openComposer,
 		projects,
+		saveMoment,
 		selectEntity,
 		tasks
 	} from '$lib/workspace.svelte.js';
 
 	/** @type {Set<string>} */
 	let collapsedProjects = $state(new Set());
+	/** @type {'day' | 'week' | 'month'} */
+	let zoom = $state('week');
+
+	/** @type {null | { taskId: string, startMs: number, endMs: number }} */
+	let draftDraw = $state(null);
+	/**
+	 * @type {null | {
+	 *   momentId: string,
+	 *   mode: 'move' | 'resize-start' | 'resize-end',
+	 *   originX: number,
+	 *   origStart: number,
+	 *   origEnd: number
+	 * }}
+	 */
+	let drag = $state(null);
 
 	const DAY_MS = 86_400_000;
-	const PX_PER_DAY = 8;
-	const ENT_RAIL_W = 28;
-	/** ~11px per letter + padding — readable stacked caps without huge type */
-	const LETTER_H = 11;
-	const ENT_MIN_PAD = 20;
+	const UNASSIGNED = '__none__';
+
+	const PX_PER_DAY = $derived(zoom === 'day' ? 28 : zoom === 'week' ? 10 : 3.5);
 
 	const sortedEnterprises = $derived(
 		[...enterprises].sort(
 			(a, b) => (a.sort ?? 100) - (b.sort ?? 100) || String(a.title).localeCompare(String(b.title))
 		)
 	);
-
-	const UNASSIGNED = '__none__';
 
 	/**
 	 * @param {string | null | undefined} iso
@@ -44,41 +55,15 @@
 		return Number.isFinite(t) ? t : fallback;
 	}
 
-	/** Active planning projects: not fully closed/canceled */
+	/** @param {number} ms */
+	function toIsoDay(ms) {
+		const d = new Date(ms);
+		return `${d.toISOString().slice(0, 10)}T12:00:00Z`;
+	}
+
 	const planningProjects = $derived(
-		projects.filter((p) => {
-			return projectLifecycle(p, tasks) !== 'archived';
-		})
+		projects.filter((p) => projectLifecycle(p, tasks) !== 'archived')
 	);
-
-	/** @param {any} p */
-	function projectTint(p) {
-		const seed = projectDisplayIcon(p, enterprises) || p.title || p.id || 'P';
-		const { r, g, b } = stringToColor(String(seed));
-		return `rgba(${r}, ${g}, ${b}, 0.22)`;
-	}
-
-	/** @param {any} p */
-	function projectTintStrong(p) {
-		const seed = projectDisplayIcon(p, enterprises) || p.title || p.id || 'P';
-		const { r, g, b } = stringToColor(String(seed));
-		return `rgba(${r}, ${g}, ${b}, 0.45)`;
-	}
-
-	/** @param {string} title */
-	function enterpriseColor(title) {
-		const { r, g, b } = stringToColor(title || 'E');
-		return `rgb(${r}, ${g}, ${b})`;
-	}
-
-	/** @param {string} title */
-	function verticalLetters(title) {
-		return String(title || '')
-			.toUpperCase()
-			.replace(/[^A-Z0-9]+/g, '')
-			.split('')
-			.slice(0, 16);
-	}
 
 	/** @param {string} taskId */
 	function momentsForTask(taskId) {
@@ -113,9 +98,7 @@
 		const e = ends.length ? Math.max(...ends) : Math.max(...starts) + 3 * DAY_MS;
 		return {
 			left: ((s - range.start) / DAY_MS) * PX_PER_DAY,
-			width: Math.max(PX_PER_DAY * 3, ((Math.max(e, s + DAY_MS) - s) / DAY_MS) * PX_PER_DAY),
-			start: s,
-			end: e
+			width: Math.max(PX_PER_DAY * 2, ((Math.max(e, s + DAY_MS) - s) / DAY_MS) * PX_PER_DAY)
 		};
 	}
 
@@ -149,20 +132,54 @@
 	const totalDays = $derived(Math.max(1, Math.ceil((range.end - range.start) / DAY_MS)));
 	const chartWidth = $derived(Math.max(720, totalDays * PX_PER_DAY));
 
-	const months = $derived.by(() => {
+	const ticks = $derived.by(() => {
 		/** @type {{ label: string, left: number, width: number }[]} */
 		const out = [];
+		if (zoom === 'month') {
+			const d = new Date(range.start);
+			while (d.getTime() < range.end) {
+				const left = ((d.getTime() - range.start) / DAY_MS) * PX_PER_DAY;
+				const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+				const width = ((Math.min(next.getTime(), range.end) - d.getTime()) / DAY_MS) * PX_PER_DAY;
+				out.push({
+					label: d.toLocaleDateString(undefined, { month: 'short', year: '2-digit', timeZone: 'UTC' }),
+					left,
+					width
+				});
+				d.setTime(next.getTime());
+			}
+			return out;
+		}
+		if (zoom === 'week') {
+			const d = new Date(range.start);
+			const day = d.getUTCDay();
+			const toMon = day === 0 ? -6 : 1 - day;
+			d.setUTCDate(d.getUTCDate() + toMon);
+			d.setUTCHours(0, 0, 0, 0);
+			while (d.getTime() < range.end) {
+				const left = ((d.getTime() - range.start) / DAY_MS) * PX_PER_DAY;
+				const next = new Date(d.getTime() + 7 * DAY_MS);
+				const width = ((Math.min(next.getTime(), range.end) - d.getTime()) / DAY_MS) * PX_PER_DAY;
+				out.push({
+					label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+					left,
+					width: Math.max(width, 1)
+				});
+				d.setTime(next.getTime());
+			}
+			return out;
+		}
+		/* day */
 		const d = new Date(range.start);
+		d.setUTCHours(0, 0, 0, 0);
 		while (d.getTime() < range.end) {
 			const left = ((d.getTime() - range.start) / DAY_MS) * PX_PER_DAY;
-			const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
-			const width = ((Math.min(next.getTime(), range.end) - d.getTime()) / DAY_MS) * PX_PER_DAY;
 			out.push({
-				label: d.toLocaleDateString(undefined, { month: 'short', year: '2-digit', timeZone: 'UTC' }),
+				label: String(d.getUTCDate()),
 				left,
-				width
+				width: PX_PER_DAY
 			});
-			d.setTime(next.getTime());
+			d.setUTCDate(d.getUTCDate() + 1);
 		}
 		return out;
 	});
@@ -183,7 +200,7 @@
 		if (e < s) e = s + DAY_MS;
 		return {
 			left: ((s - range.start) / DAY_MS) * PX_PER_DAY,
-			width: Math.max(PX_PER_DAY * 3, ((e - s) / DAY_MS) * PX_PER_DAY),
+			width: Math.max(PX_PER_DAY * 1.5, ((e - s) / DAY_MS) * PX_PER_DAY),
 			start: s,
 			end: e
 		};
@@ -206,30 +223,8 @@
 		});
 	}
 
-	/** @param {string | undefined} status */
-	function taskBarColor(status) {
-		switch (status) {
-			case 'closed':
-				return 'color-mix(in srgb, var(--accent-1) 70%, transparent)';
-			case 'inProgress':
-			case 'recurring':
-				return 'color-mix(in srgb, var(--accent-2) 75%, transparent)';
-			case 'inReview':
-				return 'color-mix(in srgb, var(--accent-1) 45%, var(--fg-8))';
-			case 'canceled':
-				return 'color-mix(in srgb, var(--fg) 12%, transparent)';
-			case 'backlog':
-				return 'color-mix(in srgb, var(--fg) 16%, transparent)';
-			default:
-				return 'color-mix(in srgb, var(--fg) 28%, transparent)';
-		}
-	}
-
-	/**
-	 * Enterprise groups with project/task rows (enterprise is a rail, not a timeline row).
-	 */
 	const groups = $derived.by(() => {
-		/** @type {{ id: string, title: string, entity: any, letters: string[], minHeight: number, rows: { kind: 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[] }[]} */
+		/** @type {{ id: string, title: string, entity: any, rows: { kind: 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[] }[]} */
 		const out = [];
 		const ents =
 			sortedEnterprises.length > 0
@@ -256,26 +251,12 @@
 					});
 				}
 			}
-			const letters = verticalLetters(ent.title);
-			const minHeight = Math.max(96, letters.length * LETTER_H + ENT_MIN_PAD);
-			out.push({
-				id: ent.id,
-				title: ent.title,
-				entity: ent,
-				letters,
-				minHeight,
-				rows
-			});
+			out.push({ id: ent.id, title: ent.title, entity: ent, rows });
 		}
 
 		for (const ent of ents) buildGroup(ent);
 		if (showUnassigned) {
-			buildGroup({
-				id: UNASSIGNED,
-				title: 'None',
-				status: 'draft',
-				icon: null
-			});
+			buildGroup({ id: UNASSIGNED, title: 'None', status: 'draft', icon: null });
 		}
 		return out;
 	});
@@ -291,21 +272,215 @@
 	function todayLeft() {
 		return `${((Date.now() - range.start) / DAY_MS) * PX_PER_DAY}px`;
 	}
+
+	/** @param {HTMLElement} el @param {number} clientX */
+	function xToMs(el, clientX) {
+		const r = el.getBoundingClientRect();
+		const x = Math.max(0, Math.min(clientX - r.left, chartWidth));
+		return range.start + (x / PX_PER_DAY) * DAY_MS;
+	}
+
+	/** @param {PointerEvent} e @param {string} taskId */
+	function onTimelineDown(e, taskId) {
+		if (e.button !== 0) return;
+		const el = /** @type {HTMLElement} */ (e.currentTarget);
+		if (e.target !== el && !(e.target instanceof HTMLElement && e.target.classList.contains('timeline')))
+			return;
+		/* only empty timeline — bars handle their own */
+		if (e.target !== el) return;
+		e.preventDefault();
+		const ms = xToMs(el, e.clientX);
+		draftDraw = { taskId, startMs: ms, endMs: ms + DAY_MS };
+		el.setPointerCapture(e.pointerId);
+	}
+
+	/** @param {PointerEvent} e */
+	function onTimelineMove(e) {
+		const el = /** @type {HTMLElement} */ (e.currentTarget);
+		if (draftDraw) {
+			const ms = xToMs(el, e.clientX);
+			const a = draftDraw.startMs;
+			draftDraw = {
+				...draftDraw,
+				startMs: Math.min(a, ms),
+				endMs: Math.max(a, ms) + (ms >= a ? 0 : 0)
+			};
+			if (draftDraw.endMs - draftDraw.startMs < DAY_MS) {
+				draftDraw = { ...draftDraw, endMs: draftDraw.startMs + DAY_MS };
+			}
+			return;
+		}
+		if (drag) {
+			const dx = e.clientX - drag.originX;
+			const dMs = (dx / PX_PER_DAY) * DAY_MS;
+			const m = moments.find((x) => x.id === drag.momentId);
+			if (!m) return;
+			let s = drag.origStart;
+			let en = drag.origEnd;
+			if (drag.mode === 'move') {
+				s = drag.origStart + dMs;
+				en = drag.origEnd + dMs;
+			} else if (drag.mode === 'resize-start') {
+				s = Math.min(drag.origStart + dMs, drag.origEnd - DAY_MS);
+			} else {
+				en = Math.max(drag.origEnd + dMs, drag.origStart + DAY_MS);
+			}
+			const i = moments.findIndex((x) => x.id === m.id);
+			if (i >= 0) {
+				moments[i] = { ...moments[i], start_at: toIsoDay(s), end_at: toIsoDay(en) };
+			}
+		}
+	}
+
+	/** @param {PointerEvent} e */
+	async function onTimelineUp(e) {
+		const el = /** @type {HTMLElement} */ (e.currentTarget);
+		try {
+			el.releasePointerCapture(e.pointerId);
+		} catch {
+			/* */
+		}
+		if (draftDraw) {
+			const { taskId, startMs, endMs } = draftDraw;
+			draftDraw = null;
+			const s = Math.min(startMs, endMs);
+			const en = Math.max(startMs, endMs, s + DAY_MS);
+			try {
+				await saveMoment(
+					{
+						task_id: taskId,
+						start_at: toIsoDay(s),
+						end_at: toIsoDay(en),
+						status: 'planned'
+					},
+					true
+				);
+			} catch (err) {
+				alert(err instanceof Error ? err.message : String(err));
+			}
+			return;
+		}
+		if (drag) {
+			const m = moments.find((x) => x.id === drag?.momentId);
+			const finished = drag;
+			drag = null;
+			if (m && finished) {
+				try {
+					await saveMoment(m, false);
+				} catch (err) {
+					alert(err instanceof Error ? err.message : String(err));
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param {PointerEvent} e
+	 * @param {any} moment
+	 * @param {'move' | 'resize-start' | 'resize-end'} mode
+	 */
+	function onBarPointerDown(e, moment, mode) {
+		e.stopPropagation();
+		e.preventDefault();
+		const s = parseMs(moment.start_at, Date.now());
+		const en = parseMs(moment.end_at, s + 3 * DAY_MS);
+		drag = {
+			momentId: moment.id,
+			mode,
+			originX: e.clientX,
+			origStart: s,
+			origEnd: en
+		};
+		const tl = /** @type {HTMLElement | null} */ (
+			/** @type {HTMLElement} */ (e.currentTarget).closest('.timeline')
+		);
+		tl?.setPointerCapture(e.pointerId);
+	}
+
+	/** @param {WheelEvent} e */
+	function onWheelZoom(e) {
+		if (!e.ctrlKey && !e.metaKey) return;
+		e.preventDefault();
+		const levels = /** @type {const} */ (['day', 'week', 'month']);
+		const i = levels.indexOf(zoom);
+		if (e.deltaY < 0 && i > 0) zoom = levels[i - 1];
+		else if (e.deltaY > 0 && i < levels.length - 1) zoom = levels[i + 1];
+	}
+
+	let pinchDist = $state(0);
+	/** @param {TouchEvent} e */
+	function onTouchStart(e) {
+		if (e.touches.length === 2) {
+			const a = e.touches[0];
+			const b = e.touches[1];
+			pinchDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+		}
+	}
+	/** @param {TouchEvent} e */
+	function onTouchMove(e) {
+		if (e.touches.length !== 2 || !pinchDist) return;
+		const a = e.touches[0];
+		const b = e.touches[1];
+		const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+		const ratio = d / pinchDist;
+		if (ratio > 1.12) {
+			const levels = /** @type {const} */ (['day', 'week', 'month']);
+			const i = levels.indexOf(zoom);
+			if (i > 0) zoom = levels[i - 1];
+			pinchDist = d;
+		} else if (ratio < 0.88) {
+			const levels = /** @type {const} */ (['day', 'week', 'month']);
+			const i = levels.indexOf(zoom);
+			if (i < levels.length - 1) zoom = levels[i + 1];
+			pinchDist = d;
+		}
+	}
+
+	/**
+	 * Deadline marker left — nest at moment end when aligned.
+	 * @param {any} task
+	 */
+	function deadlineLeft(task) {
+		const d = parseMs(task.deadline_at, NaN);
+		if (!Number.isFinite(d)) return null;
+		const ms = momentsForTask(task.id);
+		for (const m of ms) {
+			const box = span(m.start_at, m.end_at, 1);
+			if (!box) continue;
+			const end = box.end ?? parseMs(m.end_at, NaN);
+			if (Number.isFinite(end) && Math.abs(end - d) < DAY_MS * 1.5) {
+				return box.left + box.width;
+			}
+		}
+		return ((d - range.start) / DAY_MS) * PX_PER_DAY;
+	}
+
+	/**
+	 * @param {string} enterpriseId
+	 */
+	function addProject(enterpriseId) {
+		openComposer(
+			'project',
+			undefined,
+			undefined,
+			enterpriseId === UNASSIGNED ? {} : { primary_enterprise_id: enterpriseId }
+		);
+	}
+
+	/** @param {string} projectId */
+	function addTask(projectId) {
+		openComposer('task', undefined, 'open', { project_ids: [projectId] });
+	}
 </script>
 
 <svelte:head><title>Planning</title></svelte:head>
 
-<div class="feed planning">
-	<header class="toolbar">
-		<span class="eyebrow-label-xs">Retro-planning</span>
-		<div class="toolbar-actions">
-			<button type="button" class="tool-btn" onclick={() => openComposer('enterprise')}>
-				+ Enterprise
-			</button>
-			<button type="button" class="tool-btn" onclick={() => openComposer('project')}>+ Project</button>
-		</div>
-	</header>
-
+<div
+	class="feed planning"
+	onwheel={onWheelZoom}
+	ontouchstart={onTouchStart}
+	ontouchmove={onTouchMove}
+>
 	{#if enterprises.length === 0 && projects.length === 0}
 		<div class="empty">
 			<p class="empty-title">No enterprises yet</p>
@@ -317,129 +492,222 @@
 			>
 		</div>
 	{:else}
-		<div class="gantt-scroll" style:--ent-rail-w="{ENT_RAIL_W}px">
-			<div
-				class="gantt-inner"
-				style:width="calc(var(--ent-rail-w) + var(--label-w) + {chartWidth}px)"
-			>
+		<div class="gantt-scroll">
+			<div class="gantt-inner" style:width="calc(var(--label-w) + {chartWidth}px)">
 				<div class="gantt-row head">
-					<div class="ent-rail head-rail" aria-hidden="true"></div>
-					<div class="label-cell"></div>
+					<div class="label-cell head-label">
+						<div class="zoom-seg" role="group" aria-label="Timeline zoom">
+							<button
+								type="button"
+								class:on={zoom === 'day'}
+								onclick={() => (zoom = 'day')}>Day</button
+							>
+							<button
+								type="button"
+								class:on={zoom === 'week'}
+								onclick={() => (zoom = 'week')}>Week</button
+							>
+							<button
+								type="button"
+								class:on={zoom === 'month'}
+								onclick={() => (zoom = 'month')}>Month</button
+							>
+						</div>
+					</div>
 					<div class="timeline" style:width="{chartWidth}px">
-						{#each months as m}
-							<span class="month" style:left="{m.left}px" style:width="{m.width}px">{m.label}</span>
+						{#each ticks as t}
+							<span class="tick" style:left="{t.left}px" style:width="{t.width}px">{t.label}</span>
 						{/each}
 						<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
 					</div>
 				</div>
 
 				{#each groups as group (group.id)}
-					<div class="ent-group" style:min-height="{group.minHeight}px">
-						<button
-							type="button"
-							class="ent-rail"
-							style:color={enterpriseColor(group.title)}
-							title={group.title}
-							onclick={() => {
-								if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
-							}}
-						>
-							<span class="ent-letters">
-								{#each group.letters as ch, i (i)}
-									<span class="ent-ch">{ch}</span>
-								{/each}
-							</span>
-						</button>
-						<div class="ent-body">
-							{#if group.rows.length === 0}
-								<div class="gantt-row empty-ent">
-									<div class="label-cell">
-										<span class="name muted">No projects</span>
-									</div>
-									<div class="timeline" style:width="{chartWidth}px">
-										<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
-									</div>
+					<div class="ent-section">
+						<div class="ent-eyebrow">
+							<button
+								type="button"
+								class="ent-name"
+								onclick={() => {
+									if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
+								}}
+							>
+								<span class="eyebrow-label-xs">{group.title}</span>
+							</button>
+							<button
+								type="button"
+								class="eyebrow-plus"
+								aria-label="Add project to {group.title}"
+								onclick={() => addProject(group.id)}
+							>
+								<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+									<path
+										d="M6 1v10M1 6h10"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+									/>
+								</svg>
+							</button>
+						</div>
+
+						{#if group.rows.length === 0}
+							<div class="gantt-row empty-ent">
+								<div class="label-cell">
+									<span class="name muted">No projects</span>
 								</div>
-							{:else}
-								{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
-									<div class="gantt-row" class:proj={row.kind === 'project'} class:task={row.kind === 'task'}>
-										<div class="label-cell">
-											{#if row.kind === 'project'}
+								<div class="timeline" style:width="{chartWidth}px">
+									<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
+								</div>
+							</div>
+						{:else}
+							{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
+								<div
+									class="gantt-row"
+									class:proj={row.kind === 'project'}
+									class:task={row.kind === 'task'}
+								>
+									<div class="label-cell">
+										{#if row.kind === 'project'}
+											<button
+												type="button"
+												class="twist"
+												onclick={() => toggleProject(row.id)}
+												aria-label="Toggle tasks"
+												aria-expanded={!collapsedProjects.has(row.id)}
+											>
+												<svg
+													class="twist-tri"
+													class:collapsed={collapsedProjects.has(row.id)}
+													width="12"
+													height="12"
+													viewBox="0 0 12 12"
+													aria-hidden="true"
+												>
+													<path
+														d="M3.2 2.2 L9.2 6 L3.2 9.8 Z"
+														fill="currentColor"
+													/>
+												</svg>
+											</button>
+											<ProjectBox
+												state={projectLifecycle(row.entity ?? { id: row.id }, tasks)}
+												icon={projectDisplayIcon(row.entity, enterprises)}
+												size={18}
+											/>
+											<button
+												type="button"
+												class="name"
+												onclick={() => selectEntity('project', row.id)}>{row.title}</button
+											>
+											<button
+												type="button"
+												class="row-plus"
+												aria-label="Add task"
+												onclick={() => addTask(row.id)}
+											>
+												<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+													<path
+														d="M6 1v10M1 6h10"
+														stroke="currentColor"
+														stroke-width="2"
+														stroke-linecap="round"
+													/>
+												</svg>
+											</button>
+										{:else}
+											<span class="indent deep"></span>
+											<TaskBox state={row.entity.status} size={16} />
+											<button
+												type="button"
+												class="name muted"
+												onclick={() => selectEntity('task', row.id)}>{row.title}</button
+											>
+										{/if}
+									</div>
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
+									<div
+										class="timeline"
+										class:draw={row.kind === 'task'}
+										style:width="{chartWidth}px"
+										onpointerdown={row.kind === 'task'
+											? (e) => onTimelineDown(e, row.id)
+											: undefined}
+										onpointermove={row.kind === 'task' ? onTimelineMove : undefined}
+										onpointerup={row.kind === 'task' ? onTimelineUp : undefined}
+									>
+										<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
+										{#if row.kind === 'project'}
+											{@const box = projectSpanFromMoments(row.id)}
+											{#if box}
 												<button
 													type="button"
-													class="twist"
-													onclick={() => toggleProject(row.id)}
-													aria-label="Toggle tasks"
-												>
-													{collapsedProjects.has(row.id) ? '▸' : '▾'}
-												</button>
-												<ProjectBox
-													state={projectLifecycle(row.entity ?? { id: row.id }, tasks)}
-													icon={projectDisplayIcon(row.entity, enterprises)}
-													size={18}
-												/>
-												<button
-													type="button"
-													class="name"
-													onclick={() => selectEntity('project', row.id)}>{row.title}</button
-												>
-											{:else}
-												<span class="indent deep"></span>
-												<TaskBox state={row.entity.status} size={16} />
-												<button
-													type="button"
-													class="name muted"
-													onclick={() => selectEntity('task', row.id)}>{row.title}</button
-												>
+													class="proj-line"
+													style:left="{box.left}px"
+													style:width="{box.width}px"
+													onclick={() => selectEntity('project', row.id)}
+													title={row.title}
+												></button>
 											{/if}
-										</div>
-										<div class="timeline" style:width="{chartWidth}px">
-											<span class="today" style:left={todayLeft()} aria-hidden="true"></span>
-											{#if row.kind === 'project'}
-												{@const box = projectSpanFromMoments(row.id)}
+										{:else}
+											{#each momentsForTask(row.id) as m (m.id)}
+												{@const box = span(m.start_at, m.end_at, 1)}
 												{#if box}
-													<button
-														type="button"
-														class="proj-container"
+													<div
+														class="task-bar"
 														style:left="{box.left}px"
 														style:width="{box.width}px"
-														style:background={projectTint(row.entity)}
-														style:border-color={projectTintStrong(row.entity)}
-														onclick={() => selectEntity('project', row.id)}
-														title={row.title}
-													></button>
-												{/if}
-											{:else}
-												{#each momentsForTask(row.id) as m (m.id)}
-													{@const box = span(m.start_at, m.end_at, 1)}
-													{#if box}
-														<button
-															type="button"
-															class="task-bar"
-															style:left="{box.left}px"
-															style:width="{box.width}px"
-															style:background={taskBarColor(row.entity.status)}
-															onclick={() => selectEntity('task', row.id)}
-															title={m.title || row.title}
-														></button>
-													{/if}
-												{/each}
-												{#if row.entity.deadline_at}
-													{@const d = parseMs(row.entity.deadline_at, NaN)}
-													{#if Number.isFinite(d)}
+														role="button"
+														tabindex="0"
+														title={m.title || row.title}
+														onpointerdown={(e) => onBarPointerDown(e, m, 'move')}
+														onclick={() => selectEntity('task', row.id)}
+														onkeydown={(e) =>
+															e.key === 'Enter' && selectEntity('task', row.id)}
+													>
 														<span
-															class="deadline-mark"
-															style:left="{((d - range.start) / DAY_MS) * PX_PER_DAY}px"
-															title="Deadline"
+															class="bar-handle start"
+															onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
 														></span>
-													{/if}
+														<span class="bar-icon">
+															<TaskBox state={row.entity.status} size={14} embedded />
+														</span>
+														<span
+															class="bar-handle end"
+															onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
+														></span>
+													</div>
+												{/if}
+											{/each}
+											{#if draftDraw?.taskId === row.id}
+												{@const left =
+													((Math.min(draftDraw.startMs, draftDraw.endMs) - range.start) /
+														DAY_MS) *
+													PX_PER_DAY}
+												{@const width = Math.max(
+													PX_PER_DAY,
+													(Math.abs(draftDraw.endMs - draftDraw.startMs) / DAY_MS) * PX_PER_DAY
+												)}
+												<div class="task-bar draft" style:left="{left}px" style:width="{width}px"></div>
+											{/if}
+											{#if row.entity.deadline_at}
+												{@const dl = deadlineLeft(row.entity)}
+												{#if dl != null}
+													<span
+														class="deadline-flag"
+														style:left="{dl}px"
+														title="Deadline"
+														aria-hidden="true"
+													>
+														<span class="flag-circle">🏁</span>
+													</span>
 												{/if}
 											{/if}
-										</div>
+										{/if}
 									</div>
-								{/each}
-							{/if}
-						</div>
+								</div>
+							{/each}
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -452,20 +720,7 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-	}
-
-	.toolbar {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		padding: 0 14px 10px;
-		flex-shrink: 0;
-	}
-
-	.toolbar-actions {
-		display: flex;
-		gap: 6px;
+		padding-top: 8px;
 	}
 
 	.tool-btn {
@@ -510,65 +765,60 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		--label-w: 188px;
-		--ent-rail-w: 28px;
+		--label-w: 200px;
+		touch-action: pan-x pan-y;
 	}
 
 	.gantt-inner {
 		min-width: 100%;
 	}
 
-	.ent-group {
+	.ent-section {
 		display: flex;
-		align-items: stretch;
-		border-bottom: 1px solid var(--fg-8);
+		flex-direction: column;
+		margin-bottom: 4px;
 	}
 
-	.ent-rail {
+	.ent-eyebrow {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 10px 8px 4px;
+		padding: 5px 8px;
+		border-radius: 10px;
+		background: var(--fg-4);
 		position: sticky;
 		left: 0;
 		z-index: 3;
-		width: var(--ent-rail-w);
-		flex-shrink: 0;
-		margin: 0;
-		padding: 10px 0;
-		border: 0;
-		border-right: 1px solid var(--fg-8);
-		background: var(--bg);
-		cursor: pointer;
-		display: flex;
-		align-items: flex-start;
-		justify-content: center;
+		width: fit-content;
+		min-width: calc(var(--label-w) - 16px);
 		box-sizing: border-box;
 	}
 
-	.ent-rail.head-rail {
-		cursor: default;
+	.ent-name {
+		border: 0;
+		background: transparent;
 		padding: 0;
-		z-index: 4;
+		cursor: pointer;
+		color: inherit;
 	}
 
-	.ent-letters {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1px;
-		line-height: 1;
+	.eyebrow-plus {
+		margin-left: auto;
+		width: 20px;
+		height: 20px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--fg-33);
+		cursor: pointer;
 	}
 
-	.ent-ch {
-		font-size: 9px;
-		font-weight: 700;
-		letter-spacing: 0.02em;
-		line-height: 1.15;
-		user-select: none;
-	}
-
-	.ent-body {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
+	.eyebrow-plus:hover {
+		color: var(--fg);
+		background: var(--fg-8);
 	}
 
 	.gantt-row {
@@ -578,15 +828,11 @@
 		border-bottom: 1px solid var(--fg-8);
 	}
 
-	.ent-body .gantt-row:last-child {
-		border-bottom: 0;
-	}
-
 	.gantt-row.head {
-		min-height: 32px;
+		min-height: 36px;
 		position: sticky;
 		top: 0;
-		z-index: 4;
+		z-index: 5;
 		background: var(--bg);
 	}
 
@@ -594,59 +840,108 @@
 		min-height: 44px;
 	}
 
+	.gantt-row.proj:hover .row-plus {
+		opacity: 1;
+	}
+
 	.gantt-row.task {
-		min-height: 32px;
+		min-height: 36px;
 	}
 
 	.gantt-row.empty-ent {
-		flex: 1;
-		min-height: 72px;
+		min-height: 48px;
 	}
 
 	.label-cell {
 		position: sticky;
-		left: var(--ent-rail-w);
+		left: 0;
 		z-index: 2;
 		width: var(--label-w);
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		padding: 0 8px;
+		padding: 0 8px 0 4px;
 		box-sizing: border-box;
 		border-right: 1px solid var(--fg-8);
 		background: var(--bg);
 	}
 
+	.head-label {
+		padding-left: 8px;
+	}
+
 	.gantt-row.head,
-	.gantt-row.head .label-cell,
-	.gantt-row.head .ent-rail {
+	.gantt-row.head .label-cell {
 		background: var(--bg);
 	}
 
 	@media (max-width: 767px) {
 		.label-cell,
-		.ent-rail,
 		.gantt-row.head,
 		.gantt-row.head .label-cell,
-		.gantt-row.head .ent-rail {
+		.ent-eyebrow {
+			background: var(--shell);
+		}
+
+		.gantt-row.head {
 			background: var(--shell);
 		}
 	}
 
+	.zoom-seg {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		padding: 2px;
+		border-radius: 9999px;
+		background: var(--fg-4);
+	}
+
+	.zoom-seg button {
+		height: 24px;
+		padding: 0 10px;
+		border: 0;
+		border-radius: 9999px;
+		background: transparent;
+		color: var(--fg-33);
+		font: inherit;
+		font-size: 11px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.zoom-seg button.on {
+		background: var(--fg-8);
+		color: var(--fg);
+	}
+
 	.twist {
-		width: 18px;
+		width: 22px;
+		height: 22px;
+		display: grid;
+		place-items: center;
 		border: 0;
 		background: transparent;
 		color: var(--fg-33);
-		font-size: 11px;
 		cursor: pointer;
 		padding: 0;
 		flex-shrink: 0;
+		margin-left: 0;
+	}
+
+	.twist-tri {
+		display: block;
+		transition: transform 0.15s var(--ease, ease);
+		transform: rotate(90deg);
+	}
+
+	.twist-tri.collapsed {
+		transform: rotate(0deg);
 	}
 
 	.indent.deep {
-		width: 24px;
+		width: 28px;
 		flex-shrink: 0;
 	}
 
@@ -663,6 +958,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		min-width: 0;
+		flex: 1;
 		padding: 0;
 	}
 
@@ -672,20 +968,44 @@
 		color: var(--fg-66);
 	}
 
+	.row-plus {
+		opacity: 0;
+		width: 20px;
+		height: 20px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--fg-33);
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: opacity 0.12s ease;
+	}
+
+	.row-plus:hover {
+		color: var(--fg);
+		background: var(--fg-8);
+	}
+
 	.timeline {
 		position: relative;
 		flex-shrink: 0;
 		min-height: inherit;
 	}
 
-	.month {
+	.timeline.draw {
+		cursor: crosshair;
+	}
+
+	.tick {
 		position: absolute;
 		top: 0;
 		bottom: 0;
 		display: flex;
 		align-items: center;
-		padding-left: 6px;
-		font-size: 11px;
+		padding-left: 4px;
+		font-size: 10px;
 		font-weight: 600;
 		color: var(--fg-33);
 		border-left: 1px solid var(--fg-8);
@@ -698,19 +1018,20 @@
 		top: 0;
 		bottom: 0;
 		width: 1px;
-		background: var(--accent-2, #c96);
-		opacity: 0.65;
+		background: var(--fg-33);
+		opacity: 0.55;
 		pointer-events: none;
 		z-index: 1;
 	}
 
-	.proj-container {
+	.proj-line {
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
-		height: 18px;
-		border-radius: 10px;
-		border: 1px solid transparent;
+		height: 3px;
+		border: 0;
+		border-radius: 2px;
+		background: var(--fg-16);
 		cursor: pointer;
 		padding: 0;
 		box-sizing: border-box;
@@ -720,23 +1041,70 @@
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
-		height: 12px;
-		border: 0;
-		border-radius: 4px;
-		cursor: pointer;
-		padding: 0;
+		height: 22px;
+		border: var(--task-box-stroke, 1.4px) solid var(--white33);
+		border-radius: 9999px;
+		background: var(--box-plate);
+		cursor: grab;
+		padding: 0 6px 0 4px;
+		box-sizing: border-box;
+		display: flex;
+		align-items: center;
+		z-index: 2;
+		min-width: 22px;
 	}
 
-	.deadline-mark {
-		position: absolute;
-		top: 4px;
-		bottom: 4px;
-		width: 2px;
-		margin-left: -1px;
-		background: var(--accent-1, #c66);
-		border-radius: 1px;
+	.task-bar.draft {
+		opacity: 0.55;
 		pointer-events: none;
-		opacity: 0.85;
+		border-style: dashed;
+	}
+
+	.task-bar:active {
+		cursor: grabbing;
+	}
+
+	.bar-icon {
+		display: flex;
+		flex-shrink: 0;
+		pointer-events: none;
+	}
+
+	.bar-handle {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 8px;
+		cursor: ew-resize;
+		z-index: 3;
+	}
+
+	.bar-handle.start {
+		left: 0;
+	}
+
+	.bar-handle.end {
+		right: 0;
+	}
+
+	.deadline-flag {
+		position: absolute;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 3;
+		pointer-events: none;
+	}
+
+	.flag-circle {
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 9999px;
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
+		border: 1px solid var(--fg-8);
+		font-size: 11px;
+		line-height: 1;
 	}
 
 	.eyebrow-label-xs {

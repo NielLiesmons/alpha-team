@@ -13,7 +13,7 @@
 	const sw = 1.4;
 	const hasIcon = $derived(Boolean(icon && String(icon).trim()));
 	const isImage = $derived(hasIcon && isProjectImageIcon(icon));
-	const glyphSize = $derived(Math.round(size * 0.46));
+	const glyphSize = $derived(Math.round(size * 0.58));
 	const muted = $derived(
 		state === 'draft' || state === 'paused' || state === 'closed' || state === 'archived'
 	);
@@ -48,7 +48,7 @@
 		{#if isImage}
 			<img class="icon-img" src={icon} alt="" width={glyphSize} height={glyphSize} />
 		{:else if hasIcon}
-			<span class="icon-emoji" style:font-size="{Math.round(size * 0.4)}px">{icon}</span>
+			<span class="icon-emoji" style:font-size="{Math.round(size * 0.52)}px">{icon}</span>
 		{:else}
 			<span
 				class="placeholder"
@@ -93,8 +93,15 @@
 		display: block;
 	}
 
+	/* Color-emoji fonts sit optically left — nudge into star center */
 	.icon-emoji {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		line-height: 1;
+		width: 1.15em;
+		margin-left: 0.1em;
+		text-align: center;
 		user-select: none;
 	}
 
