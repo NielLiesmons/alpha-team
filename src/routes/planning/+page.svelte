@@ -45,11 +45,9 @@
 
 	/** @type {HTMLDivElement | undefined} */
 	let scrollEl = $state();
-	/** @type {HTMLDivElement | undefined} */
-	let timelineMeasure = $state();
-	let timelinePaneW = $state(640);
+	let chartPaneW = $state(640);
 
-	/** @type {null | { x: number, y: number, top: number }} */
+	/** @type {null | { x: number, y: number, top: number, left: number }} */
 	let pan = $state(null);
 
 	const UNASSIGNED = '__none__';
@@ -62,7 +60,7 @@
 	});
 
 	const totalDays = $derived(Math.max(1, (range.end - range.start) / DAY_MS));
-	const chartWidth = $derived(Math.max(120, timelinePaneW));
+	const chartWidth = $derived(Math.max(160, chartPaneW));
 	const PX_PER_DAY = $derived(chartWidth / totalDays);
 
 	const sortedEnterprises = $derived(
@@ -96,9 +94,7 @@
 		return moments.filter((m) => m.task_id === taskId && m.status !== 'canceled');
 	}
 
-	/**
-	 * @param {string} projectId
-	 */
+	/** @param {string} projectId */
 	function projectSpanFromMoments(projectId) {
 		const kids = tasksForProject(projectId);
 		/** @type {number[]} */
@@ -122,9 +118,10 @@
 		if (!starts.length && !ends.length) return null;
 		const s = starts.length ? Math.min(...starts) : Math.min(...ends) - 3 * DAY_MS;
 		const e = ends.length ? Math.max(...ends) : Math.max(...starts) + 3 * DAY_MS;
-		const left = ((s - range.start) / DAY_MS) * PX_PER_DAY;
-		const width = Math.max(4, ((Math.max(e, s + DAY_MS) - s) / DAY_MS) * PX_PER_DAY);
-		return { left, width };
+		return {
+			left: ((s - range.start) / DAY_MS) * PX_PER_DAY,
+			width: Math.max(4, ((Math.max(e, s + DAY_MS) - s) / DAY_MS) * PX_PER_DAY)
+		};
 	}
 
 	const ticks = $derived.by(() => {
@@ -150,11 +147,7 @@
 			d.setUTCHours(0, 0, 0, 0);
 			while (d.getTime() < range.end) {
 				const left = ((d.getTime() - range.start) / DAY_MS) * PX_PER_DAY;
-				out.push({
-					label: String(d.getUTCDate()),
-					left,
-					width: PX_PER_DAY
-				});
+				out.push({ label: String(d.getUTCDate()), left, width: PX_PER_DAY });
 				d.setUTCDate(d.getUTCDate() + 1);
 			}
 			return out;
@@ -176,12 +169,10 @@
 			}
 			return out;
 		}
-		/* day — hour ticks */
 		for (let h = 0; h < 24; h++) {
-			const left = (h / 24) * chartWidth;
 			out.push({
 				label: h % 3 === 0 ? `${String(h).padStart(2, '0')}:00` : '',
-				left,
+				left: (h / 24) * chartWidth,
 				width: chartWidth / 24
 			});
 		}
@@ -202,7 +193,6 @@
 			: Date.parse(/** @type {string} */ (endIso)) - fallbackDays * DAY_MS;
 		let e = hasEnd ? Date.parse(/** @type {string} */ (endIso)) : s + fallbackDays * DAY_MS;
 		if (e < s) e = s + DAY_MS;
-		/* Clip to viewport — still show if it overlaps the unit */
 		if (e < range.start || s > range.end) return null;
 		const visS = Math.max(s, range.start);
 		const visE = Math.min(e, range.end);
@@ -216,9 +206,7 @@
 
 	/** @param {string} id */
 	function projectsForEnterprise(id) {
-		if (id === UNASSIGNED) {
-			return planningProjects.filter((p) => !primaryEnterpriseId(p));
-		}
+		if (id === UNASSIGNED) return planningProjects.filter((p) => !primaryEnterpriseId(p));
 		return planningProjects.filter((p) => primaryEnterpriseId(p) === id);
 	}
 
@@ -237,24 +225,6 @@
 		return 'planned';
 	}
 
-	/**
-	 * @param {string} taskId
-	 * @param {'start' | 'end'} edge
-	 */
-	function taskEdgeX(taskId, edge) {
-		const ms = momentsForTask(taskId);
-		if (!ms.length) return null;
-		/** @type {number[]} */
-		const vals = [];
-		for (const m of ms) {
-			const box = span(m.start_at, m.end_at, 1);
-			if (!box) continue;
-			vals.push(edge === 'start' ? box.left : box.left + box.width);
-		}
-		if (!vals.length) return null;
-		return edge === 'start' ? Math.min(...vals) : Math.max(...vals);
-	}
-
 	const groups = $derived.by(() => {
 		/** @type {{ id: string, title: string, entity: any, rows: { kind: 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[] }[]} */
 		const out = [];
@@ -262,7 +232,6 @@
 			sortedEnterprises.length > 0
 				? sortedEnterprises
 				: [{ id: UNASSIGNED, title: 'Projects', status: 'active', icon: null }];
-
 		const showUnassigned =
 			planningProjects.some((p) => !primaryEnterpriseId(p)) && sortedEnterprises.length > 0;
 
@@ -289,9 +258,7 @@
 		}
 
 		for (const ent of ents) buildGroup(ent);
-		if (showUnassigned) {
-			buildGroup({ id: UNASSIGNED, title: 'None', status: 'draft', icon: null });
-		}
+		if (showUnassigned) buildGroup({ id: UNASSIGNED, title: 'None', status: 'draft', icon: null });
 		return out;
 	});
 
@@ -311,10 +278,10 @@
 		collapsedEnterprises = next;
 	}
 
-	function todayLeft() {
+	function todayLeftPx() {
 		const now = Date.now();
 		if (now < range.start || now > range.end) return null;
-		return ((now - range.start) / DAY_MS) * PX_PER_DAY;
+		return LABEL_W + ((now - range.start) / DAY_MS) * PX_PER_DAY;
 	}
 
 	/** @param {HTMLElement} el @param {number} clientX */
@@ -341,11 +308,7 @@
 		if (draftDraw) {
 			const ms = xToMs(el, e.clientX);
 			const a = draftDraw.startMs;
-			draftDraw = {
-				...draftDraw,
-				startMs: Math.min(a, ms),
-				endMs: Math.max(a, ms)
-			};
+			draftDraw = { ...draftDraw, startMs: Math.min(a, ms), endMs: Math.max(a, ms) };
 			if (draftDraw.endMs - draftDraw.startMs < DAY_MS) {
 				draftDraw = { ...draftDraw, endMs: draftDraw.startMs + DAY_MS };
 			}
@@ -367,9 +330,7 @@
 				en = Math.max(drag.origEnd + dMs, drag.origStart + DAY_MS);
 			}
 			const i = moments.findIndex((x) => x.id === m.id);
-			if (i >= 0) {
-				moments[i] = { ...moments[i], start_at: toIsoDay(s), end_at: toIsoDay(en) };
-			}
+			if (i >= 0) moments[i] = { ...moments[i], start_at: toIsoDay(s), end_at: toIsoDay(en) };
 		}
 	}
 
@@ -388,12 +349,7 @@
 			const en = Math.max(startMs, endMs, s + DAY_MS);
 			try {
 				await saveMoment(
-					{
-						task_id: taskId,
-						start_at: toIsoDay(s),
-						end_at: toIsoDay(en),
-						status: 'planned'
-					},
+					{ task_id: taskId, start_at: toIsoDay(s), end_at: toIsoDay(en), status: 'planned' },
 					true
 				);
 			} catch (err) {
@@ -403,9 +359,8 @@
 		}
 		if (drag) {
 			const m = moments.find((x) => x.id === drag?.momentId);
-			const finished = drag;
 			drag = null;
-			if (m && finished) {
+			if (m) {
 				try {
 					await saveMoment(m, false);
 				} catch (err) {
@@ -440,47 +395,38 @@
 
 	/** @param {WheelEvent} e */
 	function onWheelZoom(e) {
-		if (e.ctrlKey || e.metaKey) {
-			e.preventDefault();
-			const i = PLANNING_ZOOMS.indexOf(zoom);
-			if (e.deltaY < 0 && i > 0) setPlanningZoom(PLANNING_ZOOMS[i - 1]);
-			else if (e.deltaY > 0 && i < PLANNING_ZOOMS.length - 1) setPlanningZoom(PLANNING_ZOOMS[i + 1]);
-		}
-		/* Otherwise let the gantt scroll normally — no period jumping */
-	}
-
-	/** Scrollport is the feed itself (pane > .feed overflow). */
-	function scrollPort() {
-		return scrollEl;
+		if (!(e.ctrlKey || e.metaKey)) return;
+		e.preventDefault();
+		const i = PLANNING_ZOOMS.indexOf(zoom);
+		if (e.deltaY < 0 && i > 0) setPlanningZoom(PLANNING_ZOOMS[i - 1]);
+		else if (e.deltaY > 0 && i < PLANNING_ZOOMS.length - 1) setPlanningZoom(PLANNING_ZOOMS[i + 1]);
 	}
 
 	/** @param {PointerEvent} e */
 	function onPanDown(e) {
-		const el = scrollPort();
-		if (e.button !== 1 || !el) return;
+		if (e.button !== 1 || !scrollEl) return;
 		e.preventDefault();
-		pan = { x: e.clientX, y: e.clientY, top: el.scrollTop };
-		el.setPointerCapture(e.pointerId);
-		el.classList.add('panning');
+		pan = { x: e.clientX, y: e.clientY, top: scrollEl.scrollTop, left: scrollEl.scrollLeft };
+		scrollEl.setPointerCapture(e.pointerId);
+		scrollEl.classList.add('panning');
 	}
 
 	/** @param {PointerEvent} e */
 	function onPanMove(e) {
-		const el = scrollPort();
-		if (!pan || !el) return;
-		el.scrollTop = pan.top - (e.clientY - pan.y);
+		if (!pan || !scrollEl) return;
+		scrollEl.scrollTop = pan.top - (e.clientY - pan.y);
+		scrollEl.scrollLeft = pan.left - (e.clientX - pan.x);
 	}
 
 	/** @param {PointerEvent} e */
 	function onPanUp(e) {
-		const el = scrollPort();
-		if (!pan || !el) return;
+		if (!pan || !scrollEl) return;
 		try {
-			el.releasePointerCapture(e.pointerId);
+			scrollEl.releasePointerCapture(e.pointerId);
 		} catch {
 			/* */
 		}
-		el.classList.remove('panning');
+		scrollEl.classList.remove('panning');
 		pan = null;
 	}
 
@@ -493,17 +439,19 @@
 	/** @param {TouchEvent} e */
 	function onTouchStart(e) {
 		if (e.touches.length === 2) {
-			const a = e.touches[0];
-			const b = e.touches[1];
-			pinchDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+			pinchDist = Math.hypot(
+				e.touches[0].clientX - e.touches[1].clientX,
+				e.touches[0].clientY - e.touches[1].clientY
+			);
 		}
 	}
 	/** @param {TouchEvent} e */
 	function onTouchMove(e) {
 		if (e.touches.length !== 2 || !pinchDist) return;
-		const a = e.touches[0];
-		const b = e.touches[1];
-		const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+		const d = Math.hypot(
+			e.touches[0].clientX - e.touches[1].clientX,
+			e.touches[0].clientY - e.touches[1].clientY
+		);
 		const ratio = d / pinchDist;
 		const i = PLANNING_ZOOMS.indexOf(zoom);
 		if (ratio > 1.12 && i > 0) {
@@ -521,39 +469,6 @@
 		if (!Number.isFinite(d) || d < range.start || d > range.end) return null;
 		return ((d - range.start) / DAY_MS) * PX_PER_DAY;
 	}
-
-	const depLinks = $derived.by(() => {
-		/** @type {{ x1: number, y1: number, x2: number, y2: number }[]} */
-		const links = [];
-		const ROW_H = { eyebrow: 28, proj: 40, task: 36 };
-		let y = 0;
-		/** @type {Map<string, number>} */
-		const taskMidY = new Map();
-
-		for (const group of groups) {
-			y += ROW_H.eyebrow;
-			for (const row of group.rows) {
-				const h = row.kind === 'project' ? ROW_H.proj : ROW_H.task;
-				if (row.kind === 'task') taskMidY.set(row.id, y + h / 2);
-				y += h;
-			}
-		}
-
-		for (const t of tasks) {
-			const deps = Array.isArray(t.depends_on) ? t.depends_on : [];
-			if (!deps.length) continue;
-			const y2 = taskMidY.get(t.id);
-			const x2raw = taskEdgeX(t.id, 'start');
-			if (y2 == null || x2raw == null) continue;
-			for (const depId of deps) {
-				const y1 = taskMidY.get(depId);
-				const x1raw = taskEdgeX(depId, 'end');
-				if (y1 == null || x1raw == null) continue;
-				links.push({ x1: x1raw + 5, y1, x2: x2raw - 5, y2 });
-			}
-		}
-		return links;
-	});
 
 	/**
 	 * @param {string} enterpriseId
@@ -574,15 +489,14 @@
 
 	onMount(() => {
 		planningView.anchorMs = startOfUnit(Date.now(), planningView.zoom);
-		const el = timelineMeasure;
-		if (!el || typeof ResizeObserver === 'undefined') return;
-		const ro = new ResizeObserver((entries) => {
-			const w = entries[0]?.contentRect?.width;
-			if (w && w > 40) timelinePaneW = w;
-		});
-		ro.observe(el);
-		timelinePaneW = el.clientWidth || 640;
-		return () => ro.disconnect();
+		const measure = () => {
+			if (!scrollEl) return;
+			chartPaneW = Math.max(160, scrollEl.clientWidth - LABEL_W);
+		};
+		measure();
+		const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+		if (scrollEl && ro) ro.observe(scrollEl);
+		return () => ro?.disconnect();
 	});
 </script>
 
@@ -612,272 +526,231 @@
 			>
 		</div>
 	{:else}
-		<div class="gantt">
-			<div class="gantt-head">
-				<div class="label-cell head-label" style:width="{LABEL_W}px"></div>
-				<div class="timeline-pane head-timeline" bind:this={timelineMeasure}>
-					<div class="timeline" style:width="{chartWidth}px">
-						{#each ticks as t}
-							{#if t.label}
-								<span class="tick" style:left="{t.left}px" style:width="{t.width}px">{t.label}</span>
-							{:else}
-								<span class="tick bare" style:left="{t.left}px" style:width="{t.width}px"></span>
-							{/if}
-						{/each}
-						{#if todayLeft() != null}
-							<span class="today-line" style:left="{todayLeft()}px" aria-hidden="true"></span>
+		<div class="gantt-inner" style:width="calc({LABEL_W}px + {chartWidth}px)">
+			{#if todayLeftPx() != null}
+				<span class="today-line" style:left="{todayLeftPx()}px" aria-hidden="true"></span>
+			{/if}
+
+			<div class="gantt-row head">
+				<div class="label-cell head-label"></div>
+				<div class="timeline" style:width="{chartWidth}px">
+					{#each ticks as t}
+						{#if t.label}
+							<span class="tick" style:left="{t.left}px" style:width="{t.width}px">{t.label}</span>
+						{:else}
+							<span class="tick bare" style:left="{t.left}px" style:width="{t.width}px"></span>
 						{/if}
-					</div>
+					{/each}
 				</div>
 			</div>
 
-			<div class="gantt-body">
-				<div class="labels-col" style:width="{LABEL_W}px">
-					{#each groups as group (group.id)}
-						<div class="label-row eyebrow-row">
-							<div class="name-cluster">
-								<button
-									type="button"
-									class="ent-name"
-									onclick={() => {
-										if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
-									}}
-								>
-									<span class="eyebrow-label-xs">{group.title}</span>
-								</button>
-								<button
-									type="button"
-									class="chev"
-									class:collapsed={collapsedEnterprises.has(group.id)}
-									aria-label="Toggle projects"
-									aria-expanded={!collapsedEnterprises.has(group.id)}
-									onclick={() => toggleEnterprise(group.id)}
-								>
-									<svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-										<path
-											d="M2.5 4.2 L6 7.8 L9.5 4.2"
-											stroke="currentColor"
-											stroke-width="1.6"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
-								</button>
-							</div>
+			{#each groups as group (group.id)}
+				<div class="gantt-row eyebrow-row">
+					<div class="label-cell eyebrow-cell">
+						<div class="name-cluster">
 							<button
 								type="button"
-								class="row-plus eyebrow-plus"
-								aria-label="Add project to {group.title}"
-								onclick={() => addProject(group.id)}
+								class="ent-name"
+								onclick={() => {
+									if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
+								}}
 							>
-								<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<span class="eyebrow-label-xs">{group.title}</span>
+							</button>
+							<button
+								type="button"
+								class="chev"
+								class:collapsed={collapsedEnterprises.has(group.id)}
+								aria-label="Toggle projects"
+								aria-expanded={!collapsedEnterprises.has(group.id)}
+								onclick={() => toggleEnterprise(group.id)}
+							>
+								<svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 									<path
-										d="M6 1v10M1 6h10"
+										d="M2.5 4.2 L6 7.8 L9.5 4.2"
 										stroke="currentColor"
-										stroke-width="2"
+										stroke-width="1.6"
 										stroke-linecap="round"
+										stroke-linejoin="round"
 									/>
 								</svg>
 							</button>
 						</div>
-						{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
-							<div
-								class="label-row"
-								class:proj={row.kind === 'project'}
-								class:task={row.kind === 'task'}
-							>
-								{#if row.kind === 'project'}
-									<ProjectBox
-										state={projectLifecycle(row.entity ?? { id: row.id }, tasks)}
-										icon={projectDisplayIcon(row.entity, enterprises)}
-										size={18}
-									/>
-									<div class="name-cluster">
-										<button
-											type="button"
-											class="name"
-											onclick={() => selectEntity('project', row.id)}>{row.title}</button
-										>
-										<button
-											type="button"
-											class="chev"
-											class:collapsed={collapsedProjects.has(row.id)}
-											aria-label="Toggle tasks"
-											aria-expanded={!collapsedProjects.has(row.id)}
-											onclick={() => toggleProject(row.id)}
-										>
-											<svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-												<path
-													d="M2.5 4.2 L6 7.8 L9.5 4.2"
-													stroke="currentColor"
-													stroke-width="1.6"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-												/>
-											</svg>
-										</button>
-									</div>
+						<button
+							type="button"
+							class="row-plus"
+							aria-label="Add project to {group.title}"
+							onclick={() => addProject(group.id)}
+						>
+							<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path
+									d="M6 1v10M1 6h10"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+								/>
+							</svg>
+						</button>
+					</div>
+					<div class="timeline" style:width="{chartWidth}px" aria-hidden="true"></div>
+				</div>
+
+				{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
+					<div
+						class="gantt-row"
+						class:proj={row.kind === 'project'}
+						class:task={row.kind === 'task'}
+					>
+						<div class="label-cell" class:proj-label={row.kind === 'project'}>
+							{#if row.kind === 'project'}
+								<ProjectBox
+									state={projectLifecycle(row.entity ?? { id: row.id }, tasks)}
+									icon={projectDisplayIcon(row.entity, enterprises)}
+									size={18}
+								/>
+								<div class="name-cluster">
 									<button
 										type="button"
-										class="row-plus"
-										aria-label="Add task"
-										onclick={() => addTask(row.id)}
+										class="name"
+										onclick={() => selectEntity('project', row.id)}>{row.title}</button
 									>
-										<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+									<button
+										type="button"
+										class="chev"
+										class:collapsed={collapsedProjects.has(row.id)}
+										aria-label="Toggle tasks"
+										aria-expanded={!collapsedProjects.has(row.id)}
+										onclick={() => toggleProject(row.id)}
+									>
+										<svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 											<path
-												d="M6 1v10M1 6h10"
+												d="M2.5 4.2 L6 7.8 L9.5 4.2"
 												stroke="currentColor"
-												stroke-width="2"
+												stroke-width="1.6"
 												stroke-linecap="round"
+												stroke-linejoin="round"
 											/>
 										</svg>
 									</button>
-								{:else}
-									<span class="indent"></span>
-									<TaskBox state={row.entity.status} size={16} />
+								</div>
+								<button
+									type="button"
+									class="row-plus"
+									aria-label="Add task"
+									onclick={() => addTask(row.id)}
+								>
+									<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+										<path
+											d="M6 1v10M1 6h10"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+										/>
+									</svg>
+								</button>
+							{:else}
+								<span class="indent"></span>
+								<TaskBox state={row.entity.status} size={16} />
+								<button
+									type="button"
+									class="name muted"
+									onclick={() => selectEntity('task', row.id)}>{row.title}</button
+								>
+							{/if}
+						</div>
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div
+							class="timeline"
+							class:draw={row.kind === 'task'}
+							style:width="{chartWidth}px"
+							onpointerdown={row.kind === 'task' ? (e) => onTimelineDown(e, row.id) : undefined}
+							onpointermove={row.kind === 'task' ? onTimelineMove : undefined}
+							onpointerup={row.kind === 'task' ? onTimelineUp : undefined}
+						>
+							{#if row.kind === 'project'}
+								{@const box = projectSpanFromMoments(row.id)}
+								{#if box}
 									<button
 										type="button"
-										class="name muted"
-										onclick={() => selectEntity('task', row.id)}>{row.title}</button
-									>
+										class="proj-line"
+										style:left="{box.left}px"
+										style:width="{box.width}px"
+										onclick={() => selectEntity('project', row.id)}
+										title={row.title}
+									></button>
 								{/if}
-							</div>
-						{/each}
-					{/each}
-				</div>
-
-				<div class="timeline-pane body-timeline">
-					<div class="timeline-stack" style:width="{chartWidth}px">
-						{#if todayLeft() != null}
-							<span class="today-line body-today" style:left="{todayLeft()}px" aria-hidden="true"
-							></span>
-						{/if}
-						{#if depLinks.length}
-							<svg class="deps-layer" width={chartWidth} height="100%" aria-hidden="true">
-								{#each depLinks as link, i (i)}
-									{@const mx = (link.x1 + link.x2) / 2}
-									<path
-										class="dep-path"
-										d="M {link.x1} {link.y1} C {mx} {link.y1}, {mx} {link.y2}, {link.x2} {link.y2}"
-										marker-end="url(#dep-arrow)"
-									/>
-								{/each}
-								<defs>
-									<marker
-										id="dep-arrow"
-										viewBox="0 0 8 8"
-										refX="7"
-										refY="4"
-										markerWidth="6"
-										markerHeight="6"
-										orient="auto"
-									>
-										<path d="M0 0 L8 4 L0 8 Z" fill="var(--fg-33)" />
-									</marker>
-								</defs>
-							</svg>
-						{/if}
-
-						{#each groups as group (group.id)}
-							<div class="tl-row eyebrow-row"></div>
-							{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
-								<!-- svelte-ignore a11y_no_static_element_interactions -->
-								<div
-									class="tl-row timeline"
-									class:proj={row.kind === 'project'}
-									class:task={row.kind === 'task'}
-									class:draw={row.kind === 'task'}
-									onpointerdown={row.kind === 'task'
-										? (e) => onTimelineDown(e, row.id)
-										: undefined}
-									onpointermove={row.kind === 'task' ? onTimelineMove : undefined}
-									onpointerup={row.kind === 'task' ? onTimelineUp : undefined}
-								>
-									{#if row.kind === 'project'}
-										{@const box = projectSpanFromMoments(row.id)}
-										{#if box}
-											<button
-												type="button"
-												class="proj-line"
-												style:left="{box.left}px"
-												style:width="{box.width}px"
-												onclick={() => selectEntity('project', row.id)}
-												title={row.title}
-											></button>
-										{/if}
-									{:else}
-										{#each momentsForTask(row.id) as m (m.id)}
-											{@const box = span(m.start_at, m.end_at, 1)}
-											{#if box}
-												<div
-													class="task-bar tone-{barTone(row.entity.status)}"
-													style:left="{box.left}px"
-													style:width="{box.width}px"
-													role="button"
-													tabindex="0"
-													title={m.title || row.title}
-													onpointerdown={(e) => onBarPointerDown(e, m, 'move')}
-													onclick={() => selectEntity('task', row.id)}
-													onkeydown={(e) => e.key === 'Enter' && selectEntity('task', row.id)}
-												>
-													<span
-														class="bar-handle start"
-														onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
-													></span>
-													<span class="dep-dot start" aria-hidden="true"></span>
-													<span class="dep-dot end" aria-hidden="true"></span>
-													<span
-														class="bar-handle end"
-														onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
-													></span>
-												</div>
-											{/if}
-										{/each}
-										{#if draftDraw?.taskId === row.id}
-											{@const left =
-												((Math.min(draftDraw.startMs, draftDraw.endMs) - range.start) / DAY_MS) *
-												PX_PER_DAY}
-											{@const width = Math.max(
-												PX_PER_DAY * 0.25,
-												(Math.abs(draftDraw.endMs - draftDraw.startMs) / DAY_MS) * PX_PER_DAY
-											)}
-											<div
-												class="task-bar draft tone-planned"
-												style:left="{left}px"
-												style:width="{width}px"
-											></div>
-										{/if}
-										{#if row.entity.deadline_at}
-											{@const dl = deadlineLeft(row.entity)}
-											{#if dl != null}
-												<span
-													class="deadline-line"
-													style:left="{dl}px"
-													title="Deadline"
-													aria-hidden="true"
-												></span>
-											{/if}
-										{/if}
+							{:else}
+								{#each momentsForTask(row.id) as m (m.id)}
+									{@const box = span(m.start_at, m.end_at, 1)}
+									{#if box}
+										<div
+											class="task-bar tone-{barTone(row.entity.status)}"
+											style:left="{box.left}px"
+											style:width="{box.width}px"
+											role="button"
+											tabindex="0"
+											title={m.title || row.title}
+											onpointerdown={(e) => onBarPointerDown(e, m, 'move')}
+											onclick={() => selectEntity('task', row.id)}
+											onkeydown={(e) => e.key === 'Enter' && selectEntity('task', row.id)}
+										>
+											<span
+												class="bar-handle start"
+												onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
+											></span>
+											<span class="dep-dot start" aria-hidden="true"></span>
+											<span class="dep-dot end" aria-hidden="true"></span>
+											<span
+												class="bar-handle end"
+												onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
+											></span>
+										</div>
 									{/if}
-								</div>
-							{/each}
-						{/each}
+								{/each}
+								{#if draftDraw?.taskId === row.id}
+									{@const left =
+										((Math.min(draftDraw.startMs, draftDraw.endMs) - range.start) / DAY_MS) *
+										PX_PER_DAY}
+									{@const width = Math.max(
+										4,
+										(Math.abs(draftDraw.endMs - draftDraw.startMs) / DAY_MS) * PX_PER_DAY
+									)}
+									<div
+										class="task-bar draft tone-planned"
+										style:left="{left}px"
+										style:width="{width}px"
+									></div>
+								{/if}
+								{#if row.entity.deadline_at}
+									{@const dl = deadlineLeft(row.entity)}
+									{#if dl != null}
+										<span
+											class="deadline-line"
+											style:left="{dl}px"
+											title="Deadline"
+											aria-hidden="true"
+										></span>
+									{/if}
+								{/if}
+							{/if}
+						</div>
 					</div>
-				</div>
-			</div>
+				{/each}
+			{/each}
 		</div>
 	{/if}
 </div>
 
 <style>
 	.planning {
-		/* Scroll on the feed (pane rule) — do NOT nest a second scrollport */
-		display: block;
-		min-height: 100%;
-		box-sizing: border-box;
-		/* Sit under transparent list-top so head + chrome read as one */
+		/* Feed is the only scrollport (pane > .feed) */
 		padding-top: 0 !important;
 		--label-w: 200px;
+	}
+
+	.planning.panning {
+		cursor: grabbing;
+		user-select: none;
 	}
 
 	.tool-btn {
@@ -918,117 +791,86 @@
 		color: var(--fg-33);
 	}
 
-	/* Fixed label column + clipped timeline pane (no sticky overlay) */
-	.gantt {
-		display: block;
-		width: 100%;
+	.gantt-inner {
+		position: relative;
+		min-width: 100%;
 	}
 
-	.planning.panning {
-		cursor: grabbing;
-		user-select: none;
-	}
-
-	.gantt-head {
-		position: sticky;
+	/* Full-height now line over the whole chart (may peek at sticky seams — OK for now) */
+	.today-line {
+		position: absolute;
 		top: 0;
-		z-index: 4;
+		bottom: 0;
+		width: 1px;
+		background: var(--fg-66);
+		pointer-events: none;
+		z-index: 3;
+		transform: translateX(-50%);
+	}
+
+	.gantt-row {
 		display: flex;
 		align-items: stretch;
-		height: 48px;
-		min-height: 48px;
-		background: var(--bg);
+		height: 36px;
+		box-sizing: border-box;
 		border-bottom: 1px solid var(--fg-8);
 	}
 
-	.gantt-body {
-		display: flex;
-		align-items: flex-start;
-		min-width: 0;
-	}
-
-	.labels-col {
-		flex-shrink: 0;
-		background: var(--bg);
-		border-right: 1px solid var(--fg-8);
-		box-sizing: border-box;
-	}
-
-	.timeline-pane {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden; /* clip — never scroll under labels */
-	}
-
-	.head-timeline {
-		position: relative;
-		/* Ticks run under the glass zoom-seg (higher z on list-top actions) */
-		z-index: 0;
-	}
-
-	.body-timeline {
-		position: relative;
-	}
-
-	.timeline-stack {
-		position: relative;
-	}
-
-	.label-cell.head-label {
-		flex-shrink: 0;
-		box-sizing: border-box;
-		border-right: 1px solid var(--fg-8);
+	.gantt-row.head {
+		position: sticky;
+		top: 0;
+		z-index: 5;
+		height: 48px;
 		background: var(--bg);
 	}
 
-	.label-row,
-	.tl-row {
+	.gantt-row.eyebrow-row {
+		height: 28px;
+		border-bottom: 0;
+	}
+
+	.gantt-row.proj {
+		height: 40px;
+	}
+
+	.gantt-row.eyebrow-row:hover .chev,
+	.gantt-row.eyebrow-row:hover .row-plus,
+	.gantt-row.proj:hover .chev,
+	.gantt-row.proj:hover .row-plus {
+		opacity: 1;
+	}
+
+	.label-cell {
+		position: sticky;
+		left: 0;
+		z-index: 4;
+		width: var(--label-w);
+		flex-shrink: 0;
 		display: flex;
 		align-items: center;
-		height: 36px;
-		min-height: 36px;
-		max-height: 36px;
-		box-sizing: border-box;
-		border-bottom: 1px solid var(--fg-8);
-		position: relative;
-	}
-
-	.label-row.eyebrow-row,
-	.tl-row.eyebrow-row {
-		height: 28px;
-		min-height: 28px;
-		max-height: 28px;
-		border-bottom: 0;
 		gap: 6px;
 		padding: 0 8px 0 12px;
+		box-sizing: border-box;
+		border-right: 1px solid var(--fg-8);
+		background-color: var(--bg);
 	}
 
-	.label-row.proj,
-	.tl-row.proj {
-		height: 40px;
-		min-height: 40px;
-		max-height: 40px;
-	}
-
-	.label-row.proj {
-		padding: 0 8px 0 22px;
+	.label-cell.proj-label {
+		padding-left: 22px;
 		gap: 6px;
 	}
 
-	.label-row.task {
-		padding: 0 8px 0 22px;
-		gap: 8px;
+	.label-cell.eyebrow-cell {
+		padding-left: 12px;
 	}
 
-	.tl-row.eyebrow-row {
-		padding: 0;
+	.head-label {
+		background-color: var(--bg);
 	}
 
-	.label-row.eyebrow-row:hover .chev,
-	.label-row.eyebrow-row:hover .eyebrow-plus,
-	.label-row.proj:hover .chev,
-	.label-row.proj:hover .row-plus {
-		opacity: 1;
+	.gantt-row.head .label-cell,
+	.gantt-row.head .timeline {
+		background-color: var(--bg);
 	}
 
 	.name-cluster {
@@ -1130,15 +972,8 @@
 
 	.timeline {
 		position: relative;
-		width: 100%;
-		height: 100%;
-		min-height: 0;
-		box-sizing: border-box;
-	}
-
-	.tl-row.timeline {
-		display: block;
-		/* keep fixed row height from .tl-row / .proj */
+		flex-shrink: 0;
+		min-height: 100%;
 	}
 
 	.timeline.draw {
@@ -1164,67 +999,32 @@
 		padding: 0;
 	}
 
-	.today-line {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 1px;
-		background: var(--fg-66);
-		pointer-events: none;
-		z-index: 3;
-		transform: translateX(-50%);
-	}
-
-	.today-line.body-today {
-		z-index: 2;
-	}
-
-	.deps-layer {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		left: 0;
-		pointer-events: none;
-		z-index: 1;
-		overflow: visible;
-	}
-
-	.dep-path {
-		fill: none;
-		stroke: var(--fg-33);
-		stroke-width: 1.25;
-	}
-
 	.proj-line {
 		position: absolute;
 		top: 0;
 		bottom: 0;
-		margin-top: auto;
-		margin-bottom: auto;
+		margin-block: auto;
 		height: 3px;
 		border: 0;
 		border-radius: 2px;
 		background: var(--fg-16);
 		cursor: pointer;
 		padding: 0;
-		box-sizing: border-box;
 	}
 
 	.task-bar {
 		position: absolute;
 		top: 0;
 		bottom: 0;
-		margin-top: auto;
-		margin-bottom: auto;
+		margin-block: auto;
 		height: 14px;
 		border: 0;
 		border-radius: 4px;
 		cursor: grab;
-		padding: 0;
-		box-sizing: border-box;
 		z-index: 2;
 		min-width: 4px;
 		overflow: visible;
+		box-sizing: border-box;
 	}
 
 	.task-bar.tone-planned {
@@ -1317,7 +1117,6 @@
 		bottom: 0;
 		width: 2px;
 		background: var(--accent-2);
-		opacity: 0.9;
 		pointer-events: none;
 		z-index: 3;
 		transform: translateX(-50%);
@@ -1332,10 +1131,11 @@
 	}
 
 	@media (max-width: 767px) {
-		.gantt-head,
-		.labels-col,
-		.label-cell.head-label {
-			background: var(--shell);
+		.gantt-row.head,
+		.gantt-row.head .label-cell,
+		.gantt-row.head .timeline,
+		.label-cell {
+			background-color: var(--shell);
 		}
 	}
 </style>
