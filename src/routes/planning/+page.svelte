@@ -8,9 +8,7 @@
 		endOfUnit,
 		planningView,
 		setPlanningZoom,
-		shiftPlanningAnchor,
-		startOfUnit,
-		unitLabel
+		startOfUnit
 	} from '$lib/planning-view.svelte.js';
 	import {
 		projectLifecycle,
@@ -51,7 +49,7 @@
 	let timelineMeasure = $state();
 	let timelinePaneW = $state(640);
 
-	/** @type {null | { x: number, y: number, top: number, accX: number }} */
+	/** @type {null | { x: number, y: number, top: number }} */
 	let pan = $state(null);
 
 	const UNASSIGNED = '__none__';
@@ -72,8 +70,6 @@
 			(a, b) => (a.sort ?? 100) - (b.sort ?? 100) || String(a.title).localeCompare(String(b.title))
 		)
 	);
-
-	const periodTitle = $derived(unitLabel(range.start, zoom));
 
 	/**
 	 * @param {string | null | undefined} iso
@@ -449,21 +445,15 @@
 			const i = PLANNING_ZOOMS.indexOf(zoom);
 			if (e.deltaY < 0 && i > 0) setPlanningZoom(PLANNING_ZOOMS[i - 1]);
 			else if (e.deltaY > 0 && i < PLANNING_ZOOMS.length - 1) setPlanningZoom(PLANNING_ZOOMS[i + 1]);
-			return;
 		}
-		if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-			e.preventDefault();
-			if (Math.abs(e.deltaX) > 2 || e.shiftKey) {
-				shiftPlanningAnchor(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
-			}
-		}
+		/* Otherwise let the gantt scroll normally — no period jumping */
 	}
 
 	/** @param {PointerEvent} e */
 	function onPanDown(e) {
 		if (e.button !== 1 || !scrollEl) return;
 		e.preventDefault();
-		pan = { x: e.clientX, y: e.clientY, top: scrollEl.scrollTop, accX: 0 };
+		pan = { x: e.clientX, y: e.clientY, top: scrollEl.scrollTop };
 		scrollEl.setPointerCapture(e.pointerId);
 		scrollEl.classList.add('panning');
 	}
@@ -471,13 +461,8 @@
 	/** @param {PointerEvent} e */
 	function onPanMove(e) {
 		if (!pan || !scrollEl) return;
+		/* Keep origin fixed — updating y each move made scroll jump / feel broken */
 		scrollEl.scrollTop = pan.top - (e.clientY - pan.y);
-		pan.accX += e.clientX - pan.x;
-		pan = { ...pan, x: e.clientX, y: e.clientY, top: pan.top };
-		if (Math.abs(pan.accX) > 72) {
-			shiftPlanningAnchor(pan.accX < 0 ? 1 : -1);
-			pan = { ...pan, accX: 0 };
-		}
 	}
 
 	/** @param {PointerEvent} e */
@@ -533,7 +518,7 @@
 	const depLinks = $derived.by(() => {
 		/** @type {{ x1: number, y1: number, x2: number, y2: number }[]} */
 		const links = [];
-		const ROW_H = { eyebrow: 28, proj: 40, task: 34 };
+		const ROW_H = { eyebrow: 28, proj: 40, task: 36 };
 		let y = 0;
 		/** @type {Map<string, number>} */
 		const taskMidY = new Map();
@@ -627,7 +612,6 @@
 				<div class="label-cell head-label" style:width="{LABEL_W}px"></div>
 				<div class="timeline-pane head-timeline" bind:this={timelineMeasure}>
 					<div class="timeline" style:width="{chartWidth}px">
-						<span class="period-label">{periodTitle}</span>
 						{#each ticks as t}
 							{#if t.label}
 								<span class="tick" style:left="{t.left}px" style:width="{t.width}px">{t.label}</span>
@@ -646,33 +630,35 @@
 				<div class="labels-col" style:width="{LABEL_W}px">
 					{#each groups as group (group.id)}
 						<div class="label-row eyebrow-row">
-							<button
-								type="button"
-								class="ent-name"
-								onclick={() => {
-									if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
-								}}
-							>
-								<span class="eyebrow-label-xs">{group.title}</span>
-							</button>
-							<button
-								type="button"
-								class="chev"
-								class:collapsed={collapsedEnterprises.has(group.id)}
-								aria-label="Toggle projects"
-								aria-expanded={!collapsedEnterprises.has(group.id)}
-								onclick={() => toggleEnterprise(group.id)}
-							>
-								<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-									<path
-										d="M2.5 4.2 L6 7.8 L9.5 4.2"
-										stroke="currentColor"
-										stroke-width="1.6"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
-							</button>
+							<div class="name-cluster">
+								<button
+									type="button"
+									class="ent-name"
+									onclick={() => {
+										if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
+									}}
+								>
+									<span class="eyebrow-label-xs">{group.title}</span>
+								</button>
+								<button
+									type="button"
+									class="chev"
+									class:collapsed={collapsedEnterprises.has(group.id)}
+									aria-label="Toggle projects"
+									aria-expanded={!collapsedEnterprises.has(group.id)}
+									onclick={() => toggleEnterprise(group.id)}
+								>
+									<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+										<path
+											d="M2.5 4.2 L6 7.8 L9.5 4.2"
+											stroke="currentColor"
+											stroke-width="1.6"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+								</button>
+							</div>
 							<button
 								type="button"
 								class="row-plus eyebrow-plus"
@@ -701,29 +687,31 @@
 										icon={projectDisplayIcon(row.entity, enterprises)}
 										size={18}
 									/>
-									<button
-										type="button"
-										class="name"
-										onclick={() => selectEntity('project', row.id)}>{row.title}</button
-									>
-									<button
-										type="button"
-										class="chev"
-										class:collapsed={collapsedProjects.has(row.id)}
-										aria-label="Toggle tasks"
-										aria-expanded={!collapsedProjects.has(row.id)}
-										onclick={() => toggleProject(row.id)}
-									>
-										<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-											<path
-												d="M2.5 4.2 L6 7.8 L9.5 4.2"
-												stroke="currentColor"
-												stroke-width="1.6"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-											/>
-										</svg>
-									</button>
+									<div class="name-cluster">
+										<button
+											type="button"
+											class="name"
+											onclick={() => selectEntity('project', row.id)}>{row.title}</button
+										>
+										<button
+											type="button"
+											class="chev"
+											class:collapsed={collapsedProjects.has(row.id)}
+											aria-label="Toggle tasks"
+											aria-expanded={!collapsedProjects.has(row.id)}
+											onclick={() => toggleProject(row.id)}
+										>
+											<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+												<path
+													d="M2.5 4.2 L6 7.8 L9.5 4.2"
+													stroke="currentColor"
+													stroke-width="1.6"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												/>
+											</svg>
+										</button>
+									</div>
 									<button
 										type="button"
 										class="row-plus"
@@ -882,7 +870,9 @@
 		flex-direction: column;
 		min-height: 0;
 		height: 100%;
-		padding-top: 0;
+		/* Sit under transparent list-top so head + chrome read as one */
+		padding-top: 0 !important;
+		padding-bottom: var(--feed-pad-bottom, 36px);
 		--label-w: 200px;
 	}
 
@@ -946,7 +936,8 @@
 		z-index: 4;
 		display: flex;
 		align-items: stretch;
-		min-height: 36px;
+		height: 48px;
+		min-height: 48px;
 		background: var(--bg);
 		border-bottom: 1px solid var(--fg-8);
 	}
@@ -972,6 +963,8 @@
 
 	.head-timeline {
 		position: relative;
+		/* Ticks run under the glass zoom-seg (higher z on list-top actions) */
+		z-index: 0;
 	}
 
 	.body-timeline {
@@ -993,33 +986,39 @@
 	.tl-row {
 		display: flex;
 		align-items: center;
-		min-height: 34px;
+		height: 36px;
+		min-height: 36px;
+		max-height: 36px;
 		box-sizing: border-box;
 		border-bottom: 1px solid var(--fg-8);
+		position: relative;
 	}
 
 	.label-row.eyebrow-row,
 	.tl-row.eyebrow-row {
+		height: 28px;
 		min-height: 28px;
+		max-height: 28px;
 		border-bottom: 0;
-		gap: 4px;
-		padding: 4px 8px 2px 12px;
+		gap: 6px;
+		padding: 0 8px 0 12px;
+	}
+
+	.label-row.proj,
+	.tl-row.proj {
+		height: 40px;
+		min-height: 40px;
+		max-height: 40px;
 	}
 
 	.label-row.proj {
-		min-height: 40px;
 		padding: 0 8px 0 22px;
 		gap: 6px;
 	}
 
 	.label-row.task {
-		min-height: 34px;
 		padding: 0 8px 0 22px;
 		gap: 8px;
-	}
-
-	.tl-row.proj {
-		min-height: 40px;
 	}
 
 	.tl-row.eyebrow-row {
@@ -1033,6 +1032,14 @@
 		opacity: 1;
 	}
 
+	.name-cluster {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+		flex: 1;
+	}
+
 	.ent-name {
 		border: 0;
 		background: transparent;
@@ -1040,20 +1047,23 @@
 		cursor: pointer;
 		color: inherit;
 		min-width: 0;
-		flex: 1;
+		flex: 0 1 auto;
 		text-align: left;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.chev {
-		width: 16px;
-		height: 16px;
+		width: 18px;
+		height: 18px;
 		display: grid;
 		place-items: center;
 		border: 0;
 		background: transparent;
 		color: var(--fg-33);
 		cursor: pointer;
-		padding: 0;
+		padding: 1px 0 0;
 		flex-shrink: 0;
 		opacity: 0;
 		transition:
@@ -1108,7 +1118,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		min-width: 0;
-		flex: 1;
+		flex: 0 1 auto;
 		padding: 0;
 	}
 
@@ -1116,30 +1126,24 @@
 		font-weight: 500;
 		font-size: 12px;
 		color: var(--fg-66);
+		flex: 1;
 	}
 
 	.timeline {
 		position: relative;
-		min-height: inherit;
+		width: 100%;
 		height: 100%;
+		min-height: 0;
+		box-sizing: border-box;
+	}
+
+	.tl-row.timeline {
+		display: block;
+		/* keep fixed row height from .tl-row / .proj */
 	}
 
 	.timeline.draw {
 		cursor: crosshair;
-	}
-
-	.period-label {
-		position: absolute;
-		top: 0;
-		left: 8px;
-		bottom: 0;
-		display: flex;
-		align-items: center;
-		font-size: 11px;
-		font-weight: 600;
-		color: var(--fg-66);
-		pointer-events: none;
-		z-index: 2;
 	}
 
 	.tick {
@@ -1194,8 +1198,10 @@
 
 	.proj-line {
 		position: absolute;
-		top: 50%;
-		transform: translateY(-50%);
+		top: 0;
+		bottom: 0;
+		margin-top: auto;
+		margin-bottom: auto;
 		height: 3px;
 		border: 0;
 		border-radius: 2px;
@@ -1207,8 +1213,10 @@
 
 	.task-bar {
 		position: absolute;
-		top: 50%;
-		transform: translateY(-50%);
+		top: 0;
+		bottom: 0;
+		margin-top: auto;
+		margin-bottom: auto;
 		height: 14px;
 		border: 0;
 		border-radius: 4px;

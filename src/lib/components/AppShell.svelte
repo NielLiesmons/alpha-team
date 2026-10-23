@@ -20,12 +20,7 @@
 	} from '$lib/player.svelte.js';
 	import { resetAccountingBrowse, setAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
-	import {
-		PLANNING_ZOOM_LABELS,
-		PLANNING_ZOOMS,
-		planningView,
-		setPlanningZoom
-	} from '$lib/planning-view.svelte.js';
+	import { PLANNING_ZOOM_LABELS, PLANNING_ZOOMS, planningView, setPlanningZoom } from '$lib/planning-view.svelte.js';
 	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
 	import EnterpriseCreate from './EnterpriseCreate.svelte';
@@ -53,7 +48,6 @@
 	let search = $state('');
 	let createMenuOpen = $state(false);
 	let filterOpen = $state(false);
-	let planningZoomOpen = $state(false);
 	/** @type {string} */
 	let filter = $state('all');
 
@@ -107,7 +101,6 @@
 		forceClearSelection();
 		filter = 'all';
 		filterOpen = false;
-		planningZoomOpen = false;
 		if (p.startsWith('/player')) {
 			ensureDesktopPlayerDetail();
 		} else {
@@ -299,38 +292,15 @@
 					<h1 class="list-title" class:planning-title={wideList}>{activeItem.label}</h1>
 					<div class="list-actions">
 						{#if wideList}
-							<div class="filter-wrap">
-								<button
-									type="button"
-									class="chrome-btn"
-									class:on={planningZoomOpen}
-									aria-label="Timeframe"
-									aria-expanded={planningZoomOpen}
-									aria-haspopup="listbox"
-									onclick={() => (planningZoomOpen = !planningZoomOpen)}
-								>
-									<span class="zoom-chip">{PLANNING_ZOOM_LABELS[planningView.zoom]}</span>
-								</button>
-								{#if planningZoomOpen}
+							<div class="zoom-seg" role="group" aria-label="Timeframe">
+								{#each PLANNING_ZOOMS as z (z)}
 									<button
 										type="button"
-										class="menu-scrim"
-										aria-label="Close timeframe"
-										onclick={() => (planningZoomOpen = false)}
-									></button>
-									<div class="filter-menu" role="listbox">
-										{#each PLANNING_ZOOMS as z (z)}
-											<button
-												type="button"
-												class:on={planningView.zoom === z}
-												onclick={() => {
-													setPlanningZoom(z);
-													planningZoomOpen = false;
-												}}>{PLANNING_ZOOM_LABELS[z]}</button
-											>
-										{/each}
-									</div>
-								{/if}
+										class:on={planningView.zoom === z}
+										onclick={() => setPlanningZoom(z)}
+									>{PLANNING_ZOOM_LABELS[z]}</button
+									>
+								{/each}
 							</div>
 						{:else}
 							<div class="filter-wrap">
@@ -907,22 +877,46 @@
 
 	.list-top.planning-top {
 		padding-left: 16px;
+		/* Merge visually with Planning’s sticky head row */
+		background: transparent;
+		z-index: 8;
 	}
 
-	.zoom-chip {
-		display: block;
-		font-size: 10px;
-		font-weight: 650;
-		letter-spacing: 0.02em;
+	.zoom-seg {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		height: 26px;
+		padding: 2px;
+		box-sizing: border-box;
+		border: 1px solid transparent;
+		border-radius: 10px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		position: relative;
+		z-index: 2;
+	}
+
+	.zoom-seg button {
+		height: 100%;
+		padding: 0 9px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--fg-33);
+		font: inherit;
+		font-size: 11px;
+		font-weight: 600;
+		cursor: pointer;
 		line-height: 1;
-		padding: 0 2px;
-		color: inherit;
 	}
 
-	.chrome-btn:has(.zoom-chip) {
-		width: auto;
-		min-width: 26px;
-		padding: 0 8px;
+	.zoom-seg button.on {
+		background: var(--fg-8);
+		color: var(--fg);
 	}
 
 	.list-actions {
