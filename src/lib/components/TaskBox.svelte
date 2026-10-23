@@ -1,7 +1,7 @@
 <script>
 	/**
 	 * Status box — accent-1 (closed) / accent-2 (progress).
-	 * Planned: grayscale plate + calendar glyph (matches Planning nav icon).
+	 * Planned: grayscale plate + center dot.
 	 * `embedded`: glyph only (no plate) for use inside meta pills.
 	 */
 	/** @type {{ state?: string, size?: number, embedded?: boolean }} */
@@ -12,7 +12,7 @@
 	const crossSize = $derived(Math.round(size * 0.4));
 	const progressPadding = $derived(Math.round(size * 0.25));
 	const ring = $derived(Math.max(10, Math.round(size * 0.72)));
-	const planIcon = $derived(Math.round(size * 0.55));
+	const planDot = $derived(Math.max(3, Math.round(size * 0.22)));
 </script>
 
 <div
@@ -69,29 +69,12 @@
 			/>
 		</svg>
 	{:else if state === 'planned'}
-		<svg
-			width={planIcon}
-			height={planIcon}
-			viewBox="0 0 18 18"
-			fill="none"
+		<span
+			class="plan-dot"
+			style:width="{planDot}px"
+			style:height="{planDot}px"
 			aria-hidden="true"
-		>
-			<rect
-				x="1.5"
-				y="1.5"
-				width="15"
-				height="15"
-				rx="4"
-				stroke={embedded ? 'var(--fg-33)' : 'var(--fg-66)'}
-				stroke-width="1.5"
-			/>
-			<path
-				d="M4.5 6.5h9"
-				stroke={embedded ? 'var(--fg-33)' : 'var(--fg-66)'}
-				stroke-width="1.5"
-				stroke-linecap="round"
-			/>
-		</svg>
+		></span>
 	{:else if embedded}
 		<span
 			class="bare-ring"
@@ -145,6 +128,17 @@
 	.state-planned {
 		background: var(--box-plate);
 		border: var(--task-box-stroke) solid var(--fg-16);
+	}
+
+	.plan-dot {
+		display: block;
+		border-radius: 9999px;
+		background: var(--fg-33);
+		flex-shrink: 0;
+	}
+
+	.task-box.embedded .plan-dot {
+		background: var(--fg-33);
 	}
 
 	.state-closed {

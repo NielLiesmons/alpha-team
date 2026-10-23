@@ -67,10 +67,10 @@
 				stroke-linejoin="round"
 			/>
 		</svg>
-	{:else if name === 'calendar'}
-		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
-			<rect x="1.5" y="1.5" width="15" height="15" rx="4" stroke="currentColor" />
-			<path d="M4.5 6.5h9" stroke="currentColor" stroke-linecap="round" />
+	{:else if name === 'calendar' || name === 'planning'}
+		<!-- alpha-ui/icons/planning.svg — three staggered bars -->
+		<svg viewBox="0 0 10 10" fill="none" aria-hidden="true">
+			<path d="M1 1H7M4 5H9M2 9H6" stroke="currentColor" stroke-linecap="round" />
 		</svg>
 	{:else if name === 'dashboard'}
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
