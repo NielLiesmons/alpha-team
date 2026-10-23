@@ -627,6 +627,7 @@ export async function saveTask(draft, isNew) {
 export async function saveNote(draft, isNew) {
 	const session = activeSession();
 	const author = draft.author ?? activePerson().email;
+	const canPushNote = Boolean(session) && !isOffline();
 
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
@@ -639,13 +640,13 @@ export async function saveNote(draft, isNew) {
 			labels: draft.labels ?? [],
 			assignees: draft.assignees ?? [],
 			author,
-			_pending: Boolean(session)
+			_pending: !canPushNote
 		};
 		notes.unshift(optimistic);
 		ui.noteId = tempId;
 		ui.selection = { kind: 'note', id: tempId };
 		scheduleWorkspacePersist();
-		if (!session) return optimistic;
+		if (!canPushNote) return optimistic;
 
 		try {
 			const created = await driveCreateNote(session, {
@@ -662,22 +663,25 @@ export async function saveNote(draft, isNew) {
 				author
 			};
 			const idx = notes.findIndex((n) => n.id === tempId);
-			if (idx >= 0) notes[idx] = uiNote;
-			else notes.unshift(uiNote);
-			ui.noteId = uiNote.id;
-			ui.selection = { kind: 'note', id: uiNote.id };
+			const confirmed = mergeConfirmed(optimistic, uiNote);
+			if (idx >= 0) notes[idx] = confirmed;
+			else notes.unshift(confirmed);
+			ui.noteId = confirmed.id;
+			ui.selection = { kind: 'note', id: confirmed.id };
 			scheduleWorkspacePersist();
-			return uiNote;
+			return confirmed;
 		} catch (e) {
 			const idx = notes.findIndex((n) => n.id === tempId);
-			if (idx >= 0) notes.splice(idx, 1);
-			scheduleWorkspacePersist();
-			throw e;
+			if (idx >= 0) {
+				notes[idx]._pending = true;
+				scheduleWorkspacePersist();
+			}
+			console.warn('saveNote create deferred', e);
+			return optimistic;
 		}
 	}
 
 	const idx = notes.findIndex((n) => n.id === draft.id);
-	const canPushNote = Boolean(session) && !isOffline();
 	if (idx >= 0) Object.assign(notes[idx], { ...draft, author, _pending: !canPushNote });
 	ui.noteId = draft.id;
 	ui.selection = { kind: 'note', id: draft.id };
@@ -718,6 +722,7 @@ export async function saveNote(draft, isNew) {
  */
 export async function saveProject(draft, isNew) {
 	const session = activeSession();
+	const canPush = Boolean(session) && !isOffline();
 	const description =
 		draft.description ?? draft.summary ?? draft.body ?? '';
 	const enterpriseIds = Array.isArray(draft.enterprise_ids)
@@ -727,69 +732,89 @@ export async function saveProject(draft, isNew) {
 		draft.primary_enterprise_id || enterpriseIds[0] || null;
 	const dependsOn = Array.isArray(draft.depends_on) ? draft.depends_on : [];
 
-	if (!session) {
-		if (isNew) {
-			const id = draft.id || crypto.randomUUID();
-			projects.unshift({
-				...draft,
-				id,
-				slug: draft.slug,
+	if (isNew) {
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = {
+			...draft,
+			id: tempId,
+			slug: draft.slug,
+			description,
+			milestones: draft.milestones ?? [],
+			status: draft.status ?? 'planned',
+			icon: draft.icon ?? null,
+			enterprise_ids: enterpriseIds,
+			primary_enterprise_id: primaryEnterpriseId,
+			depends_on: dependsOn,
+			_pending: !canPush
+		};
+		projects.unshift(optimistic);
+		ui.projectId = tempId;
+		ui.selection = { kind: 'project', id: tempId };
+		scheduleWorkspacePersist();
+		if (!canPush) return optimistic;
+
+		try {
+			const created = await driveCreateProject(session, {
+				title: draft.title,
 				description,
-				milestones: draft.milestones ?? [],
 				status: draft.status ?? 'planned',
-				icon: draft.icon ?? null,
+				icon: draft.icon || null,
+				milestones: draft.milestones ?? [],
 				enterprise_ids: enterpriseIds,
 				primary_enterprise_id: primaryEnterpriseId,
 				depends_on: dependsOn
 			});
-			ui.projectId = id;
-			ui.selection = { kind: 'project', id };
-		} else {
-			const idx = projects.findIndex((p) => p.id === draft.id);
-			if (idx >= 0)
-				Object.assign(projects[idx], {
-					...draft,
-					description,
-					enterprise_ids: enterpriseIds,
-					primary_enterprise_id: primaryEnterpriseId,
-					depends_on: dependsOn
-				});
-			ui.projectId = draft.id;
-			ui.selection = { kind: 'project', id: draft.id };
+			const uiProj = {
+				id: created.id,
+				title: created.title,
+				description: created.description ?? description,
+				status: created.status ?? draft.status ?? 'planned',
+				icon: created.icon ?? draft.icon ?? null,
+				enterprise_ids: created.enterprise_ids ?? enterpriseIds,
+				primary_enterprise_id: created.primary_enterprise_id ?? primaryEnterpriseId,
+				depends_on: created.depends_on ?? dependsOn,
+				milestones: created.milestones ?? [],
+				slug: created.slug,
+				_drive: created
+			};
+			const idx = projects.findIndex((p) => p.id === tempId);
+			const confirmed = mergeConfirmed(optimistic, uiProj);
+			if (idx >= 0) projects[idx] = confirmed;
+			else projects.unshift(confirmed);
+			ui.projectId = confirmed.id;
+			ui.selection = { kind: 'project', id: confirmed.id };
+			scheduleWorkspacePersist();
+			return confirmed;
+		} catch (e) {
+			const idx = projects.findIndex((p) => p.id === tempId);
+			if (idx >= 0) {
+				projects[idx]._pending = true;
+				scheduleWorkspacePersist();
+			}
+			console.warn('saveProject create deferred', e);
+			return optimistic;
 		}
-		return;
 	}
 
-	if (isNew) {
-		const created = await driveCreateProject(session, {
-			title: draft.title,
-			description,
-			status: draft.status ?? 'planned',
-			icon: draft.icon || null,
-			milestones: draft.milestones ?? [],
-			enterprise_ids: enterpriseIds,
-			primary_enterprise_id: primaryEnterpriseId,
-			depends_on: dependsOn
-		});
-		const uiProj = {
-			id: created.id,
-			title: created.title,
-			description: created.description ?? description,
-			status: created.status ?? draft.status ?? 'planned',
-			icon: created.icon ?? draft.icon ?? null,
-			enterprise_ids: created.enterprise_ids ?? enterpriseIds,
-			primary_enterprise_id: created.primary_enterprise_id ?? primaryEnterpriseId,
-			depends_on: created.depends_on ?? dependsOn,
-			milestones: created.milestones ?? [],
-			slug: created.slug,
-			_drive: created
-		};
-		projects.unshift(uiProj);
-		ui.projectId = created.id;
-		ui.selection = { kind: 'project', id: created.id };
-	} else {
-		const prev = projects.find((p) => p.id === draft.id);
-		const nextIcon = draft.icon === undefined ? (prev?.icon ?? null) : draft.icon;
+	const idx = projects.findIndex((p) => p.id === draft.id);
+	const prev = projects.find((p) => p.id === draft.id);
+	const nextIcon = draft.icon === undefined ? (prev?.icon ?? null) : draft.icon;
+	const localPatch = {
+		...draft,
+		description,
+		icon: nextIcon,
+		enterprise_ids: enterpriseIds,
+		primary_enterprise_id: primaryEnterpriseId,
+		depends_on: dependsOn,
+		_pending: !canPush
+	};
+	if (idx >= 0) Object.assign(projects[idx], localPatch);
+	ui.projectId = draft.id;
+	ui.selection = { kind: 'project', id: draft.id };
+	scheduleWorkspacePersist();
+	if (!canPush) return localPatch;
+
+	try {
 		const { body: _legacyBody, start_at: _s, end_at: _e, ...prevDrive } = prev?._drive ?? {};
 		const base = {
 			...prevDrive,
@@ -821,11 +846,22 @@ export async function saveProject(draft, isNew) {
 			slug: saved.slug,
 			_drive: saved
 		};
-		const idx = projects.findIndex((p) => p.id === saved.id);
-		if (idx >= 0) Object.assign(projects[idx], uiProj);
-		else projects.unshift(uiProj);
-		ui.projectId = saved.id;
-		ui.selection = { kind: 'project', id: saved.id };
+		const i = projects.findIndex((p) => p.id === saved.id);
+		const local = i >= 0 ? projects[i] : localPatch;
+		const confirmed = mergeConfirmed(local, uiProj);
+		if (i >= 0) projects[i] = confirmed;
+		else projects.unshift(confirmed);
+		ui.projectId = confirmed.id;
+		ui.selection = { kind: 'project', id: confirmed.id };
+		scheduleWorkspacePersist();
+		return confirmed;
+	} catch (e) {
+		if (idx >= 0) {
+			projects[idx]._pending = true;
+			scheduleWorkspacePersist();
+		}
+		console.warn('saveProject update deferred', e);
+		return localPatch;
 	}
 }
 
@@ -838,6 +874,7 @@ export async function saveLedgerEntry(draft, isNew) {
 	const session = activeSession();
 	const author = draft.author ?? activePerson().email;
 	const plist = projects.map((p) => p._drive ?? p);
+	const canPush = Boolean(session) && !isOffline();
 
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
@@ -853,12 +890,12 @@ export async function saveLedgerEntry(draft, isNew) {
 				plist,
 				accounts
 			),
-			_pending: Boolean(session)
+			_pending: !canPush
 		};
 		ledgerEntries.unshift(optimistic);
 		ui.selection = { kind: 'ledger', id: tempId };
 		scheduleWorkspacePersist();
-		if (!session) return optimistic;
+		if (!canPush) return optimistic;
 
 		try {
 			const created = await driveCreateLedgerEntry(session, {
@@ -867,31 +904,31 @@ export async function saveLedgerEntry(draft, isNew) {
 			});
 			const uiEntry = toUiLedgerEntry(created, plist, accounts);
 			const idx = ledgerEntries.findIndex((e) => e.id === tempId);
-			if (idx >= 0) ledgerEntries[idx] = uiEntry;
-			else ledgerEntries.unshift(uiEntry);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'ledger', id: uiEntry.id };
+			const confirmed = mergeConfirmed(optimistic, uiEntry);
+			if (idx >= 0) ledgerEntries[idx] = confirmed;
+			else ledgerEntries.unshift(confirmed);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'ledger', id: confirmed.id };
 			scheduleWorkspacePersist();
-			return uiEntry;
+			return confirmed;
 		} catch (e) {
 			const idx = ledgerEntries.findIndex((x) => x.id === tempId);
-			if (idx >= 0) ledgerEntries.splice(idx, 1);
-			scheduleWorkspacePersist();
-			throw e;
+			if (idx >= 0) {
+				ledgerEntries[idx]._pending = true;
+				scheduleWorkspacePersist();
+			}
+			console.warn('saveLedgerEntry create deferred', e);
+			return optimistic;
 		}
 	}
 
 	const idx = ledgerEntries.findIndex((e) => e.id === draft.id);
-	const prev = idx >= 0 ? { ...ledgerEntries[idx] } : null;
+	const localUi = toUiLedgerEntry({ ...draft, author }, plist, accounts);
 	if (idx >= 0) {
-		Object.assign(
-			ledgerEntries[idx],
-			toUiLedgerEntry({ ...draft, author }, plist, accounts),
-			{ _pending: Boolean(session) }
-		);
+		Object.assign(ledgerEntries[idx], localUi, { _pending: !canPush });
 	}
 	ui.selection = { kind: 'ledger', id: draft.id };
 	scheduleWorkspacePersist();
-	if (!session) return draft;
+	if (!canPush) return { ...localUi, id: draft.id };
 
 	try {
 		const saved = await putLedgerEntry(session, {
@@ -901,14 +938,19 @@ export async function saveLedgerEntry(draft, isNew) {
 		});
 		const uiEntry = toUiLedgerEntry(saved, plist, accounts);
 		const i = ledgerEntries.findIndex((e) => e.id === saved.id);
-		if (i >= 0) Object.assign(ledgerEntries[i], uiEntry);
-		else ledgerEntries.unshift(uiEntry);
+		const local = i >= 0 ? ledgerEntries[i] : localUi;
+		const confirmed = mergeConfirmed(local, uiEntry);
+		if (i >= 0) ledgerEntries[i] = confirmed;
+		else ledgerEntries.unshift(confirmed);
 		scheduleWorkspacePersist();
-		return uiEntry;
+		return confirmed;
 	} catch (e) {
-		if (idx >= 0 && prev) Object.assign(ledgerEntries[idx], prev);
-		scheduleWorkspacePersist();
-		throw e;
+		if (idx >= 0) {
+			ledgerEntries[idx]._pending = true;
+			scheduleWorkspacePersist();
+		}
+		console.warn('saveLedgerEntry update deferred', e);
+		return { ...localUi, id: draft.id };
 	}
 }
 
@@ -918,26 +960,31 @@ export async function saveLedgerEntry(draft, isNew) {
  */
 export async function saveCostItem(draft, isNew) {
 	const session = activeSession();
+	const canPush = Boolean(session) && !isOffline();
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
-		const optimistic = { ...draft, id: tempId, _pending: Boolean(session) };
+		const optimistic = { ...draft, id: tempId, _pending: !canPush };
 		costItems.unshift(optimistic);
 		ui.selection = { kind: 'cost', id: tempId };
 		scheduleWorkspacePersist();
-		if (!session) return optimistic;
+		if (!canPush) return optimistic;
 		try {
 			const created = await driveCreateCostItem(session, draft);
 			const idx = costItems.findIndex((a) => a.id === tempId);
-			if (idx >= 0) costItems[idx] = created;
-			else costItems.unshift(created);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'cost', id: created.id };
+			const confirmed = mergeConfirmed(optimistic, created);
+			if (idx >= 0) costItems[idx] = confirmed;
+			else costItems.unshift(confirmed);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'cost', id: confirmed.id };
 			scheduleWorkspacePersist();
-			return created;
+			return confirmed;
 		} catch (e) {
 			const idx = costItems.findIndex((a) => a.id === tempId);
-			if (idx >= 0) costItems.splice(idx, 1);
-			scheduleWorkspacePersist();
-			throw e;
+			if (idx >= 0) {
+				costItems[idx]._pending = true;
+				scheduleWorkspacePersist();
+			}
+			console.warn('saveCostItem create deferred', e);
+			return optimistic;
 		}
 	}
 	return draft;
@@ -949,26 +996,31 @@ export async function saveCostItem(draft, isNew) {
  */
 export async function saveSalesLine(draft, isNew) {
 	const session = activeSession();
+	const canPush = Boolean(session) && !isOffline();
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
-		const optimistic = { ...draft, id: tempId, _pending: Boolean(session) };
+		const optimistic = { ...draft, id: tempId, _pending: !canPush };
 		salesLines.unshift(optimistic);
 		ui.selection = { kind: 'sales', id: tempId };
 		scheduleWorkspacePersist();
-		if (!session) return optimistic;
+		if (!canPush) return optimistic;
 		try {
 			const created = await driveCreateSalesLine(session, draft);
 			const idx = salesLines.findIndex((a) => a.id === tempId);
-			if (idx >= 0) salesLines[idx] = created;
-			else salesLines.unshift(created);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'sales', id: created.id };
+			const confirmed = mergeConfirmed(optimistic, created);
+			if (idx >= 0) salesLines[idx] = confirmed;
+			else salesLines.unshift(confirmed);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'sales', id: confirmed.id };
 			scheduleWorkspacePersist();
-			return created;
+			return confirmed;
 		} catch (e) {
 			const idx = salesLines.findIndex((a) => a.id === tempId);
-			if (idx >= 0) salesLines.splice(idx, 1);
-			scheduleWorkspacePersist();
-			throw e;
+			if (idx >= 0) {
+				salesLines[idx]._pending = true;
+				scheduleWorkspacePersist();
+			}
+			console.warn('saveSalesLine create deferred', e);
+			return optimistic;
 		}
 	}
 	return draft;
@@ -980,36 +1032,40 @@ export async function saveSalesLine(draft, isNew) {
  */
 export async function saveEnterprise(draft, isNew) {
 	const session = activeSession();
+	const canPush = Boolean(session) && !isOffline();
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
-		const optimistic = { ...draft, id: tempId, _pending: Boolean(session) };
+		const optimistic = { ...draft, id: tempId, _pending: !canPush };
 		enterprises.unshift(optimistic);
 		ui.selection = { kind: 'enterprise', id: tempId };
 		scheduleWorkspacePersist();
-		if (!session) return optimistic;
+		if (!canPush) return optimistic;
 		try {
 			const created = await driveCreateEnterprise(session, draft);
 			const idx = enterprises.findIndex((a) => a.id === tempId);
-			if (idx >= 0) enterprises[idx] = created;
-			else enterprises.unshift(created);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'enterprise', id: created.id };
+			const confirmed = mergeConfirmed(optimistic, created);
+			if (idx >= 0) enterprises[idx] = confirmed;
+			else enterprises.unshift(confirmed);
+			if (ui.selection?.id === tempId) ui.selection = { kind: 'enterprise', id: confirmed.id };
 			scheduleWorkspacePersist();
-			return created;
+			return confirmed;
 		} catch (e) {
 			const idx = enterprises.findIndex((a) => a.id === tempId);
-			if (idx >= 0) enterprises.splice(idx, 1);
-			scheduleWorkspacePersist();
-			throw e;
+			if (idx >= 0) {
+				enterprises[idx]._pending = true;
+				scheduleWorkspacePersist();
+			}
+			console.warn('saveEnterprise create deferred', e);
+			return optimistic;
 		}
 	}
 
 	const idx = enterprises.findIndex((a) => a.id === draft.id);
-	const prev = idx >= 0 ? { ...enterprises[idx] } : null;
 	if (idx >= 0) {
-		Object.assign(enterprises[idx], { ...draft, _pending: Boolean(session) });
+		Object.assign(enterprises[idx], { ...draft, _pending: !canPush });
 	}
 	scheduleWorkspacePersist();
-	if (!session) return draft;
+	if (!canPush) return draft;
 
 	try {
 		const saved = await drivePutEnterprise(session, {
@@ -1017,13 +1073,18 @@ export async function saveEnterprise(draft, isNew) {
 			schema: 'alpha.enterprise/1'
 		});
 		const i = enterprises.findIndex((a) => a.id === saved.id);
-		if (i >= 0) Object.assign(enterprises[i], { ...saved, _pending: false });
-		else enterprises.unshift(saved);
+		const local = i >= 0 ? enterprises[i] : draft;
+		const confirmed = mergeConfirmed(local, { ...saved, _pending: false });
+		if (i >= 0) enterprises[i] = confirmed;
+		else enterprises.unshift(confirmed);
 		scheduleWorkspacePersist();
-		return saved;
+		return confirmed;
 	} catch (e) {
-		if (idx >= 0 && prev) Object.assign(enterprises[idx], prev);
-		scheduleWorkspacePersist();
-		throw e;
+		if (idx >= 0) {
+			enterprises[idx]._pending = true;
+			scheduleWorkspacePersist();
+		}
+		console.warn('saveEnterprise update deferred', e);
+		return draft;
 	}
 }
