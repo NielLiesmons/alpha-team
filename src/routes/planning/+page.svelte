@@ -449,31 +449,38 @@
 		/* Otherwise let the gantt scroll normally — no period jumping */
 	}
 
+	/** Scrollport is the feed itself (pane > .feed overflow). */
+	function scrollPort() {
+		return scrollEl;
+	}
+
 	/** @param {PointerEvent} e */
 	function onPanDown(e) {
-		if (e.button !== 1 || !scrollEl) return;
+		const el = scrollPort();
+		if (e.button !== 1 || !el) return;
 		e.preventDefault();
-		pan = { x: e.clientX, y: e.clientY, top: scrollEl.scrollTop };
-		scrollEl.setPointerCapture(e.pointerId);
-		scrollEl.classList.add('panning');
+		pan = { x: e.clientX, y: e.clientY, top: el.scrollTop };
+		el.setPointerCapture(e.pointerId);
+		el.classList.add('panning');
 	}
 
 	/** @param {PointerEvent} e */
 	function onPanMove(e) {
-		if (!pan || !scrollEl) return;
-		/* Keep origin fixed — updating y each move made scroll jump / feel broken */
-		scrollEl.scrollTop = pan.top - (e.clientY - pan.y);
+		const el = scrollPort();
+		if (!pan || !el) return;
+		el.scrollTop = pan.top - (e.clientY - pan.y);
 	}
 
 	/** @param {PointerEvent} e */
 	function onPanUp(e) {
-		if (!pan || !scrollEl) return;
+		const el = scrollPort();
+		if (!pan || !el) return;
 		try {
-			scrollEl.releasePointerCapture(e.pointerId);
+			el.releasePointerCapture(e.pointerId);
 		} catch {
 			/* */
 		}
-		scrollEl.classList.remove('panning');
+		el.classList.remove('panning');
 		pan = null;
 	}
 
@@ -581,11 +588,18 @@
 
 <svelte:head><title>Planning</title></svelte:head>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="feed planning"
+	bind:this={scrollEl}
 	onwheel={onWheelZoom}
 	ontouchstart={onTouchStart}
 	ontouchmove={onTouchMove}
+	onpointerdown={onPanDown}
+	onpointermove={onPanMove}
+	onpointerup={onPanUp}
+	onpointercancel={onPanUp}
+	onauxclick={onAuxClick}
 >
 	{#if enterprises.length === 0 && projects.length === 0}
 		<div class="empty">
@@ -598,16 +612,7 @@
 			>
 		</div>
 	{:else}
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="gantt"
-			bind:this={scrollEl}
-			onpointerdown={onPanDown}
-			onpointermove={onPanMove}
-			onpointerup={onPanUp}
-			onpointercancel={onPanUp}
-			onauxclick={onAuxClick}
-		>
+		<div class="gantt">
 			<div class="gantt-head">
 				<div class="label-cell head-label" style:width="{LABEL_W}px"></div>
 				<div class="timeline-pane head-timeline" bind:this={timelineMeasure}>
@@ -648,7 +653,7 @@
 									aria-expanded={!collapsedEnterprises.has(group.id)}
 									onclick={() => toggleEnterprise(group.id)}
 								>
-									<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+									<svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 										<path
 											d="M2.5 4.2 L6 7.8 L9.5 4.2"
 											stroke="currentColor"
@@ -701,7 +706,7 @@
 											aria-expanded={!collapsedProjects.has(row.id)}
 											onclick={() => toggleProject(row.id)}
 										>
-											<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+											<svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 												<path
 													d="M2.5 4.2 L6 7.8 L9.5 4.2"
 													stroke="currentColor"
@@ -866,13 +871,12 @@
 
 <style>
 	.planning {
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-		height: 100%;
+		/* Scroll on the feed (pane rule) — do NOT nest a second scrollport */
+		display: block;
+		min-height: 100%;
+		box-sizing: border-box;
 		/* Sit under transparent list-top so head + chrome read as one */
 		padding-top: 0 !important;
-		padding-bottom: var(--feed-pad-bottom, 36px);
 		--label-w: 200px;
 	}
 
@@ -916,16 +920,11 @@
 
 	/* Fixed label column + clipped timeline pane (no sticky overlay) */
 	.gantt {
-		flex: 1;
-		min-height: 0;
-		display: flex;
-		flex-direction: column;
-		overflow: auto;
-		touch-action: pan-y;
-		overscroll-behavior-x: none;
+		display: block;
+		width: 100%;
 	}
 
-	.gantt.panning {
+	.planning.panning {
 		cursor: grabbing;
 		user-select: none;
 	}
@@ -1055,15 +1054,15 @@
 	}
 
 	.chev {
-		width: 18px;
-		height: 18px;
+		width: 19px;
+		height: 19px;
 		display: grid;
 		place-items: center;
 		border: 0;
 		background: transparent;
 		color: var(--fg-33);
 		cursor: pointer;
-		padding: 1px 0 0;
+		padding: 2px 0 0;
 		flex-shrink: 0;
 		opacity: 0;
 		transition:

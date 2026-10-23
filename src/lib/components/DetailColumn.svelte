@@ -473,13 +473,13 @@
 						{/if}
 						{#if canEdit}
 							<button type="button" class="menu-item" role="menuitem" onclick={editCurrent}>
-								<Pen size={14} />
+								<Pen size={12} />
 								Edit
 							</button>
 						{/if}
 						{#if canDelete}
-							<button type="button" class="menu-item danger" role="menuitem" onclick={deleteCurrent}>
-								<Trash size={14} />
+							<button type="button" class="menu-item" role="menuitem" onclick={deleteCurrent}>
+								<Trash size={13} />
 								Delete
 							</button>
 						{/if}
@@ -584,10 +584,10 @@
 			{/if}
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={15} />
+					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={15} />
+					<Trash size={14} />
 				</button>
 			</div>
 		</header>
@@ -616,10 +616,10 @@
 			<span class="detail-top-label">Project</span>
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={15} />
+					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={15} />
+					<Trash size={14} />
 				</button>
 			</div>
 		</header>
@@ -729,10 +729,10 @@
 					<span class="save-hint">Saving…</span>
 				{/if}
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={15} />
+					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={15} />
+					<Trash size={14} />
 				</button>
 			</div>
 		</header>
@@ -759,7 +759,7 @@
 			<span class="detail-top-label">Welcome</span>
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={15} />
+					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -895,10 +895,10 @@
 			<span class="detail-top-label">Enterprise</span>
 			<div class="detail-top-actions">
 				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={15} />
+					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={15} />
+					<Trash size={14} />
 				</button>
 			</div>
 		</header>
