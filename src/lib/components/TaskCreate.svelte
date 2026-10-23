@@ -40,6 +40,8 @@
 	];
 
 	let title = $state('');
+	/** @type {HTMLInputElement | undefined} */
+	let titleInput = $state();
 	let body = $state('');
 	let status = $state('open');
 	let priority = $state('none');
@@ -105,7 +107,7 @@
 		priorityOpen = false;
 		bottomMenu = null;
 		saving = false;
-		/* No autofocus — mobile PWAs scroll the sheet into the keyboard and hide chrome. */
+		queueMicrotask(() => titleInput?.focus());
 	});
 
 	/** @param {string | null | undefined} iso */
@@ -228,6 +230,7 @@
 		</div>
 
 		<input
+			bind:this={titleInput}
 			class="task-title-input"
 			placeholder="Title of Task"
 			bind:value={title}

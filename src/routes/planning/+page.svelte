@@ -1,6 +1,17 @@
 <script>
+	import { onMount } from 'svelte';
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
+	import {
+		DAY_MS,
+		PLANNING_ZOOMS,
+		endOfUnit,
+		planningView,
+		setPlanningZoom,
+		shiftPlanningAnchor,
+		startOfUnit,
+		unitLabel
+	} from '$lib/planning-view.svelte.js';
 	import {
 		projectLifecycle,
 		primaryEnterpriseId,
@@ -20,12 +31,6 @@
 	let collapsedProjects = $state(new Set());
 	/** @type {Set<string>} */
 	let collapsedEnterprises = $state(new Set());
-	/** @type {'day' | 'week' | 'month'} */
-	let zoom = $state('week');
-
-	/** Shared rounded play-triangle path (viewBox 0 0 12 12). */
-	const TWIST_PATH =
-		'M3.15 2.35C3.15 1.72 3.82 1.35 4.35 1.7L9.85 5.35C10.32 5.66 10.32 6.34 9.85 6.65L4.35 10.3C3.82 10.65 3.15 10.28 3.15 9.65Z';
 
 	/** @type {null | { taskId: string, startMs: number, endMs: number }} */
 	let draftDraw = $state(null);
@@ -42,19 +47,33 @@
 
 	/** @type {HTMLDivElement | undefined} */
 	let scrollEl = $state();
-	/** @type {null | { x: number, y: number, left: number, top: number }} */
+	/** @type {HTMLDivElement | undefined} */
+	let timelineMeasure = $state();
+	let timelinePaneW = $state(640);
+
+	/** @type {null | { x: number, y: number, top: number, accX: number }} */
 	let pan = $state(null);
 
-	const DAY_MS = 86_400_000;
 	const UNASSIGNED = '__none__';
+	const LABEL_W = 200;
 
-	const PX_PER_DAY = $derived(zoom === 'day' ? 28 : zoom === 'week' ? 10 : 3.5);
+	const zoom = $derived(planningView.zoom);
+	const range = $derived.by(() => {
+		const start = startOfUnit(planningView.anchorMs, planningView.zoom);
+		return { start, end: endOfUnit(start, planningView.zoom) };
+	});
+
+	const totalDays = $derived(Math.max(1, (range.end - range.start) / DAY_MS));
+	const chartWidth = $derived(Math.max(120, timelinePaneW));
+	const PX_PER_DAY = $derived(chartWidth / totalDays);
 
 	const sortedEnterprises = $derived(
 		[...enterprises].sort(
 			(a, b) => (a.sort ?? 100) - (b.sort ?? 100) || String(a.title).localeCompare(String(b.title))
 		)
 	);
+
+	const periodTitle = $derived(unitLabel(range.start, zoom));
 
 	/**
 	 * @param {string | null | undefined} iso
@@ -107,53 +126,22 @@
 		if (!starts.length && !ends.length) return null;
 		const s = starts.length ? Math.min(...starts) : Math.min(...ends) - 3 * DAY_MS;
 		const e = ends.length ? Math.max(...ends) : Math.max(...starts) + 3 * DAY_MS;
-		return {
-			left: ((s - range.start) / DAY_MS) * PX_PER_DAY,
-			width: Math.max(PX_PER_DAY * 2, ((Math.max(e, s + DAY_MS) - s) / DAY_MS) * PX_PER_DAY)
-		};
+		const left = ((s - range.start) / DAY_MS) * PX_PER_DAY;
+		const width = Math.max(4, ((Math.max(e, s + DAY_MS) - s) / DAY_MS) * PX_PER_DAY);
+		return { left, width };
 	}
-
-	const range = $derived.by(() => {
-		const now = Date.now();
-		let min = now - 30 * DAY_MS;
-		let max = now + 120 * DAY_MS;
-		for (const m of moments) {
-			const s = parseMs(m.start_at, NaN);
-			const e = parseMs(m.end_at, NaN);
-			if (Number.isFinite(s)) min = Math.min(min, s);
-			if (Number.isFinite(e)) max = Math.max(max, e);
-			if (Number.isFinite(s) && !Number.isFinite(e)) max = Math.max(max, s + 14 * DAY_MS);
-		}
-		for (const t of tasks) {
-			const d = parseMs(t.deadline_at, NaN);
-			if (Number.isFinite(d)) {
-				min = Math.min(min, d);
-				max = Math.max(max, d);
-			}
-		}
-		const start = new Date(min);
-		start.setUTCDate(1);
-		start.setUTCHours(0, 0, 0, 0);
-		const end = new Date(max);
-		end.setUTCMonth(end.getUTCMonth() + 1, 1);
-		end.setUTCHours(0, 0, 0, 0);
-		return { start: start.getTime(), end: end.getTime() };
-	});
-
-	const totalDays = $derived(Math.max(1, Math.ceil((range.end - range.start) / DAY_MS)));
-	const chartWidth = $derived(Math.max(720, totalDays * PX_PER_DAY));
 
 	const ticks = $derived.by(() => {
 		/** @type {{ label: string, left: number, width: number }[]} */
 		const out = [];
-		if (zoom === 'month') {
+		if (zoom === 'year') {
 			const d = new Date(range.start);
 			while (d.getTime() < range.end) {
 				const left = ((d.getTime() - range.start) / DAY_MS) * PX_PER_DAY;
 				const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
 				const width = ((Math.min(next.getTime(), range.end) - d.getTime()) / DAY_MS) * PX_PER_DAY;
 				out.push({
-					label: d.toLocaleDateString(undefined, { month: 'short', year: '2-digit', timeZone: 'UTC' }),
+					label: d.toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' }),
 					left,
 					width
 				});
@@ -161,36 +149,45 @@
 			}
 			return out;
 		}
-		if (zoom === 'week') {
+		if (zoom === 'month') {
 			const d = new Date(range.start);
-			const day = d.getUTCDay();
-			const toMon = day === 0 ? -6 : 1 - day;
-			d.setUTCDate(d.getUTCDate() + toMon);
 			d.setUTCHours(0, 0, 0, 0);
 			while (d.getTime() < range.end) {
 				const left = ((d.getTime() - range.start) / DAY_MS) * PX_PER_DAY;
-				const next = new Date(d.getTime() + 7 * DAY_MS);
-				const width = ((Math.min(next.getTime(), range.end) - d.getTime()) / DAY_MS) * PX_PER_DAY;
 				out.push({
-					label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+					label: String(d.getUTCDate()),
 					left,
-					width: Math.max(width, 1)
+					width: PX_PER_DAY
 				});
-				d.setTime(next.getTime());
+				d.setUTCDate(d.getUTCDate() + 1);
 			}
 			return out;
 		}
-		/* day */
-		const d = new Date(range.start);
-		d.setUTCHours(0, 0, 0, 0);
-		while (d.getTime() < range.end) {
-			const left = ((d.getTime() - range.start) / DAY_MS) * PX_PER_DAY;
+		if (zoom === 'week') {
+			const d = new Date(range.start);
+			while (d.getTime() < range.end) {
+				const left = ((d.getTime() - range.start) / DAY_MS) * PX_PER_DAY;
+				out.push({
+					label: d.toLocaleDateString(undefined, {
+						weekday: 'short',
+						day: 'numeric',
+						timeZone: 'UTC'
+					}),
+					left,
+					width: PX_PER_DAY
+				});
+				d.setUTCDate(d.getUTCDate() + 1);
+			}
+			return out;
+		}
+		/* day — hour ticks */
+		for (let h = 0; h < 24; h++) {
+			const left = (h / 24) * chartWidth;
 			out.push({
-				label: String(d.getUTCDate()),
+				label: h % 3 === 0 ? `${String(h).padStart(2, '0')}:00` : '',
 				left,
-				width: PX_PER_DAY
+				width: chartWidth / 24
 			});
-			d.setUTCDate(d.getUTCDate() + 1);
 		}
 		return out;
 	});
@@ -209,9 +206,13 @@
 			: Date.parse(/** @type {string} */ (endIso)) - fallbackDays * DAY_MS;
 		let e = hasEnd ? Date.parse(/** @type {string} */ (endIso)) : s + fallbackDays * DAY_MS;
 		if (e < s) e = s + DAY_MS;
+		/* Clip to viewport — still show if it overlaps the unit */
+		if (e < range.start || s > range.end) return null;
+		const visS = Math.max(s, range.start);
+		const visE = Math.min(e, range.end);
 		return {
-			left: ((s - range.start) / DAY_MS) * PX_PER_DAY,
-			width: Math.max(PX_PER_DAY * 1.5, ((e - s) / DAY_MS) * PX_PER_DAY),
+			left: ((visS - range.start) / DAY_MS) * PX_PER_DAY,
+			width: Math.max(4, ((visE - visS) / DAY_MS) * PX_PER_DAY),
 			start: s,
 			end: e
 		};
@@ -233,7 +234,6 @@
 		});
 	}
 
-	/** Bar fill from task status. */
 	/** @param {string | undefined} status */
 	function barTone(status) {
 		if (status === 'closed') return 'done';
@@ -242,7 +242,6 @@
 	}
 
 	/**
-	 * Earliest moment end (for dep out) / start (for dep in) in chart coords.
 	 * @param {string} taskId
 	 * @param {'start' | 'end'} edge
 	 */
@@ -317,7 +316,9 @@
 	}
 
 	function todayLeft() {
-		return `${((Date.now() - range.start) / DAY_MS) * PX_PER_DAY}px`;
+		const now = Date.now();
+		if (now < range.start || now > range.end) return null;
+		return ((now - range.start) / DAY_MS) * PX_PER_DAY;
 	}
 
 	/** @param {HTMLElement} el @param {number} clientX */
@@ -331,9 +332,6 @@
 	function onTimelineDown(e, taskId) {
 		if (e.button !== 0) return;
 		const el = /** @type {HTMLElement} */ (e.currentTarget);
-		if (e.target !== el && !(e.target instanceof HTMLElement && e.target.classList.contains('timeline')))
-			return;
-		/* only empty timeline — bars handle their own */
 		if (e.target !== el) return;
 		e.preventDefault();
 		const ms = xToMs(el, e.clientX);
@@ -350,7 +348,7 @@
 			draftDraw = {
 				...draftDraw,
 				startMs: Math.min(a, ms),
-				endMs: Math.max(a, ms) + (ms >= a ? 0 : 0)
+				endMs: Math.max(a, ms)
 			};
 			if (draftDraw.endMs - draftDraw.startMs < DAY_MS) {
 				draftDraw = { ...draftDraw, endMs: draftDraw.startMs + DAY_MS };
@@ -448,29 +446,24 @@
 	function onWheelZoom(e) {
 		if (e.ctrlKey || e.metaKey) {
 			e.preventDefault();
-			const levels = /** @type {const} */ (['day', 'week', 'month']);
-			const i = levels.indexOf(zoom);
-			if (e.deltaY < 0 && i > 0) zoom = levels[i - 1];
-			else if (e.deltaY > 0 && i < levels.length - 1) zoom = levels[i + 1];
+			const i = PLANNING_ZOOMS.indexOf(zoom);
+			if (e.deltaY < 0 && i > 0) setPlanningZoom(PLANNING_ZOOMS[i - 1]);
+			else if (e.deltaY > 0 && i < PLANNING_ZOOMS.length - 1) setPlanningZoom(PLANNING_ZOOMS[i + 1]);
 			return;
 		}
-		/* Kill native sideways wheel / shift-scroll — pan X with middle-drag instead */
 		if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
 			e.preventDefault();
+			if (Math.abs(e.deltaX) > 2 || e.shiftKey) {
+				shiftPlanningAnchor(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
+			}
 		}
 	}
 
-	/** Middle-mouse drag pans the gantt. */
 	/** @param {PointerEvent} e */
 	function onPanDown(e) {
 		if (e.button !== 1 || !scrollEl) return;
 		e.preventDefault();
-		pan = {
-			x: e.clientX,
-			y: e.clientY,
-			left: scrollEl.scrollLeft,
-			top: scrollEl.scrollTop
-		};
+		pan = { x: e.clientX, y: e.clientY, top: scrollEl.scrollTop, accX: 0 };
 		scrollEl.setPointerCapture(e.pointerId);
 		scrollEl.classList.add('panning');
 	}
@@ -478,8 +471,13 @@
 	/** @param {PointerEvent} e */
 	function onPanMove(e) {
 		if (!pan || !scrollEl) return;
-		scrollEl.scrollLeft = pan.left - (e.clientX - pan.x);
 		scrollEl.scrollTop = pan.top - (e.clientY - pan.y);
+		pan.accX += e.clientX - pan.x;
+		pan = { ...pan, x: e.clientX, y: e.clientY, top: pan.top };
+		if (Math.abs(pan.accX) > 72) {
+			shiftPlanningAnchor(pan.accX < 0 ? 1 : -1);
+			pan = { ...pan, accX: 0 };
+		}
 	}
 
 	/** @param {PointerEvent} e */
@@ -515,15 +513,12 @@
 		const b = e.touches[1];
 		const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 		const ratio = d / pinchDist;
-		if (ratio > 1.12) {
-			const levels = /** @type {const} */ (['day', 'week', 'month']);
-			const i = levels.indexOf(zoom);
-			if (i > 0) zoom = levels[i - 1];
+		const i = PLANNING_ZOOMS.indexOf(zoom);
+		if (ratio > 1.12 && i > 0) {
+			setPlanningZoom(PLANNING_ZOOMS[i - 1]);
 			pinchDist = d;
-		} else if (ratio < 0.88) {
-			const levels = /** @type {const} */ (['day', 'week', 'month']);
-			const i = levels.indexOf(zoom);
-			if (i < levels.length - 1) zoom = levels[i + 1];
+		} else if (ratio < 0.88 && i < PLANNING_ZOOMS.length - 1) {
+			setPlanningZoom(PLANNING_ZOOMS[i + 1]);
 			pinchDist = d;
 		}
 	}
@@ -531,25 +526,20 @@
 	/** @param {any} task */
 	function deadlineLeft(task) {
 		const d = parseMs(task.deadline_at, NaN);
-		if (!Number.isFinite(d)) return null;
+		if (!Number.isFinite(d) || d < range.start || d > range.end) return null;
 		return ((d - range.start) / DAY_MS) * PX_PER_DAY;
 	}
 
-	/** Dependency arrows across visible rows (coords relative to `.gantt-body`). */
 	const depLinks = $derived.by(() => {
 		/** @type {{ x1: number, y1: number, x2: number, y2: number }[]} */
 		const links = [];
-		const ROW_H = { eyebrow: 28, proj: 44, task: 36, empty: 48 };
+		const ROW_H = { eyebrow: 28, proj: 40, task: 34 };
 		let y = 0;
 		/** @type {Map<string, number>} */
 		const taskMidY = new Map();
 
 		for (const group of groups) {
 			y += ROW_H.eyebrow;
-			if (group.rows.length === 0) {
-				y += ROW_H.empty;
-				continue;
-			}
 			for (const row of group.rows) {
 				const h = row.kind === 'project' ? ROW_H.proj : ROW_H.task;
 				if (row.kind === 'task') taskMidY.set(row.id, y + h / 2);
@@ -567,14 +557,7 @@
 				const y1 = taskMidY.get(depId);
 				const x1raw = taskEdgeX(depId, 'end');
 				if (y1 == null || x1raw == null) continue;
-				/* Dots sit 12px inset from bar edges */
-				/* Dots sit just outside bar ends */
-				links.push({
-					x1: x1raw + 5,
-					y1,
-					x2: x2raw - 5,
-					y2
-				});
+				links.push({ x1: x1raw + 5, y1, x2: x2raw - 5, y2 });
 			}
 		}
 		return links;
@@ -596,6 +579,19 @@
 	function addTask(projectId) {
 		openComposer('task', undefined, 'open', { project_ids: [projectId] });
 	}
+
+	onMount(() => {
+		planningView.anchorMs = startOfUnit(Date.now(), planningView.zoom);
+		const el = timelineMeasure;
+		if (!el || typeof ResizeObserver === 'undefined') return;
+		const ro = new ResizeObserver((entries) => {
+			const w = entries[0]?.contentRect?.width;
+			if (w && w > 40) timelinePaneW = w;
+		});
+		ro.observe(el);
+		timelinePaneW = el.clientWidth || 640;
+		return () => ro.disconnect();
+	});
 </script>
 
 <svelte:head><title>Planning</title></svelte:head>
@@ -619,7 +615,7 @@
 	{:else}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="gantt-scroll"
+			class="gantt"
 			bind:this={scrollEl}
 			onpointerdown={onPanDown}
 			onpointermove={onPanMove}
@@ -627,267 +623,253 @@
 			onpointercancel={onPanUp}
 			onauxclick={onAuxClick}
 		>
-			<div class="gantt-inner" style:width="calc(var(--label-w) + {chartWidth}px)">
-				<span
-					class="today-line"
-					style:left="calc(var(--label-w) + {todayLeft()})"
-					aria-hidden="true"
-				></span>
-				<div class="gantt-row head">
-					<div class="label-cell head-label">
-						<div class="zoom-seg" role="group" aria-label="Timeline zoom">
-							<button
-								type="button"
-								class:on={zoom === 'day'}
-								onclick={() => (zoom = 'day')}>Day</button
-							>
-							<button
-								type="button"
-								class:on={zoom === 'week'}
-								onclick={() => (zoom = 'week')}>Week</button
-							>
-							<button
-								type="button"
-								class:on={zoom === 'month'}
-								onclick={() => (zoom = 'month')}>Month</button
-							>
-						</div>
-					</div>
+			<div class="gantt-head">
+				<div class="label-cell head-label" style:width="{LABEL_W}px"></div>
+				<div class="timeline-pane head-timeline" bind:this={timelineMeasure}>
 					<div class="timeline" style:width="{chartWidth}px">
+						<span class="period-label">{periodTitle}</span>
 						{#each ticks as t}
-							<span class="tick" style:left="{t.left}px" style:width="{t.width}px">{t.label}</span>
+							{#if t.label}
+								<span class="tick" style:left="{t.left}px" style:width="{t.width}px">{t.label}</span>
+							{:else}
+								<span class="tick bare" style:left="{t.left}px" style:width="{t.width}px"></span>
+							{/if}
 						{/each}
+						{#if todayLeft() != null}
+							<span class="today-line" style:left="{todayLeft()}px" aria-hidden="true"></span>
+						{/if}
 					</div>
 				</div>
+			</div>
 
-				<div class="gantt-body" style:width="calc(var(--label-w) + {chartWidth}px)">
-					{#if depLinks.length}
-						<svg
-							class="deps-layer"
-							width={chartWidth}
-							height="100%"
-							style:left="var(--label-w)"
-							aria-hidden="true"
-						>
-							{#each depLinks as link, i (i)}
-								{@const mx = (link.x1 + link.x2) / 2}
-								<path
-									class="dep-path"
-									d="M {link.x1} {link.y1} C {mx} {link.y1}, {mx} {link.y2}, {link.x2} {link.y2}"
-									marker-end="url(#dep-arrow)"
-								/>
-							{/each}
-							<defs>
-								<marker
-									id="dep-arrow"
-									viewBox="0 0 8 8"
-									refX="7"
-									refY="4"
-									markerWidth="6"
-									markerHeight="6"
-									orient="auto"
-								>
-									<path d="M0 0 L8 4 L0 8 Z" fill="var(--fg-33)" />
-								</marker>
-							</defs>
-						</svg>
-					{/if}
-
+			<div class="gantt-body">
+				<div class="labels-col" style:width="{LABEL_W}px">
 					{#each groups as group (group.id)}
-						<div class="gantt-row eyebrow-row">
-							<div class="label-cell eyebrow-cell">
-								<button
-									type="button"
-									class="twist ent-twist"
-									onclick={() => toggleEnterprise(group.id)}
-									aria-label="Toggle projects"
-									aria-expanded={!collapsedEnterprises.has(group.id)}
-								>
-									<svg
-										class="twist-tri"
-										class:collapsed={collapsedEnterprises.has(group.id)}
-										width="11"
-										height="11"
-										viewBox="0 0 12 12"
-										aria-hidden="true"
-									>
-										<path d={TWIST_PATH} fill="currentColor" />
-									</svg>
-								</button>
-								<button
-									type="button"
-									class="ent-name"
-									onclick={() => {
-										if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
-									}}
-								>
-									<span class="eyebrow-label-xs">{group.title}</span>
-								</button>
-								<button
-									type="button"
-									class="eyebrow-plus"
-									aria-label="Add project to {group.title}"
-									onclick={() => addProject(group.id)}
-								>
-									<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-										<path
-											d="M6 1v10M1 6h10"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-										/>
-									</svg>
-								</button>
-							</div>
-							<div class="timeline" style:width="{chartWidth}px" aria-hidden="true"></div>
+						<div class="label-row eyebrow-row">
+							<button
+								type="button"
+								class="ent-name"
+								onclick={() => {
+									if (group.id !== UNASSIGNED) selectEntity('enterprise', group.id);
+								}}
+							>
+								<span class="eyebrow-label-xs">{group.title}</span>
+							</button>
+							<button
+								type="button"
+								class="chev"
+								class:collapsed={collapsedEnterprises.has(group.id)}
+								aria-label="Toggle projects"
+								aria-expanded={!collapsedEnterprises.has(group.id)}
+								onclick={() => toggleEnterprise(group.id)}
+							>
+								<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+									<path
+										d="M2.5 4.2 L6 7.8 L9.5 4.2"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="row-plus eyebrow-plus"
+								aria-label="Add project to {group.title}"
+								onclick={() => addProject(group.id)}
+							>
+								<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+									<path
+										d="M6 1v10M1 6h10"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+									/>
+								</svg>
+							</button>
 						</div>
+						{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
+							<div
+								class="label-row"
+								class:proj={row.kind === 'project'}
+								class:task={row.kind === 'task'}
+							>
+								{#if row.kind === 'project'}
+									<ProjectBox
+										state={projectLifecycle(row.entity ?? { id: row.id }, tasks)}
+										icon={projectDisplayIcon(row.entity, enterprises)}
+										size={18}
+									/>
+									<button
+										type="button"
+										class="name"
+										onclick={() => selectEntity('project', row.id)}>{row.title}</button
+									>
+									<button
+										type="button"
+										class="chev"
+										class:collapsed={collapsedProjects.has(row.id)}
+										aria-label="Toggle tasks"
+										aria-expanded={!collapsedProjects.has(row.id)}
+										onclick={() => toggleProject(row.id)}
+									>
+										<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+											<path
+												d="M2.5 4.2 L6 7.8 L9.5 4.2"
+												stroke="currentColor"
+												stroke-width="1.6"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									</button>
+									<button
+										type="button"
+										class="row-plus"
+										aria-label="Add task"
+										onclick={() => addTask(row.id)}
+									>
+										<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+											<path
+												d="M6 1v10M1 6h10"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+											/>
+										</svg>
+									</button>
+								{:else}
+									<span class="indent"></span>
+									<TaskBox state={row.entity.status} size={16} />
+									<button
+										type="button"
+										class="name muted"
+										onclick={() => selectEntity('task', row.id)}>{row.title}</button
+									>
+								{/if}
+							</div>
+						{/each}
+					{/each}
+				</div>
 
-						{#if group.rows.length > 0}
+				<div class="timeline-pane body-timeline">
+					<div class="timeline-stack" style:width="{chartWidth}px">
+						{#if todayLeft() != null}
+							<span class="today-line body-today" style:left="{todayLeft()}px" aria-hidden="true"
+							></span>
+						{/if}
+						{#if depLinks.length}
+							<svg class="deps-layer" width={chartWidth} height="100%" aria-hidden="true">
+								{#each depLinks as link, i (i)}
+									{@const mx = (link.x1 + link.x2) / 2}
+									<path
+										class="dep-path"
+										d="M {link.x1} {link.y1} C {mx} {link.y1}, {mx} {link.y2}, {link.x2} {link.y2}"
+										marker-end="url(#dep-arrow)"
+									/>
+								{/each}
+								<defs>
+									<marker
+										id="dep-arrow"
+										viewBox="0 0 8 8"
+										refX="7"
+										refY="4"
+										markerWidth="6"
+										markerHeight="6"
+										orient="auto"
+									>
+										<path d="M0 0 L8 4 L0 8 Z" fill="var(--fg-33)" />
+									</marker>
+								</defs>
+							</svg>
+						{/if}
+
+						{#each groups as group (group.id)}
+							<div class="tl-row eyebrow-row"></div>
 							{#each group.rows as row (row.kind + ':' + row.id + ':' + (row.projectId ?? ''))}
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
 								<div
-									class="gantt-row"
+									class="tl-row timeline"
 									class:proj={row.kind === 'project'}
 									class:task={row.kind === 'task'}
+									class:draw={row.kind === 'task'}
+									onpointerdown={row.kind === 'task'
+										? (e) => onTimelineDown(e, row.id)
+										: undefined}
+									onpointermove={row.kind === 'task' ? onTimelineMove : undefined}
+									onpointerup={row.kind === 'task' ? onTimelineUp : undefined}
 								>
-									<div class="label-cell" class:proj-label={row.kind === 'project'}>
-										{#if row.kind === 'project'}
+									{#if row.kind === 'project'}
+										{@const box = projectSpanFromMoments(row.id)}
+										{#if box}
 											<button
 												type="button"
-												class="twist"
-												onclick={() => toggleProject(row.id)}
-												aria-label="Toggle tasks"
-												aria-expanded={!collapsedProjects.has(row.id)}
-											>
-												<svg
-													class="twist-tri"
-													class:collapsed={collapsedProjects.has(row.id)}
-													width="11"
-													height="11"
-													viewBox="0 0 12 12"
-													aria-hidden="true"
-												>
-													<path d={TWIST_PATH} fill="currentColor" />
-												</svg>
-											</button>
-											<ProjectBox
-												state={projectLifecycle(row.entity ?? { id: row.id }, tasks)}
-												icon={projectDisplayIcon(row.entity, enterprises)}
-												size={18}
-											/>
-											<button
-												type="button"
-												class="name"
-												onclick={() => selectEntity('project', row.id)}>{row.title}</button
-											>
-											<button
-												type="button"
-												class="row-plus"
-												aria-label="Add task"
-												onclick={() => addTask(row.id)}
-											>
-												<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-													<path
-														d="M6 1v10M1 6h10"
-														stroke="currentColor"
-														stroke-width="2"
-														stroke-linecap="round"
-													/>
-												</svg>
-											</button>
-										{:else}
-											<span class="indent deep"></span>
-											<TaskBox state={row.entity.status} size={16} />
-											<button
-												type="button"
-												class="name muted"
-												onclick={() => selectEntity('task', row.id)}>{row.title}</button
-											>
+												class="proj-line"
+												style:left="{box.left}px"
+												style:width="{box.width}px"
+												onclick={() => selectEntity('project', row.id)}
+												title={row.title}
+											></button>
 										{/if}
-									</div>
-									<!-- svelte-ignore a11y_no_static_element_interactions -->
-									<div
-										class="timeline"
-										class:draw={row.kind === 'task'}
-										style:width="{chartWidth}px"
-										onpointerdown={row.kind === 'task'
-											? (e) => onTimelineDown(e, row.id)
-											: undefined}
-										onpointermove={row.kind === 'task' ? onTimelineMove : undefined}
-										onpointerup={row.kind === 'task' ? onTimelineUp : undefined}
-									>
-										{#if row.kind === 'project'}
-											{@const box = projectSpanFromMoments(row.id)}
+									{:else}
+										{#each momentsForTask(row.id) as m (m.id)}
+											{@const box = span(m.start_at, m.end_at, 1)}
 											{#if box}
-												<button
-													type="button"
-													class="proj-line"
+												<div
+													class="task-bar tone-{barTone(row.entity.status)}"
 													style:left="{box.left}px"
 													style:width="{box.width}px"
-													onclick={() => selectEntity('project', row.id)}
-													title={row.title}
-												></button>
-											{/if}
-										{:else}
-											{#each momentsForTask(row.id) as m (m.id)}
-												{@const box = span(m.start_at, m.end_at, 1)}
-												{#if box}
-													<div
-														class="task-bar tone-{barTone(row.entity.status)}"
-														style:left="{box.left}px"
-														style:width="{box.width}px"
-														role="button"
-														tabindex="0"
-														title={m.title || row.title}
-														onpointerdown={(e) => onBarPointerDown(e, m, 'move')}
-														onclick={() => selectEntity('task', row.id)}
-														onkeydown={(e) =>
-															e.key === 'Enter' && selectEntity('task', row.id)}
-													>
-														<span
-															class="bar-handle start"
-															onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
-														></span>
-														<span class="dep-dot start" aria-hidden="true"></span>
-														<span class="dep-dot end" aria-hidden="true"></span>
-														<span
-															class="bar-handle end"
-															onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
-														></span>
-													</div>
-												{/if}
-											{/each}
-											{#if draftDraw?.taskId === row.id}
-												{@const left =
-													((Math.min(draftDraw.startMs, draftDraw.endMs) - range.start) /
-														DAY_MS) *
-													PX_PER_DAY}
-												{@const width = Math.max(
-													PX_PER_DAY,
-													(Math.abs(draftDraw.endMs - draftDraw.startMs) / DAY_MS) * PX_PER_DAY
-												)}
-												<div
-													class="task-bar draft tone-planned"
-													style:left="{left}px"
-													style:width="{width}px"
-												></div>
-											{/if}
-											{#if row.entity.deadline_at}
-												{@const dl = deadlineLeft(row.entity)}
-												{#if dl != null}
+													role="button"
+													tabindex="0"
+													title={m.title || row.title}
+													onpointerdown={(e) => onBarPointerDown(e, m, 'move')}
+													onclick={() => selectEntity('task', row.id)}
+													onkeydown={(e) => e.key === 'Enter' && selectEntity('task', row.id)}
+												>
 													<span
-														class="deadline-line"
-														style:left="{dl}px"
-														title="Deadline"
-														aria-hidden="true"
+														class="bar-handle start"
+														onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
 													></span>
-												{/if}
+													<span class="dep-dot start" aria-hidden="true"></span>
+													<span class="dep-dot end" aria-hidden="true"></span>
+													<span
+														class="bar-handle end"
+														onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
+													></span>
+												</div>
+											{/if}
+										{/each}
+										{#if draftDraw?.taskId === row.id}
+											{@const left =
+												((Math.min(draftDraw.startMs, draftDraw.endMs) - range.start) / DAY_MS) *
+												PX_PER_DAY}
+											{@const width = Math.max(
+												PX_PER_DAY * 0.25,
+												(Math.abs(draftDraw.endMs - draftDraw.startMs) / DAY_MS) * PX_PER_DAY
+											)}
+											<div
+												class="task-bar draft tone-planned"
+												style:left="{left}px"
+												style:width="{width}px"
+											></div>
+										{/if}
+										{#if row.entity.deadline_at}
+											{@const dl = deadlineLeft(row.entity)}
+											{#if dl != null}
+												<span
+													class="deadline-line"
+													style:left="{dl}px"
+													title="Deadline"
+													aria-hidden="true"
+												></span>
 											{/if}
 										{/if}
-									</div>
+									{/if}
 								</div>
 							{/each}
-						{/if}
-					{/each}
+						{/each}
+					</div>
 				</div>
 			</div>
 		</div>
@@ -899,7 +881,9 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+		height: 100%;
 		padding-top: 0;
+		--label-w: 200px;
 	}
 
 	.tool-btn {
@@ -940,121 +924,113 @@
 		color: var(--fg-33);
 	}
 
-	.gantt-scroll {
+	/* Fixed label column + clipped timeline pane (no sticky overlay) */
+	.gantt {
 		flex: 1;
 		min-height: 0;
+		display: flex;
+		flex-direction: column;
 		overflow: auto;
-		--label-w: 200px;
-		/* Vertical trackpad/wheel only; X via middle-drag */
 		touch-action: pan-y;
 		overscroll-behavior-x: none;
 	}
 
-	.gantt-scroll.panning {
+	.gantt.panning {
 		cursor: grabbing;
 		user-select: none;
 	}
 
-	.gantt-inner {
-		position: relative;
-		min-width: 100%;
-	}
-
-	.today-line {
-		position: absolute;
+	.gantt-head {
+		position: sticky;
 		top: 0;
-		bottom: 0;
-		width: 1px;
-		background: var(--fg-66);
-		opacity: 1;
-		pointer-events: none;
-		z-index: 3;
-		transform: translateX(-50%);
-	}
-
-	.gantt-body {
-		position: relative;
-		min-width: 100%;
-	}
-
-	.deps-layer {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		pointer-events: none;
-		z-index: 1;
-		overflow: visible;
-	}
-
-	.dep-path {
-		fill: none;
-		stroke: var(--fg-33);
-		stroke-width: 1.25;
-	}
-
-	.gantt-row {
+		z-index: 4;
 		display: flex;
 		align-items: stretch;
-		min-height: 40px;
+		min-height: 36px;
+		background: var(--bg);
 		border-bottom: 1px solid var(--fg-8);
 	}
 
-	.gantt-row.head {
-		min-height: 36px;
-		position: sticky;
-		top: 0;
-		z-index: 5;
+	.gantt-body {
+		display: flex;
+		align-items: flex-start;
+		min-width: 0;
+	}
+
+	.labels-col {
+		flex-shrink: 0;
+		background: var(--bg);
+		border-right: 1px solid var(--fg-8);
+		box-sizing: border-box;
+	}
+
+	.timeline-pane {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden; /* clip — never scroll under labels */
+	}
+
+	.head-timeline {
+		position: relative;
+	}
+
+	.body-timeline {
+		position: relative;
+	}
+
+	.timeline-stack {
+		position: relative;
+	}
+
+	.label-cell.head-label {
+		flex-shrink: 0;
+		box-sizing: border-box;
+		border-right: 1px solid var(--fg-8);
 		background: var(--bg);
 	}
 
-	.gantt-row.eyebrow-row {
-		min-height: 28px;
-		border-bottom: 0;
-	}
-
-	.gantt-row.eyebrow-row:hover .eyebrow-plus {
-		opacity: 1;
-	}
-
-	.gantt-row.proj {
-		min-height: 44px;
-	}
-
-	.gantt-row.proj:hover .row-plus {
-		opacity: 1;
-	}
-
-	.gantt-row.task {
-		min-height: 36px;
-	}
-
-	.label-cell {
-		position: sticky;
-		left: 0;
-		z-index: 5;
-		width: var(--label-w);
-		flex-shrink: 0;
+	.label-row,
+	.tl-row {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 0 8px 0 4px;
+		min-height: 34px;
 		box-sizing: border-box;
-		border-right: 1px solid var(--fg-8);
-		/* Opaque plate so timeline bars can't bleed through while scrolling */
-		background-color: var(--bg);
-		isolation: isolate;
+		border-bottom: 1px solid var(--fg-8);
 	}
 
-	.label-cell.proj-label {
-		gap: 2px;
-		padding-left: 4px;
-	}
-
-	.eyebrow-cell {
-		gap: 4px;
-		padding: 4px 8px 2px 4px;
+	.label-row.eyebrow-row,
+	.tl-row.eyebrow-row {
+		min-height: 28px;
 		border-bottom: 0;
-		align-items: center;
+		gap: 4px;
+		padding: 4px 8px 2px 12px;
+	}
+
+	.label-row.proj {
+		min-height: 40px;
+		padding: 0 8px 0 22px;
+		gap: 6px;
+	}
+
+	.label-row.task {
+		min-height: 34px;
+		padding: 0 8px 0 22px;
+		gap: 8px;
+	}
+
+	.tl-row.proj {
+		min-height: 40px;
+	}
+
+	.tl-row.eyebrow-row {
+		padding: 0;
+	}
+
+	.label-row.eyebrow-row:hover .chev,
+	.label-row.eyebrow-row:hover .eyebrow-plus,
+	.label-row.proj:hover .chev,
+	.label-row.proj:hover .row-plus {
+		opacity: 1;
 	}
 
 	.ent-name {
@@ -1068,8 +1044,33 @@
 		text-align: left;
 	}
 
-	.eyebrow-plus {
-		margin-left: auto;
+	.chev {
+		width: 16px;
+		height: 16px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		background: transparent;
+		color: var(--fg-33);
+		cursor: pointer;
+		padding: 0;
+		flex-shrink: 0;
+		opacity: 0;
+		transition:
+			opacity 0.12s ease,
+			transform 0.15s ease;
+	}
+
+	.chev.collapsed {
+		transform: rotate(-90deg);
+	}
+
+	.chev:hover {
+		color: var(--fg-66);
+	}
+
+	.row-plus {
+		opacity: 0;
 		width: 18px;
 		height: 18px;
 		display: grid;
@@ -1080,97 +1081,17 @@
 		color: var(--fg-33);
 		cursor: pointer;
 		flex-shrink: 0;
-		opacity: 0;
+		margin-left: auto;
 		transition: opacity 0.12s ease;
 	}
 
-	.eyebrow-plus:hover {
+	.row-plus:hover {
 		color: var(--fg);
 		background: var(--fg-8);
 	}
 
-	.head-label {
-		padding-left: 8px;
-	}
-
-	.gantt-row.head {
-		z-index: 6;
-	}
-
-	.gantt-row.head,
-	.gantt-row.head .label-cell {
-		background-color: var(--bg);
-	}
-
-	@media (max-width: 767px) {
-		.label-cell,
-		.gantt-row.head,
-		.gantt-row.head .label-cell {
-			background-color: var(--shell);
-		}
-
-		.gantt-row.head {
-			background-color: var(--shell);
-		}
-	}
-
-	.zoom-seg {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
-		padding: 2px;
-		border-radius: 9999px;
-		background: var(--fg-4);
-	}
-
-	.zoom-seg button {
-		height: 24px;
-		padding: 0 10px;
-		border: 0;
-		border-radius: 9999px;
-		background: transparent;
-		color: var(--fg-33);
-		font: inherit;
-		font-size: 11px;
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.zoom-seg button.on {
-		background: var(--fg-8);
-		color: var(--fg);
-	}
-
-	.twist {
-		width: 18px;
-		height: 18px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		background: transparent;
-		color: var(--fg-16);
-		cursor: pointer;
-		padding: 0;
-		flex-shrink: 0;
-		margin: 0 0 0 2px;
-	}
-
-	.twist:hover {
-		color: var(--fg-33);
-	}
-
-	.twist-tri {
-		display: block;
-		transition: transform 0.15s var(--ease, ease);
-		transform: rotate(90deg);
-	}
-
-	.twist-tri.collapsed {
-		transform: rotate(0deg);
-	}
-
-	.indent.deep {
-		width: 22px;
+	.indent {
+		width: 8px;
 		flex-shrink: 0;
 	}
 
@@ -1197,34 +1118,28 @@
 		color: var(--fg-66);
 	}
 
-	.row-plus {
-		opacity: 0;
-		width: 20px;
-		height: 20px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		border-radius: 6px;
-		background: transparent;
-		color: var(--fg-33);
-		cursor: pointer;
-		flex-shrink: 0;
-		transition: opacity 0.12s ease;
-	}
-
-	.row-plus:hover {
-		color: var(--fg);
-		background: var(--fg-8);
-	}
-
 	.timeline {
 		position: relative;
-		flex-shrink: 0;
 		min-height: inherit;
+		height: 100%;
 	}
 
 	.timeline.draw {
 		cursor: crosshair;
+	}
+
+	.period-label {
+		position: absolute;
+		top: 0;
+		left: 8px;
+		bottom: 0;
+		display: flex;
+		align-items: center;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--fg-66);
+		pointer-events: none;
+		z-index: 2;
 	}
 
 	.tick {
@@ -1240,6 +1155,41 @@
 		border-left: 1px solid var(--fg-8);
 		box-sizing: border-box;
 		overflow: hidden;
+	}
+
+	.tick.bare {
+		padding: 0;
+	}
+
+	.today-line {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 1px;
+		background: var(--fg-66);
+		pointer-events: none;
+		z-index: 3;
+		transform: translateX(-50%);
+	}
+
+	.today-line.body-today {
+		z-index: 2;
+	}
+
+	.deps-layer {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		pointer-events: none;
+		z-index: 1;
+		overflow: visible;
+	}
+
+	.dep-path {
+		fill: none;
+		stroke: var(--fg-33);
+		stroke-width: 1.25;
 	}
 
 	.proj-line {
@@ -1303,7 +1253,6 @@
 		border: 0;
 		background: transparent;
 		padding: 0;
-		/* Pointer events on so the outside hit target keeps parent :hover alive */
 		pointer-events: auto;
 		z-index: 4;
 		opacity: 0;
@@ -1373,5 +1322,13 @@
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
 		color: var(--fg-66);
+	}
+
+	@media (max-width: 767px) {
+		.gantt-head,
+		.labels-col,
+		.label-cell.head-label {
+			background: var(--shell);
+		}
 	}
 </style>

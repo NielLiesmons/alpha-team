@@ -20,6 +20,12 @@
 	} from '$lib/player.svelte.js';
 	import { resetAccountingBrowse, setAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
+	import {
+		PLANNING_ZOOM_LABELS,
+		PLANNING_ZOOMS,
+		planningView,
+		setPlanningZoom
+	} from '$lib/planning-view.svelte.js';
 	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
 	import EnterpriseCreate from './EnterpriseCreate.svelte';
@@ -47,6 +53,7 @@
 	let search = $state('');
 	let createMenuOpen = $state(false);
 	let filterOpen = $state(false);
+	let planningZoomOpen = $state(false);
 	/** @type {string} */
 	let filter = $state('all');
 
@@ -100,6 +107,7 @@
 		forceClearSelection();
 		filter = 'all';
 		filterOpen = false;
+		planningZoomOpen = false;
 		if (p.startsWith('/player')) {
 			ensureDesktopPlayerDetail();
 		} else {
@@ -287,79 +295,115 @@
 	<div class="workspace-wrap">
 		<div class="workspace">
 			<section class="list-col" class:wide={wideList} aria-label={activeItem.label}>
-				<header class="list-top">
-					<h1 class="list-title">{activeItem.label}</h1>
+				<header class="list-top" class:planning-top={wideList}>
+					<h1 class="list-title" class:planning-title={wideList}>{activeItem.label}</h1>
 					<div class="list-actions">
-						<div class="filter-wrap">
-							<button
-								type="button"
-								class="chrome-btn"
-								class:on={filter !== 'all'}
-								aria-label="Filter"
-								aria-expanded={filterOpen}
-								aria-haspopup="listbox"
-								onclick={() => (filterOpen = !filterOpen)}
-							>
-								<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-									<path
-										d="M2.5 4h11M4.5 8h7M6.5 12h3"
-										stroke="currentColor"
-										stroke-width="1.5"
-										stroke-linecap="round"
-									/>
-								</svg>
-							</button>
-							{#if filterOpen}
+						{#if wideList}
+							<div class="filter-wrap">
 								<button
 									type="button"
-									class="menu-scrim"
-									aria-label="Close filter"
-									onclick={() => (filterOpen = false)}
-								></button>
-								<div class="filter-menu" role="listbox">
+									class="chrome-btn"
+									class:on={planningZoomOpen}
+									aria-label="Timeframe"
+									aria-expanded={planningZoomOpen}
+									aria-haspopup="listbox"
+									onclick={() => (planningZoomOpen = !planningZoomOpen)}
+								>
+									<span class="zoom-chip">{PLANNING_ZOOM_LABELS[planningView.zoom]}</span>
+								</button>
+								{#if planningZoomOpen}
 									<button
 										type="button"
-										class:on={filter === 'all'}
-										onclick={() => {
-											filter = 'all';
-											filterOpen = false;
-										}}>All</button
-									>
+										class="menu-scrim"
+										aria-label="Close timeframe"
+										onclick={() => (planningZoomOpen = false)}
+									></button>
+									<div class="filter-menu" role="listbox">
+										{#each PLANNING_ZOOMS as z (z)}
+											<button
+												type="button"
+												class:on={planningView.zoom === z}
+												onclick={() => {
+													setPlanningZoom(z);
+													planningZoomOpen = false;
+												}}>{PLANNING_ZOOM_LABELS[z]}</button
+											>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{:else}
+							<div class="filter-wrap">
+								<button
+									type="button"
+									class="chrome-btn"
+									class:on={filter !== 'all'}
+									aria-label="Filter"
+									aria-expanded={filterOpen}
+									aria-haspopup="listbox"
+									onclick={() => (filterOpen = !filterOpen)}
+								>
+									<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+										<path
+											d="M2.5 4h11M4.5 8h7M6.5 12h3"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+										/>
+									</svg>
+								</button>
+								{#if filterOpen}
 									<button
 										type="button"
-										class:on={filter === 'open'}
-										onclick={() => {
-											filter = 'open';
-											filterOpen = false;
-										}}>Open</button
-									>
-									<button
-										type="button"
-										class:on={filter === 'done'}
-										onclick={() => {
-											filter = 'done';
-											filterOpen = false;
-										}}>Done</button
-									>
-								</div>
+										class="menu-scrim"
+										aria-label="Close filter"
+										onclick={() => (filterOpen = false)}
+									></button>
+									<div class="filter-menu" role="listbox">
+										<button
+											type="button"
+											class:on={filter === 'all'}
+											onclick={() => {
+												filter = 'all';
+												filterOpen = false;
+											}}>All</button
+										>
+										<button
+											type="button"
+											class:on={filter === 'open'}
+											onclick={() => {
+												filter = 'open';
+												filterOpen = false;
+											}}>Open</button
+										>
+										<button
+											type="button"
+											class:on={filter === 'done'}
+											onclick={() => {
+												filter = 'done';
+												filterOpen = false;
+											}}>Done</button
+										>
+									</div>
+								{/if}
+							</div>
+							{#if createKind}
+								<button
+									type="button"
+									class="chrome-btn list-plus"
+									aria-label="New {createKind}"
+									onclick={onListPlus}
+								>
+									<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+										<path
+											d="M8 3.25v9.5M3.25 8h9.5"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+										/>
+									</svg>
+								</button>
 							{/if}
-						</div>
-						{#if createKind}
-							<button
-								type="button"
-								class="chrome-btn list-plus"
-								aria-label="New {createKind}"
-								onclick={onListPlus}
-							>
-								<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-									<path
-										d="M8 3.25v9.5M3.25 8h9.5"
-										stroke="currentColor"
-										stroke-width="1.5"
-										stroke-linecap="round"
-									/>
-								</svg>
-							</button>
 						{/if}
 					</div>
 				</header>
@@ -851,6 +895,34 @@
 		font-weight: 500;
 		letter-spacing: 0;
 		color: var(--white33);
+	}
+
+	/* Sit over Planning’s fixed label column */
+	.list-title.planning-title {
+		width: 200px;
+		max-width: 200px;
+		box-sizing: border-box;
+		padding-right: 8px;
+	}
+
+	.list-top.planning-top {
+		padding-left: 16px;
+	}
+
+	.zoom-chip {
+		display: block;
+		font-size: 10px;
+		font-weight: 650;
+		letter-spacing: 0.02em;
+		line-height: 1;
+		padding: 0 2px;
+		color: inherit;
+	}
+
+	.chrome-btn:has(.zoom-chip) {
+		width: auto;
+		min-width: 26px;
+		padding: 0 8px;
 	}
 
 	.list-actions {

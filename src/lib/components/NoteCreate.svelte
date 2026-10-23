@@ -9,6 +9,8 @@
 	import { closeComposer, notes, projects, saveNote, tasks, ui } from '$lib/workspace.svelte.js';
 
 	let title = $state('');
+	/** @type {HTMLInputElement | undefined} */
+	let titleInput = $state();
 	let body = $state('');
 	/** @type {string[]} */
 	let projectIds = $state([]);
@@ -46,7 +48,7 @@
 		saving = false;
 		saveError = '';
 		bottomMenu = null;
-		/* No autofocus — avoids PWA keyboard scroll jumping the sheet. */
+		queueMicrotask(() => titleInput?.focus());
 	});
 
 	/** @param {string} id */
@@ -98,7 +100,12 @@
 	}}
 >
 	<div class="sheet-title-row">
-		<input class="sheet-input" placeholder="Note title" bind:value={title} />
+		<input
+			bind:this={titleInput}
+			class="sheet-input"
+			placeholder="Note title"
+			bind:value={title}
+		/>
 	</div>
 	<div class="form-divider"></div>
 	<div class="note-scroll">

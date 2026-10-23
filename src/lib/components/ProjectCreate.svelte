@@ -13,6 +13,8 @@
 	} from '$lib/workspace.svelte.js';
 
 	let title = $state('');
+	/** @type {HTMLInputElement | undefined} */
+	let titleInput = $state();
 	let description = $state('');
 	/** @type {string | null} */
 	let icon = $state(null);
@@ -63,6 +65,7 @@
 			enterpriseIds = ids;
 		}
 		enterprisesOpen = false;
+		queueMicrotask(() => titleInput?.focus());
 	});
 
 	/** Toggle membership; order = selection order (1 = primary). Unselecting renumbers. */
@@ -134,7 +137,12 @@
 		>
 			<ProjectBox state={previewStatus} icon={displayIcon} size={28} />
 		</button>
-		<input class="sheet-input" placeholder="Project title" bind:value={title} />
+		<input
+			bind:this={titleInput}
+			class="sheet-input"
+			placeholder="Project title"
+			bind:value={title}
+		/>
 	</div>
 	<div class="form-divider"></div>
 	<textarea class="sheet-body" placeholder="Description" bind:value={description}></textarea>
