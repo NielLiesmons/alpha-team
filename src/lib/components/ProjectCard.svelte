@@ -1,10 +1,8 @@
 <script>
 	/**
-	 * Feed row: ProjectBox | title
-	 * Row 2: pills aligned with title (Planning + new activity)
+	 * Feed row: ProjectBox | title | optional grayscale new-count
+	 * Matches EnterpriseCard layout.
 	 */
-	import { goto } from '$app/navigation';
-	import ProfilePic from './ProfilePic.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 
 	let {
@@ -13,24 +11,9 @@
 		status = 'planned',
 		icon = /** @type {string | null} */ (null),
 		newCount = 0,
-		assignees = /** @type {{ email?: string, name?: string }[]} */ ([]),
 		selected = false,
 		onclick = () => {}
 	} = $props();
-
-	/** @param {MouseEvent} e */
-	function openPlanning(e) {
-		e.stopPropagation();
-		e.preventDefault();
-		goto('/planning');
-	}
-
-	/** @param {MouseEvent} e */
-	function openNew(e) {
-		e.stopPropagation();
-		e.preventDefault();
-		onclick();
-	}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role a11y_click_events_have_key_events -->
@@ -48,25 +31,8 @@
 			<ProjectBox state={status} {icon} size={24} />
 		</div>
 		<span class="title" class:done={status === 'archived'}>{title}</span>
-	</div>
-
-	<div class="pill-row">
-		<button type="button" class="card-pill planning" onclick={openPlanning}>
-			{#if assignees.length > 0}
-				<span class="pill-pfps">
-					{#each assignees.slice(0, 3) as a, i (a.email ?? a.name ?? i)}
-						<span class="pill-pfp" style:z-index={3 - i}>
-							<ProfilePic name={a.name ?? ''} size={14} />
-						</span>
-					{/each}
-				</span>
-			{/if}
-			<span>Planning</span>
-		</button>
 		{#if newCount > 0}
-			<button type="button" class="card-pill new" onclick={openNew} aria-label="{newCount} new items">
-				{newCount} new
-			</button>
+			<span class="new-count" aria-label="{newCount} new items">{newCount}</span>
 		{/if}
 	</div>
 </article>
@@ -76,7 +42,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 12px 12px 10px;
+		padding: 12px;
 		border: 0;
 		background: transparent;
 		border-radius: 12px;
@@ -127,64 +93,12 @@
 		color: var(--white66);
 	}
 
-	.pill-row {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 6px;
-		padding: 8px 0 0;
-		margin-left: 36px;
-		min-width: 0;
-	}
-
-	.card-pill {
-		height: 22px;
-		padding: 0 10px;
-		border: 0;
-		border-radius: 9999px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 11px;
+	.new-count {
+		flex-shrink: 0;
+		font-size: 12px;
 		font-weight: 550;
-		letter-spacing: 0.01em;
-		cursor: pointer;
-		white-space: nowrap;
+		color: var(--fg-33);
+		font-variant-numeric: tabular-nums;
 		line-height: 1;
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-	}
-
-	.card-pill.planning {
-		padding-left: 8px;
-	}
-
-	.card-pill:hover {
-		background: var(--fg-11);
-		color: var(--fg);
-	}
-
-	.card-pill.new {
-		background: color-mix(in srgb, var(--accent-2) 18%, transparent);
-		color: var(--accent-2);
-	}
-
-	.card-pill.new:hover {
-		background: color-mix(in srgb, var(--accent-2) 28%, transparent);
-	}
-
-	.pill-pfps {
-		display: flex;
-		align-items: center;
-	}
-
-	.pill-pfp {
-		display: flex;
-		margin-left: -4px;
-	}
-
-	.pill-pfp:first-child {
-		margin-left: 0;
 	}
 </style>

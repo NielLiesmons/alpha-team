@@ -14,29 +14,11 @@
 		ui
 	} from '$lib/workspace.svelte.js';
 
-	const STATUS_ORDER = ['active', 'archived'];
-	const STATUS_LABELS = {
-		active: 'ACTIVE',
-		archived: 'ARCHIVED'
-	};
-
-	const groups = $derived.by(() => {
-		/** @type {Map<string, typeof projects>} */
-		const map = new Map();
-		const sorted = [...projects].sort((a, b) => String(a.title).localeCompare(String(b.title)));
-		for (const project of sorted) {
-			const key = projectLifecycle(project, tasks);
-			if (!map.has(key)) map.set(key, []);
-			map.get(key).push(project);
-		}
-		return STATUS_ORDER.filter((key) => (map.get(key)?.length ?? 0) > 0).map((key) => ({
-			key,
-			label: STATUS_LABELS[key],
-			items: map.get(key)
-		}));
-	});
-
 	const NEW_WINDOW_MS = 7 * 86_400_000;
+
+	const sorted = $derived(
+		[...projects].sort((a, b) => String(a.title).localeCompare(String(b.title)))
+	);
 
 	/** @param {string | undefined | null} iso */
 	function isRecent(iso) {
@@ -63,21 +45,6 @@
 		}
 		return n;
 	}
-
-	/** @param {string} projectId */
-	function assigneesFor(projectId) {
-		/** @type {Map<string, { email?: string, name?: string }>} */
-		const map = new Map();
-		for (const t of tasks) {
-			const ids = t.project_ids ?? t.targets?.map((/** @type {any} */ x) => x.id) ?? [];
-			if (!ids.includes(projectId)) continue;
-			for (const a of t.assignees ?? []) {
-				const key = (a.email || a.name || '').toLowerCase();
-				if (key && !map.has(key)) map.set(key, a);
-			}
-		}
-		return [...map.values()];
-	}
 </script>
 
 <svelte:head><title>Projects</title></svelte:head>
@@ -90,37 +57,23 @@
 		<FeedSkeleton rows={6} />
 	{:else if projects.length === 0}
 		<p class="empty">No Projects yet</p>
+		<button type="button" class="empty-add" onclick={() => openComposer('project')}>
+			Create project
+		</button>
 	{:else}
-		{#each groups as group (group.key)}
-			<div class="task-group-header">
-				<span class="eyebrow-label-xs">{group.label}</span>
-				<span class="task-group-count">{group.items.length}</span>
-				<button
-					type="button"
-					class="task-group-add-btn"
-					aria-label="Add project"
-					onclick={() => openComposer('project')}
-				>
-					<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-						<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-					</svg>
-				</button>
-			</div>
-			<div class="card-stack">
-				{#each group.items as project (project.id)}
-					<ProjectCard
-						id={project.id}
-						title={project.title}
-						status={projectLifecycle(project, tasks)}
-						icon={projectDisplayIcon(project, enterprises)}
-						newCount={newCount(project.id)}
-						assignees={assigneesFor(project.id)}
-						onclick={() => selectEntity('project', project.id)}
-						selected={ui.selection?.kind === 'project' && ui.selection.id === project.id}
-					/>
-				{/each}
-			</div>
-		{/each}
+		<div class="card-stack">
+			{#each sorted as project (project.id)}
+				<ProjectCard
+					id={project.id}
+					title={project.title}
+					status={projectLifecycle(project, tasks)}
+					icon={projectDisplayIcon(project, enterprises)}
+					newCount={newCount(project.id)}
+					onclick={() => selectEntity('project', project.id)}
+					selected={ui.selection?.kind === 'project' && ui.selection.id === project.id}
+				/>
+			{/each}
+		</div>
 	{/if}
 </div>
 
@@ -140,21 +93,24 @@
 	}
 
 	.empty {
-		padding: 48px 16px;
+		padding: 48px 16px 12px;
 		color: var(--fg-66);
+		margin: 0;
 	}
 
-	.task-group-header {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		margin: 0 6px;
-		padding: 6px 10px;
+	.empty-add {
+		margin: 0 16px 24px;
+		height: 36px;
+		padding: 0 16px;
 		border: 0;
-		border-radius: 10px;
-		background: var(--fg-4);
-		width: auto;
-		box-sizing: border-box;
+		border-radius: 9999px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 550;
+		cursor: pointer;
+		align-self: flex-start;
 	}
 
 	.card-stack {
@@ -163,39 +119,5 @@
 		gap: 2px;
 		padding: 4px 6px 10px;
 		box-sizing: border-box;
-	}
-
-	.eyebrow-label-xs {
-		font-size: 10px;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.18em;
-		color: var(--fg-66);
-	}
-
-	.task-group-count {
-		font-family: var(--font);
-		font-size: 11px;
-		font-weight: 500;
-		color: var(--fg-33);
-	}
-
-	.task-group-add-btn {
-		margin-left: auto;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 22px;
-		height: 22px;
-		padding: 0;
-		border: 0;
-		border-radius: 6px;
-		background: transparent;
-		color: var(--fg-33);
-		cursor: pointer;
-	}
-
-	.task-group-add-btn:hover {
-		color: var(--fg-66);
 	}
 </style>

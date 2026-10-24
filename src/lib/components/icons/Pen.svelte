@@ -1,9 +1,10 @@
 <script>
 	/**
 	 * Pen — outlined stroke from alpha-ui/icons/pen.svg.
+	 * Stroke is 1.5 screen px (non-scaling) to match chrome plus/filter.
 	 * @type {{ size?: number, className?: string }}
 	 */
-	let { size = 16, className = '' } = $props();
+	let { size = 13, className = '' } = $props();
 </script>
 
 <span class="icon {className}" style:width="{size}px" style:height="{size}px">
@@ -32,5 +33,10 @@
 		width: 100%;
 		height: 100%;
 		overflow: visible;
+	}
+
+	.icon :global(path) {
+		vector-effect: non-scaling-stroke;
+		stroke-width: 1.5;
 	}
 </style>
