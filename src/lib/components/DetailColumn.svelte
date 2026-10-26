@@ -33,6 +33,7 @@
 	import {
 		findMail,
 		formatMailWhen,
+		mailAuthorLabel,
 		markMailRead,
 		threadMessages
 	} from '$lib/mail.svelte.js';
@@ -514,7 +515,7 @@
 						{/if}
 						{#if canDelete}
 							<button type="button" class="menu-item" role="menuitem" onclick={deleteCurrent}>
-								<Trash size={13} />
+								<Trash size={15} />
 								Delete
 							</button>
 						{/if}
@@ -622,7 +623,7 @@
 					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={13} />
+					<Trash size={15} />
 				</button>
 			</div>
 		</header>
@@ -654,7 +655,7 @@
 					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={13} />
+					<Trash size={15} />
 				</button>
 			</div>
 		</header>
@@ -767,7 +768,7 @@
 					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={13} />
+					<Trash size={15} />
 				</button>
 			</div>
 		</header>
@@ -888,7 +889,7 @@
 			{#each thread as m (m.id)}
 				<article class="thread-msg">
 					<p class="pub-kicker">
-						{displayNameFromEmail(m.from)}
+						{mailAuthorLabel(m) || displayNameFromEmail(m.from)}
 						→ {(m.to || []).map(displayNameFromEmail).join(', ')}
 						· {formatMailWhen(m.created_at)}
 					</p>
@@ -982,7 +983,7 @@
 					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={13} />
+					<Trash size={15} />
 				</button>
 			</div>
 		</header>
@@ -1310,12 +1311,12 @@
 	}
 
 	.icon-hit {
-		width: 32px;
-		height: 32px;
+		width: 28px;
+		height: 28px;
 		display: grid;
 		place-items: center;
 		border: 1px solid transparent;
-		border-radius: 12px;
+		border-radius: 10px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;

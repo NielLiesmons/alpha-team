@@ -9,8 +9,14 @@ import {
 	putMailMessage
 } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
-import { getMailboxPassword, groupMailThreads, listJmapFolder } from './jmap-mail.js';
+import {
+	getMailboxPassword,
+	groupMailThreads,
+	listJmapFolder,
+	mailPersonName
+} from './jmap-mail.js';
 import { mailView } from './mail-view.svelte.js';
+import { displayNameFromEmail } from './actor.svelte.js';
 
 /** Thread rows (or flat Drive messages). */
 /** @type {any[]} */
@@ -261,6 +267,20 @@ export function mailPreview(msg) {
 		.replace(/\s+/g, ' ')
 		.trim();
 	return raw.slice(0, 120);
+}
+
+/**
+ * Prefer JMAP From display-name (Apple Mail style), then directory, then local-part.
+ * @param {any} msg
+ */
+export function mailAuthorLabel(msg) {
+	if (!msg) return '';
+	const named = String(msg.from_name || '').trim();
+	if (named) return named;
+	const from = String(msg.from || '').trim().toLowerCase();
+	const fromMsgName = mailPersonName(msg, from);
+	if (fromMsgName) return fromMsgName;
+	return displayNameFromEmail(from);
 }
 
 /**

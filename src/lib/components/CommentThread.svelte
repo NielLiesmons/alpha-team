@@ -210,9 +210,21 @@
 						{@const parentName = parent
 							? parentPerson?.name || displayNameFromEmail(parent.author)
 							: ''}
-						<div class="card">
-							<ProfilePic name={name} size={32} />
-							<button type="button" class="bubble" class:quoted={Boolean(parent)} onclick={() => startReply(msg)}>
+						{@const nested = Boolean(parent)}
+						<div class="card" class:nested>
+							<div class="spine" aria-hidden="true">
+								{#if nested}
+									<div class="line-dotted"></div>
+								{/if}
+								<div class="line-solid"></div>
+								<ProfilePic name={name} size={32} />
+							</div>
+							<button
+								type="button"
+								class="bubble"
+								class:quoted={nested}
+								onclick={() => startReply(msg)}
+							>
 								<div class="bubble-head">
 									<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
 									<span class="when">{formatWhen(msg.created_at)}</span>
@@ -407,8 +419,41 @@
 
 	.card {
 		display: flex;
-		gap: 10px;
-		align-items: flex-end;
+		gap: 8px;
+		align-items: stretch;
+	}
+
+	.spine {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		flex-shrink: 0;
+		width: 34px;
+	}
+
+	.card:not(.nested) .line-dotted,
+	.card:not(.nested) .line-solid {
+		display: none;
+	}
+
+	.line-dotted {
+		width: 2px;
+		flex: 1;
+		min-height: 4px;
+		background: repeating-linear-gradient(
+			to bottom,
+			color-mix(in srgb, var(--fg) 16%, transparent) 0px,
+			color-mix(in srgb, var(--fg) 16%, transparent) 6px,
+			transparent 6px,
+			transparent 10px
+		);
+	}
+
+	.line-solid {
+		width: 2px;
+		flex: 1;
+		min-height: 6px;
+		background: color-mix(in srgb, var(--fg) 16%, transparent);
 	}
 
 	.bubble {

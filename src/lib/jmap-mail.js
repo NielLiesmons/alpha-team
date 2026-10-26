@@ -155,11 +155,23 @@ function firstResult(methodResponses, name) {
 }
 
 /**
+ * Prefer JMAP EmailAddress.name (what Apple Mail shows), not a local-part guess.
+ * @param {{ name?: string, email?: string } | null | undefined} addr
+ */
+function addrDisplayName(addr) {
+	const name = String(addr?.name || '').trim();
+	if (name) return name;
+	return '';
+}
+
+/**
  * @param {any} email
  */
 export function toUiMessage(email) {
-	const from = email?.from?.[0]?.email || email?.sender?.[0]?.email || '';
-	const to = (email?.to || []).map((a) => a.email).filter(Boolean);
+	const fromAddr = email?.from?.[0] || email?.sender?.[0] || null;
+	const from = fromAddr?.email || '';
+	const toAddrs = Array.isArray(email?.to) ? email.to : [];
+	const to = toAddrs.map((a) => a?.email).filter(Boolean);
 	const created = email?.receivedAt || email?.sentAt || new Date().toISOString();
 	const fromNorm = String(from).toLowerCase();
 	return {
@@ -167,7 +179,14 @@ export function toUiMessage(email) {
 		id: email.id,
 		threadId: email.threadId || email.id,
 		from: fromNorm,
+		from_name: addrDisplayName(fromAddr),
 		to: to.map((e) => String(e).toLowerCase()),
+		to_people: toAddrs
+			.filter((a) => a?.email)
+			.map((a) => ({
+				email: String(a.email).toLowerCase(),
+				name: addrDisplayName(a)
+			})),
 		subject: email.subject || '(no subject)',
 		body: email.preview || '',
 		created_at: created,
@@ -176,6 +195,29 @@ export function toUiMessage(email) {
 		_jmap: email,
 		_unread: !email.keywords?.$seen
 	};
+}
+
+/**
+ * Display name for a mailbox address on a message (JMAP name → fallback).
+ * @param {any} msg
+ * @param {string} email
+ */
+export function mailPersonName(msg, email) {
+	const e = String(email || '')
+		.trim()
+		.toLowerCase();
+	if (!e || !msg) return '';
+	if (msg.from === e && msg.from_name) return msg.from_name;
+	const hit = Array.isArray(msg.to_people)
+		? msg.to_people.find((p) => p.email === e)
+		: null;
+	if (hit?.name) return hit.name;
+	for (const m of msg.messages || []) {
+		if (m.from === e && m.from_name) return m.from_name;
+		const p = Array.isArray(m.to_people) ? m.to_people.find((x) => x.email === e) : null;
+		if (p?.name) return p.name;
+	}
+	return '';
 }
 
 /**
@@ -197,14 +239,20 @@ export function groupMailThreads(messages, me) {
 	for (const [threadId, msgs] of by) {
 		msgs.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
 		const latest = msgs[msgs.length - 1];
-		/* Author focus: other party when possible */
+		/* Author focus: other party when possible — keep their real display name */
 		let authorEmail = latest.from;
+		let authorName = latest.from_name || '';
 		if (meN && authorEmail === meN) {
 			const other = (latest.to || []).find((e) => e !== meN);
-			if (other) authorEmail = other;
-			else {
+			if (other) {
+				authorEmail = other;
+				authorName = mailPersonName(latest, other);
+			} else {
 				const earlier = [...msgs].reverse().find((m) => m.from && m.from !== meN);
-				if (earlier) authorEmail = earlier.from;
+				if (earlier) {
+					authorEmail = earlier.from;
+					authorName = earlier.from_name || '';
+				}
 			}
 		}
 		threads.push({
@@ -212,6 +260,7 @@ export function groupMailThreads(messages, me) {
 			id: threadId,
 			threadId,
 			from: authorEmail,
+			from_name: authorName,
 			_latestFrom: latest.from,
 			messages: msgs,
 			count: msgs.length,

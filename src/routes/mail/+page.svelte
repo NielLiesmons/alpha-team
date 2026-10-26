@@ -1,11 +1,12 @@
 <script>
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
-	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { actor } from '$lib/actor.svelte.js';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
 		formatMailWhen,
 		isUnreadFor,
+		mailAuthorLabel,
 		mailMessages,
 		mailPreview,
 		mailThreadsForCurrentFolder,
@@ -55,7 +56,8 @@
 		<div class="card-stack">
 			{#each threadsList as t (t.id)}
 				{@const unread = isUnreadFor(t)}
-				{@const author = displayNameFromEmail(t.from)}
+				{@const author = mailAuthorLabel(t)}
+				{@const snippet = mailPreview(t)}
 				<button
 					type="button"
 					class="row"
@@ -73,7 +75,9 @@
 							<span class="count">{t.count}</span>
 						{/if}
 					</span>
-					<span class="preview">{mailPreview(t) || ' '}</span>
+					{#if snippet}
+						<span class="snippet">{snippet}</span>
+					{/if}
 				</button>
 			{/each}
 		</div>
@@ -129,15 +133,17 @@
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		gap: 2px;
+		gap: 1px;
 		width: 100%;
-		padding: 12px 14px;
+		padding: 10px 14px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
+		font: inherit;
+		line-height: 1.25;
 	}
 
 	.row:hover {
@@ -198,9 +204,14 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	.preview {
+	/* Do not use class "preview" — app.css .preview adds 16px padding for editors */
+	.snippet {
+		display: block;
+		margin: 0;
+		padding: 0;
 		font-size: 12px;
 		font-weight: 400;
+		line-height: 1.3;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;

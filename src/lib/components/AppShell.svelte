@@ -942,11 +942,11 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 2px;
-		height: 32px;
-		padding: 3px;
+		height: 28px;
+		padding: 2px;
 		box-sizing: border-box;
 		border: 1px solid transparent;
-		border-radius: 12px;
+		border-radius: 10px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -958,13 +958,13 @@
 
 	.zoom-seg button {
 		height: 100%;
-		padding: 0 11px;
+		padding: 0 10px;
 		border: 0;
-		border-radius: 9px;
+		border-radius: 8px;
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
-		font-size: 12px;
+		font-size: 11px;
 		font-weight: 600;
 		cursor: pointer;
 		line-height: 1;
@@ -1002,15 +1002,15 @@
 		gap: 6px;
 	}
 
-	/* Desktop: match nav search/plus (32×32); circles are mobile-only */
+	/* Desktop: 28px squared chrome (between prior 26 and nav 32); circles mobile-only */
 	.chrome-btn {
-		width: 32px;
-		height: 32px;
+		width: 28px;
+		height: 28px;
 		display: grid;
 		place-items: center;
 		padding: 0;
 		border: 1px solid transparent;
-		border-radius: 12px;
+		border-radius: 10px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;

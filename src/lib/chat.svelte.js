@@ -151,19 +151,38 @@ export function openChatRef(msg) {
 
 /** @param {any} msg */
 export function chatRefLabel(msg) {
+	const meta = chatRefMeta(msg);
+	if (!meta) return null;
+	return meta.kind ? `${meta.kind} · ${meta.title}` : meta.title;
+}
+
+/**
+ * Content tip for CommentCard-style feed rows.
+ * @param {any} msg
+ * @returns {{ kind: string, title: string, icon: string } | null}
+ */
+export function chatRefMeta(msg) {
 	const ref = msg?.ref;
-	if (!ref) return null;
+	if (!ref?.type) return null;
 	if (ref.type === 'task') {
 		const t = tasks.find((x) => x.id === ref.id);
-		return t ? `Task · ${t.title}` : 'Task';
+		return { kind: 'Task', title: t?.title || 'Task', icon: 'tasks' };
 	}
 	if (ref.type === 'note') {
 		const n = notes.find((x) => x.id === ref.id);
-		return n ? `Note · ${n.title || 'Untitled'}` : 'Note';
+		return { kind: 'Note', title: n?.title || 'Untitled', icon: 'notes' };
 	}
 	if (ref.type === 'project') {
 		const p = projects.find((x) => x.id === ref.id);
-		return p ? `Project · ${p.title}` : 'Project';
+		return { kind: 'Project', title: p?.title || 'Project', icon: 'projects' };
 	}
-	return `${ref.type}`;
+	return { kind: String(ref.type), title: String(ref.type), icon: 'chat' };
+}
+
+/**
+ * @param {string | null | undefined} replyToId
+ */
+export function findChatParent(replyToId) {
+	if (!replyToId) return null;
+	return chatFeed.find((m) => m.id === replyToId) ?? null;
 }

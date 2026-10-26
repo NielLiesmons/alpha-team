@@ -1,14 +1,14 @@
 <script>
 	import { onMount } from 'svelte';
+	import ChatFeedCard from '$lib/components/ChatFeedCard.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
-	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
-	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import {
 		chatFeed,
-		chatRefLabel,
+		chatRefMeta,
 		chatUi,
+		findChatParent,
 		openChatRef,
 		postChatMessage,
 		refreshChatFeed
@@ -87,23 +87,15 @@
 	{:else if chatFeed.length === 0}
 		<p class="empty">No messages yet — comment on a Task or Note, or send above.</p>
 	{:else}
-		<div class="card-stack">
+		<div class="stack">
 			{#each chatFeed as msg (msg.id)}
-				{@const person = asPerson(msg.author)}
-				{@const refLabel = chatRefLabel(msg)}
-				<button type="button" class="row" onclick={() => openChatRef(msg)}>
-					<ProfilePic name={person?.name || displayNameFromEmail(msg.author)} size={36} />
-					<span class="col">
-						<span class="top">
-							<span class="name">{person?.name || displayNameFromEmail(msg.author)}</span>
-							<span class="when">{formatWhen(msg.created_at)}</span>
-						</span>
-						{#if refLabel}
-							<span class="ref">{refLabel}</span>
-						{/if}
-						<span class="preview">{msg.body}</span>
-					</span>
-				</button>
+				<ChatFeedCard
+					{msg}
+					parent={findChatParent(msg.reply_to)}
+					refMeta={chatRefMeta(msg)}
+					when={formatWhen(msg.created_at)}
+					onclick={() => openChatRef(msg)}
+				/>
 			{/each}
 		</div>
 	{/if}
@@ -177,73 +169,10 @@
 		font-size: 14px;
 	}
 
-	.card-stack {
+	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 6px;
-	}
-
-	.row {
-		display: flex;
-		gap: 12px;
-		align-items: flex-start;
-		width: 100%;
-		padding: 10px 12px;
-		border: 0;
-		border-radius: 12px;
-		background: transparent;
-		color: inherit;
-		text-align: left;
-		cursor: pointer;
-		font: inherit;
-	}
-
-	.row:hover {
-		background: var(--fg-4);
-	}
-
-	.col {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.top {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 8px;
-	}
-
-	.name {
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--fg);
-	}
-
-	.when {
-		font-size: 12px;
-		color: var(--fg-33);
-		flex-shrink: 0;
-	}
-
-	.ref {
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--fg-33);
-	}
-
-	.preview {
-		font-size: 14px;
-		line-height: 1.4;
-		color: var(--fg-66);
-		overflow: hidden;
-		display: -webkit-box;
-		-webkit-line-clamp: 3;
-		line-clamp: 3;
-		-webkit-box-orient: vertical;
+		gap: 16px;
+		padding: 12px 10px 20px;
 	}
 </style>
