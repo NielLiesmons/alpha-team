@@ -7,6 +7,7 @@
 import { actor, loadActor } from './actor.svelte.js';
 import { refreshChatFeed } from './chat.svelte.js';
 import { driveSession, loadSessionFromStorage } from './drive/session.svelte.js';
+import { refreshMail } from './mail.svelte.js';
 import { hydrateTracksFromCache, refreshTracks } from './player.svelte.js';
 import { hydrateWorkspaceFromCache, refreshFromDrive, ui } from './workspace.svelte.js';
 
@@ -54,7 +55,7 @@ export async function bootApp() {
 	appBoot.ready = true;
 
 	try {
-		await Promise.all([refreshFromDrive(), refreshTracks(), refreshChatFeed()]);
+		await Promise.all([refreshFromDrive(), refreshTracks(), refreshChatFeed(), refreshMail()]);
 	} catch {
 		/* errors land on driveSession / playerUi */
 	} finally {

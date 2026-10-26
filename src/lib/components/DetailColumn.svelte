@@ -23,13 +23,18 @@
 		uploadAudioFiles,
 		uploadUi
 	} from '$lib/player.svelte.js';
-	import { activePerson, actor, asPerson } from '$lib/actor.svelte.js';
+	import { activePerson, actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import {
 		campaigns,
 		mailSettings,
 		persistSendCampaign
 	} from '$lib/publications.svelte.js';
+	import {
+		findMail,
+		formatMailWhen,
+		markMailRead
+	} from '$lib/mail.svelte.js';
 	import {
 		projectLifecycle,
 		primaryEnterpriseId,
@@ -115,6 +120,13 @@
 		selection?.kind === 'newsletter' ? campaigns.find((c) => c.id === selection.id) : null
 	);
 	const welcomeSelected = $derived(selection?.kind === 'welcome');
+	const mailMsg = $derived(selection?.kind === 'mail' ? findMail(selection.id) : null);
+
+	$effect(() => {
+		const id = mailMsg?.id;
+		if (!id) return;
+		void markMailRead(id);
+	});
 
 	/** @param {number} cents */
 	function formatMoney(cents, currency = 'EUR') {
@@ -206,7 +218,7 @@
 		if (accountingPanel) return 'Entreprises';
 		if (newsletter) return 'Newsletter';
 		if (welcomeSelected) return 'Welcome';
-		if (selection?.kind === 'mail') return 'Mail';
+		if (mailMsg) return 'Mail';
 		if (selection?.kind === 'chat') return 'Chat';
 		return 'Detail';
 	});
@@ -224,6 +236,7 @@
 		if (accountingPanel) return accountingBrowse.mode;
 		if (newsletter?.subject) return newsletter.subject;
 		if (welcomeSelected) return 'Welcome';
+		if (mailMsg?.subject) return mailMsg.subject;
 		return typeLabel;
 	});
 
@@ -239,7 +252,8 @@
 				enterprise ||
 				accountingPanel ||
 				newsletter ||
-				welcomeSelected
+				welcomeSelected ||
+				mailMsg
 		)
 	);
 
@@ -259,7 +273,10 @@
 				body: 'Welcome + newsletters for the public list. Use + to write a letter.'
 			};
 		if (path.startsWith('/mail'))
-			return { title: 'No message selected', body: 'Inbox and sent mail open here when IMAP is wired.' };
+			return {
+				title: 'No message selected',
+				body: 'Pick a message from Inbox or Sent — or use + to compose for your mailbox.'
+			};
 		if (path.startsWith('/chat')) return { title: 'No chat selected', body: 'Conversations will open here when chat is ready.' };
 		return { title: 'Nothing open', body: 'Select a task, project, note, mail, or chat to view it here.' };
 	});
@@ -479,7 +496,7 @@
 						{/if}
 						{#if canDelete}
 							<button type="button" class="menu-item" role="menuitem" onclick={deleteCurrent}>
-								<Trash size={16} />
+								<Trash size={13} />
 								Delete
 							</button>
 						{/if}
@@ -587,7 +604,7 @@
 					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={16} />
+					<Trash size={13} />
 				</button>
 			</div>
 		</header>
@@ -619,7 +636,7 @@
 					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={16} />
+					<Trash size={13} />
 				</button>
 			</div>
 		</header>
@@ -732,7 +749,7 @@
 					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={16} />
+					<Trash size={13} />
 				</button>
 			</div>
 		</header>
@@ -811,6 +828,43 @@
 			</p>
 			<h2 class="pub-title">{newsletter.subject}</h2>
 			<pre class="pub-body">{newsletter.body}</pre>
+		</div>
+	{:else if mailMsg}
+		<header class="detail-top desktop-head">
+			<span class="detail-top-label">Mail</span>
+			<div class="detail-top-actions">
+				<button
+					type="button"
+					class="send-chip"
+					onclick={() =>
+						openComposer('mail', undefined, undefined, {
+							to: mailMsg.from
+						})
+					}
+				>
+					Reply
+				</button>
+				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 4l8 8M12 4l-8 8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
+			</div>
+		</header>
+		<div class="body">
+			<p class="pub-kicker">
+				{displayNameFromEmail(mailMsg.from)}
+				→ {(mailMsg.to || []).map(displayNameFromEmail).join(', ')}
+				· {formatMailWhen(mailMsg.created_at)}
+				{#if mailMsg.transport === 'drive'}· Drive{/if}
+			</p>
+			<h2 class="pub-title">{mailMsg.subject || '(no subject)'}</h2>
+			<pre class="pub-body">{mailMsg.body || ''}</pre>
 		</div>
 	{:else if accountingPanel}
 		<AccountingDetail />
@@ -898,7 +952,7 @@
 					<Pen size={13} />
 				</button>
 				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={16} />
+					<Trash size={13} />
 				</button>
 			</div>
 		</header>

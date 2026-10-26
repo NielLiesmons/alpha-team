@@ -27,6 +27,7 @@
 	import LedgerCreate from './LedgerCreate.svelte';
 	import MobilePlayerPill from './MobilePlayerPill.svelte';
 	import NavIcon from './NavIcon.svelte';
+	import MailCreate from './MailCreate.svelte';
 	import NewsletterCreate from './NewsletterCreate.svelte';
 	import NoteCreate from './NoteCreate.svelte';
 	import NowPlayingScreen from './NowPlayingScreen.svelte';
@@ -89,7 +90,7 @@
 
 	const createKind = $derived(
 		'createKind' in activeItem
-			? /** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | undefined} */ (
+			? /** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'mail' | undefined} */ (
 					activeItem.createKind
 				)
 			: undefined
@@ -131,7 +132,7 @@
 		goto(href, { replaceState: replace });
 	}
 
-	/** @param {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise'} kind */
+	/** @param {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail'} kind */
 	function create(kind) {
 		createMenuOpen = false;
 		openComposer(kind);
@@ -139,6 +140,7 @@
 		else if (kind === 'project') go('/projects');
 		else if (kind === 'note') go('/notes');
 		else if (kind === 'newsletter') go('/publications');
+		else if (kind === 'mail') go('/mail');
 		else if (kind === 'ledger' || kind === 'cost' || kind === 'sales' || kind === 'enterprise') {
 			if (kind === 'ledger') setAccountingBrowse('ledger');
 			else if (kind === 'cost') setAccountingBrowse('costs');
@@ -261,7 +263,7 @@
 									aria-label="New {item.createKind}"
 									onclick={() =>
 										openComposer(
-											/** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger'} */ (
+											/** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'mail'} */ (
 												item.createKind
 											)
 										)}
@@ -396,6 +398,7 @@
 	<SalesCreate />
 	<EnterpriseCreate />
 	<NewsletterCreate />
+	<MailCreate />
 	<WelcomeEdit />
 	<TrackEdit />
 	<PlaylistCreate />

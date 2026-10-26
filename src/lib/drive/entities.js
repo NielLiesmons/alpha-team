@@ -1797,3 +1797,130 @@ export async function createChatMessage(session, input) {
 	await putPaths(session, writes);
 	return msg;
 }
+
+/* ── Personal mail (Drive-backed until Stalwart IMAP) ── */
+
+const MAIL_INDEX_MAX = 500;
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} id
+ */
+export async function getMailMessage(session, id) {
+	const bytes = await getPath(session, `mail/messages/${id}.json`);
+	return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @returns {Promise<string[]>}
+ */
+export async function listMailIds(session) {
+	try {
+		const bytes = await getPath(session, 'mail/index.json');
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		if (Array.isArray(doc?.ids)) return doc.ids.map(String);
+		if (Array.isArray(doc)) return doc.map(String);
+		return [];
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {number} [limit]
+ */
+export async function listMailMessages(session, limit = 200) {
+	const ids = (await listMailIds(session)).slice(0, limit);
+	/** @type {any[]} */
+	const out = [];
+	for (const id of ids) {
+		try {
+			out.push(await getMailMessage(session, id));
+		} catch {
+			/* skip missing leaf */
+		}
+	}
+	return out;
+}
+
+/**
+ * Create a Space-local mail message (not SMTP). Visible to recipients who share this Drive.
+ * @param {import('./client.js').DriveSession} session
+ * @param {{
+ *   from: string,
+ *   to: string[],
+ *   subject: string,
+ *   body: string
+ * }} input
+ */
+export async function createMailMessage(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const to = [...new Set((input.to || []).map((e) => e.trim().toLowerCase()).filter(Boolean))];
+	if (!to.length) throw new Error('Add at least one recipient');
+	const from = (input.from || '').trim().toLowerCase();
+	if (!from) throw new Error('Sender required');
+
+	const msg = {
+		schema: 'alpha.mail_message/1',
+		id,
+		from,
+		to,
+		subject: (input.subject || '').trim() || '(no subject)',
+		body: input.body ?? '',
+		created_at: created,
+		transport: 'drive',
+		read_by: [from]
+	};
+
+	let ids = [];
+	try {
+		ids = await listMailIds(session);
+	} catch {
+		ids = [];
+	}
+	ids = [id, ...ids.filter((x) => x !== id)].slice(0, MAIL_INDEX_MAX);
+
+	await putPaths(session, [
+		{
+			path: `mail/messages/${id}.json`,
+			kind: 'mail_message',
+			plaintext: JSON.stringify(msg, null, 2)
+		},
+		{
+			path: 'mail/index.json',
+			kind: 'mail_index',
+			plaintext: JSON.stringify(
+				{ schema: 'alpha.mail_index/1', ids, updated_at: created },
+				null,
+				2
+			)
+		}
+	]);
+	return msg;
+}
+
+/**
+ * Persist mail leaf (e.g. mark read).
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} msg
+ */
+export async function putMailMessage(session, msg) {
+	const id = msg?.id;
+	if (!id) throw new Error('Mail message missing id');
+	const next = {
+		...msg,
+		schema: 'alpha.mail_message/1',
+		id,
+		transport: msg.transport || 'drive'
+	};
+	await putPath(
+		session,
+		`mail/messages/${id}.json`,
+		'mail_message',
+		JSON.stringify(next, null, 2)
+	);
+	return next;
+}

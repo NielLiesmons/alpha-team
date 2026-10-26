@@ -8,7 +8,7 @@
  *   label: string,
  *   icon: string,
  *   countKey?: 'tasks' | 'projects' | 'notes' | 'enterprises' | 'ledger',
- *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise',
+ *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail',
  *   children?: NavItem[]
  * }} NavItem
  */
@@ -23,7 +23,7 @@ export const websiteChildren = [
 /** @type {NavItem[]} */
 export const primaryNav = [
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
-	{ href: '/mail', label: 'Mail', icon: 'mail' },
+	{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
 	{ href: '/drive', label: 'Drive', icon: 'drive' },
 	{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
@@ -51,7 +51,7 @@ export const mobileNav = [
 	{ href: '/projects', label: 'Projects', icon: 'projects' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
-	{ href: '/mail', label: 'Mail', icon: 'mail' },
+	{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
 	{ href: '/drive', label: 'Drive', icon: 'drive' },
 	{ href: '/player', label: 'Player', icon: 'player' }
 ];

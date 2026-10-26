@@ -72,7 +72,7 @@ export const ui = $state({
 	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise', id: string }}
 	 */
 	selection: null,
-	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise', id?: string, status?: string }} */
+	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail', id?: string, status?: string, to?: string }} */
 	composer: null,
 	/** @type {'none' | 'drive'} */
 	source: 'none'
@@ -102,10 +102,10 @@ export function forceClearSelection() {
 }
 
 /**
- * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise'} kind
+ * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail'} kind
  * @param {string} [id]
  * @param {string} [status]
- * @param {Record<string, unknown>} [seed] extra fields (e.g. project_ids, primary_enterprise_id)
+ * @param {Record<string, unknown>} [seed] extra fields (e.g. project_ids, primary_enterprise_id, to)
  */
 export function openComposer(kind, id, status, seed = {}) {
 	ui.composer = {
