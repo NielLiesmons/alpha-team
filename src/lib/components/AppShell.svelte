@@ -30,7 +30,10 @@
 	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
 	import EnterpriseCreate from './EnterpriseCreate.svelte';
+	import FormCreate from './FormCreate.svelte';
 	import LedgerCreate from './LedgerCreate.svelte';
+	import MetricCreate from './MetricCreate.svelte';
+	import TableCreate from './TableCreate.svelte';
 	import MobilePlayerPill from './MobilePlayerPill.svelte';
 	import NavIcon from './NavIcon.svelte';
 	import MailCreate from './MailCreate.svelte';
@@ -139,7 +142,7 @@
 		goto(href, { replaceState: replace });
 	}
 
-	/** @param {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail'} kind */
+	/** @param {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'table' | 'metric' | 'form'} kind */
 	function create(kind) {
 		createMenuOpen = false;
 		openComposer(kind);
@@ -148,10 +151,21 @@
 		else if (kind === 'note') go('/notes');
 		else if (kind === 'newsletter') go('/publications');
 		else if (kind === 'mail') go('/mail');
-		else if (kind === 'ledger' || kind === 'cost' || kind === 'sales' || kind === 'enterprise') {
+		else if (
+			kind === 'ledger' ||
+			kind === 'cost' ||
+			kind === 'sales' ||
+			kind === 'enterprise' ||
+			kind === 'table' ||
+			kind === 'metric' ||
+			kind === 'form'
+		) {
 			if (kind === 'ledger') setAccountingBrowse('ledger');
 			else if (kind === 'cost') setAccountingBrowse('costs');
 			else if (kind === 'sales') setAccountingBrowse('sales');
+			else if (kind === 'table') setAccountingBrowse('tables');
+			else if (kind === 'metric') setAccountingBrowse('metrics');
+			else if (kind === 'form') setAccountingBrowse('forms');
 			else setAccountingBrowse('enterprises');
 			go('/entreprises');
 		}
@@ -446,6 +460,9 @@
 	<CostCreate />
 	<SalesCreate />
 	<EnterpriseCreate />
+	<TableCreate />
+	<MetricCreate />
+	<FormCreate />
 	<NewsletterCreate />
 	<MailCreate />
 	<WelcomeEdit />

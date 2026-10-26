@@ -1589,6 +1589,8 @@ export async function createEnterprise(session, input) {
 		sales: input.sales ?? [],
 		output_unit_label: input.output_unit_label || '',
 		expected_output_units: Number(input.expected_output_units) || 0,
+		expected_output_from_metric_id: input.expected_output_from_metric_id ?? null,
+		table_ids: Array.isArray(input.table_ids) ? input.table_ids : [],
 		currency: input.currency || 'EUR',
 		labels: input.labels ?? [],
 		created_at: created,
@@ -1624,7 +1626,7 @@ export async function putEnterprise(session, enterprise) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {'task' | 'project' | 'note' | 'enterprise'} kind
+ * @param {'task' | 'project' | 'note' | 'enterprise' | 'table' | 'table_row' | 'metric' | 'form'} kind
  * @param {string} id
  */
 export async function deleteEntity(session, kind, id) {
@@ -1635,8 +1637,269 @@ export async function deleteEntity(session, kind, id) {
 				? `projects/${id}/project.json`
 				: kind === 'note'
 					? `notes/${id}/note.json`
-					: `enterprises/${id}/enterprise.json`;
+					: kind === 'table'
+						? `tables/${id}/table.json`
+						: kind === 'table_row'
+							? `table_rows/${id}/row.json`
+							: kind === 'metric'
+								? `metrics/${id}/metric.json`
+								: kind === 'form'
+									? `forms/${id}/form.json`
+									: `enterprises/${id}/enterprise.json`;
 	await deletePaths(session, [path]);
+}
+
+/* ── Operational tables / metrics / capture forms ── */
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listTables(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'table' || path.endsWith('/table.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createTable(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const columns = Array.isArray(input.columns)
+		? input.columns.map((c) => ({
+				id: c.id || newId(),
+				key: String(c.key || c.label || 'col')
+					.toLowerCase()
+					.replace(/[^a-z0-9]+/g, '_')
+					.replace(/^_|_$/g, '') || 'col',
+				label: c.label || c.key || 'Column',
+				type: c.type || 'number',
+				unit: c.unit || '',
+				formula: c.formula || undefined,
+				options: Array.isArray(c.options) ? c.options : undefined
+			}))
+		: [];
+	const key =
+		String(input.key || input.title || id)
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '_')
+			.replace(/^_|_$/g, '') || id;
+	const doc = {
+		schema: 'alpha.table/1',
+		id,
+		title: input.title || 'Untitled table',
+		key,
+		description: input.description || '',
+		enterprise_id: input.enterprise_id ?? null,
+		columns,
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(session, `tables/${id}/table.json`, 'table', JSON.stringify(doc, null, 2));
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} table
+ */
+export async function putTable(session, table) {
+	const next = { ...table, schema: 'alpha.table/1', updated_at: nowRfc3339() };
+	await putPath(session, `tables/${next.id}/table.json`, 'table', JSON.stringify(next, null, 2));
+	return next;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} [tableId]
+ */
+export async function listTableRows(session, tableId) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'table_row' || path.endsWith('/row.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				const row = JSON.parse(new TextDecoder().decode(bytes));
+				if (tableId && row.table_id !== tableId) continue;
+				out.push(row);
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createTableRow(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const doc = {
+		schema: 'alpha.table_row/1',
+		id,
+		table_id: input.table_id,
+		cells: input.cells && typeof input.cells === 'object' ? { ...input.cells } : {},
+		occurred_on: input.occurred_on || undefined,
+		author: input.author || undefined,
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(session, `table_rows/${id}/row.json`, 'table_row', JSON.stringify(doc, null, 2));
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} row
+ */
+export async function putTableRow(session, row) {
+	const next = { ...row, schema: 'alpha.table_row/1', updated_at: nowRfc3339() };
+	await putPath(
+		session,
+		`table_rows/${next.id}/row.json`,
+		'table_row',
+		JSON.stringify(next, null, 2)
+	);
+	return next;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listMetrics(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'metric' || path.endsWith('/metric.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.key || a.title).localeCompare(String(b.key || b.title)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createMetric(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const doc = {
+		schema: 'alpha.metric/1',
+		id,
+		key: String(input.key || input.title || id)
+			.toLowerCase()
+			.replace(/\s+/g, '.'),
+		title: input.title || input.key || 'Metric',
+		enterprise_id: input.enterprise_id ?? null,
+		expr: String(input.expr || '0'),
+		unit: input.unit || '',
+		value: null,
+		computed_at: null,
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(session, `metrics/${id}/metric.json`, 'metric', JSON.stringify(doc, null, 2));
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} metric
+ */
+export async function putMetric(session, metric) {
+	const next = { ...metric, schema: 'alpha.metric/1', updated_at: nowRfc3339() };
+	await putPath(
+		session,
+		`metrics/${next.id}/metric.json`,
+		'metric',
+		JSON.stringify(next, null, 2)
+	);
+	return next;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listForms(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'form' || path.endsWith('/form.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createForm(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const doc = {
+		schema: 'alpha.form/1',
+		id,
+		title: input.title || 'Capture',
+		table_id: input.table_id,
+		enterprise_id: input.enterprise_id ?? null,
+		fields: Array.isArray(input.fields) ? input.fields : [],
+		occurred_on_field: input.occurred_on_field !== false,
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(session, `forms/${id}/form.json`, 'form', JSON.stringify(doc, null, 2));
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} form
+ */
+export async function putForm(session, form) {
+	const next = { ...form, schema: 'alpha.form/1', updated_at: nowRfc3339() };
+	await putPath(session, `forms/${next.id}/form.json`, 'form', JSON.stringify(next, null, 2));
+	return next;
 }
 
 /* ── Chat messages + per-entity comment indexes ── */

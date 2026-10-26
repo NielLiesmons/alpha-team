@@ -2,11 +2,33 @@
  * Accounting browse — Player-style categories in the list column; detail shows the list.
  */
 
-/** @typedef {'home' | 'ledger' | 'costs' | 'sales' | 'enterprises'} AccountingMode */
+import { buildMetricContext, resolveEnterpriseOutput } from './table-metrics.js';
+
+/** @typedef {'home' | 'ledger' | 'costs' | 'sales' | 'enterprises' | 'tables' | 'metrics' | 'forms'} AccountingMode */
+
+export const ACCOUNTING_MODES = /** @type {const} */ ([
+	'enterprises',
+	'tables',
+	'metrics',
+	'forms',
+	'costs',
+	'sales',
+	'ledger'
+]);
+
+export const ACCOUNTING_MODE_LABELS = {
+	enterprises: 'Entreprises',
+	tables: 'Tables',
+	metrics: 'Metrics',
+	forms: 'Forms',
+	costs: 'Costs',
+	sales: 'Sales',
+	ledger: 'Ledger'
+};
 
 export const accountingBrowse = $state({
 	/** @type {AccountingMode} */
-	mode: /** @type {AccountingMode} */ ('home')
+	mode: /** @type {AccountingMode} */ ('enterprises')
 });
 
 /** @param {AccountingMode} mode */
@@ -15,19 +37,23 @@ export function setAccountingBrowse(mode) {
 }
 
 export function resetAccountingBrowse() {
-	accountingBrowse.mode = 'home';
+	accountingBrowse.mode = 'enterprises';
 }
 
 /**
  * Gross profit for an enterprise sheet given resolved cost/sales catalogs.
+ * Optional metrics/tables/rows bind expected output.
  * @param {any} enterprise
  * @param {any[]} costItems
  * @param {any[]} salesLines
+ * @param {{ tables?: any[], rows?: any[], metrics?: any[] }} [ops]
  */
-export function enterpriseGross(enterprise, costItems, salesLines) {
+export function enterpriseGross(enterprise, costItems, salesLines, ops = {}) {
 	const byCost = new Map(costItems.map((c) => [c.id, c]));
 	const bySales = new Map(salesLines.map((s) => [s.id, s]));
-	const output = Number(enterprise.expected_output_units) || 0;
+
+	const ctx = buildMetricContext(ops.tables || [], ops.rows || [], ops.metrics || []);
+	const output = resolveEnterpriseOutput(enterprise, ctx);
 
 	let fixed = 0;
 	for (const row of enterprise.fixed_costs ?? []) {
@@ -55,6 +81,7 @@ export function enterpriseGross(enterprise, costItems, salesLines) {
 		revenue_cents: Math.round(revenue),
 		fixed_cents: Math.round(fixed),
 		variable_cents: Math.round(variable),
-		gross_cents: Math.round(revenue - fixed - variable)
+		gross_cents: Math.round(revenue - fixed - variable),
+		output_units: output
 	};
 }

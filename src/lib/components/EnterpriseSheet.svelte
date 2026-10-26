@@ -2,9 +2,12 @@
 	import {
 		clearSelection,
 		costItems,
+		dataTables,
+		metrics,
 		projects,
 		salesLines,
-		saveEnterprise
+		saveEnterprise,
+		tableRows
 	} from '$lib/workspace.svelte.js';
 	import { enterpriseGross } from '$lib/accounting.svelte.js';
 
@@ -27,7 +30,16 @@
 	);
 	const variableCatalog = $derived(costItems.filter((c) => c.behavior === 'variable'));
 
-	const gp = $derived(enterpriseGross(enterprise, costItems, salesLines));
+	const gp = $derived(
+		enterpriseGross(enterprise, costItems, salesLines, {
+			tables: dataTables,
+			rows: tableRows,
+			metrics
+		})
+	);
+	const enterpriseMetrics = $derived(
+		metrics.filter((m) => !m.enterprise_id || m.enterprise_id === enterprise.id)
+	);
 
 	const linkedProjects = $derived(
 		(enterprise.project_ids ?? [])
@@ -76,6 +88,8 @@
 					sales: enterprise.sales ?? [],
 					project_ids: enterprise.project_ids ?? [],
 					expected_output_units: Number(enterprise.expected_output_units) || 0,
+					expected_output_from_metric_id: enterprise.expected_output_from_metric_id ?? null,
+					table_ids: enterprise.table_ids ?? [],
 					output_unit_label: enterprise.output_unit_label || '',
 					title: enterprise.title || 'Untitled'
 				},
@@ -180,7 +194,7 @@
 	function variableLineTotal(row) {
 		const item = byCost.get(row.cost_item_id);
 		if (!item) return 0;
-		const output = Number(enterprise.expected_output_units) || 0;
+		const output = Number(gp.output_units) || 0;
 		return (Number(item.amount_cents) || 0) * (Number(row.units_per_output) || 1) * output;
 	}
 
@@ -247,8 +261,26 @@
 				class="field-input"
 				inputmode="decimal"
 				value={enterprise.expected_output_units ?? ''}
+				disabled={Boolean(enterprise.expected_output_from_metric_id)}
 				oninput={(e) => scheduleSave({ expected_output_units: parseNum(e.currentTarget.value) })}
 			/>
+		</label>
+		<label class="field">
+			<span class="field-label">From metric</span>
+			<select
+				class="field-input"
+				value={enterprise.expected_output_from_metric_id ?? ''}
+				onchange={(e) =>
+					scheduleSave({
+						expected_output_from_metric_id: e.currentTarget.value || null
+					})
+				}
+			>
+				<option value="">Literal above</option>
+				{#each enterpriseMetrics as m (m.id)}
+					<option value={m.id}>{m.key || m.title}</option>
+				{/each}
+			</select>
 		</label>
 		<label class="field">
 			<span class="field-label">Unit</span>
@@ -273,6 +305,13 @@
 			</select>
 		</label>
 	</div>
+	{#if enterprise.expected_output_from_metric_id}
+		<p class="projects-line">
+			Resolved output: {gp.output_units?.toLocaleString?.(undefined, { maximumFractionDigits: 2 }) ??
+				gp.output_units}
+			{#if enterprise.output_unit_label}{enterprise.output_unit_label}{/if}
+		</p>
+	{/if}
 
 	{#if linkedProjects.length}
 		<p class="projects-line">

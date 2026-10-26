@@ -46,12 +46,19 @@
 	import { accountingBrowse } from '$lib/accounting.svelte.js';
 	import AccountingDetail from './AccountingDetail.svelte';
 	import CommentThread from './CommentThread.svelte';
+	import EnterpriseSheet from './EnterpriseSheet.svelte';
+	import FormDetail from './FormDetail.svelte';
+	import MetricDetail from './MetricDetail.svelte';
+	import TableDetail from './TableDetail.svelte';
 	import {
+		captureForms,
 		clearSelection,
 		costItems,
+		dataTables,
 		deleteWorkspaceEntity,
 		enterprises,
 		ledgerEntries,
+		metrics,
 		notes,
 		openComposer,
 		projects,
@@ -107,17 +114,20 @@
 	const enterprise = $derived(
 		selection?.kind === 'enterprise' ? enterprises.find((e) => e.id === selection.id) : null
 	);
+	const dataTable = $derived(
+		selection?.kind === 'table' ? dataTables.find((e) => e.id === selection.id) : null
+	);
+	const metricDoc = $derived(
+		selection?.kind === 'metric' ? metrics.find((e) => e.id === selection.id) : null
+	);
+	const formDoc = $derived(
+		selection?.kind === 'form' ? captureForms.find((e) => e.id === selection.id) : null
+	);
 	const isEntreprises = $derived(
 		$page.url.pathname.startsWith('/entreprises') || $page.url.pathname.startsWith('/accounting')
 	);
-	const accountingPanel = $derived(
-		isEntreprises &&
-			accountingBrowse.mode !== 'home' &&
-			!ledger &&
-			!costItem &&
-			!salesLine &&
-			!enterprise
-	);
+	/* List lives in /entreprises feed (category tabs); detail only for a selected entity */
+	const accountingPanel = $derived(false);
 	const newsletter = $derived(
 		selection?.kind === 'newsletter' ? campaigns.find((c) => c.id === selection.id) : null
 	);
@@ -975,29 +985,15 @@
 				{#if salesLine.unit_label}/ {salesLine.unit_label}{/if}
 			</p>
 		</div>
+	{:else if dataTable}
+		<TableDetail table={dataTable} />
+	{:else if metricDoc}
+		<MetricDetail metric={metricDoc} />
+	{:else if formDoc}
+		<FormDetail form={formDoc} />
 	{:else if enterprise}
-		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Enterprise</span>
-			<div class="detail-top-actions">
-				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={13} />
-				</button>
-				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={15} />
-				</button>
-			</div>
-		</header>
-		<div class="body">
-			<div class="title-row">
-				<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={24} />
-				<h2 class="title">{enterprise.title}</h2>
-			</div>
-			{#if enterprise.description}
-				<p class="prose">{@html renderInlineLinks(enterprise.description)}</p>
-			{:else}
-				<p class="muted">No description yet.</p>
-			{/if}
-
+		<EnterpriseSheet {enterprise} />
+		<div class="body enterprise-extra">
 			<div class="bento">
 				<section class="bento-panel">
 					<div class="bento-head">
