@@ -1,6 +1,5 @@
 /**
  * Personal Mail — Stalwart JMAP when mailbox password is set; else Drive interim leaves.
- * Not Publications / Resend newsletters.
  */
 
 import { activePerson, actor } from './actor.svelte.js';
@@ -10,8 +9,10 @@ import {
 	putMailMessage
 } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
-import { getMailboxPassword, listJmapMailbox } from './jmap-mail.js';
+import { getMailboxPassword, groupMailThreads, listJmapFolder } from './jmap-mail.js';
+import { mailView } from './mail-view.svelte.js';
 
+/** Thread rows (or flat Drive messages). */
 /** @type {any[]} */
 export const mailMessages = $state([]);
 
@@ -48,7 +49,7 @@ export function isInboxFor(msg, email) {
 export function isSentFor(msg, email) {
 	const me = normEmail(email);
 	if (!me || !msg) return false;
-	return normEmail(msg.from) === me;
+	return normEmail(msg.from) === me || normEmail(msg._latestFrom) === me;
 }
 
 /**
@@ -58,8 +59,7 @@ export function isSentFor(msg, email) {
 export function isUnreadFor(msg, email = mailActorEmail()) {
 	const me = normEmail(email);
 	if (!me || !msg) return false;
-	if (msg.transport === 'jmap') {
-		if (normEmail(msg.from) === me) return false;
+	if (msg.transport === 'jmap' || Array.isArray(msg.messages)) {
 		return Boolean(msg._unread);
 	}
 	if (!isInboxFor(msg, me)) return false;
@@ -69,32 +69,79 @@ export function isUnreadFor(msg, email = mailActorEmail()) {
 }
 
 /**
- * @param {'inbox' | 'sent'} folder
- * @param {string} [email]
+ * Strip Re:/Fwd: for Drive-side threading fallback.
+ * @param {string} subject
  */
-export function mailForFolder(folder, email = mailActorEmail()) {
-	const me = normEmail(email);
-	const list = mailMessages.filter((m) =>
-		folder === 'sent' ? isSentFor(m, me) : isInboxFor(m, me)
-	);
-	return list.slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+function threadSubjectKey(subject) {
+	return String(subject || '')
+		.replace(/^\s*((re|fw|fwd|aw|sv|antw)\s*:\s*)+/gi, '')
+		.trim()
+		.toLowerCase();
 }
 
 /**
- * @param {string} id
+ * Current folder threads (JMAP already filtered; Drive filtered here).
+ */
+export function mailThreadsForCurrentFolder() {
+	const folder = mailView.folder;
+	const me = mailActorEmail();
+	const list = [...mailMessages];
+
+	if (list.some((m) => m.transport === 'jmap' || Array.isArray(m.messages))) {
+		return list;
+	}
+
+	/* Drive interim — filter then thread by subject */
+	const filtered = list.filter((m) => {
+		if (folder === 'sent') return isSentFor(m, me);
+		if (folder === 'inbox') return isInboxFor(m, me);
+		return false;
+	});
+	const asMsgs = filtered.map((m) => ({
+		...m,
+		threadId: m.threadId || `subj:${threadSubjectKey(m.subject)}`
+	}));
+	return groupMailThreads(asMsgs, me);
+}
+
+/**
+ * @param {string} id thread id or message id
  */
 export function findMail(id) {
-	return mailMessages.find((m) => m.id === id) ?? null;
+	const hit = mailMessages.find((m) => m.id === id || m.threadId === id);
+	if (hit) return hit;
+	for (const t of mailMessages) {
+		if (Array.isArray(t.messages)) {
+			const m = t.messages.find((x) => x.id === id);
+			if (m) return { ...t, ...m, messages: t.messages, id: t.id };
+		}
+	}
+	return null;
+}
+
+/**
+ * Messages in a thread for the detail pane (oldest → newest).
+ * @param {any} thread
+ */
+export function threadMessages(thread) {
+	if (!thread) return [];
+	if (Array.isArray(thread.messages) && thread.messages.length) {
+		return [...thread.messages].sort((a, b) =>
+			String(a.created_at || '').localeCompare(String(b.created_at || ''))
+		);
+	}
+	return [thread];
 }
 
 export async function refreshMail() {
 	const me = mailActorEmail();
 	const pw = me ? getMailboxPassword(me) : '';
+	const folder = mailView.folder;
 	mailUi.loading = mailMessages.length === 0;
 	mailUi.error = null;
 	try {
 		if (me && pw) {
-			const list = await listJmapMailbox(me, pw, 100);
+			const list = await listJmapFolder(me, pw, folder, 80);
 			mailMessages.length = 0;
 			mailMessages.push(...list);
 			return;
@@ -128,7 +175,6 @@ export async function refreshMail() {
 }
 
 /**
- * Compose + store on Drive (Space-local). Recipients who share this Drive see it in Inbox.
  * @param {{ to: string[], subject: string, body: string }} input
  */
 export async function sendMail(input) {
@@ -173,22 +219,31 @@ export async function sendMail(input) {
 }
 
 /**
- * Mark opened by the signed-in mailbox (inbox only).
  * @param {string} id
  */
 export async function markMailRead(id) {
 	const me = mailActorEmail();
-	const msg = findMail(id);
-	if (!me || !msg || !isInboxFor(msg, me)) return msg;
-	const read = Array.isArray(msg.read_by) ? msg.read_by.map(normEmail) : [];
-	if (read.includes(me)) return msg;
+	const thread = findMail(id);
+	if (!me || !thread) return thread;
 
-	const next = { ...msg, read_by: [...read, me] };
+	if (thread.transport === 'jmap' || Array.isArray(thread.messages)) {
+		thread._unread = false;
+		if (Array.isArray(thread.messages)) {
+			for (const m of thread.messages) m._unread = false;
+		}
+		return thread;
+	}
+
+	if (!isInboxFor(thread, me)) return thread;
+	const read = Array.isArray(thread.read_by) ? thread.read_by.map(normEmail) : [];
+	if (read.includes(me)) return thread;
+
+	const next = { ...thread, read_by: [...read, me] };
 	const idx = mailMessages.findIndex((m) => m.id === id);
 	if (idx >= 0) mailMessages[idx] = next;
 
 	const session = activeSession();
-	if (!session || msg._local) return next;
+	if (!session || thread._local) return next;
 	try {
 		const saved = await putMailMessage(session, next);
 		if (idx >= 0) mailMessages[idx] = saved;

@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { mobileNav, primaryNav, websiteChildren } from '$lib/sections.js';
-	import { displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
 		enterprises,
 		forceClearSelection,
@@ -21,6 +21,12 @@
 	import { resetAccountingBrowse, setAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
 	import { PLANNING_ZOOM_LABELS, PLANNING_ZOOMS, planningView, setPlanningZoom } from '$lib/planning-view.svelte.js';
+	import {
+		MAIL_FOLDER_LABELS,
+		MAIL_FOLDERS,
+		mailView,
+		setMailFolder
+	} from '$lib/mail-view.svelte.js';
 	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
 	import EnterpriseCreate from './EnterpriseCreate.svelte';
@@ -112,6 +118,7 @@
 
 	/** Full-width list (no detail column) — Planning needs the whole workspace. */
 	const wideList = $derived(path.startsWith('/planning'));
+	const mailList = $derived(path.startsWith('/mail'));
 
 	onMount(() =>
 		bindDetailPopstate({
@@ -290,8 +297,32 @@
 	<div class="workspace-wrap">
 		<div class="workspace">
 			<section class="list-col" class:wide={wideList} aria-label={activeItem.label}>
-				<header class="list-top" class:planning-top={wideList}>
-					<h1 class="list-title" class:planning-title={wideList}>{activeItem.label}</h1>
+				<header class="list-top" class:planning-top={wideList} class:mail-top={mailList}>
+					{#if mailList}
+						<div class="zoom-seg mail-folder-seg" role="group" aria-label="Mailbox">
+							{#each MAIL_FOLDERS as f (f)}
+								<button
+									type="button"
+									class:on={mailView.folder === f}
+									onclick={() => setMailFolder(f)}
+								>{MAIL_FOLDER_LABELS[f]}</button
+								>
+							{/each}
+						</div>
+					{:else}
+						<h1 class="list-title desktop-only-title" class:planning-title={wideList}
+							>{activeItem.label}</h1
+						>
+						<button
+							type="button"
+							class="mobile-profile"
+							aria-label="Settings"
+							onclick={() => go('/settings')}
+						>
+							<ProfilePic name={activePerson().name} size={36} />
+							<span class="mobile-profile-name">{activePerson().name}</span>
+						</button>
+					{/if}
 					<div class="list-actions">
 						{#if wideList}
 							<div class="zoom-seg" role="group" aria-label="Timeframe">
@@ -304,6 +335,24 @@
 									>
 								{/each}
 							</div>
+						{:else if mailList}
+							{#if createKind}
+								<button
+									type="button"
+									class="chrome-btn list-plus"
+									aria-label="New {createKind}"
+									onclick={onListPlus}
+								>
+									<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+										<path
+											d="M8 3.25v9.5M3.25 8h9.5"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+										/>
+									</svg>
+								</button>
+							{/if}
 						{:else}
 							<div class="filter-wrap">
 								<button
@@ -870,6 +919,10 @@
 		color: var(--white33);
 	}
 
+	.mobile-profile {
+		display: none;
+	}
+
 	/* Sit over Planning’s fixed label column */
 	.list-title.planning-title {
 		width: 200px;
@@ -889,11 +942,11 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 2px;
-		height: 26px;
-		padding: 2px;
+		height: 32px;
+		padding: 3px;
 		box-sizing: border-box;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 12px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -905,13 +958,13 @@
 
 	.zoom-seg button {
 		height: 100%;
-		padding: 0 9px;
+		padding: 0 11px;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 9px;
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
-		font-size: 11px;
+		font-size: 12px;
 		font-weight: 600;
 		cursor: pointer;
 		line-height: 1;
@@ -922,21 +975,42 @@
 		color: var(--fg);
 	}
 
+	.list-top.mail-top {
+		gap: 10px;
+	}
+
+	.mail-folder-seg {
+		flex: 1;
+		min-width: 0;
+		max-width: 100%;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+
+	.mail-folder-seg::-webkit-scrollbar {
+		display: none;
+	}
+
+	.mail-folder-seg button {
+		padding: 0 8px;
+		white-space: nowrap;
+	}
+
 	.list-actions {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 	}
 
-	/* Desktop: squared chrome — circles are mobile-only; hover = scale only */
+	/* Desktop: match nav search/plus (32×32); circles are mobile-only */
 	.chrome-btn {
-		width: 26px;
-		height: 26px;
+		width: 32px;
+		height: 32px;
 		display: grid;
 		place-items: center;
 		padding: 0;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 12px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -1062,12 +1136,37 @@
 			);
 		}
 
-		.list-title {
-			font-size: 30px;
+		.desktop-only-title {
+			display: none;
+		}
+
+		.mobile-profile {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			min-width: 0;
+			flex: 1;
+			margin: 0;
+			padding: 0;
+			border: 0;
+			background: transparent;
+			color: inherit;
+			text-align: left;
+			cursor: pointer;
+			-webkit-tap-highlight-color: transparent;
+		}
+
+		.mobile-profile-name {
+			min-width: 0;
+			font-family: 'Inter', var(--font), system-ui, sans-serif;
+			font-size: 22px;
 			font-weight: 700;
-			letter-spacing: -0.03em;
+			letter-spacing: -0.02em;
 			line-height: 1.1;
 			color: var(--fg);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 
 		.list-actions {

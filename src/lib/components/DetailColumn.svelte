@@ -33,7 +33,8 @@
 	import {
 		findMail,
 		formatMailWhen,
-		markMailRead
+		markMailRead,
+		threadMessages
 	} from '$lib/mail.svelte.js';
 	import {
 		projectLifecycle,
@@ -203,6 +204,14 @@
 		actor.email;
 		if (task) return resolveAuthor(task.author);
 		if (note) return resolveAuthor(note.author);
+		if (mailMsg) return resolveAuthor(mailMsg.from);
+		if (project) return resolveAuthor(/** @type {any} */ (project).author);
+		if (enterprise) return resolveAuthor(/** @type {any} */ (enterprise).author);
+		if (newsletter) return resolveAuthor(/** @type {any} */ (newsletter).author);
+		if (ledger) return resolveAuthor(/** @type {any} */ (ledger).author);
+		if (costItem) return resolveAuthor(/** @type {any} */ (costItem).author);
+		if (salesLine) return resolveAuthor(/** @type {any} */ (salesLine).author);
+		if (welcomeSelected || accountingPanel) return activePerson();
 		return null;
 	});
 
@@ -450,7 +459,16 @@
 					/>
 				</svg>
 			</button>
-			<span class="mobile-title">{mobileTitle}</span>
+			{#if isPlayer}
+				<span class="mobile-title">{mobileTitle}</span>
+			{:else if detailAuthor}
+				<div class="author-chip center mobile-author">
+					<ProfilePic name={detailAuthor.name} size={28} />
+					<span class="author-name">{detailAuthor.name}</span>
+				</div>
+			{:else}
+				<span class="mobile-title">{mobileTitle}</span>
+			{/if}
 			<div class="menu-wrap">
 				<button
 					bind:this={moreBtn}
@@ -830,15 +848,24 @@
 			<pre class="pub-body">{newsletter.body}</pre>
 		</div>
 	{:else if mailMsg}
+		{@const thread = threadMessages(mailMsg)}
+		{@const me = (activePerson().email || '').trim().toLowerCase()}
+		{@const last = thread[thread.length - 1] || mailMsg}
+		{@const replyTo =
+			(last.from || '').toLowerCase() === me
+				? last.to?.[0] || mailMsg.from || ''
+				: last.from || mailMsg.from || ''}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Mail</span>
+			<span class="detail-top-label"
+				>{thread.length > 1 ? `Thread · ${thread.length}` : 'Mail'}</span
+			>
 			<div class="detail-top-actions">
 				<button
 					type="button"
 					class="send-chip"
 					onclick={() =>
 						openComposer('mail', undefined, undefined, {
-							to: mailMsg.from
+							to: replyTo
 						})
 					}
 				>
@@ -856,15 +883,18 @@
 				</button>
 			</div>
 		</header>
-		<div class="body">
-			<p class="pub-kicker">
-				{displayNameFromEmail(mailMsg.from)}
-				→ {(mailMsg.to || []).map(displayNameFromEmail).join(', ')}
-				· {formatMailWhen(mailMsg.created_at)}
-				{#if mailMsg.transport === 'drive'}· Drive{/if}
-			</p>
+		<div class="body mail-thread">
 			<h2 class="pub-title">{mailMsg.subject || '(no subject)'}</h2>
-			<pre class="pub-body">{mailMsg.body || ''}</pre>
+			{#each thread as m (m.id)}
+				<article class="thread-msg">
+					<p class="pub-kicker">
+						{displayNameFromEmail(m.from)}
+						→ {(m.to || []).map(displayNameFromEmail).join(', ')}
+						· {formatMailWhen(m.created_at)}
+					</p>
+					<pre class="pub-body">{m.body || ''}</pre>
+				</article>
+			{/each}
 		</div>
 	{:else if accountingPanel}
 		<AccountingDetail />
@@ -1083,6 +1113,26 @@
 		word-break: break-word;
 	}
 
+	.mail-thread {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.thread-msg {
+		padding: 14px 0 18px;
+		border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+	}
+
+	.thread-msg:last-child {
+		border-bottom: 0;
+		padding-bottom: 0;
+	}
+
+	.thread-msg .pub-kicker {
+		margin-bottom: 10px;
+	}
+
 	.send-chip {
 		height: 28px;
 		padding: 0 12px;
@@ -1260,12 +1310,12 @@
 	}
 
 	.icon-hit {
-		width: 26px;
-		height: 26px;
+		width: 32px;
+		height: 32px;
 		display: grid;
 		place-items: center;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 12px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -1671,6 +1721,19 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
+		}
+
+		.mobile-author {
+			flex: 1;
+			min-width: 0;
+			justify-content: center;
+			pointer-events: none;
+		}
+
+		.mobile-author .author-name {
+			font-size: 16px;
+			font-weight: 650;
+			color: var(--fg);
 		}
 
 		.chrome-btn {
