@@ -289,7 +289,9 @@
 					</span>
 					<span>Planning</span>
 				{:else}
-					<NavIcon name="calendar" size={16} />
+					<span class="planning-ico">
+						<NavIcon name="planning" size={14} />
+					</span>
 					<span>Planning</span>
 				{/if}
 			</button>
@@ -762,6 +764,17 @@
 
 	.schedule-pfp:first-child {
 		margin-left: 0;
+	}
+
+	.planning-ico {
+		display: inline-flex;
+		color: var(--fg-33);
+		line-height: 0;
+	}
+
+	.meta-pill:not(.empty) .planning-ico,
+	.meta-pill[aria-expanded='true'] .planning-ico {
+		color: var(--fg-66);
 	}
 
 	@media (max-width: 767px) {

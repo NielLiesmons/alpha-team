@@ -127,7 +127,8 @@
 
 	.state-planned {
 		background: var(--box-plate);
-		border: var(--task-box-stroke) solid var(--fg-16);
+		/* Same plate stroke weight/color as Open */
+		border: var(--task-box-stroke) solid var(--white33);
 	}
 
 	.plan-dot {

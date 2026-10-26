@@ -4,10 +4,10 @@
 	import StarterKit from '@tiptap/starter-kit';
 	import Link from '@tiptap/extension-link';
 	import Placeholder from '@tiptap/extension-placeholder';
-	import { noteLooksLikeHtml } from '$lib/note-text.js';
+	import { looksLikeMarkdown, markdownToHtml, noteLooksLikeHtml } from '$lib/note-text.js';
 
 	/**
-	 * WYSIWYG note body (Linear / Obsidian-style: type ## for headings).
+	 * WYSIWYG note body — type or paste Markdown (##, **, lists, …).
 	 * @type {{
 	 *   value?: string,
 	 *   placeholder?: string,
@@ -33,6 +33,7 @@
 	function toDoc(raw) {
 		if (!raw) return '';
 		if (noteLooksLikeHtml(raw)) return raw;
+		if (looksLikeMarkdown(raw)) return markdownToHtml(raw);
 		const escaped = raw
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
@@ -41,6 +42,20 @@
 			.split(/\n\n+/)
 			.map((block) => `<p>${block.replace(/\n/g, '<br>')}</p>`)
 			.join('');
+	}
+
+	/**
+	 * Prefer Markdown when clipboard is plain / trivial HTML wrappers.
+	 * @param {DataTransfer | null} data
+	 */
+	function markdownFromClipboard(data) {
+		if (!data) return null;
+		const text = data.getData('text/plain');
+		if (!text || !looksLikeMarkdown(text)) return null;
+		const html = data.getData('text/html') || '';
+		/* Rich paste from Word/Docs — keep browser HTML */
+		if (html && /<(h[1-6]|ul|ol|li|strong|em|b|i)\b/i.test(html)) return null;
+		return markdownToHtml(text);
 	}
 
 	onMount(() => {
@@ -67,6 +82,20 @@
 			editorProps: {
 				attributes: {
 					class: 'note-prose'
+				},
+				handlePaste(_view, event) {
+					const mdHtml = markdownFromClipboard(event.clipboardData);
+					if (!mdHtml || !editor) return false;
+					event.preventDefault();
+					editor.chain().focus().insertContent(mdHtml).run();
+					return true;
+				},
+				handleDrop(_view, event) {
+					const mdHtml = markdownFromClipboard(event.dataTransfer);
+					if (!mdHtml || !editor) return false;
+					event.preventDefault();
+					editor.chain().focus().insertContent(mdHtml).run();
+					return true;
 				}
 			},
 			onUpdate: ({ editor: ed }) => {
@@ -195,6 +224,19 @@
 		padding: 0.1em 0.35em;
 		border-radius: 4px;
 		background: var(--white8);
+	}
+
+	.note-editor :global(.note-prose pre) {
+		margin: 0 0 0.65em;
+		padding: 0.65rem 0.75rem;
+		border-radius: 8px;
+		background: var(--white8);
+		overflow-x: auto;
+	}
+
+	.note-editor :global(.note-prose pre code) {
+		padding: 0;
+		background: transparent;
 	}
 
 	.note-editor :global(.note-prose blockquote) {

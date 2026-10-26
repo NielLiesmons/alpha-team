@@ -68,8 +68,8 @@
 			/>
 		</svg>
 	{:else if name === 'calendar' || name === 'planning'}
-		<!-- alpha-ui/icons/planning.svg — three staggered bars -->
-		<svg viewBox="0 0 10 10" fill="none" aria-hidden="true">
+		<!-- alpha-ui/icons/planning.svg — optically slightly smaller than peer glyphs -->
+		<svg viewBox="0 0 10 10" fill="none" aria-hidden="true" class="planning-glyph">
 			<path d="M1 1H7M4 5H9M2 9H6" stroke="currentColor" stroke-linecap="round" />
 		</svg>
 	{:else if name === 'dashboard'}
@@ -164,3 +164,11 @@
 		</svg>
 	{/if}
 </BaseIcon>
+
+<style>
+	/* Planning bars read large in a square slot — shrink optically vs peer icons */
+	:global(.planning-glyph) {
+		width: 78% !important;
+		height: 78% !important;
+	}
+</style>

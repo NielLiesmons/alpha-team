@@ -301,9 +301,10 @@
 				<button
 					bind:this={scheduleBtn}
 					type="button"
-					class="round-meta"
+					class="meta-pill"
+					class:empty={!hasSchedule}
 					class:on={hasSchedule || bottomMenu === 'schedule'}
-					aria-label="Deadline, moment, and assignees"
+					aria-label="Planning"
 					aria-expanded={bottomMenu === 'schedule'}
 					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('schedule')}
@@ -312,13 +313,16 @@
 						<span class="schedule-pfps">
 							{#each assignees.slice(0, 2) as a, i (a.email ?? a.name ?? i)}
 								<span class="schedule-pfp" style:z-index={2 - i}>
-									<ProfilePic name={a.name ?? ''} size={18} />
+									<ProfilePic name={a.name ?? ''} size={16} />
 								</span>
 							{/each}
 						</span>
 					{:else}
-						<NavIcon name="calendar" size={18} />
+						<span class="planning-ico">
+							<NavIcon name="planning" size={15} />
+						</span>
 					{/if}
+					<span>Planning</span>
 				</button>
 			</div>
 
@@ -707,6 +711,18 @@
 
 	.schedule-pfp:first-child {
 		margin-left: 0;
+	}
+
+	.planning-ico {
+		display: inline-flex;
+		color: var(--fg-33);
+		line-height: 0;
+	}
+
+	.meta-pill:not(.empty) .planning-ico,
+	.meta-pill.on .planning-ico,
+	.meta-pill[aria-expanded='true'] .planning-ico {
+		color: var(--fg-66);
 	}
 
 	.task-body {
