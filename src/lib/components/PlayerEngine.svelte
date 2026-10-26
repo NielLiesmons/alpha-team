@@ -52,14 +52,14 @@
 		playerUi.playing = !audioEl.paused;
 		playerUi.duration = reliableDuration(audioEl, playerUi.bufferRatio, taggedDurationSec());
 
-		// iOS: truncated blob is about to end — grow before we hit `ended`.
+		// Grow truncated progressive blobs well before they end (phones need swap headroom).
 		if (
 			playerUi.wantsPlay &&
 			playerUi.bufferRatio < 0.999 &&
 			audioEl.buffered.length > 0
 		) {
 			const end = audioEl.buffered.end(audioEl.buffered.length - 1);
-			if (end - audioEl.currentTime < 1.25) {
+			if (end - audioEl.currentTime < 20) {
 				handleProgressiveStall();
 			}
 		}
@@ -75,7 +75,7 @@
 
 	function onEnded() {
 		syncClock();
-		// Early progressive blob finished — extend with more chunks, don't skip track.
+		// Early progressive blob / incomplete MSE — grow or wait; don't skip mid-song.
 		if (handleProgressiveStall()) return;
 		playEndedAdvance().catch(() => {});
 	}
@@ -83,12 +83,21 @@
 	function onWaiting() {
 		if (playerUi.wantsPlay) handleProgressiveStall();
 	}
+
+	function onError() {
+		// Decode glitch after a blob swap — try grow/resume once; otherwise advance.
+		if (playerUi.wantsPlay && handleProgressiveStall()) return;
+		if (playerUi.bufferRatio >= 0.999) {
+			playEndedAdvance().catch(() => {});
+		}
+	}
 </script>
 
 <audio
 	bind:this={audioEl}
 	class="sr-audio"
 	preload="auto"
+	playsinline
 	ontimeupdate={syncClock}
 	onloadedmetadata={syncClock}
 	ondurationchange={syncClock}
@@ -96,6 +105,7 @@
 	onpause={syncClock}
 	onended={onEnded}
 	onwaiting={onWaiting}
+	onerror={onError}
 	oncanplay={syncClock}
 ></audio>
 

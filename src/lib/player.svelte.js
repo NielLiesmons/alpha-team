@@ -141,20 +141,39 @@ let activeMediaSource = null;
 /** @type {Promise<void> | null} */
 let bufferTail = null;
 /**
- * Blob progressive: called when the early truncated file stalls/ends before full download.
- * @type {null | (() => void)}
+ * Progressive blob: grow/resume when the early truncated file stalls/ends.
+ * Returns true when growth happened (caller should not advance queue).
+ * @type {null | (() => boolean)}
  */
 let onProgressiveStall = null;
+/** True while chunk download for the current track is still in flight. */
+let mediaStreamActive = false;
+/** Snapshot of track ids when the user starts playback — used for next/prev / ended advance. */
+/** @type {string[]} */
+let activeQueueIds = [];
 
 /**
- * If progressive blob ran out before the full file arrived, grow/swap instead of skipping tracks.
- * @returns {boolean} true if handled
+ * If the current source ran out before the full file arrived, grow/resume instead of skipping.
+ * @returns {boolean} true if handled (caller must NOT advance queue)
  */
 export function handleProgressiveStall() {
-	if (playerUi.bufferRatio >= 0.999) return false;
-	if (!onProgressiveStall) return false;
-	onProgressiveStall();
-	return true;
+	if (playerUi.bufferRatio >= 0.999 && !mediaStreamActive) return false;
+	if (onProgressiveStall) {
+		const grew = onProgressiveStall();
+		if (grew) return true;
+		/* Still downloading more chunks — wait; do not skip to next track. */
+		if (mediaStreamActive) {
+			if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
+			return true;
+		}
+		return false;
+	}
+	/* MSE underrun while chunks are still appending. */
+	if (mediaStreamActive) {
+		if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
+		return true;
+	}
+	return false;
 }
 
 /**
@@ -175,6 +194,7 @@ function revokeUrl() {
 
 function cancelInFlightPlay() {
 	playGeneration += 1;
+	mediaStreamActive = false;
 	if (playAbort) {
 		playAbort.abort();
 		playAbort = null;
@@ -437,6 +457,87 @@ export async function uploadAudioFiles(files) {
 
 /**
  * @param {SourceBuffer} sb
+ * @param {AbortSignal} signal
+ */
+function waitSourceBufferIdle(sb, signal) {
+	return new Promise((resolve, reject) => {
+		if (signal.aborted) {
+			const err = new Error('Aborted');
+			err.name = 'AbortError';
+			reject(err);
+			return;
+		}
+		if (!sb.updating) {
+			resolve(undefined);
+			return;
+		}
+		const onAbort = () => {
+			cleanup();
+			const err = new Error('Aborted');
+			err.name = 'AbortError';
+			reject(err);
+		};
+		const onEnd = () => {
+			cleanup();
+			resolve(undefined);
+		};
+		const cleanup = () => {
+			signal.removeEventListener('abort', onAbort);
+			sb.removeEventListener('updateend', onEnd);
+		};
+		signal.addEventListener('abort', onAbort);
+		sb.addEventListener('updateend', onEnd);
+	});
+}
+
+/**
+ * Evict decoded media behind the playhead so long tracks don't hit QuotaExceeded.
+ * @param {SourceBuffer} sb
+ * @param {AbortSignal} signal
+ */
+async function evictBufferedBeforePlayhead(sb, signal) {
+	const audio = boundAudio;
+	const t = audio?.currentTime ?? 0;
+	const keepFrom = Math.max(0, t - 20);
+	if (keepFrom < 1 || !sb.buffered.length) return false;
+	const start = sb.buffered.start(0);
+	if (start >= keepFrom - 0.5) return false;
+	await waitSourceBufferIdle(sb, signal);
+	await new Promise((resolve, reject) => {
+		const onAbort = () => {
+			cleanup();
+			const err = new Error('Aborted');
+			err.name = 'AbortError';
+			reject(err);
+		};
+		const cleanup = () => {
+			signal.removeEventListener('abort', onAbort);
+			sb.removeEventListener('updateend', onEnd);
+			sb.removeEventListener('error', onErr);
+		};
+		const onEnd = () => {
+			cleanup();
+			resolve(undefined);
+		};
+		const onErr = () => {
+			cleanup();
+			reject(new Error('SourceBuffer remove error'));
+		};
+		signal.addEventListener('abort', onAbort);
+		sb.addEventListener('updateend', onEnd);
+		sb.addEventListener('error', onErr);
+		try {
+			sb.remove(start, keepFrom);
+		} catch (e) {
+			cleanup();
+			reject(e instanceof Error ? e : new Error(String(e)));
+		}
+	});
+	return true;
+}
+
+/**
+ * @param {SourceBuffer} sb
  * @param {BufferSource} data
  * @param {AbortSignal} signal
  */
@@ -486,6 +587,27 @@ function appendBuffer(sb, data, signal) {
 		};
 		tryAppend();
 	});
+}
+
+/**
+ * Append with one QuotaExceeded eviction retry (common on long phone plays).
+ * @param {SourceBuffer} sb
+ * @param {BufferSource} data
+ * @param {AbortSignal} signal
+ */
+async function appendBufferResilient(sb, data, signal) {
+	try {
+		await appendBuffer(sb, data, signal);
+	} catch (e) {
+		const quota =
+			e?.name === 'QuotaExceededError' ||
+			(typeof DOMException !== 'undefined' && e instanceof DOMException && e.name === 'QuotaExceededError') ||
+			/quota/i.test(String(e?.message ?? e));
+		if (!quota) throw e;
+		const evicted = await evictBufferedBeforePlayhead(sb, signal);
+		if (!evicted) throw e;
+		await appendBuffer(sb, data, signal);
+	}
 }
 
 /**
@@ -628,6 +750,17 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 		resolveStart?.();
 	};
 
+	const endMseStream = () => {
+		if (ms.readyState === 'open') {
+			try {
+				ms.endOfStream();
+			} catch {
+				/* ignore */
+			}
+		}
+	};
+
+	mediaStreamActive = true;
 	bufferTail = streamMediaChunks(session, track.media_path, {
 		signal,
 		manifest,
@@ -649,25 +782,23 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 				next.set(copy.subarray(0, next.length - headBytes.length), headBytes.length);
 				headBytes = next;
 			}
-			await appendBuffer(sb, copy, signal);
+			await appendBufferResilient(sb, copy, signal);
 			chunksAppended += 1;
 			tryStart();
 		}
 	})
 		.then(() => {
 			if (generation !== playGeneration) return;
-			if (ms.readyState === 'open') {
-				try {
-					ms.endOfStream();
-				} catch {
-					/* ignore */
-				}
-			}
+			mediaStreamActive = false;
+			endMseStream();
 			playerUi.bufferRatio = 1;
 			tryStart();
 		})
 		.catch((e) => {
 			if (generation !== playGeneration || e?.name === 'AbortError') return;
+			mediaStreamActive = false;
+			/* Allow buffered audio to finish and fire `ended` so the queue can advance. */
+			endMseStream();
 			if (!started) {
 				rejectStart?.(e instanceof Error ? e : new Error(String(e)));
 			}
@@ -697,6 +828,7 @@ function concatParts(parts) {
 /**
  * Fallback when MSE can't append MP3 (Safari/iOS): play growing blobs.
  * Truncated early blobs MUST be replaced before they end — otherwise phones stop cold.
+ * Grow only when headroom is low (not on every chunk) to avoid mid-song src thrash.
  * @param {import('./drive/client.js').DriveSession} session
  * @param {any} track
  * @param {any} manifest
@@ -712,6 +844,8 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 	let activeUrl = /** @type {string | null} */ (null);
 	let partsAttached = 0;
 	let swapping = false;
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let revokeTimer = null;
 
 	/** @type {((v?: undefined) => void) | null} */
 	let resolveStart = null;
@@ -723,14 +857,29 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 	});
 
 	/**
+	 * Seconds of buffered audio remaining ahead of the playhead (0 if unknown/ended).
+	 */
+	const bufferedHeadroom = () => {
+		const audio = boundAudio;
+		if (!audio || !audio.buffered.length) return 0;
+		try {
+			const end = audio.buffered.end(audio.buffered.length - 1);
+			return Math.max(0, end - audio.currentTime);
+		} catch {
+			return 0;
+		}
+	};
+
+	/**
 	 * Attach a blob built from the first `n` parts (or all). Restores playhead + wantsPlay.
 	 * @param {number} [n]
+	 * @returns {boolean}
 	 */
 	const attachFromParts = (n = parts.length) => {
-		if (generation !== playGeneration || n < 1 || n > parts.length) return;
-		if (swapping) return;
+		if (generation !== playGeneration || n < 1 || n > parts.length) return false;
+		if (swapping) return false;
 		// Already playing this many parts (or more).
-		if (started && n <= partsAttached && activeUrl) return;
+		if (started && n <= partsAttached && activeUrl) return false;
 		swapping = true;
 		const slice = parts.slice(0, n);
 		const bytes = concatParts(slice);
@@ -765,11 +914,18 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 			requestAnimationFrame(() => {
 				if (boundAudio && boundAudio.readyState >= 1) finish();
 			});
-			setTimeout(finish, 400);
+			setTimeout(finish, 500);
 		} else {
 			swapping = false;
 		}
-		if (prev && prev !== url) URL.revokeObjectURL(prev);
+		/* Keep prior blob URL alive briefly — iOS can still be decoding it during the swap. */
+		if (prev && prev !== url) {
+			if (revokeTimer) clearTimeout(revokeTimer);
+			revokeTimer = setTimeout(() => {
+				if (activeUrl !== prev) URL.revokeObjectURL(prev);
+			}, 2500);
+		}
+		return true;
 	};
 
 	const startEarly = () => {
@@ -784,19 +940,31 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		resolveStart?.();
 	};
 
-	/** Grow attached blob when the engine stalls or early file ends. */
-	const growIfNeeded = () => {
-		if (generation !== playGeneration) return;
-		if (!started || parts.length <= partsAttached) return;
-		attachFromParts(parts.length);
+	/**
+	 * Grow when more parts are ready AND (stalled / near end / caller forced).
+	 * @param {boolean} [force]
+	 * @returns {boolean}
+	 */
+	const growIfNeeded = (force = false) => {
+		if (generation !== playGeneration) return false;
+		if (!started || parts.length <= partsAttached) return false;
+		const audio = boundAudio;
+		const urgent =
+			force ||
+			!audio ||
+			audio.ended ||
+			(audio.paused && playerUi.wantsPlay) ||
+			bufferedHeadroom() < 25;
+		if (!urgent) return false;
+		return attachFromParts(parts.length);
 	};
 
 	onProgressiveStall = () => {
-		if (generation !== playGeneration) return;
-		if (parts.length > partsAttached) growIfNeeded();
-		else if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
+		if (generation !== playGeneration) return false;
+		return growIfNeeded(true);
 	};
 
+	mediaStreamActive = true;
 	bufferTail = streamMediaChunks(session, track.media_path, {
 		signal,
 		manifest,
@@ -809,26 +977,27 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 			if (generation !== playGeneration) return;
 			parts.push(bytes);
 			if (!started) startEarly();
-			// Further growth is driven by waiting / near-end / ended (see PlayerEngine).
+			else growIfNeeded(false);
 		}
 	})
 		.then(async () => {
 			if (generation !== playGeneration) return;
+			mediaStreamActive = false;
 			playerUi.bufferRatio = 1;
-			onProgressiveStall = null;
 			if (!started) {
 				started = true;
 				playerUi.status = 'ready';
 				attachFromParts(parts.length);
 				if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
 				resolveStart?.();
-				return;
+			} else {
+				attachFromParts(parts.length);
 			}
-			// Final full-file attach (same grow path).
-			attachFromParts(parts.length);
+			onProgressiveStall = null;
 		})
 		.catch((e) => {
 			if (generation !== playGeneration || e?.name === 'AbortError') return;
+			mediaStreamActive = false;
 			onProgressiveStall = null;
 			if (!started) {
 				rejectStart?.(e instanceof Error ? e : new Error(String(e)));
@@ -848,16 +1017,38 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 }
 
 /**
- * Stream from Drive; MSE starts playback while later chunks still download.
+ * Freeze the list the user tapped from so next/ended keep that order even if browse changes.
  * @param {any} track
  */
-export async function playTrack(track) {
+function capturePlayQueue(track) {
+	const vis = visibleTracks();
+	if (track?.id && vis.some((t) => t.id === track.id)) {
+		activeQueueIds = vis.map((t) => t.id);
+		return;
+	}
+	if (track?.id && activeQueueIds.includes(track.id)) return;
+	const fallback = playQueue();
+	activeQueueIds = fallback.map((t) => t.id);
+	if (track?.id && !activeQueueIds.includes(track.id)) {
+		activeQueueIds = [track.id, ...activeQueueIds];
+	}
+}
+
+/**
+ * Stream from Drive; MSE starts playback while later chunks still download.
+ * @param {any} track
+ * @param {{ fromQueue?: boolean }} [opts] fromQueue = skip re-snapshot (next/prev / ended)
+ */
+export async function playTrack(track, opts = {}) {
 	const session = activeSession();
 	if (!session) throw new Error('Connect Drive in Settings first');
 	if (!track?.media_path) throw new Error('Track has no media_path');
 
+	if (!opts.fromQueue) capturePlayQueue(track);
+
 	cancelInFlightPlay();
 	onProgressiveStall = null;
+	mediaStreamActive = false;
 	const generation = playGeneration;
 	const ac = new AbortController();
 	playAbort = ac;
@@ -943,6 +1134,8 @@ export async function playTrack(track) {
 export function stopPlayback() {
 	cancelInFlightPlay();
 	onProgressiveStall = null;
+	mediaStreamActive = false;
+	activeQueueIds = [];
 	revokeUrl();
 	playerUi.currentId = null;
 	playerUi.status = 'idle';
@@ -1256,16 +1449,26 @@ export function playQueue() {
 	return [...tracks].sort(compareTracks);
 }
 
+/** Resolved active queue (snapshot from last user play, else live browse list). */
+function resolvedQueue() {
+	if (activeQueueIds.length) {
+		const byId = new Map(tracks.map((t) => [t.id, t]));
+		const snapped = activeQueueIds.map((id) => byId.get(id)).filter(Boolean);
+		if (snapped.length) return snapped;
+	}
+	return playQueue();
+}
+
 /**
  * @param {-1 | 1} delta
  */
 export async function playAdjacent(delta) {
-	const queue = playQueue();
+	const queue = resolvedQueue();
 	if (!queue.length) return;
 	let idx = queue.findIndex((t) => t.id === playerUi.currentId);
 	if (idx < 0) idx = delta > 0 ? -1 : 0;
 	idx = (idx + delta + queue.length) % queue.length;
-	await playTrack(queue[idx]);
+	await playTrack(queue[idx], { fromQueue: true });
 }
 
 /**
@@ -1277,16 +1480,23 @@ export function queuePlayNext(track) {
 	playerUi.upNextId = track.id;
 }
 
-/** Advance: honor Play Next, else next in browse list. */
+/** Advance: honor Play Next, else next in the frozen list/queue. */
 export async function playEndedAdvance() {
 	const nextId = playerUi.upNextId;
 	if (nextId) {
 		playerUi.upNextId = null;
 		const t = tracks.find((x) => x.id === nextId);
 		if (t) {
-			await playTrack(t);
+			await playTrack(t, { fromQueue: true });
 			return;
 		}
+	}
+	const queue = resolvedQueue();
+	if (queue.length <= 1) {
+		/* Single-track list: stop cleanly rather than looping the same song forever. */
+		playerUi.wantsPlay = false;
+		playerUi.playing = false;
+		return;
 	}
 	await playAdjacent(1);
 }
