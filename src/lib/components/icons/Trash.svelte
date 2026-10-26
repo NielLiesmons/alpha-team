@@ -1,7 +1,8 @@
 <script>
 	/**
-	 * Trash — author glyph from alpha-ui/icons/trash.svg (25×26 fill / currentColor).
-	 * Color via `currentColor` / CSS `color`. Size matches chrome pen by default.
+	 * Trash — author outline from alpha-ui/icons/trash.svg (25×26).
+	 * Figma exports the stroke as a filled compound path; color via currentColor.
+	 * Default size matches chrome pen (13).
 	 * @type {{ size?: number, className?: string }}
 	 */
 	let { size = 13, className = '' } = $props();

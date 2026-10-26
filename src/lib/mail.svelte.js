@@ -1,6 +1,6 @@
 /**
- * Personal Mail — Drive-backed inbox/sent for the signed-in mailbox (actor.email).
- * Not Publications / Resend newsletters. SMTP/IMAP (Stalwart) still TODO — see MAIL-STACK.
+ * Personal Mail — Stalwart JMAP when mailbox password is set; else Drive interim leaves.
+ * Not Publications / Resend newsletters.
  */
 
 import { activePerson, actor } from './actor.svelte.js';
@@ -10,6 +10,7 @@ import {
 	putMailMessage
 } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
+import { getMailboxPassword, listJmapMailbox } from './jmap-mail.js';
 
 /** @type {any[]} */
 export const mailMessages = $state([]);
@@ -56,7 +57,12 @@ export function isSentFor(msg, email) {
  */
 export function isUnreadFor(msg, email = mailActorEmail()) {
 	const me = normEmail(email);
-	if (!me || !isInboxFor(msg, me)) return false;
+	if (!me || !msg) return false;
+	if (msg.transport === 'jmap') {
+		if (normEmail(msg.from) === me) return false;
+		return Boolean(msg._unread);
+	}
+	if (!isInboxFor(msg, me)) return false;
 	if (normEmail(msg.from) === me) return false;
 	const read = Array.isArray(msg.read_by) ? msg.read_by.map(normEmail) : [];
 	return !read.includes(me);
@@ -82,22 +88,38 @@ export function findMail(id) {
 }
 
 export async function refreshMail() {
-	const session = activeSession();
-	if (!session) {
-		/* Keep any local-only drafts from this session */
-		mailMessages.splice(
-			0,
-			mailMessages.length,
-			...mailMessages.filter((m) => m._local)
-		);
-		return;
-	}
+	const me = mailActorEmail();
+	const pw = me ? getMailboxPassword(me) : '';
 	mailUi.loading = mailMessages.length === 0;
 	mailUi.error = null;
 	try {
+		if (me && pw) {
+			const list = await listJmapMailbox(me, pw, 100);
+			mailMessages.length = 0;
+			mailMessages.push(...list);
+			return;
+		}
+
+		const session = activeSession();
+		if (!session) {
+			mailMessages.splice(
+				0,
+				mailMessages.length,
+				...mailMessages.filter((m) => m._local)
+			);
+			if (me && !pw) {
+				mailUi.error =
+					'Add your mailbox password in Settings → Mail (Stalwart) to load the real inbox.';
+			}
+			return;
+		}
 		const list = await listMailMessages(session, 200);
 		mailMessages.length = 0;
 		mailMessages.push(...list);
+		if (me && !pw) {
+			mailUi.error =
+				'Showing Drive drafts only — add mailbox password in Settings to sync Stalwart.';
+		}
 	} catch (e) {
 		mailUi.error = e instanceof Error ? e.message : String(e);
 	} finally {

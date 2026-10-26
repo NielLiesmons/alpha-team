@@ -7,7 +7,14 @@
 		driveSession,
 		saveSession
 	} from '$lib/drive/session.svelte.js';
+	import { actor } from '$lib/actor.svelte.js';
+	import {
+		getMailboxPassword,
+		setMailboxPassword,
+		testMailboxLogin
+	} from '$lib/jmap-mail.js';
 	import { getAdminToken, setAdminToken } from '$lib/mail-api.js';
+	import { refreshMail } from '$lib/mail.svelte.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { setTheme, themeChoice } from '$lib/theme.svelte.js';
 
@@ -25,14 +32,48 @@
 	let advancedOpen = $state(false);
 	let apiTokenDraft = $state('');
 	let apiTokenMsg = $state('');
+	let mailboxPw = $state('');
+	let mailboxMsg = $state('');
+	let mailboxBusy = $state(false);
 
 	onMount(() => {
 		apiTokenDraft = getAdminToken();
+		mailboxPw = getMailboxPassword(actor.email);
+	});
+
+	$effect(() => {
+		actor.email;
+		mailboxPw = getMailboxPassword(actor.email);
+		mailboxMsg = '';
 	});
 
 	function saveApiToken() {
 		setAdminToken(apiTokenDraft);
 		apiTokenMsg = 'Saved on this device.';
+	}
+
+	async function saveMailboxPw() {
+		if (!actor.email) {
+			mailboxMsg = 'Pick who you are first (Welcome / I am).';
+			return;
+		}
+		mailboxBusy = true;
+		mailboxMsg = '';
+		try {
+			if (mailboxPw.trim()) {
+				await testMailboxLogin(actor.email, mailboxPw.trim());
+				setMailboxPassword(actor.email, mailboxPw.trim());
+				await refreshMail();
+				mailboxMsg = `Stalwart OK for ${actor.email} — Mail tab will use JMAP.`;
+			} else {
+				setMailboxPassword(actor.email, '');
+				mailboxMsg = 'Cleared mailbox password on this device.';
+			}
+		} catch (e) {
+			mailboxMsg = e instanceof Error ? e.message : String(e);
+		} finally {
+			mailboxBusy = false;
+		}
 	}
 
 	async function connect() {
@@ -84,6 +125,38 @@
 </section>
 
 <DriveInvite />
+
+<section class="block">
+	<p class="field-label">Mail (Stalwart)</p>
+	<p class="hint">
+		Real inbox at <code>mail.bley.farm</code> (JMAP). Enter the mailbox password for
+		<strong>{actor.email || 'your signed-in email'}</strong> — same as Apple Mail. Stored only on
+		this device. Not the Publications API token.
+	</p>
+	<label class="row stack">
+		<span>Mailbox password</span>
+		<input
+			type="password"
+			bind:value={mailboxPw}
+			autocomplete="current-password"
+			spellcheck="false"
+			disabled={!actor.email}
+		/>
+	</label>
+	<div class="actions">
+		<button
+			type="button"
+			class="btn primary"
+			disabled={mailboxBusy || !actor.email}
+			onclick={saveMailboxPw}
+		>
+			{mailboxBusy ? 'Checking…' : 'Save & test'}
+		</button>
+	</div>
+	{#if mailboxMsg}
+		<p class="status on">{mailboxMsg}</p>
+	{/if}
+</section>
 
 <section class="block">
 	<p class="field-label">Publications API</p>
