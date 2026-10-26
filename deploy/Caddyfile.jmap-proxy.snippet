@@ -1,0 +1,18 @@
+# Merge into the admin.bley.farm site block on the Alpha VPS.
+# Browser Admin cannot call mail.bley.farm directly (no CORS) — proxy JMAP same-origin.
+#
+# Keep the /jmap path prefix (do not use handle_path) so Stalwart still sees /jmap/session.
+
+handle /jmap* {
+	reverse_proxy https://mail.bley.farm {
+		header_up Host mail.bley.farm
+		transport http {
+			tls
+		}
+	}
+}
+
+# Prefer localhost if Stalwart already listens on the VPS:
+# handle /jmap* {
+# 	reverse_proxy 127.0.0.1:8080
+# }

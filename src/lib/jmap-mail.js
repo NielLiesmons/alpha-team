@@ -1,11 +1,33 @@
 /**
  * Stalwart JMAP client for personal mailboxes (mail.bley.farm).
  * Auth: HTTP Basic with mailbox email + password (or app password).
+ *
+ * Browser calls are same-origin `/jmap/*` (Vite proxy in dev; Caddy on admin.bley.farm
+ * in prod). Direct mail.bley.farm fetch fails with NetworkError — no CORS.
  */
 
 export const JMAP_ORIGIN = 'https://mail.bley.farm';
 
 const PW_KEY = 'alpha-admin-mailbox-pw.v1';
+
+/** Same-origin JMAP base (proxied to Stalwart). */
+function jmapBase() {
+	if (typeof location !== 'undefined' && location.origin) {
+		return `${location.origin}/jmap`;
+	}
+	return `${JMAP_ORIGIN}/jmap`;
+}
+
+/**
+ * @param {unknown} e
+ */
+function networkHint(e) {
+	const msg = e instanceof Error ? e.message : String(e);
+	if (/NetworkError|Failed to fetch|Load failed|network/i.test(msg)) {
+		return 'Cannot reach Stalwart from this page (CORS). Use Admin via admin.bley.farm with /jmap proxied, or local Vite (proxy enabled).';
+	}
+	return msg;
+}
 
 /**
  * @returns {Record<string, string>} email → password
@@ -57,15 +79,23 @@ function basicAuth(email, password) {
  * @param {string} password
  */
 export async function jmapSession(email, password) {
-	const res = await fetch(`${JMAP_ORIGIN}/jmap/session`, {
-		headers: {
-			Accept: 'application/json',
-			Authorization: basicAuth(email, password)
-		}
-	});
+	let res;
+	try {
+		res = await fetch(`${jmapBase()}/session`, {
+			headers: {
+				Accept: 'application/json',
+				Authorization: basicAuth(email, password)
+			}
+		});
+	} catch (e) {
+		throw new Error(networkHint(e));
+	}
 	if (res.status === 401) throw new Error('Mailbox password rejected by Stalwart');
 	if (!res.ok) throw new Error(`JMAP session HTTP ${res.status}`);
-	return /** @type {any} */ (await res.json());
+	const session = /** @type {any} */ (await res.json());
+	/* Stalwart returns absolute mail.bley.farm URLs — keep calls on the proxy. */
+	session.apiUrl = `${jmapBase()}/`;
+	return session;
 }
 
 /**
@@ -75,18 +105,23 @@ export async function jmapSession(email, password) {
  * @param {any[]} methodCalls
  */
 async function jmapCall(apiUrl, email, password, methodCalls) {
-	const res = await fetch(apiUrl, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Accept: 'application/json',
-			Authorization: basicAuth(email, password)
-		},
-		body: JSON.stringify({
-			using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'],
-			methodCalls
-		})
-	});
+	let res;
+	try {
+		res = await fetch(apiUrl || `${jmapBase()}/`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Accept: 'application/json',
+				Authorization: basicAuth(email, password)
+			},
+			body: JSON.stringify({
+				using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'],
+				methodCalls
+			})
+		});
+	} catch (e) {
+		throw new Error(networkHint(e));
+	}
 	if (res.status === 401) throw new Error('Mailbox password rejected by Stalwart');
 	if (!res.ok) throw new Error(`JMAP call HTTP ${res.status}`);
 	return /** @type {any} */ (await res.json());
@@ -154,7 +189,7 @@ function toUiMessage(email) {
 export async function listJmapMailbox(email, password, limit = 100) {
 	const session = await jmapSession(email, password);
 	const accountId = primaryMailAccountId(session);
-	const apiUrl = session.apiUrl || `${JMAP_ORIGIN}/jmap/`;
+	const apiUrl = session.apiUrl || `${jmapBase()}/`;
 
 	const boxes = await jmapCall(apiUrl, email, password, [
 		[

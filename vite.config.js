@@ -74,6 +74,14 @@ export default defineConfig({
 	],
 	server: {
 		port: 5174,
-		strictPort: false
+		strictPort: false,
+		/* Same-origin JMAP — browser cannot call mail.bley.farm (no CORS). */
+		proxy: {
+			'/jmap': {
+				target: 'https://mail.bley.farm',
+				changeOrigin: true,
+				secure: true
+			}
+		}
 	}
 });
