@@ -746,12 +746,13 @@ export async function patchTrackFields(session, track, patch) {
 }
 
 /**
- * Decode any browser-readable image and re-encode as JPEG (max edge 1400).
+ * Decode any browser-readable image and re-encode as JPEG.
  * Rejects HEIC/unsupported types with a clear error instead of a silent fail.
  * @param {File | Blob} file
+ * @param {number} [maxEdge=1400]
  * @returns {Promise<Uint8Array>}
  */
-async function encodeCoverJpeg(file) {
+async function encodeCoverJpeg(file, maxEdge = 1400) {
 	const type = (file.type || '').toLowerCase();
 	if (type.includes('heic') || type.includes('heif')) {
 		throw new Error('HEIC photos aren’t supported — export as JPEG or PNG first');
@@ -762,8 +763,6 @@ async function encodeCoverJpeg(file) {
 	if (file.size > 20 * 1024 * 1024) {
 		throw new Error('Cover image is too large (max 20MB)');
 	}
-
-	const maxEdge = 1400;
 	/** @type {number} */
 	let width;
 	/** @type {number} */
@@ -837,6 +836,20 @@ export async function prepareCoverImage(file) {
  */
 export async function putCoverImage(session, file) {
 	const { path, bytes } = await prepareCoverImage(file);
+	await putPath(session, path, 'blob', bytes);
+	return path;
+}
+
+/**
+ * Store a profile avatar (JPEG, max edge 512) and return its Drive path.
+ * @param {import('./client.js').DriveSession} session
+ * @param {File | Blob} file
+ */
+export async function putAvatarImage(session, file) {
+	const bytes = await encodeCoverJpeg(file, 512);
+	if (!bytes.length) throw new Error('Empty avatar image');
+	const hash = await sha256Hex(bytes);
+	const path = `media/avatars/${hash}.jpg`;
 	await putPath(session, path, 'blob', bytes);
 	return path;
 }
@@ -963,36 +976,30 @@ export async function deleteTracks(session, trackOrTracks) {
  */
 export async function listTracks(session) {
 	const { dir } = await loadRootDirWithTip(session);
+	const { getCachedLeaf, mapPool, putCachedLeaf } = await import('./leaf-cache.js');
 
-	const paths = Object.entries(dir.children ?? {})
+	const entries = Object.entries(dir.children ?? {})
 		.filter(([path, child]) => child.kind === 'track' || path.endsWith('/track.json'))
-		.map(([path]) => path);
+		.map(([path, child]) => ({ path, hash: child.hash }));
 
-	/** @type {(any | null)[]} */
-	const slots = new Array(paths.length).fill(null);
-	let next = 0;
-	const workers = Array.from(
-		{ length: Math.min(LIST_CONCURRENCY, Math.max(paths.length, 1)) },
-		async () => {
-			while (next < paths.length) {
-				const i = next++;
-				const path = paths[i];
-				try {
-					const { bytes } = await getPathFromDir(session, dir, path);
-					const t = JSON.parse(new TextDecoder().decode(bytes));
-					t.schema = 'alpha.track/1';
-					t.artists = Array.isArray(t.artists) && t.artists.length ? t.artists : ['Unknown'];
-					t.album = t.album ?? '';
-					t.track_no = t.track_no ?? null;
-					t.disc_no = t.disc_no ?? null;
-					slots[i] = t;
-				} catch {
-					/* skip broken entry */
-				}
+	const slots = await mapPool(entries, 32, async ({ path, hash }) => {
+		try {
+			let t = hash ? await getCachedLeaf(hash) : null;
+			if (!t) {
+				const { bytes } = await getPathFromDir(session, dir, path);
+				t = JSON.parse(new TextDecoder().decode(bytes));
+				if (hash) void putCachedLeaf(hash, t);
 			}
+			t.schema = 'alpha.track/1';
+			t.artists = Array.isArray(t.artists) && t.artists.length ? t.artists : ['Unknown'];
+			t.album = t.album ?? '';
+			t.track_no = t.track_no ?? null;
+			t.disc_no = t.disc_no ?? null;
+			return t;
+		} catch {
+			return null;
 		}
-	);
-	await Promise.all(workers);
+	});
 
 	return sortTracks(slots.filter(Boolean));
 }
@@ -1002,27 +1009,30 @@ export async function listTracks(session) {
  */
 export async function listPlaylists(session) {
 	const { dir } = await loadRootDirWithTip(session);
-	const paths = Object.entries(dir.children ?? {})
+	const { getCachedLeaf, mapPool, putCachedLeaf } = await import('./leaf-cache.js');
+	const entries = Object.entries(dir.children ?? {})
 		.filter(
 			([path, child]) => child.kind === 'playlist' || path.endsWith('/playlist.json')
 		)
-		.map(([path]) => path);
+		.map(([path, child]) => ({ path, hash: child.hash }));
 
 	/** @type {any[]} */
 	const out = [];
-	await Promise.all(
-		paths.map(async (path) => {
-			try {
+	await mapPool(entries, 16, async ({ path, hash }) => {
+		try {
+			let p = hash ? await getCachedLeaf(hash) : null;
+			if (!p) {
 				const { bytes } = await getPathFromDir(session, dir, path);
-				const p = JSON.parse(new TextDecoder().decode(bytes));
-				p.schema = 'alpha.playlist/1';
-				p.items = Array.isArray(p.items) ? p.items : [];
-				out.push(p);
-			} catch {
-				/* skip */
+				p = JSON.parse(new TextDecoder().decode(bytes));
+				if (hash) void putCachedLeaf(hash, p);
 			}
-		})
-	);
+			p.schema = 'alpha.playlist/1';
+			p.items = Array.isArray(p.items) ? p.items : [];
+			out.push(p);
+		} catch {
+			/* skip */
+		}
+	});
 	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
 	return out;
 }
@@ -1626,7 +1636,7 @@ export async function putEnterprise(session, enterprise) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {'task' | 'project' | 'note' | 'enterprise' | 'table' | 'table_row' | 'metric' | 'form'} kind
+ * @param {'task' | 'project' | 'note' | 'enterprise' | 'table' | 'table_row' | 'metric' | 'form' | 'view'} kind
  * @param {string} id
  */
 export async function deleteEntity(session, kind, id) {
@@ -1645,7 +1655,9 @@ export async function deleteEntity(session, kind, id) {
 								? `metrics/${id}/metric.json`
 								: kind === 'form'
 									? `forms/${id}/form.json`
-									: `enterprises/${id}/enterprise.json`;
+									: kind === 'view'
+										? `views/${id}/view.json`
+										: `enterprises/${id}/enterprise.json`;
 	await deletePaths(session, [path]);
 }
 
@@ -1753,11 +1765,20 @@ export async function listTableRows(session, tableId) {
  * @param {Record<string, any>} input
  */
 export async function createTableRow(session, input) {
-	const id = newId();
+	const docs = await createTableRows(session, [input]);
+	return docs[0];
+}
+
+/**
+ * Batch-append rows with a single tip update.
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>[]} inputs
+ */
+export async function createTableRows(session, inputs) {
 	const created = nowRfc3339();
-	const doc = {
+	const docs = (inputs || []).map((input) => ({
 		schema: 'alpha.table_row/1',
-		id,
+		id: newId(),
 		table_id: input.table_id,
 		cells: input.cells && typeof input.cells === 'object' ? { ...input.cells } : {},
 		occurred_on: input.occurred_on || undefined,
@@ -1765,9 +1786,17 @@ export async function createTableRow(session, input) {
 		labels: input.labels ?? [],
 		created_at: created,
 		updated_at: created
-	};
-	await putPath(session, `table_rows/${id}/row.json`, 'table_row', JSON.stringify(doc, null, 2));
-	return doc;
+	}));
+	if (!docs.length) return docs;
+	await putPaths(
+		session,
+		docs.map((doc) => ({
+			path: `table_rows/${doc.id}/row.json`,
+			kind: 'table_row',
+			plaintext: JSON.stringify(doc, null, 2)
+		}))
+	);
+	return docs;
 }
 
 /**
@@ -1902,6 +1931,62 @@ export async function putForm(session, form) {
 	return next;
 }
 
+/* ── Views (table/metric overviews) ── */
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listViews(session) {
+	const dir = await loadRootDir(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const [path, child] of Object.entries(dir.children ?? {})) {
+		if (child.kind === 'view' || path.endsWith('/view.json')) {
+			try {
+				const bytes = await getPath(session, path);
+				out.push(JSON.parse(new TextDecoder().decode(bytes)));
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {Record<string, any>} input
+ */
+export async function createView(session, input) {
+	const id = newId();
+	const created = nowRfc3339();
+	const doc = {
+		schema: 'alpha.view/1',
+		id,
+		title: input.title || 'Untitled view',
+		description: input.description || '',
+		enterprise_id: input.enterprise_id ?? null,
+		table_ids: Array.isArray(input.table_ids) ? input.table_ids : [],
+		metric_ids: Array.isArray(input.metric_ids) ? input.metric_ids : [],
+		labels: input.labels ?? [],
+		created_at: created,
+		updated_at: created
+	};
+	await putPath(session, `views/${id}/view.json`, 'view', JSON.stringify(doc, null, 2));
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} view
+ */
+export async function putView(session, view) {
+	const next = { ...view, schema: 'alpha.view/1', updated_at: nowRfc3339() };
+	await putPath(session, `views/${next.id}/view.json`, 'view', JSON.stringify(next, null, 2));
+	return next;
+}
+
 /* ── Chat messages + per-entity comment indexes ── */
 
 const FEED_MAX = 200;
@@ -1975,31 +2060,32 @@ export async function listFeedIds(session) {
  */
 export async function listFeedMessages(session, limit = 80) {
 	const ids = (await listFeedIds(session)).slice(0, limit);
-	/** @type {any[]} */
-	const out = [];
-	for (const id of ids) {
+	const { mapPool } = await import('./leaf-cache.js');
+	const rows = await mapPool(ids, 16, async (id) => {
 		try {
-			out.push(await getChatMessage(session, id));
+			return await getChatMessage(session, id);
 		} catch {
-			/* skip */
+			return null;
 		}
-	}
-	return out;
+	});
+	return rows.filter(Boolean);
 }
 
 /**
  * Write a chat/comment leaf, append entity comments.json + chat/feed.json.
+ * Pass `knownFeedIds` / `knownCommentIds` to skip the pre-write GET round-trips.
  * @param {import('./client.js').DriveSession} session
  * @param {{
  *   body: string,
  *   author: string,
- *   kind?: 'comment' | 'chat' | 'reaction',
+ *   kind?: 'comment' | 'chat' | 'reaction' | 'event',
  *   ref?: { type: string, id: string } | null,
  *   reaction?: string,
  *   reply_to?: string | null
  * }} input
+ * @param {{ knownFeedIds?: string[], knownCommentIds?: string[] }} [opts]
  */
-export async function createChatMessage(session, input) {
+export async function createChatMessage(session, input, opts = {}) {
 	const id = newId();
 	const created = nowRfc3339();
 	const kind = input.kind || (input.ref ? 'comment' : 'chat');
@@ -2024,13 +2110,24 @@ export async function createChatMessage(session, input) {
 		}
 	];
 
-	if (input.ref && (input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')) {
+	/* Events announce in the feed only — never land in entity comments.json. */
+	if (
+		kind !== 'event' &&
+		input.ref &&
+		(input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')
+	) {
 		const indexPath = `${input.ref.type}s/${input.ref.id}/comments.json`;
-		let ids = [];
-		try {
-			ids = await listCommentIds(session, /** @type {'task'|'note'|'project'} */ (input.ref.type), input.ref.id);
-		} catch {
-			ids = [];
+		let ids = Array.isArray(opts.knownCommentIds) ? [...opts.knownCommentIds] : null;
+		if (!ids) {
+			try {
+				ids = await listCommentIds(
+					session,
+					/** @type {'task'|'note'|'project'} */ (input.ref.type),
+					input.ref.id
+				);
+			} catch {
+				ids = [];
+			}
 		}
 		ids = [...ids, id];
 		writes.push({
@@ -2040,11 +2137,13 @@ export async function createChatMessage(session, input) {
 		});
 	}
 
-	let feedIds = [];
-	try {
-		feedIds = await listFeedIds(session);
-	} catch {
-		feedIds = [];
+	let feedIds = Array.isArray(opts.knownFeedIds) ? [...opts.knownFeedIds] : null;
+	if (!feedIds) {
+		try {
+			feedIds = await listFeedIds(session);
+		} catch {
+			feedIds = [];
+		}
 	}
 	feedIds = [id, ...feedIds.filter((x) => x !== id)].slice(0, FEED_MAX);
 	writes.push({
@@ -2059,6 +2158,45 @@ export async function createChatMessage(session, input) {
 
 	await putPaths(session, writes);
 	return msg;
+}
+
+/**
+ * Remove a chat message leaf and drop it from `chat/feed.json`.
+ * Pass `knownFeedIds` to skip the pre-delete GET.
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} id
+ * @param {{ knownFeedIds?: string[] }} [opts]
+ */
+export async function deleteChatMessage(session, id, opts = {}) {
+	const sid = String(id || '').trim();
+	if (!sid || sid.startsWith('local-')) return;
+
+	let feedIds = Array.isArray(opts.knownFeedIds) ? [...opts.knownFeedIds] : null;
+	if (!feedIds) {
+		try {
+			feedIds = await listFeedIds(session);
+		} catch {
+			feedIds = [];
+		}
+	}
+	const nextIds = feedIds.filter((x) => x !== sid).slice(0, FEED_MAX);
+	const updated = nowRfc3339();
+	await putPaths(session, [
+		{
+			path: 'chat/feed.json',
+			kind: 'chat_feed',
+			plaintext: JSON.stringify(
+				{ schema: 'alpha.chat_feed/1', ids: nextIds, updated_at: updated },
+				null,
+				2
+			)
+		}
+	]);
+	try {
+		await deletePaths(session, [`chat/messages/${sid}.json`]);
+	} catch {
+		/* feed index is enough for UI */
+	}
 }
 
 /* ── Personal mail (Drive-backed until Stalwart IMAP) ── */
@@ -2186,4 +2324,118 @@ export async function putMailMessage(session, msg) {
 		JSON.stringify(next, null, 2)
 	);
 	return next;
+}
+
+/* ── Web Push subscriptions (per device; fan-out from chat senders) ── */
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @returns {Promise<string[]>}
+ */
+export async function listPushSubscriptionIds(session) {
+	try {
+		const bytes = await getPath(session, 'chat/push/index.json');
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		if (Array.isArray(doc?.ids)) return doc.ids.map(String);
+		if (Array.isArray(doc)) return doc.map(String);
+		return [];
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ */
+export async function listPushSubscriptions(session) {
+	const ids = await listPushSubscriptionIds(session);
+	/** @type {any[]} */
+	const out = [];
+	for (const id of ids) {
+		try {
+			const bytes = await getPath(session, `chat/push/${id}.json`);
+			out.push(JSON.parse(new TextDecoder().decode(bytes)));
+		} catch {
+			/* missing */
+		}
+	}
+	return out;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {{
+ *   id: string,
+ *   email: string,
+ *   endpoint: string,
+ *   keys: { p256dh: string, auth: string },
+ *   expirationTime?: number | null,
+ *   userAgent?: string
+ * }} input
+ */
+export async function upsertPushSubscription(session, input) {
+	const id = String(input.id || '').trim();
+	if (!id) throw new Error('Push subscription missing id');
+	const updated = nowRfc3339();
+	const doc = {
+		schema: 'alpha.push_subscription/1',
+		id,
+		email: String(input.email || '').trim().toLowerCase(),
+		endpoint: String(input.endpoint || ''),
+		keys: {
+			p256dh: String(input.keys?.p256dh || ''),
+			auth: String(input.keys?.auth || '')
+		},
+		expirationTime: input.expirationTime ?? null,
+		userAgent: String(input.userAgent || ''),
+		updated_at: updated
+	};
+
+	let ids = await listPushSubscriptionIds(session);
+	ids = [id, ...ids.filter((x) => x !== id)].slice(0, 40);
+
+	await putPaths(session, [
+		{
+			path: `chat/push/${id}.json`,
+			kind: 'blob',
+			plaintext: JSON.stringify(doc, null, 2)
+		},
+		{
+			path: 'chat/push/index.json',
+			kind: 'blob',
+			plaintext: JSON.stringify(
+				{ schema: 'alpha.push_index/1', ids, updated_at: updated },
+				null,
+				2
+			)
+		}
+	]);
+	return doc;
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} id
+ */
+export async function removePushSubscription(session, id) {
+	const sid = String(id || '').trim();
+	if (!sid) return;
+	const ids = (await listPushSubscriptionIds(session)).filter((x) => x !== sid);
+	const updated = nowRfc3339();
+	await putPaths(session, [
+		{
+			path: 'chat/push/index.json',
+			kind: 'blob',
+			plaintext: JSON.stringify(
+				{ schema: 'alpha.push_index/1', ids, updated_at: updated },
+				null,
+				2
+			)
+		}
+	]);
+	try {
+		await deletePaths(session, [`chat/push/${sid}.json`]);
+	} catch {
+		/* index is enough */
+	}
 }

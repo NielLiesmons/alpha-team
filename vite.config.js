@@ -10,9 +10,9 @@ export default defineConfig({
 			injectRegister: null,
 			strategies: 'generateSW',
 			manifest: {
-				name: 'Alpha Admin',
-				short_name: 'Admin',
-				description: 'Family space operator dashboard',
+				name: 'Alpha',
+				short_name: 'Alpha',
+				description: 'Family chat, drive, mail, and planning',
 				lang: 'en',
 				dir: 'ltr',
 				start_url: '/',
@@ -21,9 +21,9 @@ export default defineConfig({
 				display: 'standalone',
 				display_override: ['standalone', 'minimal-ui'],
 				orientation: 'any',
-				background_color: '#121212',
+				background_color: '#090909',
 				theme_color: '#090909',
-				categories: ['productivity', 'utilities'],
+				categories: ['productivity', 'social', 'utilities'],
 				icons: [
 					{
 						src: '/icons/icon-192.png',
@@ -47,12 +47,14 @@ export default defineConfig({
 			},
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
+				importScripts: ['/push-sw.js'],
 				navigateFallback: '/',
-				navigateFallbackDenylist: [/^\/api/, /\/sw\.js$/],
+				navigateFallbackDenylist: [/^\/api/, /^\/jmap/, /\/sw\.js$/],
 				navigationPreload: false,
 				cleanupOutdatedCaches: true,
 				clientsClaim: true,
 				skipWaiting: true,
+				globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2,webmanifest}'],
 				runtimeCaching: [
 					{
 						urlPattern: ({ request }) => request.destination === 'font',
@@ -60,6 +62,15 @@ export default defineConfig({
 						options: {
 							cacheName: 'fonts',
 							expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 365 }
+						}
+					},
+					{
+						urlPattern: ({ request, sameOrigin }) =>
+							sameOrigin && request.destination === 'image',
+						handler: 'StaleWhileRevalidate',
+						options: {
+							cacheName: 'images',
+							expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 }
 						}
 					}
 				]

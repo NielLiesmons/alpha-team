@@ -70,8 +70,11 @@
 	}
 
 	.count {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: inherit;
 		font-weight: 500;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 		color: inherit;
 		white-space: nowrap;
 		overflow: hidden;

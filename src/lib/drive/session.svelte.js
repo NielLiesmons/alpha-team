@@ -4,14 +4,16 @@
 
 const STORAGE_KEY = 'alpha.drive.session.v1';
 
-/** @type {{ url: string, token: string, rootKey: string, connected: boolean, error: string | null, loading: boolean }} */
+/** @type {{ url: string, token: string, rootKey: string, connected: boolean, error: string | null, loading: boolean, syncing: boolean }} */
 export const driveSession = $state({
 	url: 'https://drive.bley.farm',
 	token: '',
 	rootKey: '',
 	connected: false,
 	error: null,
-	loading: false
+	loading: false,
+	/** True while a background Drive refresh is in flight (cache may already be shown). */
+	syncing: false
 });
 
 function readStored() {

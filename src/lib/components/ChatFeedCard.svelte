@@ -1,25 +1,37 @@
 <script>
 	/**
-	 * Family chat feed row — same grammar as Zapstore CommentCard:
-	 * content tip (badge + one-liner) → vertical spine → avatar → bubble
-	 * (optional in-bubble quote). Adapted for Alpha entities, not a clone.
+	 * Family chat bubble — Alpha Chat look + Zapstore desktop hover actions.
+	 * Outgoing: accent gradient, no profile pic. Incoming: muted bubble + avatar.
+	 * Desktop: React / Reply circle buttons on hover. Mobile: long-press → react picker.
 	 */
-	import NavIcon from './NavIcon.svelte';
 	import ProfilePic from './ProfilePic.svelte';
-	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
-	import { profileTextColor, stringToColor } from '$lib/color.js';
+	import Heart from './icons/Heart.svelte';
+	import Reply from './icons/Reply.svelte';
+	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { REACTION_EMOJI, reactionsForMessage, toggleReaction } from '$lib/chat.svelte.js';
+	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+
+	const REACTION_PFP_MAX = 3;
 
 	/**
 	 * @type {{
 	 *   msg: any,
 	 *   parent?: any | null,
-	 *   refMeta?: { kind: string, title: string, icon: string } | null,
 	 *   when?: string,
-	 *   onclick?: () => void
+	 *   onReply?: () => void,
+	 *   onQuoteClick?: (parentId: string) => void
 	 * }}
 	 */
-	let { msg, parent = null, refMeta = null, when = '', onclick } = $props();
+	let { msg, parent = null, when = '', onReply, onQuoteClick } = $props();
+
+	let pickerOpen = $state(false);
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let holdTimer = null;
+	let holdFired = false;
+	/** @type {{ x: number, y: number } | null} */
+	let holdOrigin = null;
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -36,16 +48,22 @@
 		parent ? parentPerson?.name || displayNameFromEmail(parent.author) : ''
 	);
 	const isReply = $derived(Boolean(parent));
-	const hasRoot = $derived(Boolean(refMeta));
+	const isMine = $derived.by(() => {
+		const me = (actor.email || '').trim().toLowerCase();
+		const author = String(msg.author || '').trim().toLowerCase();
+		return Boolean(me && author && me === author);
+	});
+	const reactions = $derived(reactionsForMessage(msg.id));
+	const delivery = $derived(
+		msg._pending || msg.delivery === 'sending' ? 'sending' : msg.delivery || 'sent'
+	);
 
 	function nameColor(email, label) {
-		const rgb = stringToColor(email || label || 'A');
-		return profileTextColor(rgb, isDark);
+		return profileNameCss(email, label, isDark);
 	}
 
 	function accentRgb(email, label) {
-		const rgb = stringToColor(email || label || 'A');
-		return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+		return profileAccentCss(email, label);
 	}
 
 	function preview(text, max = 80) {
@@ -55,54 +73,129 @@
 		if (plain.length <= max) return plain;
 		return `${plain.slice(0, max).trim()}…`;
 	}
+
+	/** @param {string} emoji */
+	async function onReact(emoji) {
+		pickerOpen = false;
+		try {
+			await toggleReaction(msg.id, emoji);
+		} catch {
+			/* feed will show failure on next refresh */
+		}
+	}
+
+	function openReactPicker() {
+		pickerOpen = !pickerOpen;
+	}
+
+	function clearHold() {
+		if (holdTimer != null) {
+			clearTimeout(holdTimer);
+			holdTimer = null;
+		}
+	}
+
+	/** @param {PointerEvent} e */
+	function onBubblePointerDown(e) {
+		if (e.pointerType === 'mouse') return;
+		holdFired = false;
+		holdOrigin = { x: e.clientX, y: e.clientY };
+		clearHold();
+		holdTimer = setTimeout(() => {
+			holdFired = true;
+			pickerOpen = true;
+			holdTimer = null;
+		}, 450);
+	}
+
+	function onBubblePointerUp() {
+		clearHold();
+		holdOrigin = null;
+	}
+
+	/** @param {PointerEvent} e */
+	function onBubblePointerMove(e) {
+		if (!holdOrigin || holdTimer == null) return;
+		const dx = e.clientX - holdOrigin.x;
+		const dy = e.clientY - holdOrigin.y;
+		if (dx * dx + dy * dy > 100) clearHold();
+	}
+
+	function onBubblePointerCancel() {
+		clearHold();
+		holdOrigin = null;
+	}
+
+	/** @param {Event} e */
+	function onBubbleContextMenu(e) {
+		/* Mobile long-press often fires contextmenu — keep picker instead of OS menu. */
+		if (pickerOpen || holdFired) {
+			e.preventDefault();
+		}
+	}
+
+	function handleReply() {
+		pickerOpen = false;
+		onReply?.();
+	}
+
+	$effect(() => {
+		if (!pickerOpen) return;
+		/** @param {PointerEvent} e */
+		function onDoc(e) {
+			const t = /** @type {Node | null} */ (e.target);
+			const root = document.querySelector(`[data-chat-bubble="${msg.id}"]`);
+			if (root && t && root.contains(t)) return;
+			pickerOpen = false;
+		}
+		document.addEventListener('pointerdown', onDoc, true);
+		return () => document.removeEventListener('pointerdown', onDoc, true);
+	});
 </script>
 
-<article class="card">
-	<div class="left-col">
-		{#if hasRoot}
-			<button
-				type="button"
-				class="root-badge"
-				aria-label={refMeta ? `${refMeta.kind}: ${refMeta.title}` : 'Open'}
-				onclick={(e) => {
-					e.stopPropagation();
-					onclick?.();
-				}}
-			>
-				<NavIcon name={refMeta?.icon || 'chat'} size={14} />
-			</button>
-			{#if isReply}
-				<div class="line-dotted" aria-hidden="true"></div>
-			{/if}
-			<div class="line-solid" aria-hidden="true"></div>
-		{/if}
+<article
+	class="card desktop-bubble-actions-target"
+	class:mine={isMine}
+	class:failed={msg._failed}
+	data-chat-bubble={msg.id}
+>
+	{#if !isMine}
 		<div class="avatar-wrap">
-			<ProfilePic name={name} size={34} />
+			<ProfilePic name={name} email={msg.author} pictureUrl={pictureUrlFor(msg.author)} size={34} />
 		</div>
-	</div>
+	{/if}
 
-	<div class="right-col">
-		{#if hasRoot && refMeta}
-			<button
-				type="button"
-				class="root-label-row"
-				onclick={(e) => {
-					e.stopPropagation();
-					onclick?.();
-				}}
-			>
-				<span class="root-kind">{refMeta.kind}</span>
-				<span class="root-title">{refMeta.title}</span>
-			</button>
-		{/if}
-
-		<button type="button" class="bubble" class:quoted={isReply} onclick={() => onclick?.()}>
-			<div class="bubble-head">
-				<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
-				{#if when}<span class="when">{when}</span>{/if}
-			</div>
+	<div class="bubble-trailing">
+		<div class="bubble-stack">
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="bubble"
+				class:quoted={isReply}
+				class:mine={isMine}
+			onpointerdown={onBubblePointerDown}
+			onpointerup={onBubblePointerUp}
+			onpointermove={onBubblePointerMove}
+			onpointercancel={onBubblePointerCancel}
+			oncontextmenu={onBubbleContextMenu}
+			role="group"
+			aria-label={isMine ? 'Your message' : `Message from ${name}`}
+		>
+			{#if !isMine}
+				<div class="bubble-head">
+					<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
+					{#if when}<span class="when">{when}</span>{/if}
+				</div>
+			{/if}
 			{#if parent}
-				<div class="quote">
+				<button
+					type="button"
+					class="quote"
+					aria-label={`Jump to message from ${parentName}`}
+					onclick={(e) => {
+						e.stopPropagation();
+						onQuoteClick?.(String(parent.id));
+					}}
+				>
 					<div
 						class="quote-bar"
 						style:background={accentRgb(parent.author, parentName)}
@@ -114,140 +207,220 @@
 						>
 						<span class="quote-text">{preview(parent.body)}</span>
 					</div>
-				</div>
+				</button>
 			{/if}
 			<p class="text">{msg.body}</p>
-		</button>
+			{#if isMine}
+				<div class="meta-out">
+					{#if when}<span class="when">{when}</span>{/if}
+					<span
+						class="receipt"
+						class:read={delivery === 'read'}
+						title={delivery === 'read'
+							? 'Read'
+							: delivery === 'delivered'
+								? 'Delivered'
+								: delivery === 'sending'
+									? 'Sending'
+									: 'Sent'}
+						aria-label={delivery}
+					>
+						{#if delivery === 'read' || delivery === 'delivered'}
+							<svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
+								<path
+									d="M1.2 5.2 3.6 7.6 8.8 1.6M6.2 5.2 8.6 7.6 14.2 1.6"
+									stroke="currentColor"
+									stroke-width="1.4"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						{:else}
+							<svg width="12" height="10" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+								<path
+									d="M1.2 5.2 4.1 8.1 10.6 1.5"
+									stroke="currentColor"
+									stroke-width="1.4"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						{/if}
+					</span>
+				</div>
+			{/if}
+			{#if msg._failed}
+				<p class="fail-hint">Couldn’t send — pull to refresh and try again.</p>
+			{/if}
+
+			{#if pickerOpen}
+				<div class="react-picker" role="listbox" aria-label="Reactions">
+					{#each REACTION_EMOJI as emoji (emoji)}
+						<button
+							type="button"
+							class="react-pick"
+							role="option"
+							onclick={(e) => {
+								e.stopPropagation();
+								void onReact(emoji);
+							}}
+						>
+							{emoji}
+						</button>
+					{/each}
+				</div>
+			{/if}
+			</div>
+
+			{#if reactions.length}
+				<div class="reaction-pills" role="list">
+					{#each reactions as r (r.emoji)}
+						<button
+							type="button"
+							class="reaction-pill"
+							class:mine={r.mine}
+							role="listitem"
+							aria-label={r.mine
+								? `Remove your ${r.emoji} reaction`
+								: `${r.emoji} ${r.count}`}
+							onclick={() => void onReact(r.emoji)}
+						>
+							<span class="emoji">{r.emoji}</span>
+							{#if r.count <= REACTION_PFP_MAX}
+								<span class="reactors" aria-hidden="true">
+									{#each r.authors.slice(0, REACTION_PFP_MAX) as email, i (email)}
+										{@const rp = asPerson(email)}
+										{@const rn = rp?.name || displayNameFromEmail(email)}
+										<span class="reactor" style:z-index={REACTION_PFP_MAX - i}>
+											<ProfilePic
+												name={rn}
+												email={email}
+												pictureUrl={pictureUrlFor(email)}
+												size={20}
+												bare
+											/>
+										</span>
+									{/each}
+								</span>
+							{:else}
+								<span class="count">{r.count}</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
+
+		<div class="action-rail" role="group" aria-label="Message actions">
+			<button
+				type="button"
+				class="rail-btn"
+				aria-label="React"
+				aria-expanded={pickerOpen}
+				onclick={(e) => {
+					e.stopPropagation();
+					openReactPicker();
+				}}
+			>
+				<Heart size={14} />
+			</button>
+			<button
+				type="button"
+				class="rail-btn"
+				aria-label="Reply"
+				onclick={(e) => {
+					e.stopPropagation();
+					handleReply();
+				}}
+			>
+				<Reply size={14} />
+			</button>
+		</div>
 	</div>
 </article>
 
 <style>
 	.card {
 		display: flex;
-		gap: 8px;
-		align-items: stretch;
+		gap: 6px;
+		align-items: flex-end;
 		width: 100%;
+		position: relative;
 	}
 
-	.left-col {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		flex-shrink: 0;
-		width: 36px;
+	/* Clear hanging reaction pills without shifting pfp / hover rail off the bubble */
+	.card:has(.reaction-pills) {
+		margin-bottom: 22px;
 	}
 
-	.root-badge {
-		width: 28px;
-		height: 28px;
-		display: grid;
-		place-items: center;
-		flex-shrink: 0;
-		padding: 0;
-		border: 0;
-		border-radius: 6px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		cursor: pointer;
+	.card.mine {
+		flex-direction: row-reverse;
+		justify-content: flex-start;
 	}
 
-	.root-badge:hover {
-		color: var(--fg);
-		background: var(--fg-11, var(--fg-8));
-	}
-
-	.line-dotted {
-		width: 2px;
-		flex: 1;
-		min-height: 6px;
-		background: repeating-linear-gradient(
-			to bottom,
-			color-mix(in srgb, var(--fg) 16%, transparent) 0px,
-			color-mix(in srgb, var(--fg) 16%, transparent) 6px,
-			transparent 6px,
-			transparent 10px
-		);
-	}
-
-	.line-solid {
-		width: 2px;
-		flex: 1;
-		min-height: 8px;
-		background: color-mix(in srgb, var(--fg) 16%, transparent);
+	.card.failed .text {
+		opacity: 0.7;
 	}
 
 	.avatar-wrap {
 		flex-shrink: 0;
 		line-height: 0;
+		align-self: flex-end;
 	}
 
-	.right-col {
-		flex: 1;
+	.bubble-trailing {
+		display: flex;
+		align-items: flex-end;
+		gap: 8px;
 		min-width: 0;
+		max-width: calc(100% - 40px);
+	}
+
+	.card.mine .bubble-trailing {
+		flex-direction: row-reverse;
+		max-width: 100%;
+	}
+
+	.bubble-stack {
+		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
 		align-items: flex-start;
-	}
-
-	.root-label-row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		height: 28px;
 		min-width: 0;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		color: inherit;
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
+		max-width: 100%;
 	}
 
-	.root-kind {
-		flex-shrink: 0;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--fg-33);
-	}
-
-	.root-title {
-		min-width: 0;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--fg-66);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.root-label-row:hover .root-title,
-	.root-label-row:hover .root-kind {
-		color: var(--fg);
+	.card.mine .bubble-stack {
+		align-items: flex-end;
 	}
 
 	.bubble {
+		position: relative;
+		z-index: 0;
 		width: fit-content;
-		max-width: 100%;
-		min-width: 200px;
-		padding: 8px 12px 8px;
+		max-width: min(85vw, 100%);
+		/* Vertical shell only — text vs quote use different horizontal insets (Alpha Chat). */
+		padding: 6px 0 7px;
 		border: 0;
-		border-radius: 14px 14px 14px 4px;
-		background: color-mix(in srgb, var(--fg) 8%, transparent);
+		border-radius: 16px 16px 16px 4px;
+		background: color-mix(in srgb, var(--fg) 12%, transparent);
 		color: inherit;
 		text-align: left;
 		font: inherit;
-		cursor: pointer;
+		-webkit-touch-callout: none;
+		user-select: text;
+		touch-action: manipulation;
+	}
+
+	.bubble.mine {
+		border-radius: 16px 16px 4px 16px;
+		background: var(--gradient-accent-1);
+		color: #fff;
+		padding-bottom: 4px;
 	}
 
 	.bubble.quoted {
-		min-width: 240px;
-	}
-
-	.bubble:hover {
-		background: color-mix(in srgb, var(--fg) 11%, transparent);
+		min-width: min(240px, 100%);
 	}
 
 	.bubble-head {
@@ -255,7 +428,8 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: 10px;
-		margin-bottom: 4px;
+		margin-bottom: 2px;
+		padding: 1px 11px 0;
 	}
 
 	.author {
@@ -270,13 +444,55 @@
 		flex-shrink: 0;
 	}
 
+	.bubble.mine .when {
+		color: rgba(255, 255, 255, 0.55);
+	}
+
+	.meta-out {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 5px;
+		margin-top: -1px;
+		padding: 0 11px 1px;
+	}
+
+	.receipt {
+		display: inline-flex;
+		color: rgba(255, 255, 255, 0.5);
+		line-height: 0;
+	}
+
+	.receipt.read {
+		color: color-mix(in srgb, #fff 70%, var(--accent-1));
+	}
+
 	.quote {
 		display: flex;
 		min-width: 0;
-		margin-bottom: 6px;
+		width: calc(100% - 12px);
+		/* Tighter than paragraph inset (11px) — matches Alpha Chat ChatQuoteBubblePadH. */
+		margin: 0 6px 6px;
+		padding: 0;
+		border: 0;
 		border-radius: 8px;
 		overflow: hidden;
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.quote:focus-visible {
+		outline: 2px solid var(--accent-1);
+		outline-offset: 1px;
+	}
+
+	.bubble.mine .quote {
+		/* Outgoing accent bubble: darken quote, never a white wash. */
+		background: rgba(0, 0, 0, 0.18);
 	}
 
 	.quote-bar {
@@ -288,7 +504,7 @@
 	.quote-body {
 		flex: 1;
 		min-width: 0;
-		padding: 5px 10px 4px;
+		padding: 5px 8px 4px;
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
@@ -311,12 +527,206 @@
 		text-overflow: ellipsis;
 	}
 
+	.bubble.mine .quote-text {
+		color: rgba(255, 255, 255, 0.72);
+	}
+
 	.text {
 		margin: 0;
-		font-size: 14px;
-		line-height: 1.45;
-		color: color-mix(in srgb, var(--fg) 85%, transparent);
+		padding: 0 11px;
+		font-size: 15px;
+		line-height: 1.4;
+		color: var(--fg-83);
 		white-space: pre-wrap;
 		word-break: break-word;
+	}
+
+	.bubble.mine .text {
+		color: #fff;
+	}
+
+	.fail-hint {
+		margin: 6px 0 0;
+		padding: 0 11px;
+		font-size: 11px;
+		font-weight: 500;
+		color: #c45;
+	}
+
+	.bubble.mine .fail-hint {
+		color: #ffe0e0;
+	}
+
+	.action-rail {
+		display: none;
+		flex-shrink: 0;
+		flex-direction: row;
+		align-items: center;
+		gap: 6px;
+		height: 28px;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.15s ease;
+	}
+
+	.rail-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		margin: 0;
+		border: none;
+		border-radius: 50%;
+		background: var(--fg-8);
+		color: var(--fg-33);
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.rail-btn:hover {
+		background: color-mix(in srgb, var(--fg) 14%, transparent);
+		color: var(--fg-66);
+	}
+
+	.rail-btn:focus-visible {
+		outline: 2px solid var(--accent-1);
+		outline-offset: 2px;
+		opacity: 1;
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.action-rail {
+			display: flex;
+		}
+
+		.desktop-bubble-actions-target:hover .action-rail,
+		.desktop-bubble-actions-target:focus-within .action-rail {
+			opacity: 1;
+			pointer-events: auto;
+		}
+	}
+
+	.react-picker {
+		position: absolute;
+		bottom: calc(100% + 8px);
+		left: 0;
+		z-index: 5;
+		display: flex;
+		gap: 2px;
+		padding: 4px;
+		border-radius: 999px;
+		border: 1px solid var(--glass-border);
+		background: var(--glass-panel);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		box-shadow: 0 8px 24px var(--shadow);
+	}
+
+	.card.mine .react-picker {
+		left: auto;
+		right: 0;
+	}
+
+	.react-pick {
+		width: 32px;
+		height: 32px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		font-size: 16px;
+		line-height: 1;
+		cursor: pointer;
+	}
+
+	.react-pick:hover {
+		background: var(--fg-8);
+	}
+
+	.reaction-pills {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		display: flex;
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px;
+		width: max-content;
+		max-width: min(100vw, 280px);
+		/* Hang ~3px onto the bubble bottom edge */
+		margin-top: -3px;
+		padding-left: 4px;
+		z-index: 2;
+	}
+
+	.card.mine .reaction-pills {
+		left: auto;
+		right: 0;
+		padding-left: 0;
+		padding-right: 4px;
+		justify-content: flex-end;
+	}
+
+	.reaction-pill {
+		display: inline-flex;
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		/* Right pad matches top/bottom around the pfp */
+		padding: 3px 3px 3px 5px;
+		border: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+		border-radius: 999px;
+		/* Same surface as dropdown / FloatPanel popovers */
+		background: var(--popover);
+		color: var(--fg-66);
+		font: inherit;
+		cursor: pointer;
+		line-height: 1;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+	}
+
+	.reaction-pill.mine {
+		/* Own reaction: accent wash on top of popover */
+		background: color-mix(in srgb, var(--accent-1) 28%, var(--popover));
+		border-color: color-mix(in srgb, var(--accent-1) 35%, transparent);
+		color: var(--fg);
+	}
+
+	.reaction-pill .emoji {
+		font-size: 17px;
+		line-height: 1;
+	}
+
+	.reaction-pill .reactors {
+		display: inline-flex;
+		align-items: center;
+		height: 20px;
+	}
+
+	.reaction-pill .reactor {
+		position: relative;
+		margin-left: -4px;
+		line-height: 0;
+	}
+
+	.reaction-pill .reactor:first-child {
+		margin-left: 0;
+	}
+
+	.reaction-pill .count {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--fg-33);
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
+		padding-right: 0;
 	}
 </style>

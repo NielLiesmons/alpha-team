@@ -5,11 +5,14 @@
  */
 
 import { actor, loadActor } from './actor.svelte.js';
-import { refreshChatFeed } from './chat.svelte.js';
+import { hydrateChatFeedFromCache } from './chat.svelte.js';
+import { loadDeviceProfiles } from './device-profiles.svelte.js';
+import { refreshAllDrive } from './drive-refresh.js';
 import { driveSession, loadSessionFromStorage } from './drive/session.svelte.js';
-import { refreshMail } from './mail.svelte.js';
-import { hydrateTracksFromCache, refreshTracks } from './player.svelte.js';
-import { hydrateWorkspaceFromCache, refreshFromDrive, ui } from './workspace.svelte.js';
+import { ensurePersistentStorage } from './offline-store.js';
+import { hydrateTracksFromCache } from './player.svelte.js';
+import { ensureEggsExample } from './seed-eggs-forecast.js';
+import { hydrateWorkspaceFromCache, ui } from './workspace.svelte.js';
 
 /** @type {{ ready: boolean, listsReady: boolean }} */
 export const appBoot = $state({ ready: false, listsReady: false });
@@ -29,6 +32,7 @@ function activeSessionSafe() {
  */
 export async function bootApp() {
 	loadActor();
+	loadDeviceProfiles();
 	loadSessionFromStorage();
 
 	if (!activeSessionSafe()) {
@@ -37,29 +41,25 @@ export async function bootApp() {
 		return;
 	}
 
-	// Connected — never show “Connect Drive” / empty feeds while we hydrate.
+	// Connected — unlock shell immediately; never block Chat on Drive crawl.
 	ui.source = 'drive';
-	driveSession.loading = true;
-	appBoot.listsReady = false;
-
-	try {
-		const [ws, tr] = await Promise.all([hydrateWorkspaceFromCache(), hydrateTracksFromCache()]);
-		if (ws || tr) {
-			driveSession.loading = false;
-			appBoot.listsReady = true;
-		}
-	} catch {
-		/* ignore */
-	}
-
+	hydrateChatFeedFromCache();
 	appBoot.ready = true;
+	appBoot.listsReady = true;
+	driveSession.loading = false;
+	void ensurePersistentStorage();
 
-	try {
-		await Promise.all([refreshFromDrive(), refreshTracks(), refreshChatFeed(), refreshMail()]);
-	} catch {
-		/* errors land on driveSession / playerUi */
-	} finally {
-		driveSession.loading = false;
-		appBoot.listsReady = true;
-	}
+	void (async () => {
+		try {
+			await Promise.all([hydrateWorkspaceFromCache(), hydrateTracksFromCache()]);
+		} catch {
+			/* ignore */
+		}
+		try {
+			await refreshAllDrive();
+			void ensureEggsExample().catch((e) => console.warn('ensureEggsExample', e));
+		} catch {
+			/* errors land on driveSession / playerUi */
+		}
+	})();
 }

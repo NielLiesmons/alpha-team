@@ -1,7 +1,16 @@
 <script>
 	import ProfilePic from './ProfilePic.svelte';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 
-	let { profiles = [], text = '', size = 'xs' } = $props();
+	/**
+	 * @type {{
+	 *   profiles?: Array<{ name?: string, email?: string, pictureUrl?: string | null }>,
+	 *   text?: string,
+	 *   size?: 'xs' | 'sm' | 'md',
+	 *   onclick?: ((e: MouseEvent) => void) | null
+	 * }}
+	 */
+	let { profiles = [], text = '', size = 'xs', onclick = null } = $props();
 
 	const sizeMap = {
 		xs: { overlap: 7, height: 24, pic: 24 },
@@ -13,22 +22,67 @@
 	const metrics = $derived(sizeMap[size] ?? sizeMap.xs);
 </script>
 
-<div class="profile-pic-stack">
-	{#if displayed.length > 0}
-		<div class="pics">
-			{#each displayed as profile, i (profile.email ?? profile.name ?? i)}
-				<div class="pic" style:z-index={displayed.length - i} style:margin-left={i === 0 ? '0' : `-${metrics.overlap}px`}>
-					<ProfilePic name={profile.name ?? ''} size={metrics.pic} />
-				</div>
-			{/each}
-		</div>
-	{/if}
-	{#if text}
-		<div class="pill" style:height="{metrics.height}px" style:margin-left={displayed.length ? `-${metrics.overlap}px` : '0'}>
-			<span>{text}</span>
-		</div>
-	{/if}
-</div>
+{#if onclick}
+	<button type="button" class="profile-pic-stack hit" {onclick}>
+		{#if displayed.length > 0}
+			<div class="pics">
+				{#each displayed as profile, i (profile.email ?? profile.name ?? i)}
+					<div
+						class="pic"
+						style:z-index={displayed.length - i}
+						style:margin-left={i === 0 ? '0' : `-${metrics.overlap}px`}
+					>
+						<ProfilePic
+							name={profile.name ?? ''}
+							email={profile.email ?? ''}
+							pictureUrl={profile.pictureUrl ?? pictureUrlFor(profile.email)}
+							size={metrics.pic}
+						/>
+					</div>
+				{/each}
+			</div>
+		{/if}
+		{#if text}
+			<div
+				class="pill"
+				style:height="{metrics.height}px"
+				style:margin-left={displayed.length ? `-${metrics.overlap}px` : '0'}
+			>
+				<span>{text}</span>
+			</div>
+		{/if}
+	</button>
+{:else}
+	<div class="profile-pic-stack">
+		{#if displayed.length > 0}
+			<div class="pics">
+				{#each displayed as profile, i (profile.email ?? profile.name ?? i)}
+					<div
+						class="pic"
+						style:z-index={displayed.length - i}
+						style:margin-left={i === 0 ? '0' : `-${metrics.overlap}px`}
+					>
+						<ProfilePic
+							name={profile.name ?? ''}
+							email={profile.email ?? ''}
+							pictureUrl={profile.pictureUrl ?? pictureUrlFor(profile.email)}
+							size={metrics.pic}
+						/>
+					</div>
+				{/each}
+			</div>
+		{/if}
+		{#if text}
+			<div
+				class="pill"
+				style:height="{metrics.height}px"
+				style:margin-left={displayed.length ? `-${metrics.overlap}px` : '0'}
+			>
+				<span>{text}</span>
+			</div>
+		{/if}
+	</div>
+{/if}
 
 <style>
 	.profile-pic-stack {
@@ -38,6 +92,17 @@
 		align-items: center;
 		flex-shrink: 0;
 		min-width: 0;
+	}
+
+	.profile-pic-stack.hit {
+		padding: 0;
+		border: 0;
+		margin: 0;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+		text-align: left;
 	}
 
 	.pics {

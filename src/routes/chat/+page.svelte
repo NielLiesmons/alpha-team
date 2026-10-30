@@ -1,178 +1,193 @@
 <script>
 	import { onMount } from 'svelte';
-	import ChatFeedCard from '$lib/components/ChatFeedCard.svelte';
-	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
-	import Spinner from '$lib/components/Spinner.svelte';
-	import { appBoot } from '$lib/boot.svelte.js';
+	import ProfilePic from '$lib/components/ProfilePic.svelte';
+	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
+		chatChannels,
 		chatFeed,
-		chatRefMeta,
 		chatUi,
-		findChatParent,
-		openChatRef,
-		postChatMessage,
-		refreshChatFeed
+		chatEventLabel,
+		setActiveChannel,
+		visibleChatMessages
 	} from '$lib/chat.svelte.js';
-	import { driveSession } from '$lib/drive/session.svelte.js';
-
-	let draft = $state('');
+	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	onMount(() => {
-		void refreshChatFeed();
+		const id = chatUi.activeChannelId || 'general';
+		setActiveChannel(id);
+		selectEntity('chat', id);
 	});
 
-	function formatWhen(iso) {
+	/** @param {string} id */
+	function openChat(id) {
+		setActiveChannel(id);
+		selectEntity('chat', id);
+	}
+
+	/** @param {any} ch */
+	function avatarFor(ch) {
+		if (ch.kind === 'dm' && Array.isArray(ch.members) && ch.members[0]) {
+			const email = String(ch.members[0]);
+			const p = asPerson(email);
+			return {
+				name: p?.name || displayNameFromEmail(email),
+				email,
+				pictureUrl: pictureUrlFor(email)
+			};
+		}
+		if (ch.kind === 'agent') {
+			return { name: ch.title || 'Agent', email: `agent:${ch.id}`, pictureUrl: null };
+		}
+		/* Family / group: seed from title so General gets a stable round pfp. */
+		return { name: ch.title || 'Chat', email: `chat:${ch.id}`, pictureUrl: null };
+	}
+
+	/** @param {string} chatId */
+	function lastMessage(chatId) {
+		const msgs = visibleChatMessages(chatFeed).filter(
+			(m) => (m.channel_id || 'general') === chatId
+		);
+		return msgs[0] || null;
+	}
+
+	/** @param {any} msg */
+	function previewLine(msg) {
+		if (!msg) return 'No messages yet';
+		if (msg.kind === 'event') {
+			const who = asPerson(msg.author);
+			const name = who?.name || displayNameFromEmail(msg.author) || 'Someone';
+			return `${name} ${chatEventLabel(msg)}`;
+		}
+		const who = asPerson(msg.author);
+		const name = who?.name || displayNameFromEmail(msg.author);
+		const plain = String(msg.body || '')
+			.replace(/\s+/g, ' ')
+			.trim();
+		const text = plain.length > 64 ? `${plain.slice(0, 64).trim()}…` : plain || 'Attachment';
+		return name ? `${name}: ${text}` : text;
+	}
+
+	/** @param {string | undefined} iso */
+	function whenLabel(iso) {
 		if (!iso) return '';
 		const d = new Date(iso);
 		if (Number.isNaN(d.getTime())) return '';
-		const now = Date.now();
-		const diff = now - d.getTime();
-		if (diff < 60_000) return 'just now';
+		const diff = Date.now() - d.getTime();
+		if (diff < 60_000) return 'now';
 		if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
 		if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
+		if (diff < 6 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d`;
 		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-	}
-
-	async function send() {
-		const body = draft.trim();
-		if (!body || chatUi.posting) return;
-		try {
-			await postChatMessage({ body, kind: 'chat' });
-			draft = '';
-		} catch (e) {
-			chatUi.error = e instanceof Error ? e.message : String(e);
-		}
-	}
-
-	/** @param {KeyboardEvent} e */
-	function onKey(e) {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			void send();
-		}
 	}
 </script>
 
 <svelte:head><title>Chat</title></svelte:head>
 
-<div class="feed">
-	{#if driveSession.error}
-		<p class="banner"><span class="err">{driveSession.error}</span></p>
-	{/if}
-	{#if chatUi.error}
-		<p class="banner"><span class="err">{chatUi.error}</span></p>
-	{/if}
-
-	<div class="composer-card">
-		<textarea
-			class="composer"
-			rows="2"
-			placeholder="Message the family…"
-			bind:value={draft}
-			onkeydown={onKey}
-		></textarea>
+<div class="feed chat-list">
+	{#each chatChannels as ch (ch.id)}
+		{@const av = avatarFor(ch)}
+		{@const last = lastMessage(ch.id)}
 		<button
 			type="button"
-			class="send"
-			disabled={!draft.trim() || chatUi.posting}
-			onclick={() => void send()}
+			class="row"
+			class:on={ui.selection?.kind === 'chat' && ui.selection?.id === ch.id}
+			onclick={() => openChat(ch.id)}
 		>
-			{#if chatUi.posting}<Spinner size={14} label="Sending" />{/if}
-			Send
+			<span class="avatar" aria-hidden="true">
+				<ProfilePic name={av.name} email={av.email} pictureUrl={av.pictureUrl} size={44} />
+			</span>
+			<span class="meta">
+				<span class="title-row">
+					<span class="title">{ch.title}</span>
+					{#if last?.created_at}
+						<span class="when">{whenLabel(last.created_at)}</span>
+					{/if}
+				</span>
+				<span class="preview">{previewLine(last)}</span>
+			</span>
 		</button>
-	</div>
-
-	{#if (chatUi.loading || !appBoot.listsReady) && chatFeed.length === 0}
-		<FeedSkeleton rows={6} />
-	{:else if chatFeed.length === 0}
-		<p class="empty">No messages yet — comment on a Task or Note, or send above.</p>
-	{:else}
-		<div class="stack">
-			{#each chatFeed as msg (msg.id)}
-				<ChatFeedCard
-					{msg}
-					parent={findChatParent(msg.reply_to)}
-					refMeta={chatRefMeta(msg)}
-					when={formatWhen(msg.created_at)}
-					onclick={() => openChatRef(msg)}
-				/>
-			{/each}
-		</div>
-	{/if}
+	{/each}
 </div>
 
 <style>
-	.feed {
+	.chat-list {
 		display: flex;
 		flex-direction: column;
-		min-height: 0;
-		flex: 1;
+		gap: 0;
+		padding: 4px 10px 24px;
 	}
 
-	.banner {
-		margin: 0;
-		padding: 10px 16px;
-		font-size: 13px;
-	}
-
-	.err {
-		color: #b44;
-	}
-
-	.composer-card {
+	.row {
 		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		padding: 12px 14px;
-		border-bottom: 1px solid var(--fg-8);
-	}
-
-	.composer {
+		align-items: flex-start;
+		gap: 12px;
 		width: 100%;
-		min-height: 52px;
-		padding: 10px 12px;
+		padding: 10px 8px;
 		border: 0;
 		border-radius: 12px;
-		background: var(--fg-4);
-		color: var(--fg);
+		background: transparent;
+		color: inherit;
 		font: inherit;
-		font-size: 14px;
-		resize: vertical;
-	}
-
-	.send {
-		align-self: flex-end;
-		height: 34px;
-		padding: 0 14px;
-		border: 1px solid transparent;
-		border-radius: 9999px;
-		background: var(--button-primary-bg) padding-box, var(--glass-shine) border-box;
-		background-color: transparent;
-		color: var(--button-primary-fg);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 500;
+		text-align: left;
 		cursor: pointer;
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
 	}
 
-	.send:disabled {
-		opacity: 0.45;
+	.row:hover {
+		background: var(--fg-4);
 	}
 
-	.empty {
-		padding: 32px 16px;
-		margin: 0;
-		color: var(--fg-66);
-		font-size: 14px;
+	.row.on {
+		background: var(--fg-8);
 	}
 
-	.stack {
+	.avatar {
+		flex-shrink: 0;
+		line-height: 0;
+		padding-top: 2px;
+	}
+
+	.meta {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
-		padding: 12px 10px 20px;
+		gap: 2px;
+		padding-top: 2px;
+	}
+
+	.title-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		min-height: 20px;
+	}
+
+	.title {
+		flex: 1;
+		min-width: 0;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--fg);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.when {
+		flex-shrink: 0;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	.preview {
+		font-size: 14px;
+		line-height: 1.35;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 </style>

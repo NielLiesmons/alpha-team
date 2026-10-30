@@ -1,6 +1,9 @@
 <script>
 	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
+	import MailHeroEditor from './MailHeroEditor.svelte';
+	import NoteEditor from './NoteEditor.svelte';
+	import EditorToolbar from './EditorToolbar.svelte';
 	import { mailSettings, persistMailSettings } from '$lib/publications.svelte.js';
 	import { closeComposer, ui } from '$lib/workspace.svelte.js';
 
@@ -10,10 +13,17 @@
 	let subjectEn = $state('');
 	let bodyFr = $state('');
 	let bodyEn = $state('');
+	let descFr = $state('');
+	/** @type {string | null} */
+	let imageUrl = $state(null);
 	let busy = $state(false);
 	let err = $state('');
 	/** @type {string | null} */
 	let seededFor = $state(null);
+	/** @type {import('@tiptap/core').Editor | null} */
+	let tipTap = $state(null);
+	/** @type {'fr' | 'en'} */
+	let lang = $state('fr');
 
 	const open = $derived(ui.composer?.kind === 'welcome');
 
@@ -30,9 +40,26 @@
 		subjectEn = mailSettings.welcome.subject_en;
 		bodyFr = mailSettings.welcome.body_fr;
 		bodyEn = mailSettings.welcome.body_en;
+		descFr = '';
+		imageUrl = null;
 		err = '';
 		tick();
 	});
+
+	const activeSubject = $derived(lang === 'fr' ? subjectFr : subjectEn);
+	const activeBody = $derived(lang === 'fr' ? bodyFr : bodyEn);
+
+	/** @param {string} v */
+	function setSubject(v) {
+		if (lang === 'fr') subjectFr = v;
+		else subjectEn = v;
+	}
+
+	/** @param {string} html */
+	function setBody(html) {
+		if (lang === 'fr') bodyFr = html;
+		else bodyEn = html;
+	}
 
 	async function save() {
 		busy = true;
@@ -67,21 +94,47 @@
 		<input class="sheet-input" placeholder="From — Bley &lt;news@bley.farm&gt;" bind:value={from} />
 	</div>
 	<div class="form-divider"></div>
-	<p class="lang">French</p>
-	<div class="sheet-title-row">
-		<input class="sheet-input" placeholder="Subject (FR)" bind:value={subjectFr} />
+	<div class="lang-seg" role="group" aria-label="Language">
+		<button type="button" class:on={lang === 'fr'} onclick={() => (lang = 'fr')}>FR</button>
+		<button type="button" class:on={lang === 'en'} onclick={() => (lang = 'en')}>EN</button>
 	</div>
-	<textarea class="sheet-body" rows="5" placeholder="Body (FR)" bind:value={bodyFr}></textarea>
+	<div class="pad">
+		<MailHeroEditor
+			brand={mailSettings.brand_name || 'Bley'}
+			logoUrl={mailSettings.branding?.logo_url || 'https://bley.farm/icons/bley-logo-ink.svg'}
+			eyebrow={lang === 'en'
+				? mailSettings.branding?.eyebrow_en || 'Letter'
+				: mailSettings.branding?.eyebrow_fr || 'Lettre'}
+			readCta={mailSettings.branding?.read_cta_fr || 'Open Online'}
+			accent={mailSettings.branding?.accent || '#dd8f87'}
+			pageBg={mailSettings.branding?.page_bg || '#f7f3f1'}
+			ink={mailSettings.branding?.ink || '#160b0f'}
+			title={activeSubject}
+			description={descFr}
+			{imageUrl}
+			onTitle={setSubject}
+			onDescription={(v) => (descFr = v)}
+			onImage={(url) => (imageUrl = url)}
+		/>
+	</div>
 	<div class="form-divider"></div>
-	<p class="lang">English</p>
-	<div class="sheet-title-row">
-		<input class="sheet-input" placeholder="Subject (EN)" bind:value={subjectEn} />
+	<div class="body-pad">
+		{#if open}
+			{#key lang}
+				<NoteEditor
+					value={activeBody}
+					placeholder="Type / for commands"
+					onChange={setBody}
+					onReady={(ed) => (tipTap = ed)}
+				/>
+			{/key}
+		{/if}
 	</div>
-	<textarea class="sheet-body" rows="5" placeholder="Body (EN)" bind:value={bodyEn}></textarea>
 	{#if err}
 		<p class="err" role="alert">{err}</p>
 	{/if}
-	<div class="sheet-bottom">
+	<div class="sheet-bottom row">
+		<EditorToolbar editor={tipTap} />
 		<button type="button" class="publish-btn" disabled={busy} onclick={save}>
 			{busy ? 'Saving…' : 'Save welcome'}
 		</button>
@@ -100,40 +153,65 @@
 		cursor: pointer;
 	}
 
-	.lang {
-		margin: 0;
-		padding: 8px 14px 0;
-		font-size: 12px;
-		font-weight: 600;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--fg-33);
+	.lang-seg {
+		display: inline-flex;
+		gap: 2px;
+		margin: 8px 14px 0;
+		padding: 3px;
+		border-radius: 10px;
+		background: var(--fg-4);
 	}
 
-	.sheet-body {
-		display: block;
-		width: 100%;
-		min-height: 100px;
-		margin: 0;
-		padding: 10px 14px;
+	.lang-seg button {
 		border: 0;
-		resize: vertical;
+		border-radius: 8px;
+		padding: 6px 12px;
 		background: transparent;
-		color: var(--fg);
+		color: var(--fg-66);
 		font: inherit;
-		font-size: 15px;
-		line-height: 1.5;
-		box-sizing: border-box;
+		font-size: 12px;
+		font-weight: 650;
+		cursor: pointer;
 	}
 
-	.sheet-body:focus {
-		outline: none;
+	.lang-seg button.on {
+		background: var(--popover);
+		color: var(--fg);
+	}
+
+	.pad {
+		padding: 10px 14px 0;
+	}
+
+	.body-pad {
+		padding: 8px 14px 12px;
+		min-height: 140px;
+	}
+
+	.sheet-bottom.row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+
+	.publish-btn {
+		margin-left: auto;
+		height: 40px;
+		padding: 0 16px;
+		border: 1px solid transparent;
+		border-radius: 12px;
+		background: var(--button-primary-bg) padding-box, var(--glass-shine) border-box;
+		color: var(--button-primary-fg);
+		font: inherit;
+		font-weight: 650;
+		cursor: pointer;
 	}
 
 	.err {
-		margin: 0;
-		padding: 0 14px 8px;
+		margin: 0 14px 8px;
 		font-size: 13px;
-		color: var(--accent);
+		color: #b44;
 	}
 </style>

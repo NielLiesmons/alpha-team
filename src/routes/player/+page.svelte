@@ -164,7 +164,7 @@
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
 		/* Explicit chrome clearance so Songs/library scrolls under top bar + bottom nav */
-		padding-top: var(--feed-pad-top, 48px);
+		padding-top: var(--feed-pad-top, 44px);
 		padding-bottom: var(--feed-pad-bottom, 40px);
 		box-sizing: border-box;
 	}
@@ -191,9 +191,11 @@
 	}
 
 	.group-count {
-		font-family: var(--font);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 500;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 		color: var(--fg-33);
 	}
 

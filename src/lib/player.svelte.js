@@ -18,7 +18,12 @@ import {
 	mseMimeForContentType,
 	streamMediaChunks
 } from './drive/media.js';
-import { hasMpegFrameSync } from './drive/audio-meta.js';
+import { hasMpegFrameSync, mimeForAudioKind, sniffAudioKind } from './drive/audio-meta.js';
+
+/** Only swap progressive blobs when playhead is this close to the end of buffered audio. */
+const BLOB_GROW_HEADROOM_SEC = 3;
+/** Wait for at least this many decrypted bytes before starting progressive play. */
+const BLOB_START_MIN_BYTES = 384 * 1024;
 import { pushRecentlyPlayed, readRecentlyPlayed } from './player-cache.js';
 import { actor } from './actor.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
@@ -181,6 +186,11 @@ export function handleProgressiveStall() {
  */
 export function bindPlayerAudio(el) {
 	boundAudio = el;
+	/* Element may mount after play() already set objectUrl — attach once, never thrash. */
+	if (el && playerUi.objectUrl) {
+		const cur = el.getAttribute('src') || '';
+		if (cur !== playerUi.objectUrl) el.src = playerUi.objectUrl;
+	}
 }
 
 function revokeUrl() {
@@ -190,6 +200,25 @@ function revokeUrl() {
 	}
 	activeMediaSource = null;
 	bufferTail = null;
+}
+
+/** Silence + detach <audio> immediately — must run before any await on track change. */
+function hardStopAudio() {
+	onProgressiveStall = null;
+	mediaStreamActive = false;
+	if (boundAudio) {
+		try {
+			boundAudio.pause();
+		} catch {
+			/* ignore */
+		}
+		try {
+			boundAudio.removeAttribute('src');
+			boundAudio.load();
+		} catch {
+			/* ignore */
+		}
+	}
 }
 
 function cancelInFlightPlay() {
@@ -252,7 +281,8 @@ export async function refreshTracks() {
 		return;
 	}
 	const hadLocal = tracks.length > 0;
-	driveSession.loading = !hadLocal;
+	/* Don't flash global loading when a coordinated sync is already showing progress. */
+	if (!hadLocal && !driveSession.syncing) driveSession.loading = true;
 	try {
 		const [list, pls] = await Promise.all([listTracks(session), listPlaylists(session)]);
 		replaceTracks(list);
@@ -669,7 +699,6 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 	activeMediaSource = ms;
 	const url = URL.createObjectURL(ms);
 	playerUi.objectUrl = url;
-	attachAudioSrc(url);
 
 	const sourceOpen = new Promise((resolve, reject) => {
 		const onOpen = () => {
@@ -702,6 +731,7 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 		}
 		ms.addEventListener('sourceopen', onOpen, { once: true });
 		signal.addEventListener('abort', onAbort);
+		/* Attach once — attaching twice reloads MediaSource on some engines. */
 		attachAudioSrc(url);
 		const timer = setTimeout(onTimeout, 4000);
 	});
@@ -726,7 +756,9 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 	}
 
 	let started = false;
+	let startFailed = false;
 	let chunksAppended = 0;
+	let appendedBytes = 0;
 	/** Prefix of appended bytes — used to wait for a real MPEG frame (skip fat ID3). */
 	let headBytes = new Uint8Array(0);
 	const wantMpeg = mime.includes('mpeg');
@@ -740,9 +772,19 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 	});
 
 	const tryStart = () => {
-		if (started || generation !== playGeneration) return;
-		if (wantMpeg && chunksAppended > 0 && !hasMpegFrameSync(headBytes) && playerUi.bufferRatio < 0.999) {
-			return;
+		if (started || startFailed || generation !== playGeneration) return;
+		const complete = playerUi.bufferRatio >= 0.999;
+		if (wantMpeg && !hasMpegFrameSync(headBytes) && !complete) return;
+		/* Prefer a bit of audio past ID3 before first play() — reduces first-frame stutters. */
+		if (!complete && appendedBytes < 96 * 1024 && chunksAppended < 2) return;
+		if (wantMpeg && headBytes.length) {
+			const kind = sniffAudioKind(headBytes);
+			if (kind !== 'mp3' && kind !== 'unknown') {
+				/* Fall through to blob path (playTrack catch) with correct container handling. */
+				startFailed = true;
+				rejectStart?.(new Error(`mse_wrong_container:${kind}`));
+				return;
+			}
 		}
 		started = true;
 		playerUi.status = 'ready';
@@ -784,6 +826,7 @@ async function playViaMse(session, track, mime, manifest, fileKeyHex, generation
 			}
 			await appendBufferResilient(sb, copy, signal);
 			chunksAppended += 1;
+			appendedBytes += copy.length;
 			tryStart();
 		}
 	})
@@ -837,13 +880,14 @@ function concatParts(parts) {
  * @param {AbortSignal} signal
  */
 async function playViaBlob(session, track, manifest, fileKeyHex, generation, signal) {
-	const type = manifest.content_type || 'audio/mpeg';
+	let type = manifest.content_type || 'audio/mpeg';
 	/** @type {Uint8Array[]} */
 	const parts = [];
 	let started = false;
 	let activeUrl = /** @type {string | null} */ (null);
 	let partsAttached = 0;
 	let swapping = false;
+	let sniffed = false;
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let revokeTimer = null;
 
@@ -870,6 +914,12 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		}
 	};
 
+	const totalBytes = () => {
+		let n = 0;
+		for (const p of parts) n += p.length;
+		return n;
+	};
+
 	/**
 	 * Attach a blob built from the first `n` parts (or all). Restores playhead + wantsPlay.
 	 * @param {number} [n]
@@ -888,6 +938,7 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 		const t = audio?.currentTime ?? 0;
 		const resume = playerUi.wantsPlay;
 		const prev = activeUrl;
+		const isFirstAttach = !started || !activeUrl;
 		activeUrl = url;
 		playerUi.objectUrl = url;
 		attachAudioSrc(url);
@@ -899,7 +950,8 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 			done = true;
 			swapping = false;
 			try {
-				if (t > 0) boundAudio.currentTime = t;
+				/* First attach starts at 0 — seeking is what caused audible restarts. */
+				if (!isFirstAttach && t > 0.15) boundAudio.currentTime = t;
 			} catch {
 				/* ignore */
 			}
@@ -931,17 +983,35 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 	const startEarly = () => {
 		if (started || generation !== playGeneration || !parts.length) return;
 		const early = concatParts(parts);
+		const complete = playerUi.bufferRatio >= 0.999;
+		if (!sniffed && early.length >= 32) {
+			sniffed = true;
+			const kind = sniffAudioKind(early);
+			if (kind === 'flac' || kind === 'wav') {
+				rejectStart?.(
+					new Error(
+						`Can't stream ${kind.toUpperCase()} in the browser player — convert to MP3/M4A and re-upload.`
+					)
+				);
+				return;
+			}
+			if (kind === 'mp4' || kind === 'aac' || kind === 'ogg' || kind === 'mp3') {
+				type = mimeForAudioKind(kind);
+			}
+		}
 		const looksMp3 = type.includes('mpeg') || type.includes('mp3');
-		if (looksMp3 && !hasMpegFrameSync(early) && playerUi.bufferRatio < 0.999) return;
+		if (looksMp3 && !hasMpegFrameSync(early) && !complete) return;
+		/* Containers that need a full moov atom — wait for the whole file. */
+		if ((type.includes('mp4') || type.includes('aac')) && !complete) return;
+		if (!complete && totalBytes() < BLOB_START_MIN_BYTES && parts.length < 3) return;
 		started = true;
 		playerUi.status = 'ready';
 		attachFromParts(parts.length);
-		if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
 		resolveStart?.();
 	};
 
 	/**
-	 * Grow when more parts are ready AND (stalled / near end / caller forced).
+	 * Grow when more parts are ready AND playhead is critically near the blob end.
 	 * @param {boolean} [force]
 	 * @returns {boolean}
 	 */
@@ -954,7 +1024,7 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 			!audio ||
 			audio.ended ||
 			(audio.paused && playerUi.wantsPlay) ||
-			bufferedHeadroom() < 25;
+			bufferedHeadroom() < BLOB_GROW_HEADROOM_SEC;
 		if (!urgent) return false;
 		return attachFromParts(parts.length);
 	};
@@ -988,9 +1058,9 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 				started = true;
 				playerUi.status = 'ready';
 				attachFromParts(parts.length);
-				if (playerUi.wantsPlay) boundAudio?.play()?.catch(() => {});
 				resolveStart?.();
-			} else {
+			} else if (parts.length > partsAttached) {
+				/* Final attach only if we still have unread parts — avoid useless mid-song swap. */
 				attachFromParts(parts.length);
 			}
 			onProgressiveStall = null;
@@ -1004,7 +1074,7 @@ async function playViaBlob(session, track, manifest, fileKeyHex, generation, sig
 			}
 		});
 
-	const timeout = sleep(30000, signal).then(() => {
+	const timeout = sleep(45000, signal).then(() => {
 		if (!started) {
 			rejectStart?.(new Error('Timed out waiting for audio'));
 		}
@@ -1046,14 +1116,14 @@ export async function playTrack(track, opts = {}) {
 
 	if (!opts.fromQueue) capturePlayQueue(track);
 
+	/* Instant UI switch: kill previous audio + clock before any network await. */
 	cancelInFlightPlay();
-	onProgressiveStall = null;
-	mediaStreamActive = false;
+	hardStopAudio();
+	revokeUrl();
 	const generation = playGeneration;
 	const ac = new AbortController();
 	playAbort = ac;
 
-	revokeUrl();
 	playerUi.currentId = track.id;
 	playerUi.status = 'loading';
 	playerUi.bufferRatio = 0;
@@ -1067,6 +1137,7 @@ export async function playTrack(track, opts = {}) {
 	playerUi.wantsPlay = true;
 	playerUi.error = '';
 	if (track.cover_path) void ensureTrackCover(track);
+	if (isMobileViewport()) playerUi.nowPlayingOpen = true;
 
 	try {
 		const { manifest, fileKeyHex } = await loadMediaManifest(
@@ -1093,7 +1164,12 @@ export async function playTrack(track, opts = {}) {
 				);
 			} catch (e) {
 				if (e?.name === 'AbortError' || generation !== playGeneration) throw e;
-				// MSE rejected before start — progressive blob (still starts on first chunk).
+				const msg = e instanceof Error ? e.message : String(e);
+				/* Wrong container for audio/mpeg MSE — blob path sniffs and plays (or errors clearly). */
+				const wrongContainer = msg.startsWith('mse_wrong_container:');
+				if (!wrongContainer && !msg.includes('SourceBuffer') && !msg.includes('MediaSource')) {
+					/* Unexpected hard failure — still try blob before surfacing. */
+				}
 				cancelInFlightPlay();
 				revokeUrl();
 				const gen2 = playGeneration;
@@ -1112,7 +1188,6 @@ export async function playTrack(track, opts = {}) {
 		if (url && (generation === liveGen || playerUi.currentId === track.id)) {
 			playAbort = null;
 			if (playerUi.upNextId === track.id) playerUi.upNextId = null;
-			if (isMobileViewport()) playerUi.nowPlayingOpen = true;
 			const sess = activeSession();
 			if (sess) {
 				pushRecentlyPlayed(actor.email, sess, track.id);
@@ -1133,8 +1208,7 @@ export async function playTrack(track, opts = {}) {
 
 export function stopPlayback() {
 	cancelInFlightPlay();
-	onProgressiveStall = null;
-	mediaStreamActive = false;
+	hardStopAudio();
 	activeQueueIds = [];
 	revokeUrl();
 	playerUi.currentId = null;

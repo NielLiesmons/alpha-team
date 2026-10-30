@@ -64,20 +64,28 @@
 <style>
 	.overlay {
 		position: fixed;
-		inset: 0;
+		top: var(--vv-top, 0px);
+		left: 0;
+		right: 0;
+		height: var(--app-height, 100dvh);
 		z-index: 60;
 		background: var(--scrim);
 	}
 
 	.wrap {
 		position: fixed;
-		inset: 0;
+		/* Track visualViewport so sheets sit above the soft keyboard */
+		top: var(--vv-top, 0px);
+		left: 0;
+		right: 0;
+		height: var(--app-height, 100dvh);
 		z-index: 70;
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;
 		pointer-events: none;
 		padding: 0;
+		box-sizing: border-box;
 		box-sizing: border-box;
 	}
 
@@ -88,8 +96,8 @@
 		flex-direction: column;
 		width: 100%;
 		height: auto;
-		/* Prefer dynamic viewport so keyboard doesn't leave a tall empty sheet */
-		max-height: min(92dvh, 92svh, 880px);
+		/* Prefer live visual viewport so the keyboard doesn't cover the sheet */
+		max-height: min(92%, calc(var(--app-height, 100dvh) - 8px), 880px);
 		min-height: 0;
 		border: 1px solid var(--glass-border);
 		border-bottom: none;

@@ -1,33 +1,57 @@
 <script>
+	import { formatMetricValue } from '$lib/format-value.js';
 	import { buildMetricContext, evalMetric } from '$lib/table-metrics.js';
+	import { parentEnterpriseId } from '$lib/entity-routes.js';
 	import {
 		clearSelection,
 		dataTables,
 		enterprises,
 		metrics,
 		saveMetric,
-		tableRows
+		selectEntity,
+		tableRows,
+		ui
 	} from '$lib/workspace.svelte.js';
+	import SyncProgressBar from './SyncProgressBar.svelte';
 
 	/** @type {{ metric: any }} */
 	let { metric } = $props();
 
 	const ctx = $derived(buildMetricContext(dataTables, tableRows, metrics));
 	const live = $derived(evalMetric(metric, ctx));
+	const parentId = $derived(
+		metric.enterprise_id || parentEnterpriseId(ui.selection)
+	);
 
 	async function persist(patch) {
 		Object.assign(metric, patch);
 		await saveMetric({ ...metric }, false);
 	}
+
+	function backToEnterprise() {
+		if (parentId) selectEntity('enterprise', parentId);
+		else clearSelection();
+	}
 </script>
 
 <header class="detail-top desktop-head">
-	<span class="detail-top-label">Metric</span>
-	<button type="button" class="icon-hit" aria-label="Close" onclick={clearSelection}>
-		<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-			<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-		</svg>
-	</button>
+	<div class="detail-top-start">
+		{#if parentId}
+			<button type="button" class="icon-hit" aria-label="Back to enterprise" onclick={backToEnterprise}>
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+					<path
+						d="M10 3.5 5.5 8 10 12.5"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</button>
+		{/if}
+		<span class="detail-top-label">Metric</span>
+		<SyncProgressBar variant="inline" class="detail-sync" />
+	</div>
 </header>
 
 <div class="body">
@@ -66,9 +90,16 @@
 			{/each}
 		</select>
 	</label>
+	<label class="field">
+		<span>Unit</span>
+		<input
+			value={metric.unit ?? ''}
+			placeholder="EUR, eggs, %"
+			oninput={(e) => void persist({ unit: e.currentTarget.value || null })}
+		/>
+	</label>
 	<p class="live">
-		Live value: <strong>{Number.isFinite(live) ? live.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</strong>
-		{#if metric.unit}<span class="unit">{metric.unit}</span>{/if}
+		Live value: <strong>{formatMetricValue(live, metric.unit)}</strong>
 	</p>
 	<p class="hint">
 		Examples: <code>sum(table:egg_actuals, col:dozen)</code>,
@@ -78,84 +109,67 @@
 </div>
 
 <style>
-	.detail-top {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		height: 48px;
-		padding: 0 8px 0 16px;
-	}
-	.detail-top-label {
-		font-size: 13px;
-		color: var(--fg-33);
-	}
-	.icon-hit {
-		width: 28px;
-		height: 28px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-4);
-		color: var(--fg-66);
-		cursor: pointer;
-	}
 	.body {
-		padding: 8px 16px 32px;
+		padding: 48px 20px 48px;
+		overflow: auto;
+		min-height: 0;
+		flex: 1;
+	}
+
+	@media (min-width: 768px) {
+		.body {
+			padding-left: 24px;
+			padding-right: 24px;
+		}
 	}
 	.title-input {
 		width: 100%;
 		border: 0;
 		background: transparent;
 		font: inherit;
-		font-size: 1.35rem;
-		font-weight: 700;
+		font-size: 22px;
+		font-weight: 650;
 		color: var(--fg);
-		margin-bottom: 14px;
-		outline: none;
+		padding: 0;
+		margin: 0 0 16px;
 	}
 	.field {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		margin-bottom: 12px;
+		margin-bottom: 14px;
 		font-size: 11px;
 		font-weight: 600;
 		color: var(--fg-33);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 	}
 	.field input,
 	.field textarea,
 	.field select {
 		border: 1px solid var(--fg-8);
-		border-radius: 10px;
-		background: var(--fg-4);
+		border-radius: 8px;
+		background: var(--bg);
 		color: var(--fg);
 		font: inherit;
 		font-size: 13px;
 		font-weight: 400;
-		text-transform: none;
-		letter-spacing: 0;
 		padding: 8px 10px;
 	}
 	.live {
-		margin: 16px 0 8px;
-		font-size: 15px;
-		color: var(--fg);
+		margin: 8px 0;
+		font-size: 14px;
+		color: var(--fg-66);
 	}
 	.unit {
-		color: var(--fg-33);
-		font-size: 13px;
 		margin-left: 4px;
+		color: var(--fg-33);
 	}
 	.hint {
+		margin: 16px 0 0;
 		font-size: 12px;
 		color: var(--fg-33);
 		line-height: 1.45;
 	}
 	.hint code {
 		font-size: 11px;
-		color: var(--fg-66);
 	}
 </style>

@@ -1,0 +1,1184 @@
+<script>
+	import { onMount, tick } from 'svelte';
+	import AlphaLogo from '$lib/components/icons/AlphaLogo.svelte';
+	import ArrowDown from '$lib/components/icons/ArrowDown.svelte';
+	import Voice from '$lib/components/icons/Voice.svelte';
+	import ChatFeedCard from '$lib/components/ChatFeedCard.svelte';
+	import EnterpriseBox from '$lib/components/EnterpriseBox.svelte';
+	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
+	import NavIcon from '$lib/components/NavIcon.svelte';
+	import ProfilePic from '$lib/components/ProfilePic.svelte';
+	import ProjectBox from '$lib/components/ProjectBox.svelte';
+	import TaskBox from '$lib/components/TaskBox.svelte';
+	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+	import {
+		chatEphemeral,
+		chatFeed,
+		chatUi,
+		chatPublicationRefKey,
+		chatRefMeta,
+		chatProjectBoxProps,
+		findChatParent,
+		hydrateChatFeedFromCache,
+		openChatRef,
+		postChatMessage,
+		refreshChatFeed,
+		visibleChatMessages
+	} from '$lib/chat.svelte.js';
+	import { driveSession } from '$lib/drive/session.svelte.js';
+
+	/** @type {{ channelId?: string }} */
+	let { channelId = 'general' } = $props();
+
+	let draft = $state('');
+	/** @type {any | null} */
+	let replyTo = $state(null);
+	/** @type {HTMLDivElement | undefined} */
+	let messagesEl = $state();
+	/** @type {HTMLTextAreaElement | undefined} */
+	let inputEl = $state();
+
+	/** Near bottom → follow new messages; else show FABs / bump unread. */
+	let nearBottom = $state(true);
+	let showScrollFab = $state(false);
+	let pendingNewCount = $state(0);
+	/** @type {string} */
+	let lastTailId = $state('');
+	/** Briefly highlight a jumped-to quoted message. */
+	let highlightId = $state(/** @type {string | null} */ (null));
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let highlightTimer = null;
+	/** Textarea edge fades — only when content overflows that edge. */
+	let fadeTop = $state(false);
+	let fadeBottom = $state(false);
+	let fieldTall = $state(false);
+	const NEAR_BOTTOM_PX = 96;
+	const COMPOSER_FADE_THRESHOLD = 4;
+	const COMPOSER_MAX_H = 140;
+	const COMPOSER_TALL_PX = 28;
+
+	const chronological = $derived(
+		[...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)].reverse()
+	);
+	const canSend = $derived(Boolean(draft.trim()));
+	const presence = $derived(
+		(chatEphemeral || []).filter((e) => e.channel_id === channelId && e.state !== 'idle')
+	);
+
+	/**
+	 * @type {{
+	 *   type: 'panel' | 'event' | 'plain',
+	 *   key: string,
+	 *   refKey?: string | null,
+	 *   refMeta?: any,
+	 *   messages: any[]
+	 * }[]}
+	 */
+	const feedBlocks = $derived.by(() => {
+		/** @type {{ type: 'panel' | 'event' | 'plain', key: string, refKey?: string | null, refMeta?: any, messages: any[] }[]} */
+		const blocks = [];
+		for (const msg of chronological) {
+			if (msg?.kind === 'event' && msg.ref?.type && msg.ref?.id) {
+				blocks.push({
+					type: 'event',
+					key: `event-${msg.id}`,
+					refKey: `${msg.ref.type}:${msg.ref.id}`,
+					refMeta: chatRefMeta(msg),
+					messages: [msg]
+				});
+				continue;
+			}
+			const refKey = chatPublicationRefKey(msg);
+			const last = blocks[blocks.length - 1];
+			if (refKey && last?.type === 'panel' && last.refKey === refKey) {
+				last.messages.push(msg);
+				continue;
+			}
+			if (refKey) {
+				blocks.push({
+					type: 'panel',
+					key: `panel-${refKey}-${msg.id}`,
+					refKey,
+					refMeta: chatRefMeta(msg),
+					messages: [msg]
+				});
+			} else {
+				blocks.push({
+					type: 'plain',
+					key: `msg-${msg.id}`,
+					messages: [msg]
+				});
+			}
+		}
+		return blocks;
+	});
+
+	onMount(() => {
+		const warm = hydrateChatFeedFromCache();
+		if (warm) {
+			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
+			void scrollToBottom(true);
+		} else {
+			chatUi.loading = true;
+		}
+		void refreshChatFeed().then(() => {
+			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
+			void scrollToBottom(true);
+		});
+		return () => {
+			if (highlightTimer != null) clearTimeout(highlightTimer);
+		};
+	});
+
+	$effect(() => {
+		channelId;
+		lastTailId = '';
+		pendingNewCount = 0;
+		nearBottom = true;
+		showScrollFab = false;
+		void scrollToBottom(true);
+	});
+
+	/** Only follow the tail when pinned near bottom — never on reactions / mid-feed edits. */
+	$effect(() => {
+		const msgs = chronological;
+		const tail = msgs.at(-1);
+		const tailId = tail ? String(tail.id) : '';
+		if (!tailId) {
+			lastTailId = '';
+			return;
+		}
+		if (!lastTailId) {
+			lastTailId = tailId;
+			return;
+		}
+		if (tailId === lastTailId) return;
+
+		const prevIdx = msgs.findIndex((m) => String(m.id) === lastTailId);
+		const added = prevIdx >= 0 ? msgs.length - 1 - prevIdx : 1;
+		lastTailId = tailId;
+
+		if (nearBottom) {
+			pendingNewCount = 0;
+			void scrollToBottom(false);
+		} else {
+			pendingNewCount += Math.max(1, added);
+		}
+	});
+
+	function measureScroll() {
+		const el = messagesEl;
+		if (!el) return;
+		const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+		const near = dist < NEAR_BOTTOM_PX;
+		nearBottom = near;
+		showScrollFab = !near && el.scrollHeight > el.clientHeight + 40;
+		if (near) pendingNewCount = 0;
+	}
+
+	async function scrollToBottom(instant) {
+		await tick();
+		const el = messagesEl;
+		if (!el) return;
+		el.scrollTo({ top: el.scrollHeight, behavior: instant ? 'auto' : 'smooth' });
+		nearBottom = true;
+		showScrollFab = false;
+		pendingNewCount = 0;
+	}
+
+	function onJumpToLatest() {
+		void scrollToBottom(false);
+	}
+
+	/** Jump to a quoted parent bubble and flash it. */
+	async function scrollToQuoted(parentId) {
+		const id = String(parentId || '');
+		if (!id) return;
+		await tick();
+		const root = messagesEl;
+		const target = root?.querySelector(`[data-chat-bubble="${CSS.escape(id)}"]`);
+		if (!(target instanceof HTMLElement)) return;
+		target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		highlightId = id;
+		if (highlightTimer != null) clearTimeout(highlightTimer);
+		highlightTimer = setTimeout(() => {
+			if (highlightId === id) highlightId = null;
+			highlightTimer = null;
+		}, 1400);
+		measureScroll();
+	}
+
+	function formatWhen(iso) {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		const now = Date.now();
+		const diff = now - d.getTime();
+		if (diff < 60_000) return 'just now';
+		if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
+		if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
+		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+	}
+
+	/** @param {any} msg */
+	function startReply(msg) {
+		replyTo = msg;
+		inputEl?.focus();
+	}
+
+	function clearReply() {
+		replyTo = null;
+	}
+
+	async function send() {
+		const body = draft.trim();
+		if (!body) return;
+		draft = '';
+		fieldTall = false;
+		fadeTop = false;
+		fadeBottom = false;
+		if (inputEl) inputEl.style.height = 'auto';
+		const parent = replyTo;
+		replyTo = null;
+		const pubRef =
+			parent && chatPublicationRefKey(parent) && parent.ref?.type && parent.ref?.id
+				? { type: String(parent.ref.type), id: String(parent.ref.id) }
+				: null;
+		try {
+			nearBottom = true;
+			/* Optimistic paint returns immediately — Drive write is backgrounded. */
+			await postChatMessage({
+				body,
+				kind: pubRef ? 'comment' : 'chat',
+				ref: pubRef,
+				reply_to: parent?.id ?? null,
+				channel_id: channelId
+			});
+			inputEl?.focus();
+			void scrollToBottom(true);
+		} catch (e) {
+			chatUi.error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	/** @param {KeyboardEvent} e */
+	function onKey(e) {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			void send();
+		}
+		if (e.key === 'Escape' && replyTo) {
+			clearReply();
+		}
+	}
+
+	function updateInputFade() {
+		const el = inputEl;
+		if (!el) {
+			fadeTop = false;
+			fadeBottom = false;
+			return;
+		}
+		fadeTop = el.scrollTop > COMPOSER_FADE_THRESHOLD;
+		fadeBottom =
+			el.scrollHeight - el.clientHeight > COMPOSER_FADE_THRESHOLD &&
+			el.scrollHeight - el.scrollTop - el.clientHeight > COMPOSER_FADE_THRESHOLD;
+	}
+
+	function onInput() {
+		const el = inputEl;
+		if (!el) return;
+		el.style.height = 'auto';
+		const next = Math.min(el.scrollHeight, COMPOSER_MAX_H);
+		el.style.height = `${next}px`;
+		fieldTall = next > COMPOSER_TALL_PX || draft.includes('\n');
+		updateInputFade();
+	}
+
+	const replyPreview = $derived.by(() => {
+		if (!replyTo) return null;
+		const p = asPerson(replyTo.author);
+		const n = p?.name || displayNameFromEmail(replyTo.author);
+		const plain = String(replyTo.body || '')
+			.replace(/\s+/g, ' ')
+			.trim();
+		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain;
+		return { name: n, text };
+	});
+
+	const pillExpanded = $derived(Boolean(replyPreview) || fieldTall);
+
+	function presenceLabel(/** @type {any} */ e) {
+		if (e.label) return e.label;
+		if (e.state === 'recording') return 'Recording…';
+		if (e.state === 'thinking') return 'Thinking…';
+		if (e.state === 'tool') return 'Working…';
+		return 'Typing…';
+	}
+</script>
+
+<div class="chat">
+	<div class="feed messages" bind:this={messagesEl} onscroll={measureScroll}>
+		{#if driveSession.error}
+			<p class="banner"><span class="err">{driveSession.error}</span></p>
+		{/if}
+		{#if chatUi.error}
+			<p class="banner"><span class="err">{chatUi.error}</span></p>
+		{/if}
+
+		{#if chronological.length === 0 && (!chatUi.settled || chatUi.loading)}
+			<FeedSkeleton rows={6} />
+		{:else if chronological.length === 0}
+			<p class="empty">No messages yet — say hi to the family.</p>
+		{:else}
+			<div class="stack">
+				{#each feedBlocks as block (block.key)}
+					{#if block.type === 'event'}
+						{@const refMeta = block.refMeta}
+						{@const eventMsg = block.messages[0]}
+						{@const eventPerson = asPerson(eventMsg.author)}
+						{@const eventName =
+							eventPerson?.name || displayNameFromEmail(eventMsg.author) || 'Someone'}
+						{@const projectBox =
+							refMeta?.box === 'project' && refMeta.project
+								? chatProjectBoxProps(refMeta.project)
+								: null}
+						<section class="pub-panel event-panel">
+							<button
+								type="button"
+								class="pub-tip event-tip"
+								aria-label={refMeta ? `${eventName} added ${refMeta.kind}: ${refMeta.title}` : 'Open'}
+								onclick={() => openChatRef(eventMsg)}
+							>
+								{#if refMeta?.box === 'task'}
+									<span class="pub-box" aria-hidden="true">
+										<TaskBox state={refMeta.status || 'open'} size={22} />
+									</span>
+								{:else if refMeta?.box === 'project'}
+									<span class="pub-box" aria-hidden="true">
+										<ProjectBox
+											state={projectBox?.state || 'active'}
+											icon={projectBox?.icon}
+											size={22}
+										/>
+									</span>
+								{:else if refMeta?.box === 'enterprise'}
+									<span class="pub-box" aria-hidden="true">
+										<EnterpriseBox
+											state={refMeta.enterprise?.status ?? 'active'}
+											icon={refMeta.enterprise?.icon}
+											size={22}
+										/>
+									</span>
+								{:else}
+									<span class="pub-glyph" aria-hidden="true">
+										<NavIcon name={refMeta?.icon || 'notes'} size={19} />
+									</span>
+								{/if}
+								{#if refMeta}
+									<span class="pub-kind">{refMeta.kind}</span>
+									<span class="pub-title">{refMeta.title}</span>
+								{/if}
+								<span class="event-by">
+									<span class="event-pfp" aria-hidden="true">
+										<ProfilePic
+											name={eventName}
+											email={eventMsg.author}
+											pictureUrl={pictureUrlFor(eventMsg.author)}
+											size={18}
+											bare
+										/>
+									</span>
+									<span class="event-who">By {eventName}</span>
+									{#if eventMsg.created_at}
+										<span class="event-when">{formatWhen(eventMsg.created_at)}</span>
+									{/if}
+								</span>
+							</button>
+						</section>
+					{:else if block.type === 'panel'}
+						{@const refMeta = block.refMeta}
+						{@const projectBox =
+							refMeta?.box === 'project' && refMeta.project
+								? chatProjectBoxProps(refMeta.project)
+								: null}
+						<section class="pub-panel">
+							<button
+								type="button"
+								class="pub-tip"
+								aria-label={refMeta ? `${refMeta.kind}: ${refMeta.title}` : 'Open'}
+								onclick={() => openChatRef(block.messages[0])}
+							>
+								{#if refMeta?.box === 'task'}
+									<span class="pub-box" aria-hidden="true">
+										<TaskBox state={refMeta.status || 'open'} size={22} />
+									</span>
+								{:else if refMeta?.box === 'project'}
+									<span class="pub-box" aria-hidden="true">
+										<ProjectBox
+											state={projectBox?.state || 'active'}
+											icon={projectBox?.icon}
+											size={22}
+										/>
+									</span>
+								{:else if refMeta?.box === 'enterprise'}
+									<span class="pub-box" aria-hidden="true">
+										<EnterpriseBox
+											state={refMeta.enterprise?.status ?? 'active'}
+											icon={refMeta.enterprise?.icon}
+											size={22}
+										/>
+									</span>
+								{:else}
+									<span class="pub-glyph" aria-hidden="true">
+										<NavIcon name={refMeta?.icon || 'chat'} size={19} />
+									</span>
+								{/if}
+								{#if refMeta}
+									<span class="pub-kind">{refMeta.kind}</span>
+									<span class="pub-title">{refMeta.title}</span>
+								{/if}
+							</button>
+							<div class="pub-body">
+								{#each block.messages as msg (msg.id)}
+									<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
+										<ChatFeedCard
+											{msg}
+											parent={findChatParent(msg.reply_to)}
+											when={formatWhen(msg.created_at)}
+											onReply={() => startReply(msg)}
+											onQuoteClick={scrollToQuoted}
+										/>
+									</div>
+								{/each}
+							</div>
+						</section>
+					{:else}
+						{#each block.messages as msg (msg.id)}
+							<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
+								<ChatFeedCard
+									{msg}
+									parent={findChatParent(msg.reply_to)}
+									when={formatWhen(msg.created_at)}
+									onReply={() => startReply(msg)}
+									onQuoteClick={scrollToQuoted}
+								/>
+							</div>
+						{/each}
+					{/if}
+				{/each}
+			</div>
+		{/if}
+
+		{#if presence.length}
+			<div class="presence-row" aria-live="polite">
+				{#each presence as e (e.actor + e.state)}
+					<div class="presence-item">
+						<ProfilePic
+							name={displayNameFromEmail(e.actor)}
+							email={e.actor}
+							pictureUrl={pictureUrlFor(e.actor)}
+							size={28}
+						/>
+						<span class="presence-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+						<span class="presence-label">{presenceLabel(e)}</span>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+
+	{#if showScrollFab || pendingNewCount > 0}
+		<div class="scroll-fabs" class:with-new={pendingNewCount > 0}>
+			{#if pendingNewCount > 0}
+				<button type="button" class="new-msgs" onclick={onJumpToLatest}>
+					New messages{#if pendingNewCount > 1}
+						· {pendingNewCount > 99 ? '99+' : pendingNewCount}{/if}
+				</button>
+			{/if}
+			{#if showScrollFab}
+				<button
+					type="button"
+					class="scroll-fab"
+					aria-label="Scroll to bottom"
+					onclick={onJumpToLatest}
+				>
+					<ArrowDown size={18} />
+					{#if pendingNewCount > 0}
+						<span class="fab-badge">{pendingNewCount > 99 ? '99+' : pendingNewCount}</span>
+					{/if}
+				</button>
+			{/if}
+		</div>
+	{/if}
+
+	<div class="composer-fade" aria-hidden="true"></div>
+	<div class="composer-dock">
+		<div class="composer-pill" class:expanded={pillExpanded}>
+			{#if replyPreview}
+				<div class="reply-bar">
+					<div class="reply-meta">
+						<span class="reply-label">Reply to {replyPreview.name}</span>
+						<span class="reply-text">{replyPreview.text}</span>
+					</div>
+					<button type="button" class="reply-clear" aria-label="Cancel reply" onclick={clearReply}>
+						×
+					</button>
+				</div>
+			{/if}
+			<div class="composer-row">
+				<button type="button" class="side-btn plus" aria-label="Attach" disabled>
+					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+						<path
+							d="M9 3.5v11M3.5 9h11"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
+				<div
+					class="composer-field"
+					class:fade-top={fadeTop}
+					class:fade-bottom={fadeBottom}
+				>
+					<textarea
+						bind:this={inputEl}
+						class="composer-input"
+						rows="1"
+						placeholder={replyTo ? 'Reply' : 'Message'}
+						bind:value={draft}
+						onkeydown={onKey}
+						oninput={onInput}
+						onscroll={updateInputFade}
+						aria-label="Message"
+					></textarea>
+				</div>
+				{#if canSend}
+					<button type="button" class="side-btn send" aria-label="Send" onclick={() => void send()}>
+						<AlphaLogo size={15} />
+					</button>
+				{:else}
+					<button
+						type="button"
+						class="side-btn mic"
+						aria-label="Voice message"
+						disabled
+						title="Voice coming soon"
+					>
+						<Voice size={22} />
+					</button>
+				{/if}
+			</div>
+		</div>
+	</div>
+</div>
+
+<style>
+	.chat {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+		height: 100%;
+		overflow: hidden;
+		background: transparent;
+	}
+
+	.messages {
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
+		-webkit-overflow-scrolling: touch;
+		display: flex;
+		flex-direction: column;
+		box-sizing: border-box;
+		/* Clear detail-top; bottom clears floating composer (no phantom bottom-nav pad) */
+		padding: 56px 24px calc(72px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.banner {
+		margin: 0;
+		padding: 10px 0;
+		font-size: 13px;
+	}
+
+	.err {
+		color: #b44;
+	}
+
+	.empty {
+		margin: auto;
+		padding: 32px 16px;
+		color: var(--fg-66);
+		font-size: 14px;
+		text-align: center;
+	}
+
+	.stack {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 8px 0 12px;
+		margin-top: auto;
+	}
+
+	.bubble-anchor {
+		border-radius: 16px;
+		transition: background-color 0.35s ease;
+	}
+
+	.bubble-anchor.jump-flash {
+		animation: quote-flash 1.35s ease;
+	}
+
+	@keyframes quote-flash {
+		0% {
+			background-color: color-mix(in srgb, var(--accent-1) 28%, transparent);
+		}
+		55% {
+			background-color: color-mix(in srgb, var(--accent-1) 14%, transparent);
+		}
+		100% {
+			background-color: transparent;
+		}
+	}
+
+	.pub-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 8px 8px 10px;
+		border-radius: var(--radius-16);
+		background: color-mix(in srgb, var(--fg) 5%, transparent);
+		border: 1px solid color-mix(in srgb, var(--fg) 6%, transparent);
+	}
+
+	.pub-panel.event-panel {
+		padding: 6px 8px;
+	}
+
+	.pub-tip {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		width: 100%;
+		height: 28px;
+		padding: 0 4px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.pub-tip.event-tip {
+		height: auto;
+		min-height: 28px;
+	}
+
+	.event-by {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		flex-shrink: 0;
+		margin-left: auto;
+		padding-left: 8px;
+		color: var(--fg-33);
+		font-size: 12px;
+		font-weight: 500;
+	}
+
+	.event-pfp {
+		display: inline-flex;
+		line-height: 0;
+	}
+
+	.event-who {
+		white-space: nowrap;
+	}
+
+	.event-when {
+		flex-shrink: 0;
+		color: var(--fg-16);
+		white-space: nowrap;
+	}
+
+	.pub-tip:hover {
+		background: var(--fg-8);
+	}
+
+	.pub-box {
+		flex-shrink: 0;
+		width: 22px;
+		height: 22px;
+		display: grid;
+		place-items: center;
+	}
+
+	.pub-glyph {
+		flex-shrink: 0;
+		width: 22px;
+		height: 22px;
+		display: grid;
+		place-items: center;
+		color: var(--fg-33);
+	}
+
+	.pub-kind,
+	.pub-title {
+		font-size: 13px;
+		font-weight: 500;
+	}
+
+	.pub-kind {
+		flex-shrink: 0;
+		color: var(--fg-33);
+	}
+
+	.pub-title {
+		min-width: 0;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.pub-body {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.presence-row {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 4px 0 8px;
+	}
+
+	.presence-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--fg-33);
+		font-size: 12px;
+	}
+
+	.presence-dots {
+		display: inline-flex;
+		gap: 3px;
+		align-items: center;
+	}
+
+	.presence-dots i {
+		width: 4px;
+		height: 4px;
+		border-radius: 50%;
+		background: currentColor;
+		opacity: 0.45;
+		animation: presence-bounce 1.2s ease-in-out infinite;
+	}
+
+	.presence-dots i:nth-child(2) {
+		animation-delay: 0.15s;
+	}
+
+	.presence-dots i:nth-child(3) {
+		animation-delay: 0.3s;
+	}
+
+	@keyframes presence-bounce {
+		0%,
+		80%,
+		100% {
+			transform: translateY(0);
+			opacity: 0.35;
+		}
+		40% {
+			transform: translateY(-3px);
+			opacity: 0.9;
+		}
+	}
+
+	.presence-label {
+		color: var(--fg-33);
+	}
+
+	.scroll-fabs {
+		position: absolute;
+		right: 24px;
+		/* Above composer dock: pad 10 + pill 47 + gap 10 */
+		bottom: calc(67px + env(safe-area-inset-bottom, 0px));
+		z-index: 5;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 8px;
+		pointer-events: none;
+	}
+
+	.scroll-fabs > * {
+		pointer-events: auto;
+	}
+
+	@media (max-width: 767px) {
+		.scroll-fabs {
+			right: 14px;
+		}
+	}
+
+	.new-msgs {
+		padding: 6px 12px;
+		border: 0;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--accent-1) 33%, transparent);
+		color: #fff;
+		font: inherit;
+		font-size: 12px;
+		font-weight: 500;
+		cursor: pointer;
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		box-shadow: 0 4px 16px color-mix(in srgb, var(--fg-raw, #000) 18%, transparent);
+	}
+
+	.scroll-fab {
+		position: relative;
+		/* Match composer pill / dock control height */
+		width: 47px;
+		height: 47px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--glass) 72%, transparent);
+		color: var(--fg-33);
+		cursor: pointer;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		-webkit-tap-highlight-color: transparent;
+		isolation: isolate;
+	}
+
+	.scroll-fab::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		padding: 1px;
+		pointer-events: none;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
+			color-mix(in srgb, var(--fg) 9%, transparent) 100%
+		);
+		-webkit-mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
+	}
+
+	.scroll-fab:hover {
+		color: var(--fg-66);
+	}
+
+	.fab-badge {
+		position: absolute;
+		top: -4px;
+		left: 50%;
+		transform: translateX(-50%);
+		min-width: 18px;
+		height: 18px;
+		padding: 0 4px;
+		box-sizing: border-box;
+		display: grid;
+		place-items: center;
+		border-radius: 999px;
+		background: var(--accent-1);
+		color: #fff;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 10px;
+		font-weight: 600;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
+		line-height: 1;
+	}
+
+	/* Soft veil behind composer — three-stop: solid edge → ~80% at bar mid → clear */
+	.composer-fade {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 3;
+		height: calc(88px + env(safe-area-inset-bottom, 0px));
+		pointer-events: none;
+		background: linear-gradient(
+			to top,
+			var(--bg) 0%,
+			color-mix(in srgb, var(--bg) 80%, transparent)
+				calc(28px + env(safe-area-inset-bottom, 0px) * 0.5),
+			transparent 100%
+		);
+	}
+
+	/* Float over feed — feed scrolls underneath (z-index) */
+	.composer-dock {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 4;
+		padding: 10px 24px calc(10px + env(safe-area-inset-bottom, 0px));
+		box-sizing: border-box;
+		pointer-events: none;
+		background: transparent;
+	}
+
+	.composer-dock > * {
+		pointer-events: auto;
+	}
+
+	@media (max-width: 767px) {
+		.messages {
+			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
+				calc(72px + env(safe-area-inset-bottom, 0px));
+		}
+
+		.composer-fade {
+			height: calc(88px + env(safe-area-inset-bottom, 0px));
+			background: linear-gradient(
+				to top,
+				var(--shell, var(--bg)) 0%,
+				color-mix(in srgb, var(--shell, var(--bg)) 80%, transparent)
+					calc(28px + env(safe-area-inset-bottom, 0px) * 0.5),
+				transparent 100%
+			);
+		}
+
+		.composer-dock {
+			padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+		}
+	}
+
+	.composer-pill {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0;
+		min-height: 47px;
+		padding: 0;
+		border-radius: 9999px;
+		box-sizing: border-box;
+		/*
+		 * Flat translucent fill only. Shine lives on ::after as a 1px masked ring
+		 * so the diagonal never shows through the fill (padding-box+border-box leaked).
+		 */
+		position: relative;
+		isolation: isolate;
+		border: 0;
+		background: color-mix(in srgb, var(--glass) 72%, transparent);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		overflow: hidden;
+	}
+
+	.composer-pill::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		padding: 1px;
+		pointer-events: none;
+		z-index: 1;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
+			color-mix(in srgb, var(--fg) 9%, transparent) 100%
+		);
+		-webkit-mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
+	}
+
+	.composer-pill.expanded {
+		border-radius: 16px 16px 23.5px 23.5px;
+	}
+
+	.reply-bar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 0;
+		padding: 8px 10px 0;
+		border: 0;
+		background: transparent;
+	}
+
+	.reply-meta {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
+	.reply-label {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--accent-1);
+	}
+
+	.reply-text {
+		font-size: 12px;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.reply-clear {
+		flex-shrink: 0;
+		width: 28px;
+		height: 28px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: var(--fg-33);
+		font-size: 20px;
+		line-height: 1;
+		cursor: pointer;
+	}
+
+	.composer-row {
+		display: flex;
+		align-items: flex-end;
+		gap: 7px;
+		min-height: calc(47px - 14px);
+		padding: 7px;
+		box-sizing: border-box;
+	}
+
+	.composer-pill:has(.reply-bar) .composer-row {
+		padding-top: 4px;
+	}
+
+	.side-btn {
+		width: 33px;
+		height: 33px;
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 9999px;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.side-btn.plus {
+		background: color-mix(in srgb, var(--fg) 12%, transparent);
+		color: var(--fg-66);
+	}
+
+	.side-btn.plus:disabled,
+	.side-btn.mic:disabled {
+		opacity: 0.55;
+		cursor: default;
+	}
+
+	.side-btn.mic {
+		background: transparent;
+		color: var(--fg-33);
+	}
+
+	.side-btn.send {
+		background: var(--gradient-accent-1);
+		color: #fff;
+	}
+
+	.composer-field {
+		flex: 1;
+		min-width: 0;
+		max-height: 140px;
+		display: flex;
+		align-items: flex-end;
+		/* Soft-clip overflow via mask; edges only when scrolled past threshold */
+		-webkit-mask-image: linear-gradient(#000, #000);
+		mask-image: linear-gradient(#000, #000);
+	}
+
+	.composer-field.fade-top {
+		-webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
+		mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
+	}
+
+	.composer-field.fade-bottom {
+		-webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 8px), transparent 100%);
+		mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 8px), transparent 100%);
+	}
+
+	.composer-field.fade-top.fade-bottom {
+		-webkit-mask-image: linear-gradient(
+			to bottom,
+			transparent 0,
+			#000 8px,
+			#000 calc(100% - 8px),
+			transparent 100%
+		);
+		mask-image: linear-gradient(
+			to bottom,
+			transparent 0,
+			#000 8px,
+			#000 calc(100% - 8px),
+			transparent 100%
+		);
+	}
+
+	.composer-input {
+		flex: 1;
+		min-width: 0;
+		width: 100%;
+		min-height: 20px;
+		max-height: 140px;
+		margin: 0;
+		padding: 6px 4px 7px;
+		border: 0;
+		outline: none;
+		resize: none;
+		overflow-y: auto;
+		background: transparent;
+		color: var(--fg);
+		font: inherit;
+		font-size: 15px;
+		line-height: 20px;
+		field-sizing: content;
+	}
+
+	.composer-input::placeholder {
+		color: var(--fg-33);
+	}
+</style>

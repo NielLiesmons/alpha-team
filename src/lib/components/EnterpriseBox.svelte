@@ -13,7 +13,7 @@
 	const sw = 1.4;
 	const hasIcon = $derived(Boolean(icon && String(icon).trim()));
 	const isImage = $derived(hasIcon && isProjectImageIcon(icon));
-	const glyphSize = $derived(Math.round(size * 0.58));
+	const glyphSize = $derived(Math.round(size * 0.44));
 	const muted = $derived(
 		state === 'draft' || state === 'paused' || state === 'closed' || state === 'archived'
 	);
@@ -24,7 +24,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
 	class="enterprise-box"
-	style="width:{size}px; height:{size}px;"
+	style="width:{size}px; height:{size}px; --box:{size}px;"
 	role={onclick ? 'button' : undefined}
 	tabindex={onclick ? 0 : undefined}
 	aria-label={onclick ? 'Enterprise icon' : undefined}
@@ -48,7 +48,7 @@
 		{#if isImage}
 			<img class="icon-img" src={icon} alt="" width={glyphSize} height={glyphSize} />
 		{:else if hasIcon}
-			<span class="icon-emoji" style:font-size="{Math.round(size * 0.52)}px">{icon}</span>
+			<span class="icon-emoji" style:font-size="{Math.round(size * 0.38)}px">{icon}</span>
 		{:else}
 			<span
 				class="placeholder"
@@ -93,14 +93,15 @@
 		display: block;
 	}
 
-	/* Color-emoji fonts sit optically left — nudge into star center */
+	/* Optical center in the star: feed (~24) neutral/right; larger detail a hair left. */
 	.icon-emoji {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		line-height: 1;
 		width: 1.15em;
-		margin-left: 0.1em;
+		margin-left: 0;
+		transform: translateX(clamp(-1px, calc((var(--box, 24px) - 40px) * -0.04), 1px));
 		text-align: center;
 		user-select: none;
 	}

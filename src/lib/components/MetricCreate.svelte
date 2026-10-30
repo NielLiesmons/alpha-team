@@ -4,18 +4,27 @@
 
 	let title = $state('');
 	let key = $state('');
-	let expr = $state('sum(table:egg_actuals, col:dozen)');
+	let expr = $state('sum(table:egg_laying, col:eggs)');
 	/** @type {string} */
 	let enterpriseId = $state('');
+	/** @type {string | null} */
+	let seededFor = $state(null);
 
 	const open = $derived(ui.composer?.kind === 'metric');
 
 	$effect(() => {
-		if (!open) return;
+		if (!open) {
+			seededFor = null;
+			return;
+		}
+		const seedKey = typeof ui.composer?.enterprise_id === 'string' ? ui.composer.enterprise_id : '';
+		const stamp = `__new__:${seedKey}`;
+		if (seededFor === stamp) return;
+		seededFor = stamp;
 		title = '';
 		key = '';
-		expr = 'sum(table:egg_actuals, col:dozen)';
-		enterpriseId = '';
+		expr = 'sum(table:egg_laying, col:eggs)';
+		enterpriseId = seedKey;
 	});
 
 	async function save() {
@@ -36,14 +45,16 @@
 
 <CreateSheet {open} label="New metric" onclose={closeComposer}>
 	<input class="sheet-input" placeholder="Title" bind:value={title} />
-	<input class="sheet-input" placeholder="Key (eggs.actual_month)" bind:value={key} />
+	<input class="sheet-input" placeholder="Key (eggs.month_total)" bind:value={key} />
 	<textarea class="sheet-input area" rows="3" placeholder="Expression" bind:value={expr}></textarea>
-	<select class="sheet-input" bind:value={enterpriseId}>
-		<option value="">Enterprise (optional)</option>
-		{#each enterprises as ent (ent.id)}
-			<option value={ent.id}>{ent.title}</option>
-		{/each}
-	</select>
+	{#if enterprises.length}
+		<select class="sheet-input" bind:value={enterpriseId}>
+			<option value="">Enterprise (optional)</option>
+			{#each enterprises as ent (ent.id)}
+				<option value={ent.id}>{ent.title}</option>
+			{/each}
+		</select>
+	{/if}
 	<div class="sheet-bottom">
 		<button type="button" class="publish-btn" disabled={!expr.trim()} onclick={() => void save()}
 			>Create</button

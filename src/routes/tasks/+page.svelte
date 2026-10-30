@@ -117,7 +117,7 @@
 		align-items: center;
 		gap: 10px;
 		margin: 0 6px;
-		padding: 6px 10px;
+		padding: 6px 10px 6px 13px;
 		border: 0;
 		border-radius: 10px;
 		background: var(--fg-4);
@@ -128,7 +128,7 @@
 	.card-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 0;
 		padding: 4px 6px 10px;
 		box-sizing: border-box;
 	}
@@ -142,9 +142,11 @@
 	}
 
 	.task-group-count {
-		font-family: var(--font);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 500;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 		color: var(--fg-33);
 	}
 

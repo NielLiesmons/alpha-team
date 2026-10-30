@@ -1,14 +1,22 @@
 <script>
 	/**
 	 * Circular profile pic — initial when named, Zapstore-style person icon when empty.
+	 * Hue from email when available (same seed as quote bars / author names).
 	 */
-	import { stringToColor, profileTextColor } from '$lib/color.js';
+	import { stringToColor, profileTextColor, profileColorSeed } from '$lib/color.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 
-	let { name = '', size = 24, pictureUrl = /** @type {string | null} */ (null) } = $props();
+	let {
+		name = '',
+		email = '',
+		size = 24,
+		pictureUrl = /** @type {string | null} */ (null),
+		/** Skip hairline ring (e.g. stacked reaction pfps). */
+		bare = false
+	} = $props();
 
 	const initial = $derived(name?.trim()?.[0]?.toUpperCase() ?? '');
-	const color = $derived(stringToColor(name?.trim() || 'A'));
+	const color = $derived(stringToColor(profileColorSeed(email, name)));
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
 		if (choice === 'light') return false;
@@ -29,6 +37,7 @@
 
 <div
 	class="profile-pic"
+	class:bare
 	style:width="{size}px"
 	style:height="{size}px"
 	aria-hidden="true"
@@ -77,6 +86,10 @@
 		line-height: 1;
 		overflow: hidden;
 		user-select: none;
+	}
+
+	.profile-pic.bare .inner {
+		border: 0;
 	}
 
 	.photo {

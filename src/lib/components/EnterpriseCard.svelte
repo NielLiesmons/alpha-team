@@ -41,7 +41,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 12px;
+		padding: 10px 16px 10px 10px;
 		border: 0;
 		background: transparent;
 		border-radius: 12px;
@@ -94,10 +94,12 @@
 
 	.new-count {
 		flex-shrink: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 12px;
-		font-weight: 550;
+		font-weight: 500;
 		color: var(--fg-33);
-		font-variant-numeric: tabular-nums;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 		line-height: 1;
 	}
 </style>

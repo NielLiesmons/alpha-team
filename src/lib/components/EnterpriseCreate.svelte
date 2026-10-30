@@ -82,7 +82,7 @@
 			onpointerdown={(e) => e.preventDefault()}
 			onclick={() => (iconOpen = !iconOpen)}
 		>
-			<EnterpriseBox state="active" {icon} size={28} />
+			<EnterpriseBox state="active" {icon} size={36} />
 		</button>
 		<input class="sheet-input" placeholder="Enterprise (e.g. Eggs, Sheep, General)" bind:value={title} />
 	</div>

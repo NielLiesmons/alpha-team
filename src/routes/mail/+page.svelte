@@ -198,10 +198,12 @@
 
 	.count {
 		flex-shrink: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 600;
 		color: var(--fg-33);
-		font-variant-numeric: tabular-nums;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 	}
 
 	/* Do not use class "preview" — app.css .preview adds 16px padding for editors */

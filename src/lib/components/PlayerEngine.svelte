@@ -32,10 +32,10 @@
 			}
 			return;
 		}
-		const current = audioEl.getAttribute('src') || '';
-		if (current !== url && audioEl.src !== url) {
-			audioEl.src = url;
-		}
+		/*
+		 * Do NOT assign audio.src here. Progressive blob grows + MSE attach own the src;
+		 * re-assigning the same/new blob URL mid-play was causing the ~1s restart glitch.
+		 */
 		if (playerUi.status === 'ready' && playerUi.wantsPlay && audioEl.paused) {
 			audioEl.play().catch(() => {});
 		}
@@ -48,18 +48,27 @@
 
 	function syncClock() {
 		if (!audioEl) return;
+		/* While switching tracks, keep scrubber at 0 — ignore stale timeupdates from the old src. */
+		if (playerUi.status === 'loading' || playerUi.status === 'idle') {
+			playerUi.playing = false;
+			if (playerUi.status === 'loading') {
+				playerUi.currentTime = 0;
+				playerUi.duration = taggedDurationSec() || playerUi.duration;
+			}
+			return;
+		}
 		playerUi.currentTime = audioEl.currentTime;
 		playerUi.playing = !audioEl.paused;
 		playerUi.duration = reliableDuration(audioEl, playerUi.bufferRatio, taggedDurationSec());
 
-		// Grow truncated progressive blobs well before they end (phones need swap headroom).
+		/* Grow only when critically near the end of the current truncated blob (~3s). */
 		if (
 			playerUi.wantsPlay &&
 			playerUi.bufferRatio < 0.999 &&
 			audioEl.buffered.length > 0
 		) {
 			const end = audioEl.buffered.end(audioEl.buffered.length - 1);
-			if (end - audioEl.currentTime < 20) {
+			if (end - audioEl.currentTime < 3) {
 				handleProgressiveStall();
 			}
 		}

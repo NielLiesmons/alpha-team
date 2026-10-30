@@ -2,6 +2,7 @@
 	import CreateSheet from './CreateSheet.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import NoteEditor from './NoteEditor.svelte';
+	import EditorToolbar from './EditorToolbar.svelte';
 	import Spinner from './Spinner.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
@@ -22,6 +23,8 @@
 	let bottomMenu = $state(null);
 	/** @type {HTMLButtonElement | undefined} */
 	let projectsBtn = $state();
+	/** @type {import('@tiptap/core').Editor | null} */
+	let tipTap = $state(null);
 
 	const editing = $derived(
 		ui.composer?.kind === 'note' && ui.composer.id
@@ -113,11 +116,16 @@
 			{#if open}
 				<NoteEditor
 					value={body}
-					placeholder="Write…  (## for a heading)"
+					placeholder="Type / for commands"
 					onChange={(html) => (body = html)}
+					onReady={(ed) => (tipTap = ed)}
 				/>
 			{/if}
 		{/key}
+	</div>
+	<div class="form-divider"></div>
+	<div class="editor-tools">
+		<EditorToolbar editor={tipTap} />
 	</div>
 	<div class="form-divider"></div>
 	<div class="task-bottom-row">
@@ -206,6 +214,11 @@
 		padding: 10px 16px;
 		box-sizing: border-box;
 		-webkit-overflow-scrolling: touch;
+	}
+
+	.editor-tools {
+		padding: 0 16px 4px;
+		flex-shrink: 0;
 	}
 
 	.task-bottom-row {

@@ -6,6 +6,7 @@ import {
 	createCostItem as driveCreateCostItem,
 	createEnterprise as driveCreateEnterprise,
 	createForm as driveCreateForm,
+	createView as driveCreateView,
 	createLedgerEntry as driveCreateLedgerEntry,
 	createMetric as driveCreateMetric,
 	createSalesLine as driveCreateSalesLine,
@@ -14,26 +15,16 @@ import {
 	createMoment as driveCreateMoment,
 	createTable as driveCreateTable,
 	createTableRow as driveCreateTableRow,
+	createTableRows as driveCreateTableRows,
 	createTask as driveCreateTask,
 	deleteEntity as driveDeleteEntity,
 	ensureDefaultAccounts,
 	ensureSpace,
 	fromUiNote,
 	fromUiTask,
-	listCostItems,
-	listEnterprises,
-	listForms,
-	listLedgerEntries,
-	listMetrics,
-	listMoments,
-	listSalesLines,
-	listNotes,
-	listProjects,
-	listTableRows,
-	listTables,
-	listTasks,
 	putEnterprise as drivePutEnterprise,
 	putForm as drivePutForm,
+	putView as drivePutView,
 	putLedgerEntry,
 	putMetric as drivePutMetric,
 	putMoment as drivePutMoment,
@@ -47,9 +38,15 @@ import {
 	toUiTask
 } from './drive/entities.js';
 import { activePerson, members } from './actor.svelte.js';
+import { hydrateAvatarUrls } from './avatar.svelte.js';
+import { ensureMembers } from './members.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
+import { getLastAppliedTip, setLastAppliedTip } from './drive/tip-gate.js';
+import { getTip } from './drive/client.js';
+import { loadWorkspaceLeaves } from './drive/workspace-load.js';
 import { idbGet, idbSet, workspaceCacheKey } from './local-db.js';
 import { popDetailLayer, pushDetailLayer } from './nav-stack.js';
+import { beginSync, endSync, setSyncRatio } from './sync-progress.svelte.js';
 
 /** People available for assignee pickers. Email = account id. */
 export const people = members;
@@ -81,6 +78,8 @@ export const tableRows = $state([]);
 export const metrics = $state([]);
 /** @type {any[]} */
 export const captureForms = $state([]);
+/** @type {any[]} */
+export const dataViews = $state([]);
 
 export const ui = $state({
 	/** @type {string | null} */
@@ -89,10 +88,10 @@ export const ui = $state({
 	noteId: null,
 	/**
 	 * Opened entity in the desktop detail column (view, not create).
-	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'table' | 'metric' | 'form', id: string }}
+	 * @type {null | { kind: 'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'pubs' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'table' | 'metric' | 'form' | 'view', id: string }}
 	 */
 	selection: null,
-	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'table' | 'metric' | 'form', id?: string, status?: string, to?: string }} */
+	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'table' | 'metric' | 'form' | 'view', id?: string, status?: string, to?: string }} */
 	composer: null,
 	/** @type {'none' | 'drive'} */
 	source: 'none'
@@ -100,12 +99,14 @@ export const ui = $state({
 
 /**
  * Open an entity in the third column (does not open the create/edit modal).
- * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'table' | 'metric' | 'form'} kind
+ * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'pubs' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'table' | 'metric' | 'form' | 'view'} kind
  * @param {string} id
  */
 export function selectEntity(kind, id) {
+	const sid = String(id);
+	if (ui.selection?.kind === kind && String(ui.selection?.id) === sid) return;
 	const opening = !ui.selection;
-	ui.selection = { kind, id };
+	ui.selection = { kind, id: sid };
 	if (opening) pushDetailLayer('selection');
 }
 
@@ -122,7 +123,7 @@ export function forceClearSelection() {
 }
 
 /**
- * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'table' | 'metric' | 'form'} kind
+ * @param {'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'table' | 'metric' | 'form' | 'view'} kind
  * @param {string} [id]
  * @param {string} [status]
  * @param {Record<string, unknown>} [seed] extra fields (e.g. project_ids, primary_enterprise_id, to)
@@ -162,6 +163,32 @@ export async function deleteWorkspaceEntity(kind, id) {
 	}
 }
 
+/** @param {string[]} ids */
+export async function deleteTableRows(ids) {
+	if (!ids?.length) return;
+	const session = activeSession();
+	const keep = [];
+	for (const id of ids) {
+		const idx = tableRows.findIndex((r) => r.id === id);
+		if (idx >= 0) {
+			keep.push(tableRows[idx]);
+			tableRows.splice(idx, 1);
+		}
+	}
+	scheduleWorkspacePersist();
+	if (!session || isOffline()) return;
+	try {
+		for (const id of ids) {
+			await driveDeleteEntity(session, 'table_row', id);
+		}
+		scheduleWorkspacePersist();
+	} catch (e) {
+		tableRows.unshift(...keep);
+		scheduleWorkspacePersist();
+		console.warn('deleteTableRows deferred', e);
+	}
+}
+
 export function closeComposer() {
 	ui.composer = null;
 }
@@ -184,6 +211,7 @@ function clearWorkspace() {
 	replaceArray(tableRows, []);
 	replaceArray(metrics, []);
 	replaceArray(captureForms, []);
+	replaceArray(dataViews, []);
 	ui.projectId = null;
 	ui.noteId = null;
 	ui.selection = null;
@@ -207,13 +235,33 @@ function isOffline() {
  * @param {any} saved
  */
 function mergeConfirmed(local, saved) {
-	return {
+	const merged = {
 		...saved,
 		...local,
 		id: saved?.id ?? local?.id,
 		_drive: saved?._drive ?? local?._drive,
 		_pending: false
 	};
+	/* Optimistic table drafts often lack column.id — never clobber server columns. */
+	if (Array.isArray(saved?.columns) && saved.columns.some((c) => c?.id)) {
+		merged.columns = saved.columns;
+	}
+	return merged;
+}
+
+/** @param {any[]} columns */
+function normalizeTableColumns(columns) {
+	return (Array.isArray(columns) ? columns : []).map((c) => ({
+		...c,
+		id: c.id || crypto.randomUUID().slice(0, 8),
+		key:
+			String(c.key || c.label || 'col')
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '_')
+				.replace(/^_|_$/g, '') || 'col',
+		label: c.label || c.key || 'Column',
+		type: c.type || 'number'
+	}));
 }
 
 /** Persist a thin workspace snapshot for instant PWA reopen (keeps `_pending`). */
@@ -233,7 +281,8 @@ async function persistWorkspaceCache(session) {
 		dataTables: [...dataTables],
 		tableRows: [...tableRows],
 		metrics: [...metrics],
-		captureForms: [...captureForms]
+		captureForms: [...captureForms],
+		dataViews: [...dataViews]
 	};
 	await idbSet(cacheKeyForSession(session), snapshot);
 }
@@ -271,11 +320,15 @@ export async function hydrateWorkspaceFromCache() {
 	replaceArray(tableRows, Array.isArray(snap.tableRows) ? snap.tableRows : []);
 	replaceArray(metrics, Array.isArray(snap.metrics) ? snap.metrics : []);
 	replaceArray(captureForms, Array.isArray(snap.captureForms) ? snap.captureForms : []);
+	replaceArray(dataViews, Array.isArray(snap.dataViews) ? snap.dataViews : []);
 	ui.source = 'drive';
 	return hasAny || Array.isArray(snap.tasks);
 }
 
-export async function refreshFromDrive() {
+/**
+ * @param {{ skipTipGate?: boolean, outerProgress?: boolean }} [opts]
+ */
+export async function refreshFromDrive(opts = {}) {
 	const session = activeSession();
 	if (!session) {
 		clearWorkspace();
@@ -290,25 +343,37 @@ export async function refreshFromDrive() {
 		salesLines.length > 0 ||
 		enterprises.length > 0;
 	driveSession.loading = !hadLocal;
+	const ownProgress = !opts.outerProgress;
+	if (ownProgress) {
+		driveSession.syncing = true;
+		beginSync('Workspace');
+	}
 	driveSession.error = null;
 	try {
+		if (!opts.skipTipGate && hadLocal) {
+			try {
+				const tipNow = await getTip(session);
+				if (tipNow && tipNow === getLastAppliedTip(session)) {
+					if (ownProgress) setSyncRatio(1, 1);
+					return;
+				}
+			} catch {
+				/* fall through */
+			}
+		}
+
 		await ensureSpace(session, 'Bley Family');
-		const [plist, tlist, nlist, mlist, alist, elist, costs, sales, ents, tabs, trows, mets, forms] =
-			await Promise.all([
-				listProjects(session),
-				listTasks(session),
-				listNotes(session),
-				listMoments(session),
-				ensureDefaultAccounts(session),
-				listLedgerEntries(session),
-				listCostItems(session),
-				listSalesLines(session),
-				listEnterprises(session),
-				listTables(session),
-				listTableRows(session),
-				listMetrics(session),
-				listForms(session)
-			]);
+		const [{ buckets, tip }, alist] = await Promise.all([
+			loadWorkspaceLeaves(session, undefined, {
+				onProgress: (done, total) => {
+					if (ownProgress) setSyncRatio(done, Math.max(total, 1));
+					else setSyncRatio(done * 0.7, Math.max(total, 1));
+				}
+			}),
+			ensureDefaultAccounts(session),
+			ensureMembers(session).then(() => hydrateAvatarUrls())
+		]);
+		const plist = buckets.project;
 		replaceArray(
 			projects,
 			plist.map((p) => ({
@@ -331,32 +396,45 @@ export async function refreshFromDrive() {
 		);
 		replaceArray(
 			tasks,
-			tlist.map((t) => toUiTask(t, plist))
+			buckets.task.map((t) => toUiTask(t, plist))
 		);
-		replaceArray(moments, mlist);
+		replaceArray(moments, buckets.moment);
 		replaceArray(
 			notes,
-			nlist.map((n) => toUiNote(n, plist))
+			buckets.note.map((n) => toUiNote(n, plist))
 		);
-		replaceArray(accounts, alist);
+		replaceArray(accounts, alist.length ? alist : buckets.account);
 		replaceArray(
 			ledgerEntries,
-			elist.map((e) => toUiLedgerEntry(e, plist, alist))
+			buckets.ledger.map((e) => toUiLedgerEntry(e, plist, alist.length ? alist : buckets.account))
 		);
-		replaceArray(costItems, costs);
-		replaceArray(salesLines, sales);
-		replaceArray(enterprises, ents);
-		replaceArray(dataTables, tabs);
-		replaceArray(tableRows, trows);
-		replaceArray(metrics, mets);
-		replaceArray(captureForms, forms);
+		replaceArray(costItems, buckets.cost);
+		replaceArray(salesLines, buckets.sales);
+		replaceArray(
+			enterprises,
+			buckets.enterprise.map((e) => ({
+				...e,
+				/* Prefer description; legacy Drive docs may still carry body */
+				description: e.description || e.body || ''
+			}))
+		);
+		replaceArray(dataTables, buckets.table);
+		replaceArray(tableRows, buckets.table_row);
+		replaceArray(metrics, buckets.metric);
+		replaceArray(captureForms, buckets.form);
+		replaceArray(dataViews, buckets.view);
 		ui.source = 'drive';
+		if (tip) setLastAppliedTip(session, tip);
 		void persistWorkspaceCache(session);
 	} catch (e) {
 		driveSession.error = e instanceof Error ? e.message : String(e);
 		if (!hadLocal) clearWorkspace();
 	} finally {
 		driveSession.loading = false;
+		if (ownProgress) {
+			driveSession.syncing = false;
+			endSync();
+		}
 	}
 }
 
@@ -391,6 +469,17 @@ export async function patchProject(id, patch) {
 	const p = projects.find((x) => x.id === id);
 	if (!p) return;
 	await saveProject({ ...p, ...patch }, false);
+}
+
+/**
+ * Quick field patch for enterprises (title, description, …).
+ * @param {string} id
+ * @param {Record<string, unknown>} patch
+ */
+export async function patchEnterprise(id, patch) {
+	const e = enterprises.find((x) => x.id === id);
+	if (!e) return;
+	await saveEnterprise({ ...e, ...patch }, false);
 }
 
 /**
@@ -588,7 +677,12 @@ export async function saveTask(draft, isNew) {
 		tasks.unshift(optimistic);
 		ui.selection = { kind: 'task', id: tempId };
 		scheduleWorkspacePersist();
-		if (!canPush) return optimistic;
+		if (!canPush) {
+			void import('./chat.svelte.js').then(({ announceEntityCreated }) =>
+				announceEntityCreated('task', tempId)
+			);
+			return optimistic;
+		}
 
 		try {
 			const created = await driveCreateTask(session, {
@@ -615,6 +709,9 @@ export async function saveTask(draft, isNew) {
 			else tasks.unshift(confirmed);
 			if (ui.selection?.id === tempId) ui.selection = { kind: 'task', id: confirmed.id };
 			scheduleWorkspacePersist();
+			void import('./chat.svelte.js').then(({ announceEntityCreated }) =>
+				announceEntityCreated('task', confirmed.id)
+			);
 			return confirmed;
 		} catch (e) {
 			const idx = tasks.findIndex((t) => t.id === tempId);
@@ -687,7 +784,12 @@ export async function saveNote(draft, isNew) {
 		ui.noteId = tempId;
 		ui.selection = { kind: 'note', id: tempId };
 		scheduleWorkspacePersist();
-		if (!canPushNote) return optimistic;
+		if (!canPushNote) {
+			void import('./chat.svelte.js').then(({ announceEntityCreated }) =>
+				announceEntityCreated('note', tempId)
+			);
+			return optimistic;
+		}
 
 		try {
 			const created = await driveCreateNote(session, {
@@ -710,6 +812,9 @@ export async function saveNote(draft, isNew) {
 			ui.noteId = confirmed.id;
 			ui.selection = { kind: 'note', id: confirmed.id };
 			scheduleWorkspacePersist();
+			void import('./chat.svelte.js').then(({ announceEntityCreated }) =>
+				announceEntityCreated('note', confirmed.id)
+			);
 			return confirmed;
 		} catch (e) {
 			const idx = notes.findIndex((n) => n.id === tempId);
@@ -792,7 +897,12 @@ export async function saveProject(draft, isNew) {
 		ui.projectId = tempId;
 		ui.selection = { kind: 'project', id: tempId };
 		scheduleWorkspacePersist();
-		if (!canPush) return optimistic;
+		if (!canPush) {
+			void import('./chat.svelte.js').then(({ announceEntityCreated }) =>
+				announceEntityCreated('project', tempId)
+			);
+			return optimistic;
+		}
 
 		try {
 			const created = await driveCreateProject(session, {
@@ -825,6 +935,9 @@ export async function saveProject(draft, isNew) {
 			ui.projectId = confirmed.id;
 			ui.selection = { kind: 'project', id: confirmed.id };
 			scheduleWorkspacePersist();
+			void import('./chat.svelte.js').then(({ announceEntityCreated }) =>
+				announceEntityCreated('project', confirmed.id)
+			);
 			return confirmed;
 		} catch (e) {
 			const idx = projects.findIndex((p) => p.id === tempId);
@@ -1133,24 +1246,28 @@ export async function saveEnterprise(draft, isNew) {
 /**
  * @param {any} draft
  * @param {boolean} isNew
+ * @param {{ select?: boolean }} [opts]
  */
-export async function saveDataTable(draft, isNew) {
+export async function saveDataTable(draft, isNew, opts = {}) {
 	const session = activeSession();
 	const canPush = Boolean(session) && !isOffline();
+	const select = opts.select !== false;
+	const columns = normalizeTableColumns(draft.columns);
+	const normalized = { ...draft, columns };
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
-		const optimistic = { ...draft, id: tempId, _pending: !canPush };
+		const optimistic = { ...normalized, id: tempId, _pending: !canPush };
 		dataTables.unshift(optimistic);
-		ui.selection = { kind: 'table', id: tempId };
+		if (select) ui.selection = { kind: 'table', id: tempId };
 		scheduleWorkspacePersist();
 		if (!canPush) return optimistic;
 		try {
-			const created = await driveCreateTable(session, draft);
+			const created = await driveCreateTable(session, normalized);
 			const idx = dataTables.findIndex((a) => a.id === tempId);
 			const confirmed = mergeConfirmed(optimistic, created);
 			if (idx >= 0) dataTables[idx] = confirmed;
 			else dataTables.unshift(confirmed);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'table', id: confirmed.id };
+			if (select && ui.selection?.id === tempId) ui.selection = { kind: 'table', id: confirmed.id };
 			scheduleWorkspacePersist();
 			return confirmed;
 		} catch (e) {
@@ -1159,13 +1276,13 @@ export async function saveDataTable(draft, isNew) {
 		}
 	}
 	const idx = dataTables.findIndex((a) => a.id === draft.id);
-	if (idx >= 0) Object.assign(dataTables[idx], { ...draft, _pending: !canPush });
+	if (idx >= 0) Object.assign(dataTables[idx], { ...normalized, _pending: !canPush });
 	scheduleWorkspacePersist();
-	if (!canPush) return draft;
+	if (!canPush) return normalized;
 	try {
-		const saved = await drivePutTable(session, draft);
+		const saved = await drivePutTable(session, normalized);
 		const i = dataTables.findIndex((a) => a.id === saved.id);
-		const local = i >= 0 ? dataTables[i] : draft;
+		const local = i >= 0 ? dataTables[i] : normalized;
 		const confirmed = mergeConfirmed(local, saved);
 		if (i >= 0) dataTables[i] = confirmed;
 		else dataTables.unshift(confirmed);
@@ -1173,7 +1290,7 @@ export async function saveDataTable(draft, isNew) {
 		return confirmed;
 	} catch (e) {
 		console.warn('saveDataTable update deferred', e);
-		return draft;
+		return normalized;
 	}
 }
 
@@ -1181,38 +1298,52 @@ export async function saveDataTable(draft, isNew) {
  * @param {{ table_id: string, cells: Record<string, unknown>, occurred_on?: string, author?: string }} input
  */
 export async function appendTableRow(input) {
+	const [row] = await appendTableRows([input]);
+	return row;
+}
+
+/**
+ * Batch-append rows (one Drive tip update when online).
+ * @param {{ table_id: string, cells: Record<string, unknown>, occurred_on?: string, author?: string }[]} inputs
+ */
+export async function appendTableRows(inputs) {
 	const session = activeSession();
 	const canPush = Boolean(session) && !isOffline();
-	const author = input.author || activePerson().email || undefined;
-	const tempId = crypto.randomUUID();
-	const optimistic = {
+	const author = activePerson().email || undefined;
+	const createdAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+	const optimistic = (inputs || []).map((input) => ({
 		schema: 'alpha.table_row/1',
-		id: tempId,
+		id: crypto.randomUUID(),
 		table_id: input.table_id,
 		cells: { ...input.cells },
 		occurred_on: input.occurred_on,
-		author,
-		created_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+		author: input.author || author,
+		created_at: createdAt,
 		_pending: !canPush
-	};
-	tableRows.unshift(optimistic);
+	}));
+	if (optimistic.length) tableRows.unshift(...optimistic);
 	scheduleWorkspacePersist();
-	if (!canPush) return optimistic;
+	if (!canPush || !optimistic.length) return optimistic;
 	try {
-		const created = await driveCreateTableRow(session, {
-			table_id: input.table_id,
-			cells: input.cells,
-			occurred_on: input.occurred_on,
-			author
-		});
-		const idx = tableRows.findIndex((r) => r.id === tempId);
-		const confirmed = mergeConfirmed(optimistic, created);
-		if (idx >= 0) tableRows[idx] = confirmed;
-		else tableRows.unshift(confirmed);
+		const created = await driveCreateTableRows(
+			session,
+			optimistic.map((row) => ({
+				table_id: row.table_id,
+				cells: row.cells,
+				occurred_on: row.occurred_on,
+				author: row.author
+			}))
+		);
+		for (let i = 0; i < optimistic.length; i++) {
+			const tempId = optimistic[i].id;
+			const idx = tableRows.findIndex((r) => r.id === tempId);
+			const confirmed = mergeConfirmed(optimistic[i], created[i]);
+			if (idx >= 0) tableRows[idx] = confirmed;
+		}
 		scheduleWorkspacePersist();
-		return confirmed;
+		return created.map((c, i) => mergeConfirmed(optimistic[i], c));
 	} catch (e) {
-		console.warn('appendTableRow deferred', e);
+		console.warn('appendTableRows deferred', e);
 		return optimistic;
 	}
 }
@@ -1245,15 +1376,17 @@ export async function saveTableRow(row) {
 /**
  * @param {any} draft
  * @param {boolean} isNew
+ * @param {{ select?: boolean }} [opts]
  */
-export async function saveMetric(draft, isNew) {
+export async function saveMetric(draft, isNew, opts = {}) {
 	const session = activeSession();
 	const canPush = Boolean(session) && !isOffline();
+	const select = opts.select !== false;
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
 		const optimistic = { ...draft, id: tempId, _pending: !canPush };
 		metrics.unshift(optimistic);
-		ui.selection = { kind: 'metric', id: tempId };
+		if (select) ui.selection = { kind: 'metric', id: tempId };
 		scheduleWorkspacePersist();
 		if (!canPush) return optimistic;
 		try {
@@ -1262,7 +1395,7 @@ export async function saveMetric(draft, isNew) {
 			const confirmed = mergeConfirmed(optimistic, created);
 			if (idx >= 0) metrics[idx] = confirmed;
 			else metrics.unshift(confirmed);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'metric', id: confirmed.id };
+			if (select && ui.selection?.id === tempId) ui.selection = { kind: 'metric', id: confirmed.id };
 			scheduleWorkspacePersist();
 			return confirmed;
 		} catch (e) {
@@ -1291,15 +1424,17 @@ export async function saveMetric(draft, isNew) {
 /**
  * @param {any} draft
  * @param {boolean} isNew
+ * @param {{ select?: boolean }} [opts]
  */
-export async function saveCaptureForm(draft, isNew) {
+export async function saveCaptureForm(draft, isNew, opts = {}) {
 	const session = activeSession();
 	const canPush = Boolean(session) && !isOffline();
+	const select = opts.select !== false;
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
 		const optimistic = { ...draft, id: tempId, _pending: !canPush };
 		captureForms.unshift(optimistic);
-		ui.selection = { kind: 'form', id: tempId };
+		if (select) ui.selection = { kind: 'form', id: tempId };
 		scheduleWorkspacePersist();
 		if (!canPush) return optimistic;
 		try {
@@ -1308,7 +1443,7 @@ export async function saveCaptureForm(draft, isNew) {
 			const confirmed = mergeConfirmed(optimistic, created);
 			if (idx >= 0) captureForms[idx] = confirmed;
 			else captureForms.unshift(confirmed);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'form', id: confirmed.id };
+			if (select && ui.selection?.id === tempId) ui.selection = { kind: 'form', id: confirmed.id };
 			scheduleWorkspacePersist();
 			return confirmed;
 		} catch (e) {
@@ -1330,6 +1465,54 @@ export async function saveCaptureForm(draft, isNew) {
 		return confirmed;
 	} catch (e) {
 		console.warn('saveCaptureForm update deferred', e);
+		return draft;
+	}
+}
+
+/**
+ * @param {any} draft
+ * @param {boolean} isNew
+ * @param {{ select?: boolean }} [opts]
+ */
+export async function saveDataView(draft, isNew, opts = {}) {
+	const session = activeSession();
+	const canPush = Boolean(session) && !isOffline();
+	const select = opts.select !== false;
+	if (isNew) {
+		const tempId = draft.id || crypto.randomUUID();
+		const optimistic = { ...draft, id: tempId, _pending: !canPush };
+		dataViews.unshift(optimistic);
+		if (select) ui.selection = { kind: 'view', id: tempId };
+		scheduleWorkspacePersist();
+		if (!canPush) return optimistic;
+		try {
+			const created = await driveCreateView(session, draft);
+			const idx = dataViews.findIndex((a) => a.id === tempId);
+			const confirmed = mergeConfirmed(optimistic, created);
+			if (idx >= 0) dataViews[idx] = confirmed;
+			else dataViews.unshift(confirmed);
+			if (select && ui.selection?.id === tempId) ui.selection = { kind: 'view', id: confirmed.id };
+			scheduleWorkspacePersist();
+			return confirmed;
+		} catch (e) {
+			console.warn('saveDataView create deferred', e);
+			return optimistic;
+		}
+	}
+	const idx = dataViews.findIndex((a) => a.id === draft.id);
+	if (idx >= 0) Object.assign(dataViews[idx], { ...draft, _pending: !canPush });
+	scheduleWorkspacePersist();
+	if (!canPush) return draft;
+	try {
+		const saved = await drivePutView(session, draft);
+		const i = dataViews.findIndex((a) => a.id === saved.id);
+		const local = i >= 0 ? dataViews[i] : draft;
+		const confirmed = mergeConfirmed(local, saved);
+		if (i >= 0) dataViews[i] = confirmed;
+		scheduleWorkspacePersist();
+		return confirmed;
+	} catch (e) {
+		console.warn('saveDataView update deferred', e);
 		return draft;
 	}
 }

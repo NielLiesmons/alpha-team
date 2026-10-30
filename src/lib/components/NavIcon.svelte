@@ -54,17 +54,17 @@
 				stroke-linejoin="round"
 			/>
 		</svg>
-	{:else if name === 'notes'}
-		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+	{:else if name === 'notes' || name === 'note'}
+		<!-- alpha-ui/icons/note.svg verbatim -->
+		<svg viewBox="0 0 17 17" fill="none" aria-hidden="true">
 			<path
-				d="M4 1.5h10A2.5 2.5 0 0 1 16.5 4v8L12 16.5H4A2.5 2.5 0 0 1 1.5 14V4A2.5 2.5 0 0 1 4 1.5Z"
+				d="M4.5 0.5H12.5C14.7091 0.5 16.5 2.29086 16.5 4.5V9.5C16.5 10.7318 14.9075 12.0746 13.5 13.5C12.051 14.9674 10.7682 16.5 9.5 16.5H4.5C2.29086 16.5 0.5 14.7091 0.5 12.5V4.5C0.5 2.29086 2.29086 0.5 4.5 0.5Z"
 				stroke="currentColor"
-				stroke-linejoin="round"
 			/>
 			<path
-				d="M16.5 12H13.5A1.5 1.5 0 0 0 12 13.5V16.5"
+				d="M16.5 8.5C16.5 11 12.5 8.5 10.5 10.5C8.5 12.5 11 16.5 8.5 16.5"
 				stroke="currentColor"
-				stroke-linejoin="round"
+				stroke-linecap="round"
 			/>
 		</svg>
 	{:else if name === 'calendar' || name === 'planning'}
@@ -88,17 +88,23 @@
 				/>
 			</g>
 		</svg>
-	{:else if name === 'website' || name === 'link'}
-		<!-- Link / chain -->
-		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+	{:else if name === 'website' || name === 'link' || name === 'globe'}
+		<!-- alpha-ui/icons/website.svg verbatim -->
+		<svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
 			<path
-				d="M7.4 10.6a3.25 3.25 0 0 0 4.6 0l1.85-1.85a3.25 3.25 0 1 0-4.6-4.6L8.4 5"
+				d="M7 13.5C10.5899 13.5 13.5 10.5899 13.5 7C13.5 3.41015 10.5899 0.5 7 0.5C3.41015 0.5 0.5 3.41015 0.5 7C0.5 10.5899 3.41015 13.5 7 13.5Z"
 				stroke="currentColor"
 				stroke-linecap="round"
 				stroke-linejoin="round"
 			/>
 			<path
-				d="M10.6 7.4a3.25 3.25 0 0 0-4.6 0L4.15 9.25a3.25 3.25 0 1 0 4.6 4.6L9.6 13"
+				d="M0.5 7H13.5"
+				stroke="currentColor"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+			<path
+				d="M9.5 7C9.3772 9.37699 8.50168 11.6533 7 13.5C5.49832 11.6533 4.6228 9.37699 4.5 7C4.6228 4.62301 5.49832 2.34665 7 0.5C8.50168 2.34665 9.3772 4.62301 9.5 7Z"
 				stroke="currentColor"
 				stroke-linecap="round"
 				stroke-linejoin="round"
@@ -115,6 +121,22 @@
 				d="M11.5 2.5V5.5H14.5M5.5 9h7M5.5 11.5h5"
 				stroke="currentColor"
 				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		</svg>
+	{:else if name === 'profile' || name === 'accounts' || name === 'people' || name === 'members'}
+		<!-- alpha-ui / Profile silhouette (stroke for nav) -->
+		<svg viewBox="0 0 16 20" fill="none" aria-hidden="true">
+			<path
+				d="M12.8 4.70588C12.8 7.30487 10.651 9.41177 8 9.41177C5.34903 9.41177 3.2 7.30487 3.2 4.70588C3.2 2.1069 5.34903 0 8 0C10.651 0 12.8 2.1069 12.8 4.70588Z"
+				stroke="currentColor"
+				stroke-width="1.35"
+				stroke-linejoin="round"
+			/>
+			<path
+				d="M16 16.2353C16 18.3145 12.4183 20 8 20C3.58172 20 0 18.3145 0 16.2353C0 14.1561 3.58172 12.4706 8 12.4706C12.4183 12.4706 16 14.1561 16 16.2353Z"
+				stroke="currentColor"
+				stroke-width="1.35"
 				stroke-linejoin="round"
 			/>
 		</svg>

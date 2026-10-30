@@ -225,6 +225,29 @@ export async function putPaths(session, entries) {
 	await putBlock(session, dirHash, dirCt);
 	await putTip(session, dirHash);
 	rememberRootDir(dir, dirHash, session);
+	try {
+		const { markTipApplied } = await import('./tip-gate.js');
+		markTipApplied(session, dirHash);
+	} catch {
+		/* ignore */
+	}
+
+	/* Warm leaf cache so the next refresh skips re-download of what we just wrote. */
+	try {
+		const { putCachedLeaf } = await import('./leaf-cache.js');
+		for (const entry of entries) {
+			const name = normalizePath(entry.path);
+			const hash = dir.children?.[name]?.hash;
+			if (!hash) continue;
+			const doc =
+				typeof entry.plaintext === 'string'
+					? JSON.parse(entry.plaintext)
+					: JSON.parse(new TextDecoder().decode(entry.plaintext));
+			void putCachedLeaf(hash, doc);
+		}
+	} catch {
+		/* non-JSON blobs (media) — ignore */
+	}
 }
 
 /**
@@ -278,6 +301,12 @@ export async function deletePaths(session, logicalPaths) {
 	await putBlock(session, dirHash, dirCt);
 	await putTip(session, dirHash);
 	rememberRootDir(dir, dirHash, session);
+	try {
+		const { markTipApplied } = await import('./tip-gate.js');
+		markTipApplied(session, dirHash);
+	} catch {
+		/* ignore */
+	}
 }
 
 /**
@@ -313,6 +342,12 @@ export async function putPathWithKey(session, logicalPath, kind, plaintext, file
 	await putBlock(session, dirHash, dirCt);
 	await putTip(session, dirHash);
 	rememberRootDir(dir, dirHash, session);
+	try {
+		const { markTipApplied } = await import('./tip-gate.js');
+		markTipApplied(session, dirHash);
+	} catch {
+		/* ignore */
+	}
 	return hash;
 }
 

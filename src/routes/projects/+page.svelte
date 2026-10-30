@@ -116,7 +116,7 @@
 	.card-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 0;
 		padding: 4px 6px 10px;
 		box-sizing: border-box;
 	}

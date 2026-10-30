@@ -8,8 +8,9 @@
 	import FloatPanel from './FloatPanel.svelte';
 	import LabelsPicker from './LabelsPicker.svelte';
 	import NavIcon from './NavIcon.svelte';
-	import { projectLifecycle } from '$lib/project-status.js';
+	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
+		enterprises,
 		moments,
 		patchNote,
 		patchTask,
@@ -508,7 +509,7 @@
 				>
 					<ProjectBox
 						state={projectLifecycle(project, tasks)}
-						icon={project.icon}
+						icon={projectDisplayIcon(project, enterprises)}
 						size={18}
 					/>
 					<span class="option-text">{project.title}</span>
@@ -546,7 +547,7 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 8px;
-		padding: 0 16px 10px;
+		padding: 0 0 10px;
 		box-sizing: border-box;
 	}
 

@@ -6,14 +6,23 @@
 	let key = $state('');
 	/** @type {string} */
 	let enterpriseId = $state('');
+	/** @type {string | null} */
+	let seededFor = $state(null);
 
 	const open = $derived(ui.composer?.kind === 'table');
 
 	$effect(() => {
-		if (!open) return;
+		if (!open) {
+			seededFor = null;
+			return;
+		}
+		const seedKey = typeof ui.composer?.enterprise_id === 'string' ? ui.composer.enterprise_id : '';
+		const stamp = `__new__:${seedKey}`;
+		if (seededFor === stamp) return;
+		seededFor = stamp;
 		title = '';
 		key = '';
-		enterpriseId = '';
+		enterpriseId = seedKey;
 	});
 
 	async function save() {
@@ -43,13 +52,15 @@
 
 <CreateSheet {open} label="New table" onclose={closeComposer}>
 	<input class="sheet-input" placeholder="Table title" bind:value={title} />
-	<input class="sheet-input" placeholder="Key (egg_actuals)" bind:value={key} />
-	<select class="sheet-input" bind:value={enterpriseId}>
-		<option value="">Enterprise (optional)</option>
-		{#each enterprises as ent (ent.id)}
-			<option value={ent.id}>{ent.title}</option>
-		{/each}
-	</select>
+	<input class="sheet-input" placeholder="Key (optional)" bind:value={key} />
+	{#if enterprises.length}
+		<select class="sheet-input" bind:value={enterpriseId}>
+			<option value="">Enterprise (optional)</option>
+			{#each enterprises as ent (ent.id)}
+				<option value={ent.id}>{ent.title}</option>
+			{/each}
+		</select>
+	{/if}
 	<div class="sheet-bottom">
 		<button type="button" class="publish-btn" disabled={!title.trim()} onclick={() => void save()}
 			>Create</button

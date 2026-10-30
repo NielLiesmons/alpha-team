@@ -1,9 +1,10 @@
 /**
- * Passphrase-wrapped Drive session invite (QR / share link).
- * Schema: alpha.drive.invite/1 — see ADR-identity-chat-drive-comments.
+ * Passphrase-wrapped member invite (QR / share link).
+ * Schema: alpha.drive.invite/2 — Drive session + email + role + mailbox password.
+ * Legacy /1 (Drive only) still decodes. See ADR-identity-chat-drive-comments.
  *
  * Share as a URL: https://admin…/join?i=<payload>
- * Opener only needs the passphrase (+ their email).
+ * Opener only needs the passphrase when email is embedded.
  */
 
 export const INVITE_PREFIX = 'alpha-drive-invite:v1:';
@@ -53,7 +54,19 @@ async function deriveKey(passphrase, salt) {
 }
 
 /**
- * @param {{ url: string, token: string, rootKey: string }} session
+ * @typedef {{
+ *   url: string,
+ *   token: string,
+ *   rootKey: string,
+ *   email?: string,
+ *   displayName?: string,
+ *   role?: 'owner' | 'admin' | 'member',
+ *   mailboxPassword?: string
+ * }} InviteSession
+ */
+
+/**
+ * @param {InviteSession} session
  * @param {string} passphrase
  * @returns {Promise<string>} QR / paste payload
  */
@@ -65,17 +78,30 @@ export async function encodeInvite(session, passphrase) {
 	const rootKey = session.rootKey?.trim();
 	if (!url || !token || !rootKey) throw new Error('Drive session is incomplete');
 
+	const email = String(session.email || '')
+		.trim()
+		.toLowerCase();
 	const salt = crypto.getRandomValues(new Uint8Array(16));
 	const iv = crypto.getRandomValues(new Uint8Array(12));
 	const key = await deriveKey(pass, salt);
-	const plain = new TextEncoder().encode(
-		JSON.stringify({
-			schema: 'alpha.drive.invite/1',
-			url,
-			token,
-			rootKey
-		})
-	);
+	/** @type {Record<string, unknown>} */
+	const body = {
+		schema: 'alpha.drive.invite/2',
+		url,
+		token,
+		rootKey
+	};
+	if (email.includes('@')) {
+		body.email = email;
+		if (session.displayName?.trim()) body.displayName = session.displayName.trim();
+		if (session.role === 'owner' || session.role === 'admin' || session.role === 'member') {
+			body.role = session.role;
+		}
+		if (session.mailboxPassword?.trim()) {
+			body.mailboxPassword = session.mailboxPassword.trim();
+		}
+	}
+	const plain = new TextEncoder().encode(JSON.stringify(body));
 	const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain));
 	const packed = new Uint8Array(salt.length + iv.length + ct.length);
 	packed.set(salt, 0);
@@ -171,7 +197,7 @@ export function invitePayloadFromLocation(href) {
 /**
  * @param {string} payloadOrUrl
  * @param {string} passphrase
- * @returns {Promise<{ url: string, token: string, rootKey: string }>}
+ * @returns {Promise<InviteSession>}
  */
 export async function decodeInvite(payloadOrUrl, passphrase) {
 	const raw = extractInvitePayload(payloadOrUrl);
@@ -192,11 +218,26 @@ export async function decodeInvite(payloadOrUrl, passphrase) {
 	}
 	const doc = JSON.parse(new TextDecoder().decode(plain));
 	if (!doc?.url || !doc?.token || !doc?.rootKey) throw new Error('Invite missing credentials');
-	return {
+	/** @type {InviteSession} */
+	const out = {
 		url: String(doc.url).replace(/\/$/, ''),
 		token: String(doc.token).trim(),
 		rootKey: String(doc.rootKey).trim()
 	};
+	const email = String(doc.email || '')
+		.trim()
+		.toLowerCase();
+	if (email.includes('@')) out.email = email;
+	if (typeof doc.displayName === 'string' && doc.displayName.trim()) {
+		out.displayName = doc.displayName.trim();
+	}
+	if (doc.role === 'owner' || doc.role === 'admin' || doc.role === 'member') {
+		out.role = doc.role;
+	}
+	if (typeof doc.mailboxPassword === 'string' && doc.mailboxPassword.trim()) {
+		out.mailboxPassword = doc.mailboxPassword.trim();
+	}
+	return out;
 }
 
 export function isInvitePayload(text) {

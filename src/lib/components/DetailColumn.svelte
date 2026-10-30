@@ -1,9 +1,9 @@
 <script>
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ProjectBox from './ProjectBox.svelte';
 	import EnterpriseBox from './EnterpriseBox.svelte';
 	import TaskBox from './TaskBox.svelte';
-	import ProfilePic from './ProfilePic.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import PlayerDetail from './PlayerDetail.svelte';
 	import DetailMetaPills from './DetailMetaPills.svelte';
@@ -12,7 +12,6 @@
 	import Pen from './icons/Pen.svelte';
 	import Trash from './icons/Trash.svelte';
 	import {
-		closePlayerDetail,
 		currentTrack,
 		openUploadModal,
 		playerBack,
@@ -23,12 +22,15 @@
 		uploadAudioFiles,
 		uploadUi
 	} from '$lib/player.svelte.js';
-	import { activePerson, actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import {
 		campaigns,
 		mailSettings,
-		persistSendCampaign
+		persistDeleteCampaign,
+		persistDeletePost,
+		persistSendCampaign,
+		publicPosts
 	} from '$lib/publications.svelte.js';
 	import {
 		findMail,
@@ -45,22 +47,35 @@
 	import { renderInlineLinks } from '$lib/note-text.js';
 	import { accountingBrowse } from '$lib/accounting.svelte.js';
 	import AccountingDetail from './AccountingDetail.svelte';
+	import ChatChannelPanel from './ChatChannelPanel.svelte';
 	import CommentThread from './CommentThread.svelte';
-	import EnterpriseSheet from './EnterpriseSheet.svelte';
 	import FormDetail from './FormDetail.svelte';
+	import PublicationsHub from './PublicationsHub.svelte';
+	import { channelById } from '$lib/chat.svelte.js';
 	import MetricDetail from './MetricDetail.svelte';
 	import TableDetail from './TableDetail.svelte';
+	import ViewDetail from './ViewDetail.svelte';
+	import PullToRefresh from './PullToRefresh.svelte';
+	import SyncProgressBar from './SyncProgressBar.svelte';
+	import { refreshAllDrive } from '$lib/drive-refresh.js';
+	import { attachChromeScrollFade } from '$lib/chrome-scroll-fade.js';
+	import { openEntreprisesEntity } from '$lib/entity-routes.js';
 	import {
 		captureForms,
 		clearSelection,
 		costItems,
 		dataTables,
+		dataViews,
 		deleteWorkspaceEntity,
 		enterprises,
+		forceClearSelection,
 		ledgerEntries,
 		metrics,
 		notes,
 		openComposer,
+		patchEnterprise,
+		patchProject,
+		patchTask,
 		projects,
 		salesLines,
 		saveNote,
@@ -69,13 +84,57 @@
 		ui
 	} from '$lib/workspace.svelte.js';
 
+	const BENTO_PREVIEW = 5;
+
+	/** @param {'table' | 'metric' | 'view' | 'form' | 'project' | 'task' | 'note'} kind @param {string} id */
+	function openLinked(kind, id) {
+		if (kind === 'table' || kind === 'metric' || kind === 'view' || kind === 'form') {
+			openEntreprisesEntity(kind, id);
+			return;
+		}
+		selectEntity(kind, id);
+	}
+
+	/** @param {string} path */
+	function viewAll(path) {
+		forceClearSelection();
+		void goto(path);
+	}
+
+	/** @type {HTMLTextAreaElement | undefined} */
+	let descEl = $state();
+
+	/** @param {HTMLTextAreaElement | null | undefined} el */
+	function hugDescription(el) {
+		if (!el) return;
+		el.style.height = 'auto';
+		/* ≥ one line so empty placeholder stays visible */
+		el.style.height = `${Math.max(el.scrollHeight, 24)}px`;
+	}
+
 	const selection = $derived(ui.selection);
 	const isPlayer = $derived($page.url.pathname.startsWith('/player'));
+	const chatChannelId = $derived(selection?.kind === 'chat' ? String(selection.id) : null);
+	const chatChannel = $derived(chatChannelId ? channelById(chatChannelId) : null);
 	const playerTitle = $derived(isPlayer ? playerHeading() : '');
 	const playerConnected = $derived(Boolean(activeSession()));
 
 	/** @type {HTMLInputElement | undefined} */
 	let playerFileInput = $state();
+	/** @type {HTMLElement | undefined} */
+	let detailRoot = $state();
+	/** 0 at rest → 1 after ~16px scroll (detail-top / mobile-bar fade) */
+	let detailFade = $state(0);
+
+	$effect(() => {
+		selection;
+		isPlayer;
+		playerBrowse;
+		const root = detailRoot;
+		return attachChromeScrollFade(root, (v) => {
+			detailFade = v;
+		});
+	});
 
 	async function onPlayerFiles(/** @type {Event} */ e) {
 		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
@@ -115,13 +174,24 @@
 		selection?.kind === 'enterprise' ? enterprises.find((e) => e.id === selection.id) : null
 	);
 	const dataTable = $derived(
-		selection?.kind === 'table' ? dataTables.find((e) => e.id === selection.id) : null
+		selection?.kind === 'table'
+			? dataTables.find((e) => String(e.id) === String(selection.id))
+			: null
 	);
 	const metricDoc = $derived(
-		selection?.kind === 'metric' ? metrics.find((e) => e.id === selection.id) : null
+		selection?.kind === 'metric'
+			? metrics.find((e) => String(e.id) === String(selection.id))
+			: null
 	);
 	const formDoc = $derived(
-		selection?.kind === 'form' ? captureForms.find((e) => e.id === selection.id) : null
+		selection?.kind === 'form'
+			? captureForms.find((e) => String(e.id) === String(selection.id))
+			: null
+	);
+	const viewDoc = $derived(
+		selection?.kind === 'view'
+			? dataViews.find((e) => String(e.id) === String(selection.id))
+			: null
 	);
 	const isEntreprises = $derived(
 		$page.url.pathname.startsWith('/entreprises') || $page.url.pathname.startsWith('/accounting')
@@ -129,9 +199,22 @@
 	/* List lives in /entreprises feed (category tabs); detail only for a selected entity */
 	const accountingPanel = $derived(false);
 	const newsletter = $derived(
-		selection?.kind === 'newsletter' ? campaigns.find((c) => c.id === selection.id) : null
+		selection?.kind === 'newsletter' && !String(selection.id || '').startsWith('post:')
+			? campaigns.find((c) => c.id === selection.id)
+			: null
+	);
+	const pubPostSlug = $derived(
+		selection?.kind === 'newsletter' && String(selection.id || '').startsWith('post:')
+			? String(selection.id).slice(5)
+			: ''
+	);
+	const pubPost = $derived(
+		pubPostSlug
+			? publicPosts.find((p) => p.slug === pubPostSlug || p.id === pubPostSlug) || null
+			: null
 	);
 	const welcomeSelected = $derived(selection?.kind === 'welcome');
+	const pubsHub = $derived(selection?.kind === 'pubs');
 	const mailMsg = $derived(selection?.kind === 'mail' ? findMail(selection.id) : null);
 
 	$effect(() => {
@@ -188,43 +271,46 @@
 		);
 	});
 
-	/** @type {HTMLButtonElement | undefined} */
-	let moreBtn = $state();
-
-	const canEdit = $derived(
-		Boolean(task || project || note || enterprise || newsletter || welcomeSelected)
-	);
-	const canDelete = $derived(Boolean(task || project || note || enterprise));
-
-	/**
-	 * Prefer entity author; fall back to signed-in actor (never legacy "You").
-	 * @param {unknown} raw
-	 */
-	function resolveAuthor(raw) {
-		const me = activePerson();
-		const p = asPerson(raw);
-		if (!p) return me;
-		const e = (p.email || '').toLowerCase();
-		if (!e || e === 'you@local' || e === 'local' || e === 'you') return me;
-		// Re-resolve through member directory so niel@… shows as Niel
-		return asPerson(e) ?? p;
-	}
-
-	const detailAuthor = $derived.by(() => {
-		// Depend on actor.email so the chip updates when Settings changes signed-in user
-		actor.email;
-		if (task) return resolveAuthor(task.author);
-		if (note) return resolveAuthor(note.author);
-		if (mailMsg) return resolveAuthor(mailMsg.from);
-		if (project) return resolveAuthor(/** @type {any} */ (project).author);
-		if (enterprise) return resolveAuthor(/** @type {any} */ (enterprise).author);
-		if (newsletter) return resolveAuthor(/** @type {any} */ (newsletter).author);
-		if (ledger) return resolveAuthor(/** @type {any} */ (ledger).author);
-		if (costItem) return resolveAuthor(/** @type {any} */ (costItem).author);
-		if (salesLine) return resolveAuthor(/** @type {any} */ (salesLine).author);
-		if (welcomeSelected || accountingPanel) return activePerson();
-		return null;
+	const enterpriseTables = $derived.by(() => {
+		if (!enterprise) return [];
+		const eid = String(enterprise.id);
+		return dataTables.filter(
+			(t) =>
+				String(t.enterprise_id ?? '') === eid ||
+				(Array.isArray(enterprise.table_ids) &&
+					enterprise.table_ids.some((id) => String(id) === String(t.id)))
+		);
 	});
+
+	const enterpriseMetrics = $derived.by(() => {
+		if (!enterprise) return [];
+		const eid = String(enterprise.id);
+		return metrics.filter((m) => String(m.enterprise_id ?? '') === eid);
+	});
+
+	const enterpriseViews = $derived.by(() => {
+		if (!enterprise) return [];
+		const eid = String(enterprise.id);
+		return dataViews.filter((v) => String(v.enterprise_id ?? '') === eid);
+	});
+
+	/** @type {HTMLElement | null} */
+	let menuAnchor = $state(null);
+	let menuOpen = $state(false);
+
+	/** Composer edit still useful for welcome / newsletter / site posts (not inline). */
+	const canComposerEdit = $derived(Boolean(newsletter || pubPost || welcomeSelected));
+	const canDelete = $derived(
+		Boolean(task || project || note || enterprise || newsletter || pubPost)
+	);
+	const canShare = $derived(
+		Boolean(
+			task || project || note || enterprise || dataTable || metricDoc || viewDoc || newsletter || pubPost
+		)
+	);
+	const showMoreMenu = $derived(
+		Boolean(canDelete || canShare || canComposerEdit || (isPlayer && playerConnected))
+	);
 
 	const typeLabel = $derived.by(() => {
 		if (isPlayer) return 'Player';
@@ -234,12 +320,23 @@
 		if (ledger) return 'Ledger';
 		if (costItem) return 'Cost';
 		if (salesLine) return 'Sales';
+		if (viewDoc) return 'View';
+		if (dataTable) return 'Table';
+		if (metricDoc) return 'Metric';
+		if (formDoc) return 'Form';
 		if (enterprise) return 'Enterprise';
 		if (accountingPanel) return 'Entreprises';
-		if (newsletter) return 'Newsletter';
+		if (newsletter) return 'Letter';
+		if (pubPost) {
+			const k = String(pubPost.kind || 'blog');
+			if (k === 'event') return 'Event';
+			if (k === 'post') return 'Post';
+			return 'Blog';
+		}
 		if (welcomeSelected) return 'Welcome';
+		if (pubsHub) return 'Publications';
 		if (mailMsg) return 'Mail';
-		if (selection?.kind === 'chat') return 'Chat';
+		if (chatChannel) return chatChannel.title || 'Chat';
 		return 'Detail';
 	});
 
@@ -252,11 +349,18 @@
 		if (ledger) return ledger.memo || ledger.account_title || 'Entry';
 		if (costItem?.title) return costItem.title;
 		if (salesLine?.title) return salesLine.title;
+		if (viewDoc?.title) return viewDoc.title;
+		if (dataTable?.title) return dataTable.title;
+		if (metricDoc?.title || metricDoc?.key) return metricDoc.title || metricDoc.key;
+		if (formDoc?.title) return formDoc.title;
 		if (enterprise?.title) return enterprise.title;
 		if (accountingPanel) return accountingBrowse.mode;
 		if (newsletter?.subject) return newsletter.subject;
+		if (pubPost?.title) return pubPost.title;
 		if (welcomeSelected) return 'Welcome';
+		if (pubsHub) return 'Publications';
 		if (mailMsg?.subject) return mailMsg.subject;
+		if (chatChannel) return chatChannel.title || 'General';
 		return typeLabel;
 	});
 
@@ -269,11 +373,18 @@
 				ledger ||
 				costItem ||
 				salesLine ||
+				viewDoc ||
+				dataTable ||
+				metricDoc ||
+				formDoc ||
 				enterprise ||
 				accountingPanel ||
 				newsletter ||
+				pubPost ||
 				welcomeSelected ||
-				mailMsg
+				pubsHub ||
+				mailMsg ||
+				chatChannel
 		)
 	);
 
@@ -285,19 +396,25 @@
 		if (path.startsWith('/entreprises') || path.startsWith('/accounting'))
 			return {
 				title: 'No entry selected',
-				body: 'Open Entreprises, Costs, Sales, or Ledger — then pick a row.'
+				body: 'Open an Entreprise — Views, Tables, and Metrics live inside it.'
 			};
-		if (path.startsWith('/publications'))
+		if (path.startsWith('/publications') || path.startsWith('/website'))
 			return {
-				title: 'No publication selected',
-				body: 'Welcome + newsletters for the public list. Use + to write a letter.'
+				title: path.startsWith('/website') ? 'No section open' : 'Publications',
+				body: path.startsWith('/website')
+					? 'Open Publications from a site card — it appears here in the detail column.'
+					: 'Open the hub — Blog letters mail subscribers and appear on the site.'
 			};
 		if (path.startsWith('/mail'))
 			return {
 				title: 'No message selected',
 				body: 'Pick a message from Inbox or Sent — or use + to compose for your mailbox.'
 			};
-		if (path.startsWith('/chat')) return { title: 'No chat selected', body: 'Conversations will open here when chat is ready.' };
+		if (path.startsWith('/chat'))
+			return {
+				title: 'Pick a channel',
+				body: 'General is the family chat. DMs and agents will land in the list beside this.'
+			};
 		return { title: 'Nothing open', body: 'Select a task, project, note, mail, or chat to view it here.' };
 	});
 
@@ -305,7 +422,12 @@
 
 	async function sendSelectedNewsletter() {
 		if (!newsletter || newsletter.status === 'sent') return;
-		if (!confirm('Send this newsletter to every subscribed address?')) return;
+		if (
+			!confirm(
+				'Publish this letter? It will email every subscriber and appear as a Blog post on the site.'
+			)
+		)
+			return;
 		sendBusy = true;
 		try {
 			await persistSendCampaign(newsletter.id);
@@ -316,68 +438,120 @@
 		}
 	}
 
-	let menuOpen = $state(false);
-
-	/** Inline note editor state */
-	let noteDraftId = $state(/** @type {string | null} */ (null));
-	let noteTitle = $state('');
-	let noteBody = $state('');
+	/** Inline title / body drafts for the open entity */
+	let draftKey = $state(/** @type {string | null} */ (null));
+	let draftTitle = $state('');
+	let draftBody = $state('');
 	/** @type {ReturnType<typeof setTimeout> | undefined} */
-	let noteSaveTimer;
-	let noteSaving = $state(false);
+	let draftSaveTimer;
+	let draftSaving = $state(false);
 
 	$effect(() => {
-		const id = note?.id ?? null;
-		if (!id || !note) {
-			noteDraftId = null;
-			return;
-		}
-		if (noteDraftId === id) return;
-		noteDraftId = id;
-		noteTitle = note.title ?? '';
-		noteBody = note.body ?? '';
+		draftBody;
+		const el = descEl;
+		if (!el) return;
+		queueMicrotask(() => hugDescription(el));
 	});
 
-	function scheduleNoteSave() {
-		if (!note) return;
-		clearTimeout(noteSaveTimer);
-		noteSaveTimer = setTimeout(() => {
-			void persistNote();
+	const inlineKind = $derived.by(() => {
+		if (task) return 'task';
+		if (project) return 'project';
+		if (note) return 'note';
+		if (enterprise) return 'enterprise';
+		return null;
+	});
+
+	$effect(() => {
+		const kind = inlineKind;
+		const ent = task || project || note || enterprise;
+		const id = ent?.id ?? null;
+		const key = kind && id ? `${kind}:${id}` : null;
+		if (!key || !ent) {
+			draftKey = null;
+			return;
+		}
+		if (draftKey === key) return;
+		draftKey = key;
+		draftTitle = ent.title ?? '';
+		draftBody =
+			kind === 'project' || kind === 'enterprise'
+				? ent.description || ent.body || ''
+				: ent.body ?? '';
+	});
+
+	function scheduleDraftSave() {
+		if (!inlineKind) return;
+		clearTimeout(draftSaveTimer);
+		draftSaveTimer = setTimeout(() => {
+			void persistDraft();
 		}, 450);
 	}
 
-	async function persistNote() {
-		if (!note) return;
-		const title = noteTitle.trim() || 'Untitled';
-		if (title === (note.title ?? '') && noteBody === (note.body ?? '')) return;
-		noteSaving = true;
+	async function persistDraft() {
+		const kind = inlineKind;
+		if (!kind) return;
+		const title = draftTitle.trim() || 'Untitled';
+		const body = draftBody;
+		draftSaving = true;
 		try {
-			await saveNote({ ...note, title, body: noteBody }, false);
+			if (kind === 'note' && note) {
+				if (title === (note.title ?? '') && body === (note.body ?? '')) return;
+				await saveNote({ ...note, title, body }, false);
+			} else if (kind === 'task' && task) {
+				if (title === (task.title ?? '') && body === (task.body ?? '')) return;
+				await patchTask(task.id, { title, body });
+			} else if (kind === 'project' && project) {
+				if (title === (project.title ?? '') && body === (project.description ?? '')) return;
+				await patchProject(project.id, { title, description: body });
+			} else if (kind === 'enterprise' && enterprise) {
+				if (title === (enterprise.title ?? '') && body === (enterprise.description ?? '')) return;
+				await patchEnterprise(enterprise.id, { title, description: body });
+			}
 		} catch (err) {
 			alert(err instanceof Error ? err.message : String(err));
 		} finally {
-			noteSaving = false;
+			draftSaving = false;
 		}
 	}
 
 	/** @param {string} html */
 	function onNoteBodyChange(html) {
-		noteBody = html;
-		scheduleNoteSave();
+		draftBody = html;
+		scheduleDraftSave();
+	}
+
+	/** @param {MouseEvent} e */
+	function toggleMoreMenu(e) {
+		const btn = /** @type {HTMLElement} */ (e.currentTarget);
+		if (menuOpen && menuAnchor === btn) {
+			menuOpen = false;
+			return;
+		}
+		menuAnchor = btn;
+		menuOpen = true;
 	}
 
 	function editCurrent() {
 		menuOpen = false;
 		if (!selection) return;
-		if (
-			selection.kind === 'task' ||
-			selection.kind === 'project' ||
-			selection.kind === 'enterprise' ||
-			selection.kind === 'note' ||
-			selection.kind === 'newsletter' ||
-			selection.kind === 'welcome'
-		) {
+		if (selection.kind === 'newsletter' || selection.kind === 'welcome') {
 			openComposer(selection.kind, selection.id);
+		}
+	}
+
+	async function shareCurrent() {
+		menuOpen = false;
+		const base = typeof window !== 'undefined' ? window.location.origin : '';
+		const site =
+			newsletter?.post_slug || pubPost?.slug
+				? `https://bley.farm/fr/publications/${newsletter?.post_slug || pubPost?.slug}`
+				: '';
+		const url = site || (typeof window !== 'undefined' ? window.location.href : '') || base;
+		if (!url) return;
+		try {
+			await navigator.clipboard.writeText(url);
+		} catch {
+			window.prompt('Copy link', url);
 		}
 	}
 
@@ -385,6 +559,28 @@
 		menuOpen = false;
 		if (!selection) return;
 		const kind = selection.kind;
+		if (kind === 'newsletter') {
+			const id = String(selection.id || '');
+			if (id.startsWith('post:')) {
+				const slug = id.slice(5);
+				if (!confirm(`Delete this publication from the site? This cannot be undone.`)) return;
+				try {
+					await persistDeletePost(slug);
+					forceClearSelection();
+				} catch (e) {
+					alert(e instanceof Error ? e.message : String(e));
+				}
+				return;
+			}
+			if (!confirm(`Delete this letter? Removes it from the public site too.`)) return;
+			try {
+				await persistDeleteCampaign(id);
+				forceClearSelection();
+			} catch (e) {
+				alert(e instanceof Error ? e.message : String(e));
+			}
+			return;
+		}
 		if (kind !== 'task' && kind !== 'project' && kind !== 'note' && kind !== 'enterprise') return;
 		const label =
 			kind === 'task'
@@ -404,9 +600,9 @@
 
 	function close() {
 		menuOpen = false;
-		if (note) {
-			clearTimeout(noteSaveTimer);
-			void persistNote();
+		if (inlineKind) {
+			clearTimeout(draftSaveTimer);
+			void persistDraft();
 		}
 		clearSelection();
 	}
@@ -451,6 +647,8 @@
 	class:player-mode={isPlayer}
 	class:has-mini={isPlayer && Boolean(currentTrack())}
 	aria-label="Detail"
+	bind:this={detailRoot}
+	style="--chrome-scroll-fade: {detailFade}"
 >
 	{#if renderBody}
 		<header class="mobile-bar">
@@ -470,24 +668,17 @@
 					/>
 				</svg>
 			</button>
-			{#if isPlayer}
-				<span class="mobile-title">{mobileTitle}</span>
-			{:else if detailAuthor}
-				<div class="author-chip center mobile-author">
-					<ProfilePic name={detailAuthor.name} size={28} />
-					<span class="author-name">{detailAuthor.name}</span>
-				</div>
-			{:else}
-				<span class="mobile-title">{mobileTitle}</span>
-			{/if}
-			<div class="menu-wrap">
+			<span class="mobile-title-stack">
+				<span class="mobile-type">{isPlayer ? mobileTitle : typeLabel}</span>
+				<SyncProgressBar variant="under" class="mobile-sync-bar" />
+			</span>
+			{#if showMoreMenu}
 				<button
-					bind:this={moreBtn}
 					type="button"
 					class="chrome-btn more-btn"
 					aria-label="More"
 					aria-expanded={menuOpen}
-					onclick={() => (menuOpen = !menuOpen)}
+					onclick={toggleMoreMenu}
 				>
 					<svg width="26" height="26" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 						<circle cx="9" cy="3.75" r="1.65" fill="currentColor" />
@@ -495,45 +686,54 @@
 						<circle cx="9" cy="14.25" r="1.65" fill="currentColor" />
 					</svg>
 				</button>
-				<FloatPanel
-					open={menuOpen}
-					anchor={moreBtn}
-					placement="below"
-					align="end"
-					width={200}
-					maxHeight={280}
-					onclose={() => (menuOpen = false)}
-				>
-					<div class="float-list" role="menu">
-						{#if isPlayer && playerConnected}
-							<button
-								type="button"
-								class="menu-item"
-								role="menuitem"
-								onclick={() => {
-									menuOpen = false;
-									if (uploadUi.active) openUploadModal();
-									else playerFileInput?.click();
-								}}>{uploadUi.active ? 'Uploads' : 'Upload'}</button
-							>
-						{/if}
-						{#if canEdit}
-							<button type="button" class="menu-item" role="menuitem" onclick={editCurrent}>
-								<Pen size={13} />
-								Edit
-							</button>
-						{/if}
-						{#if canDelete}
-							<button type="button" class="menu-item" role="menuitem" onclick={deleteCurrent}>
-								<Trash size={15} />
-								Delete
-							</button>
-						{/if}
-					</div>
-				</FloatPanel>
-			</div>
+			{:else}
+				<span class="menu-spacer" aria-hidden="true"></span>
+			{/if}
 		</header>
 
+		<FloatPanel
+			open={menuOpen}
+			anchor={menuAnchor}
+			placement="below"
+			align="end"
+			width={200}
+			maxHeight={280}
+			onclose={() => (menuOpen = false)}
+		>
+			<div class="float-list" role="menu">
+				{#if isPlayer && playerConnected}
+					<button
+						type="button"
+						class="menu-item"
+						role="menuitem"
+						onclick={() => {
+							menuOpen = false;
+							if (uploadUi.active) openUploadModal();
+							else playerFileInput?.click();
+						}}>{uploadUi.active ? 'Uploads' : 'Upload'}</button
+					>
+				{/if}
+				{#if canShare}
+					<button type="button" class="menu-item" role="menuitem" onclick={() => void shareCurrent()}>
+						Share
+					</button>
+				{/if}
+				{#if canComposerEdit}
+					<button type="button" class="menu-item" role="menuitem" onclick={editCurrent}>
+						<Pen size={13} />
+						Edit
+					</button>
+				{/if}
+				{#if canDelete}
+					<button type="button" class="menu-item danger" role="menuitem" onclick={deleteCurrent}>
+						<Trash size={15} />
+						Delete
+					</button>
+				{/if}
+			</div>
+		</FloatPanel>
+
+	<PullToRefresh onRefresh={() => refreshAllDrive()}>
 	{#if isPlayer}
 		<input
 			bind:this={playerFileInput}
@@ -581,6 +781,7 @@
 					</button>
 				{/if}
 				<span class="detail-top-label">{playerTitle}</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				{#if playerConnected}
@@ -603,16 +804,6 @@
 						</svg>
 					</button>
 				{/if}
-				<button type="button" class="icon-hit" aria-label="Close" onclick={closePlayerDetail}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M4 4l8 8M12 4l-8 8"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-						/>
-					</svg>
-				</button>
 			</div>
 		</header>
 		<div class="body player-body">
@@ -620,27 +811,50 @@
 		</div>
 	{:else if task}
 		<header class="detail-top desktop-head">
-			{#if detailAuthor}
-				<div class="author-chip">
-					<ProfilePic name={detailAuthor.name} size={22} />
-					<span class="author-name">{detailAuthor.name}</span>
-				</div>
-			{:else}
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
 				<span class="detail-top-label">Task</span>
-			{/if}
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
 			<div class="detail-top-actions">
-				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={13} />
-				</button>
-				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={15} />
-				</button>
+				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+				{/if}
 			</div>
 		</header>
 		<div class="body">
 			<div class="title-row task-title-row">
 				<TaskFieldPicker taskId={task.id} field="status" value={task.status} size={24} />
-				<h2 class="title">{task.title}</h2>
+				<input
+					class="title-input"
+					bind:value={draftTitle}
+					aria-label="Task title"
+					placeholder="Untitled"
+					oninput={scheduleDraftSave}
+				/>
 				<TaskFieldPicker
 					taskId={task.id}
 					field="priority"
@@ -650,23 +864,50 @@
 				/>
 			</div>
 			<DetailMetaPills entity={task} kind="task" />
-			{#if task.body}
-				<p class="prose">{@html renderInlineLinks(task.body)}</p>
-			{:else}
-				<p class="muted">No description.</p>
-			{/if}
+			<textarea
+				class="body-input"
+				bind:value={draftBody}
+				aria-label="Task description"
+				placeholder="Add a description…"
+				rows="3"
+				oninput={scheduleDraftSave}
+			></textarea>
 		</div>
 		<CommentThread type="task" entityId={task.id} />
 	{:else if project}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Project</span>
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">Project</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
 			<div class="detail-top-actions">
-				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={13} />
-				</button>
-				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={15} />
-				</button>
+				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+				{/if}
 			</div>
 		</header>
 		<div class="body">
@@ -676,13 +917,26 @@
 					icon={projectDisplayIcon(project, enterprises)}
 					size={24}
 				/>
-				<h2 class="title">{project.title}</h2>
+				<input
+					class="title-input"
+					bind:value={draftTitle}
+					aria-label="Project title"
+					placeholder="Untitled"
+					oninput={scheduleDraftSave}
+				/>
 			</div>
-			{#if project.description}
-				<p class="prose">{@html renderInlineLinks(project.description)}</p>
-			{:else}
-				<p class="muted">No description yet.</p>
-			{/if}
+			<textarea
+				class="body-input body-input-hug"
+				bind:this={descEl}
+				bind:value={draftBody}
+				aria-label="Project description"
+				placeholder="Add a description…"
+				rows="1"
+				oninput={(e) => {
+					hugDescription(/** @type {HTMLTextAreaElement} */ (e.currentTarget));
+					scheduleDraftSave();
+				}}
+			></textarea>
 
 			<div class="bento">
 				<section class="bento-panel">
@@ -704,7 +958,7 @@
 						<p class="muted tight">No tasks yet.</p>
 					{:else}
 						<ul class="linked-list">
-							{#each projectTasks as t (t.id)}
+							{#each projectTasks.slice(0, BENTO_PREVIEW) as t (t.id)}
 								<li>
 									<button type="button" class="linked-row" onclick={() => selectEntity('task', t.id)}>
 										<TaskBox state={t.status} size={18} />
@@ -714,6 +968,7 @@
 							{/each}
 						</ul>
 					{/if}
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/tasks')}>View all</button>
 				</section>
 
 				<section class="bento-panel">
@@ -735,7 +990,7 @@
 						<p class="muted tight">No notes yet.</p>
 					{:else}
 						<ul class="linked-list">
-							{#each projectNotes as n (n.id)}
+							{#each projectNotes.slice(0, BENTO_PREVIEW) as n (n.id)}
 								<li>
 									<button type="button" class="linked-row" onclick={() => selectEntity('note', n.id)}>
 										<span class="linked-title">{n.title || 'Untitled'}</span>
@@ -744,6 +999,7 @@
 							{/each}
 						</ul>
 					{/if}
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/notes')}>View all</button>
 				</section>
 
 				<section class="bento-panel">
@@ -760,63 +1016,115 @@
 				</section>
 			</div>
 		</div>
+		<CommentThread type="project" entityId={project.id} />
 	{:else if note}
 		<header class="detail-top desktop-head">
-			{#if detailAuthor}
-				<div class="author-chip">
-					<ProfilePic name={detailAuthor.name} size={22} />
-					<span class="author-name">{detailAuthor.name}</span>
-				</div>
-			{:else}
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
 				<span class="detail-top-label">Note</span>
-			{/if}
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
 			<div class="detail-top-actions">
-				{#if noteSaving}
-					<span class="save-hint">Saving…</span>
+				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
 				{/if}
-				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={13} />
-				</button>
-				<button type="button" class="icon-hit" aria-label="Delete" onclick={deleteCurrent}>
-					<Trash size={15} />
-				</button>
 			</div>
 		</header>
 		<div class="body note-body-wrap">
 			<div class="title-row">
 				<input
 					class="title-input"
-					bind:value={noteTitle}
+					bind:value={draftTitle}
 					aria-label="Note title"
 					placeholder="Untitled"
-					oninput={scheduleNoteSave}
+					oninput={scheduleDraftSave}
 				/>
 			</div>
 			<DetailMetaPills entity={note} kind="note" />
 			{#key note.id}
 				<div class="note-editor-pad">
-					<NoteEditor value={noteBody} editable={true} onChange={onNoteBodyChange} />
+					<NoteEditor value={draftBody} editable={true} onChange={onNoteBodyChange} />
 				</div>
 			{/key}
 		</div>
 		<CommentThread type="note" entityId={note.id} />
-	{:else if welcomeSelected}
+	{:else if pubsHub}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Welcome</span>
-			<div class="detail-top-actions">
-				<button type="button" class="icon-hit" aria-label="Edit" onclick={editCurrent}>
-					<Pen size={13} />
-				</button>
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
-							d="M4 4l8 8M12 4l-8 8"
+							d="M10 3.5 5.5 8 10 12.5"
 							stroke="currentColor"
 							stroke-width="1.5"
 							stroke-linecap="round"
+							stroke-linejoin="round"
 						/>
 					</svg>
 				</button>
+				<span class="detail-top-label">Publications</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
+		</header>
+		<div class="body">
+			<PublicationsHub filterKind={$page.url.searchParams.get('kind')} />
+		</div>
+	{:else if welcomeSelected}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">Welcome</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
+			<div class="detail-top-actions">
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+				{/if}
 			</div>
 		</header>
 		<div class="body">
@@ -826,7 +1134,21 @@
 		</div>
 	{:else if newsletter}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Newsletter</span>
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">Newsletter</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
 			<div class="detail-top-actions">
 				{#if newsletter.status === 'draft' || newsletter.status === 'failed'}
 					<button
@@ -837,26 +1159,93 @@
 					>
 						{sendBusy ? 'Sending…' : 'Send'}
 					</button>
+				{:else if newsletter.post_slug}
+					<button
+						type="button"
+						class="send-chip"
+						onclick={() => openComposer('newsletter', newsletter.id)}
+					>
+						Edit site
+					</button>
 				{/if}
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M4 4l8 8M12 4l-8 8"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-						/>
-					</svg>
-				</button>
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+				{/if}
 			</div>
 		</header>
 		<div class="body">
 			<p class="pub-kicker">
 				{newsletter.status}{#if newsletter.sent_count}
-					· {newsletter.sent_count} sent{/if}
+					· {newsletter.sent_count} sent{/if}{#if newsletter.post_slug}
+					· on site{/if}
 			</p>
 			<h2 class="pub-title">{newsletter.subject}</h2>
 			<pre class="pub-body">{newsletter.body}</pre>
+		</div>
+	{:else if pubPost}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{typeLabel}</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
+			<div class="detail-top-actions">
+				<button
+					type="button"
+					class="send-chip"
+					onclick={() => openComposer('newsletter', `post:${pubPost.slug}`)}
+				>
+					Edit
+				</button>
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+				{/if}
+			</div>
+		</header>
+		<div class="body">
+			<p class="pub-kicker">
+				{pubPost.kind || 'blog'}{#if pubPost.updated_at}
+					· edited{/if}{#if pubPost.slug}
+					· /{pubPost.slug}{/if}
+			</p>
+			<h2 class="pub-title">{pubPost.title}</h2>
+			{#if pubPost.summary}
+				<pre class="pub-body">{pubPost.summary}</pre>
+			{/if}
 		</div>
 	{:else if mailMsg}
 		{@const thread = threadMessages(mailMsg)}
@@ -867,9 +1256,23 @@
 				? last.to?.[0] || mailMsg.from || ''
 				: last.from || mailMsg.from || ''}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label"
-				>{thread.length > 1 ? `Thread · ${thread.length}` : 'Mail'}</span
-			>
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label"
+					>{thread.length > 1 ? `Thread · ${thread.length}` : 'Mail'}</span
+				>
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
 			<div class="detail-top-actions">
 				<button
 					type="button"
@@ -881,16 +1284,6 @@
 					}
 				>
 					Reply
-				</button>
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M4 4l8 8M12 4l-8 8"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-						/>
-					</svg>
 				</button>
 			</div>
 		</header>
@@ -907,22 +1300,46 @@
 				</article>
 			{/each}
 		</div>
+	{:else if chatChannel}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{chatChannel.title || 'General'}</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
+			<div class="detail-top-actions"></div>
+		</header>
+		<div class="body chat-channel-body">
+			<ChatChannelPanel channelId={chatChannel.id} />
+		</div>
 	{:else if accountingPanel}
 		<AccountingDetail />
 	{:else if ledger}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Ledger</span>
-			<div class="detail-top-actions">
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
-							d="M4 4l8 8M12 4l-8 8"
+							d="M10 3.5 5.5 8 10 12.5"
 							stroke="currentColor"
 							stroke-width="1.5"
 							stroke-linecap="round"
+							stroke-linejoin="round"
 						/>
 					</svg>
 				</button>
+				<span class="detail-top-label">Ledger</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 		</header>
 		<div class="body">
@@ -949,13 +1366,20 @@
 		</div>
 	{:else if costItem}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Cost</span>
-			<div class="detail-top-actions">
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
 					</svg>
 				</button>
+				<span class="detail-top-label">Cost</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 		</header>
 		<div class="body">
@@ -968,13 +1392,20 @@
 		</div>
 	{:else if salesLine}
 		<header class="detail-top desktop-head">
-			<span class="detail-top-label">Sales</span>
-			<div class="detail-top-actions">
-				<button type="button" class="icon-hit" aria-label="Close" onclick={close}>
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
 					</svg>
 				</button>
+				<span class="detail-top-label">Sales</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 		</header>
 		<div class="body">
@@ -985,6 +1416,8 @@
 				{#if salesLine.unit_label}/ {salesLine.unit_label}{/if}
 			</p>
 		</div>
+	{:else if viewDoc}
+		<ViewDetail view={viewDoc} />
 	{:else if dataTable}
 		<TableDetail table={dataTable} />
 	{:else if metricDoc}
@@ -992,9 +1425,201 @@
 	{:else if formDoc}
 		<FormDetail form={formDoc} />
 	{:else if enterprise}
-		<EnterpriseSheet {enterprise} />
-		<div class="body enterprise-extra">
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">Enterprise</span>
+				<SyncProgressBar variant="inline" class="detail-sync" />
+			</div>
+			<div class="detail-top-actions">
+				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+				{/if}
+			</div>
+		</header>
+		<div class="body">
+			<div class="title-row">
+				<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={36} />
+				<input
+					class="title-input"
+					bind:value={draftTitle}
+					aria-label="Enterprise title"
+					placeholder="Untitled"
+					oninput={scheduleDraftSave}
+				/>
+			</div>
+			<textarea
+				class="body-input body-input-hug"
+				bind:this={descEl}
+				bind:value={draftBody}
+				aria-label="Enterprise description"
+				placeholder="Add a description…"
+				rows="1"
+				oninput={(e) => {
+					hugDescription(/** @type {HTMLTextAreaElement} */ (e.currentTarget));
+					scheduleDraftSave();
+				}}
+			></textarea>
+
 			<div class="bento">
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Views</span>
+						<span class="bento-count">{enterpriseViews.length}</span>
+						<button
+							type="button"
+							class="proj-add"
+							aria-label="Add view"
+							onclick={() =>
+								openComposer('view', undefined, undefined, { enterprise_id: enterprise.id })
+							}
+						>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					{#if enterpriseViews.length === 0}
+						<p class="muted tight">No views yet.</p>
+					{:else}
+						<ul class="linked-list">
+							{#each enterpriseViews.slice(0, BENTO_PREVIEW) as v (v.id)}
+								<li>
+									<button type="button" class="linked-row" onclick={() => openLinked('view', v.id)}>
+										<span class="linked-title">{v.title}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>View all</button>
+				</section>
+
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Tables</span>
+						<span class="bento-count">{enterpriseTables.length}</span>
+						<button
+							type="button"
+							class="proj-add"
+							aria-label="Add table"
+							onclick={() =>
+								openComposer('table', undefined, undefined, { enterprise_id: enterprise.id })
+							}
+						>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					{#if enterpriseTables.length === 0}
+						<p class="muted tight">No tables yet.</p>
+					{:else}
+						<ul class="linked-list">
+							{#each enterpriseTables.slice(0, BENTO_PREVIEW) as t (t.id)}
+								<li>
+									<button type="button" class="linked-row" onclick={() => openLinked('table', t.id)}>
+										<span class="linked-title">{t.title}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>View all</button>
+				</section>
+
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Metrics</span>
+						<span class="bento-count">{enterpriseMetrics.length}</span>
+						<button
+							type="button"
+							class="proj-add"
+							aria-label="Add metric"
+							onclick={() =>
+								openComposer('metric', undefined, undefined, { enterprise_id: enterprise.id })
+							}
+						>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					{#if enterpriseMetrics.length === 0}
+						<p class="muted tight">No metrics yet.</p>
+					{:else}
+						<ul class="linked-list">
+							{#each enterpriseMetrics.slice(0, BENTO_PREVIEW) as m (m.id)}
+								<li>
+									<button type="button" class="linked-row" onclick={() => openLinked('metric', m.id)}>
+										<span class="linked-title">{m.title || m.key}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>View all</button>
+				</section>
+
+				<section class="bento-panel">
+					<div class="bento-head">
+						<span class="eyebrow-label-xs">Projects</span>
+						<span class="bento-count">{enterpriseProjects.length}</span>
+						<button
+							type="button"
+							class="proj-add"
+							aria-label="Add project"
+							onclick={() =>
+								openComposer('project', undefined, undefined, {
+									primary_enterprise_id: enterprise.id,
+									enterprise_ids: [enterprise.id]
+								})
+							}
+						>
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+					{#if enterpriseProjects.length === 0}
+						<p class="muted tight">No projects yet.</p>
+					{:else}
+						<ul class="linked-list">
+							{#each enterpriseProjects.slice(0, BENTO_PREVIEW) as p (p.id)}
+								<li>
+									<button type="button" class="linked-row" onclick={() => selectEntity('project', p.id)}>
+										<span class="linked-title">{p.title}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/projects')}>View all</button>
+				</section>
+
 				<section class="bento-panel">
 					<div class="bento-head">
 						<span class="eyebrow-label-xs">Tasks</span>
@@ -1014,7 +1639,7 @@
 						<p class="muted tight">No tasks yet.</p>
 					{:else}
 						<ul class="linked-list">
-							{#each enterpriseTasks as t (t.id)}
+							{#each enterpriseTasks.slice(0, BENTO_PREVIEW) as t (t.id)}
 								<li>
 									<button type="button" class="linked-row" onclick={() => selectEntity('task', t.id)}>
 										<TaskBox state={t.status} size={18} />
@@ -1024,6 +1649,7 @@
 							{/each}
 						</ul>
 					{/if}
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/tasks')}>View all</button>
 				</section>
 
 				<section class="bento-panel">
@@ -1045,7 +1671,7 @@
 						<p class="muted tight">No notes yet.</p>
 					{:else}
 						<ul class="linked-list">
-							{#each enterpriseNotes as n (n.id)}
+							{#each enterpriseNotes.slice(0, BENTO_PREVIEW) as n (n.id)}
 								<li>
 									<button type="button" class="linked-row" onclick={() => selectEntity('note', n.id)}>
 										<span class="linked-title">{n.title || 'Untitled'}</span>
@@ -1054,6 +1680,7 @@
 							{/each}
 						</ul>
 					{/if}
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/notes')}>View all</button>
 				</section>
 
 				<section class="bento-panel">
@@ -1071,6 +1698,7 @@
 			</div>
 		</div>
 	{/if}
+	</PullToRefresh>
 {:else}
 	<div class="empty desktop-empty">
 		<p class="empty-title">{emptyCopy.title}</p>
@@ -1178,45 +1806,81 @@
 		display: none;
 	}
 
-	/* Floating detail header — soft short fade (match list-top) */
-	.detail-top {
+	/* Floating detail header — solid control row; fade veil only as content scrolls under.
+	   :global so Table/Metric/View detail children share the same chrome. */
+	:global(.detail .detail-top) {
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
 		z-index: 6;
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
 		gap: 10px;
 		width: 100%;
-		height: 48px;
-		padding: 0 8px 0 16px;
+		/* Control row ~48px; taller box = scroll-driven fade zone */
+		height: 72px;
+		padding: 0 24px;
 		border-bottom: none;
 		box-sizing: border-box;
 		pointer-events: none;
+		background: transparent;
+	}
+
+	/* Solid only to bar mid — avoid full opaque past control-row center */
+	:global(.detail .detail-top)::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 24px;
+		background: var(--bg);
+		pointer-events: none;
+		z-index: -1;
+	}
+
+	/* Three-stop fade: solid top → ~80% at control-row mid (24px) → clear */
+	:global(.detail .detail-top)::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 72px;
 		background: linear-gradient(
 			to bottom,
 			var(--bg) 0%,
-			color-mix(in srgb, var(--bg) 55%, transparent) 50%,
+			color-mix(in srgb, var(--bg) 80%, transparent) 24px,
 			transparent 100%
 		);
+		opacity: var(--chrome-scroll-fade, 0);
+		pointer-events: none;
+		z-index: -1;
 	}
 
-	.detail-top > * {
+	:global(.detail .detail-top-start),
+	:global(.detail .detail-top-actions) {
+		height: 48px;
+		display: flex;
+		align-items: center;
+	}
+
+	:global(.detail .detail-top > *) {
 		pointer-events: auto;
 	}
 
-	.detail-top-start {
+	:global(.detail .detail-top-start) {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 12px;
 	}
 
-	.detail-top-label {
-		flex: 1;
+	:global(.detail .detail-top-label) {
+		flex: 0 1 auto;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
@@ -1226,6 +1890,25 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.mobile-title-stack {
+		display: none;
+	}
+
+	:global(.detail .ptr) {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	:global(.detail .detail-top-actions) {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
 	}
 
 	.author-chip {
@@ -1280,11 +1963,46 @@
 		font-weight: 600;
 	}
 
+	.body-input {
+		display: block;
+		width: 100%;
+		min-height: 4.5rem;
+		margin: 4px 0 8px;
+		padding: 0;
+		border: 0;
+		outline: none;
+		resize: none;
+		background: transparent;
+		font: inherit;
+		font-size: 15px;
+		line-height: 1.55;
+		color: var(--fg-83);
+		box-sizing: border-box;
+	}
+
+	.body-input.body-input-hug {
+		/* Keep one line visible when empty so placeholder stays editable/visible */
+		min-height: 1.55em;
+		height: auto;
+		margin: 2px 0 10px;
+		overflow: hidden;
+		field-sizing: content;
+	}
+
+	.body-input::placeholder {
+		color: var(--fg-33);
+	}
+
 	.note-editor-pad {
 		/* Match task .prose — 4px under meta pills */
-		padding: 4px 16px 16px;
+		padding: 4px 0 16px;
 		flex: 1;
 		min-height: 0;
+	}
+
+	.menu-spacer {
+		width: 44px;
+		flex-shrink: 0;
 	}
 
 	.sr-only {
@@ -1306,7 +2024,8 @@
 		gap: 6px;
 	}
 
-	.icon-hit {
+	/* Glass chrome only on detail top-bar hits — not status/priority pickers in the body */
+	:global(.detail .detail-top .icon-hit) {
 		width: 28px;
 		height: 28px;
 		display: grid;
@@ -1325,11 +2044,11 @@
 		transition: transform 0.15s var(--ease);
 	}
 
-	.icon-hit:hover {
+	:global(.detail .detail-top .icon-hit:hover) {
 		transform: scale(1.06);
 	}
 
-	.icon-hit:active {
+	:global(.detail .detail-top .icon-hit:active) {
 		transform: scale(0.96);
 	}
 
@@ -1341,9 +2060,9 @@
 	}
 
 	.task-title-row {
-		/* Match TaskCreate: status | title | priority */
-		padding-left: 16px;
-		padding-right: 16px;
+		/* Match TaskCreate: status | title | priority — side inset from .body */
+		padding-left: 0;
+		padding-right: 0;
 	}
 
 	.task-title-row .title {
@@ -1367,16 +2086,30 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		padding: 48px 0 24px;
+		/* Clears solid part of the 72px detail-top fade */
+		padding: 56px 24px 32px;
 		display: flex;
 		flex-direction: column;
 		gap: 0;
+	}
+
+	/* Nested entity bodies (View/Table/Metric/Form) — desktop side inset */
+	:global(.detail > .body) {
+		box-sizing: border-box;
 	}
 
 	.body.player-body {
 		/* Match Task/Note column chrome; list scrolls inside PlayerDetail */
 		overflow: hidden;
 		width: 100%;
+	}
+
+	.body.chat-channel-body {
+		overflow: hidden;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
 	}
 
 	.note-body-wrap {
@@ -1388,8 +2121,8 @@
 	.prose,
 	.summary,
 	.muted {
-		padding-left: 16px;
-		padding-right: 16px;
+		padding-left: 0;
+		padding-right: 0;
 	}
 
 	.title-row {
@@ -1409,7 +2142,7 @@
 		padding-bottom: 8px;
 		font-size: 15px;
 		line-height: 1.55;
-		color: var(--white66);
+		color: var(--fg-83);
 		white-space: pre-wrap;
 	}
 
@@ -1443,16 +2176,50 @@
 	.bento {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 12px;
-		padding: 16px 16px 8px;
+		gap: 16px;
+		padding: 8px 0 0;
 		box-sizing: border-box;
 	}
 
 	.bento-panel {
+		position: relative;
 		min-width: 0;
-		padding: 12px 12px 8px;
-		border-radius: 16px;
+		min-height: 168px;
+		padding: 16px;
+		border-radius: 18px;
 		background: var(--fg-4);
+		box-sizing: border-box;
+	}
+
+	/* Overlay FAB — floats on panel; clearance via last-row pad (no glass/stroke/hover). */
+	.view-all-fab {
+		position: absolute;
+		right: 10px;
+		bottom: 10px;
+		z-index: 2;
+		padding: 6px 11px;
+		border: 0;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--bg) 92%, transparent);
+		box-shadow: none;
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		cursor: pointer;
+	}
+
+	.view-all-fab:hover,
+	.view-all-fab:focus-visible {
+		color: var(--fg-66);
+		background: color-mix(in srgb, var(--bg) 92%, transparent);
+	}
+
+	/* Keep last list row / empty line clear of the View all FAB. */
+	.bento-panel .linked-list > li:last-child .linked-row,
+	.bento-panel > .muted.tight {
+		padding-right: 5.75rem;
 		box-sizing: border-box;
 	}
 
@@ -1473,10 +2240,12 @@
 	}
 
 	.bento-count {
-		font-family: var(--font);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 500;
 		color: var(--fg-33);
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 	}
 
 	.proj-add {
@@ -1625,9 +2394,10 @@
 	.empty-title {
 		margin: 0;
 		font-family: var(--font);
-		font-size: 1.25rem;
-		font-weight: 700;
-		color: var(--white);
+		font-size: 1.65rem;
+		font-weight: 650;
+		letter-spacing: -0.02em;
+		color: var(--fg-33);
 	}
 
 	.empty-body {
@@ -1635,7 +2405,7 @@
 		max-width: 16rem;
 		font-size: 14px;
 		line-height: 1.5;
-		color: var(--white33);
+		color: var(--fg-16);
 	}
 
 	.mobile-title-row {
@@ -1692,45 +2462,82 @@
 			flex-shrink: 0;
 			box-sizing: border-box;
 			pointer-events: none;
+			background: transparent;
+		}
+
+		/* Solid to vertical center of the 44px chrome buttons */
+		.mobile-bar::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: calc(28px + env(safe-area-inset-top, 0px));
+			background: var(--shell);
+			pointer-events: none;
+			z-index: -1;
+		}
+
+		.mobile-bar::after {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 100%;
 			background: linear-gradient(
 				to bottom,
 				var(--shell) 0%,
-				color-mix(in srgb, var(--shell) 75%, transparent) 42%,
-				color-mix(in srgb, var(--shell) 28%, transparent) 72%,
+				color-mix(in srgb, var(--shell) 80%, transparent)
+					calc(28px + env(safe-area-inset-top, 0px)),
 				transparent 100%
 			);
+			opacity: var(--chrome-scroll-fade, 0);
+			pointer-events: none;
+			z-index: -1;
 		}
 
 		.mobile-bar > * {
 			pointer-events: auto;
 		}
 
-		.mobile-title {
+		.mobile-title-stack {
+			position: relative;
 			flex: 1;
 			min-width: 0;
+			height: 44px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.mobile-type {
+			min-width: 0;
+			max-width: 100%;
 			text-align: center;
 			font-family: 'Inter', var(--font), system-ui, sans-serif;
-			font-size: 19px;
-			font-weight: 650;
-			letter-spacing: -0.02em;
+			font-size: 17px;
+			font-weight: 600;
+			letter-spacing: -0.01em;
 			line-height: 1.15;
-			color: var(--fg);
+			color: var(--fg-66);
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
 		}
 
-		.mobile-author {
-			flex: 1;
-			min-width: 0;
-			justify-content: center;
-			pointer-events: none;
+		:global(.mobile-sync-bar) {
+			position: absolute;
+			left: 50%;
+			top: calc(100% + 4px);
+			transform: translateX(-50%);
+			align-self: center;
 		}
 
-		.mobile-author .author-name {
-			font-size: 16px;
-			font-weight: 650;
-			color: var(--fg);
+		:global(.detail .detail-top .detail-sync),
+		:global(.detail .detail-top .sync-bar.detail-sync) {
+			display: none;
 		}
 
 		.chrome-btn {
@@ -1775,7 +2582,8 @@
 
 		.bento {
 			grid-template-columns: 1fr;
-			padding: 12px 12px 8px;
+			/* Body already has 14px side inset — don’t double-pad */
+			padding: 8px 0 0;
 			gap: 10px;
 		}
 
@@ -1787,18 +2595,22 @@
 
 		/* Keep equal-width side slots so the title stays optically centered */
 		.mobile-bar > .chrome-btn,
-		.mobile-bar > .menu-wrap {
+		.mobile-bar > .menu-spacer {
 			width: 44px;
 			flex-shrink: 0;
 		}
 
 		.desktop-head,
-		.desktop-empty {
+		.desktop-empty,
+		:global(.detail .desktop-head),
+		:global(.detail .desktop-empty) {
 			display: none;
 		}
 
-		.body {
-			padding: calc(56px + env(safe-area-inset-top, 0px)) 0
+		/* Side inset matches mobile-bar horizontal padding (14px) */
+		.body,
+		:global(.detail > .body) {
+			padding: calc(56px + env(safe-area-inset-top, 0px)) 14px
 				calc(24px + env(safe-area-inset-bottom, 0px));
 		}
 

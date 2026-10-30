@@ -6,6 +6,7 @@
 		enterprises,
 		saveCaptureForm
 	} from '$lib/workspace.svelte.js';
+	import SyncProgressBar from './SyncProgressBar.svelte';
 
 	/** @type {{ form: any }} */
 	let { form } = $props();
@@ -31,14 +32,23 @@
 </script>
 
 <header class="detail-top desktop-head">
-	<span class="detail-top-label">Capture form</span>
-	<div class="actions">
-		<button type="button" class="linkish" onclick={() => goto(`/capture/${form.id}`)}>Open</button>
-		<button type="button" class="icon-hit" aria-label="Close" onclick={clearSelection}>
+	<div class="detail-top-start">
+		<button type="button" class="icon-hit" aria-label="Back" onclick={clearSelection}>
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-				<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+				<path
+					d="M10 3.5 5.5 8 10 12.5"
+					stroke="currentColor"
+					stroke-width="1.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
 			</svg>
 		</button>
+		<span class="detail-top-label">Capture form</span>
+		<SyncProgressBar variant="inline" class="detail-sync" />
+	</div>
+	<div class="detail-top-actions">
+		<button type="button" class="linkish" onclick={() => goto(`/capture/${form.id}`)}>Open</button>
 	</div>
 </header>
 
@@ -85,22 +95,6 @@
 </div>
 
 <style>
-	.detail-top {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		height: 48px;
-		padding: 0 8px 0 16px;
-	}
-	.detail-top-label {
-		font-size: 13px;
-		color: var(--fg-33);
-	}
-	.actions {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-	}
 	.linkish {
 		border: 0;
 		background: var(--fg-8);
@@ -113,19 +107,18 @@
 		font-weight: 600;
 		cursor: pointer;
 	}
-	.icon-hit {
-		width: 28px;
-		height: 28px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-4);
-		color: var(--fg-66);
-		cursor: pointer;
-	}
 	.body {
-		padding: 8px 16px 32px;
+		padding: 48px 20px 32px;
+		overflow: auto;
+		min-height: 0;
+		flex: 1;
+	}
+
+	@media (min-width: 768px) {
+		.body {
+			padding-left: 24px;
+			padding-right: 24px;
+		}
 	}
 	.title-input {
 		width: 100%;

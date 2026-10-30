@@ -1,8 +1,10 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { mobileNav, primaryNav, websiteChildren } from '$lib/sections.js';
-	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { mobileNavForRole, navForRole, websiteChildren } from '$lib/sections.js';
+	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { canManageMembers } from '$lib/members.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		enterprises,
 		forceClearSelection,
@@ -18,7 +20,11 @@
 		ensureDesktopPlayerDetail,
 		forceClosePlayerDetail
 	} from '$lib/player.svelte.js';
-	import { resetAccountingBrowse, setAccountingBrowse } from '$lib/accounting.svelte.js';
+	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
+	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
+	import { refreshAllDrive } from '$lib/drive-refresh.js';
+	import { attachChromeScrollFade } from '$lib/chrome-scroll-fade.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
 	import { PLANNING_ZOOM_LABELS, PLANNING_ZOOMS, planningView, setPlanningZoom } from '$lib/planning-view.svelte.js';
 	import {
@@ -29,11 +35,14 @@
 	} from '$lib/mail-view.svelte.js';
 	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
+	import PullToRefresh from './PullToRefresh.svelte';
+	import SyncProgressBar from './SyncProgressBar.svelte';
 	import EnterpriseCreate from './EnterpriseCreate.svelte';
 	import FormCreate from './FormCreate.svelte';
 	import LedgerCreate from './LedgerCreate.svelte';
 	import MetricCreate from './MetricCreate.svelte';
 	import TableCreate from './TableCreate.svelte';
+	import ViewCreate from './ViewCreate.svelte';
 	import MobilePlayerPill from './MobilePlayerPill.svelte';
 	import NavIcon from './NavIcon.svelte';
 	import MailCreate from './MailCreate.svelte';
@@ -50,11 +59,16 @@
 	import TrackEdit from './TrackEdit.svelte';
 	import UploadModal from './UploadModal.svelte';
 	import WelcomeEdit from './WelcomeEdit.svelte';
+	import PwaInstallBanner from './PwaInstallBanner.svelte';
 
 	let { children } = $props();
 
 	/** @type {HTMLDivElement | undefined} */
 	let pillTrack = $state();
+	/** @type {HTMLElement | undefined} */
+	let listColEl = $state();
+	/** 0 at rest → 1 after ~16px scroll (list-top fade veil) */
+	let listFade = $state(0);
 	let search = $state('');
 	let createMenuOpen = $state(false);
 	let filterOpen = $state(false);
@@ -62,19 +76,25 @@
 	let filter = $state('all');
 
 	const path = $derived($page.url.pathname);
+	const tasksList = $derived(path.startsWith('/tasks'));
 
 	/** @param {string} href */
 	function active(href) {
 		return path === href || path.startsWith(`${href}/`);
 	}
 
+	const showAccounts = $derived(canManageMembers(actor.email));
+	const roleNav = $derived(navForRole(showAccounts));
+	const roleMobileNav = $derived(mobileNavForRole(showAccounts));
+
 	const activeItem = $derived.by(() => {
 		const child = websiteChildren.find((item) => active(item.href));
 		if (child) return child;
-		const top = primaryNav.find((item) => active(item.href));
+		const top = roleNav.find((item) => active(item.href));
 		if (top) return top;
+		if (active('/accounts')) return { href: '/accounts', label: 'Accounts', icon: 'accounts' };
 		if (active('/settings')) return { href: '/settings', label: 'Settings', icon: 'settings' };
-		return primaryNav[0];
+		return roleNav[0];
 	});
 
 	const websiteOpen = $derived(
@@ -93,35 +113,43 @@
 
 	const filteredNav = $derived.by(() => {
 		const q = search.trim().toLowerCase();
-		if (!q) return primaryNav;
-		return primaryNav.filter((item) => item.label.toLowerCase().includes(q));
+		if (!q) return roleNav;
+		return roleNav.filter((item) => item.label.toLowerCase().includes(q));
 	});
 
 	const createKind = $derived(
 		'createKind' in activeItem
-			? /** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'mail' | undefined} */ (
+			? /** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'mail' | 'file' | undefined} */ (
 					activeItem.createKind
 				)
 			: undefined
 	);
 
-	/** Clear detail whenever the section changes — never carry a Task into Mail, etc. */
+	/** Clear detail only when the section path changes — never on search/query or re-renders. */
+	let lastSectionPath = /** @type {string | null} */ (null);
 	$effect(() => {
 		const p = path;
-		forceClearSelection();
-		filter = 'all';
-		filterOpen = false;
+		if (lastSectionPath === p) return;
+		const first = lastSectionPath === null;
+		lastSectionPath = p;
+		/* Skip clear on first paint so deep links / child onMount selection survive. */
+		if (!first) {
+			forceClearSelection();
+			filter = 'all';
+			filterOpen = false;
+			resetAccountingBrowse();
+		}
 		if (p.startsWith('/player')) {
 			ensureDesktopPlayerDetail();
 		} else {
 			forceClosePlayerDetail();
 		}
-		resetAccountingBrowse();
 	});
 
 	/** Full-width list (no detail column) — Planning needs the whole workspace. */
 	const wideList = $derived(path.startsWith('/planning'));
 	const mailList = $derived(path.startsWith('/mail'));
+	const driveList = $derived(path.startsWith('/drive'));
 
 	onMount(() =>
 		bindDetailPopstate({
@@ -158,22 +186,34 @@
 			kind === 'enterprise' ||
 			kind === 'table' ||
 			kind === 'metric' ||
-			kind === 'form'
+			kind === 'form' ||
+			kind === 'view'
 		) {
-			if (kind === 'ledger') setAccountingBrowse('ledger');
-			else if (kind === 'cost') setAccountingBrowse('costs');
-			else if (kind === 'sales') setAccountingBrowse('sales');
-			else if (kind === 'table') setAccountingBrowse('tables');
-			else if (kind === 'metric') setAccountingBrowse('metrics');
-			else if (kind === 'form') setAccountingBrowse('forms');
-			else setAccountingBrowse('enterprises');
 			go('/entreprises');
 		}
 	}
 
 	function onListPlus() {
+		if (createKind === 'file') {
+			requestDriveUpload();
+			return;
+		}
 		if (createKind) openComposer(createKind);
 		else createMenuOpen = true;
+	}
+
+	/** @param {string | undefined} kind */
+	function onNavPlus(kind) {
+		if (kind === 'file') {
+			if (!path.startsWith('/drive')) go('/drive');
+			requestDriveUpload();
+			return;
+		}
+		if (kind) {
+			openComposer(
+				/** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'mail'} */ (kind)
+			);
+		}
 	}
 
 	async function centerActivePill() {
@@ -193,15 +233,29 @@
 		}
 	});
 
+	$effect(() => {
+		path;
+		const root = listColEl;
+		return attachChromeScrollFade(root, (v) => {
+			listFade = v;
+		});
+	});
+
 	const hasMiniPlayer = $derived(Boolean(currentTrack()));
 </script>
 
-<div class="shell" class:has-mini-player={hasMiniPlayer}>
+<div class="shell" class:has-mini-player={hasMiniPlayer} class:tasks-pad={tasksList}>
+	<PwaInstallBanner />
 	<PlayerEngine />
 	<aside class="sidebar">
 		<header class="side-top">
 			<button type="button" class="pfp-btn" aria-label="Settings" onclick={() => go('/settings')}>
-				<ProfilePic name={displayNameFromEmail()} size={32} />
+				<ProfilePic
+					name={displayNameFromEmail()}
+					email={actor.email}
+					pictureUrl={pictureUrlFor(actor.email)}
+					size={32}
+				/>
 			</button>
 			<label class="search">
 				<span class="sr-only">Search</span>
@@ -258,15 +312,16 @@
 			{#each filteredNav as item (item.href)}
 				{@const count = item.countKey ? counts[item.countKey] : null}
 				{@const isWebsite = item.href === '/website'}
+				{@const rowActive = isWebsite ? websiteOpen : active(item.href)}
 				<div
 					class="nav-row"
-					class:active={!isWebsite && active(item.href)}
+					class:active={rowActive}
 					class:creatable={Boolean(item.createKind)}
 				>
 					<button
 						type="button"
 						class="nav-item"
-						class:active={isWebsite ? websiteOpen : active(item.href)}
+						class:active={rowActive}
 						onclick={() => go(item.href)}
 					>
 						<span class="icon-wrap"><NavIcon name={item.icon} size={18} /></span>
@@ -281,13 +336,8 @@
 								<button
 									type="button"
 									class="row-plus"
-									aria-label="New {item.createKind}"
-									onclick={() =>
-										openComposer(
-											/** @type {'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'mail'} */ (
-												item.createKind
-											)
-										)}
+									aria-label={item.createKind === 'file' ? 'Upload file' : `New ${item.createKind}`}
+									onclick={() => onNavPlus(item.createKind)}
 								>
 									<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 										<path
@@ -310,32 +360,46 @@
 
 	<div class="workspace-wrap">
 		<div class="workspace">
-			<section class="list-col" class:wide={wideList} aria-label={activeItem.label}>
-				<header class="list-top" class:planning-top={wideList} class:mail-top={mailList}>
+			<section
+				class="list-col"
+				class:wide={wideList}
+				aria-label={activeItem.label}
+				bind:this={listColEl}
+			>
+				<header
+					class="list-top"
+					class:planning-top={wideList}
+					class:mail-top={mailList}
+					style="--chrome-scroll-fade: {listFade}"
+				>
 					{#if mailList}
-						<div class="zoom-seg mail-folder-seg" role="group" aria-label="Mailbox">
-							{#each MAIL_FOLDERS as f (f)}
-								<button
-									type="button"
-									class:on={mailView.folder === f}
-									onclick={() => setMailFolder(f)}
-								>{MAIL_FOLDER_LABELS[f]}</button
-								>
-							{/each}
+						<div class="mail-title-stack">
+							<div class="mail-top-row">
+								<div class="zoom-seg mail-folder-seg" role="group" aria-label="Mailbox">
+									{#each MAIL_FOLDERS as f (f)}
+										<button
+											type="button"
+											class:on={mailView.folder === f}
+											onclick={() => setMailFolder(f)}
+										>{MAIL_FOLDER_LABELS[f]}</button
+										>
+									{/each}
+								</div>
+								<SyncProgressBar variant="inline" class="mail-sync desktop-mail-sync" />
+							</div>
+							<SyncProgressBar variant="under" class="mobile-sync-bar" />
 						</div>
 					{:else}
-						<h1 class="list-title desktop-only-title" class:planning-title={wideList}
-							>{activeItem.label}</h1
-						>
-						<button
-							type="button"
-							class="mobile-profile"
-							aria-label="Settings"
-							onclick={() => go('/settings')}
-						>
-							<ProfilePic name={activePerson().name} size={36} />
-							<span class="mobile-profile-name">{activePerson().name}</span>
-						</button>
+						<div class="list-title-row desktop-only-title">
+							<h1 class="list-title" class:planning-title={wideList}>{activeItem.label}</h1>
+							<SyncProgressBar variant="inline" />
+						</div>
+						<div class="mobile-page-title">
+							<span class="mobile-title-stack">
+								<h1 class="mobile-page-name">{activeItem.label}</h1>
+								<SyncProgressBar variant="under" class="mobile-sync-bar" />
+							</span>
+						</div>
 					{/if}
 					<div class="list-actions">
 						{#if wideList}
@@ -349,12 +413,12 @@
 									>
 								{/each}
 							</div>
-						{:else if mailList}
+						{:else if mailList || driveList}
 							{#if createKind}
 								<button
 									type="button"
 									class="chrome-btn list-plus"
-									aria-label="New {createKind}"
+									aria-label={createKind === 'file' ? 'Upload file' : `New ${createKind}`}
 									onclick={onListPlus}
 								>
 									<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -442,9 +506,11 @@
 						{/if}
 					</div>
 				</header>
-				<div class="pane">
-					{@render children()}
-				</div>
+				<PullToRefresh onRefresh={() => refreshAllDrive()}>
+					<div class="pane-inner">
+						{@render children()}
+					</div>
+				</PullToRefresh>
 				<div class="list-bottom-fade" aria-hidden="true"></div>
 			</section>
 			{#if !wideList}
@@ -463,6 +529,7 @@
 	<TableCreate />
 	<MetricCreate />
 	<FormCreate />
+	<ViewCreate />
 	<NewsletterCreate />
 	<MailCreate />
 	<WelcomeEdit />
@@ -476,7 +543,7 @@
 	<nav class="bottom-pill" aria-label="Sections">
 		<div class="pill-inner">
 			<div class="pill-track" bind:this={pillTrack}>
-				{#each mobileNav as item (item.href)}
+				{#each roleMobileNav as item (item.href)}
 					<button
 						type="button"
 						class="pill-item"
@@ -498,11 +565,15 @@
 <style>
 	.shell {
 		/* Pad ≈ control row; fade is short/soft so content stays readable until the bar */
-		--feed-pad-top: 48px;
+		/* Clears the solid control row; fade veil is scroll-driven */
+		--feed-pad-top: 44px;
 		--feed-pad-bottom: 36px;
 		--chrome-fade: var(--bg);
+		--chrome-scroll-fade: 0;
 		display: flex;
-		height: 100dvh;
+		/* --app-height tracks visualViewport so the keyboard shrinks the app */
+		height: var(--app-height, 100dvh);
+		max-height: var(--app-height, 100dvh);
 		width: 100%;
 		overflow: hidden;
 		background: var(--shell);
@@ -798,12 +869,14 @@
 		height: 24px;
 		margin: 0;
 		padding: 0;
-		font-family: var(--font);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 12px;
 		font-weight: 500;
 		font-style: normal;
 		line-height: 1;
 		letter-spacing: 0;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 		color: var(--white33);
 		text-align: center;
 		transition: opacity 0.22s var(--ease);
@@ -894,7 +967,7 @@
 	}
 
 
-	/* Floating header — soft short fade (not a solid veil over the list) */
+	/* Floating header — solid control row; fade veil only as content scrolls under */
 	.list-top {
 		position: absolute;
 		top: 0;
@@ -902,20 +975,60 @@
 		right: 0;
 		z-index: 6;
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
 		gap: 10px;
-		height: 48px;
+		/* Control row ~48px; extra height is the scroll-driven fade zone */
+		height: 72px;
 		padding: 0 10px 0 16px;
 		border-bottom: none;
 		box-sizing: border-box;
 		pointer-events: none;
+		background: transparent;
+	}
+
+	/* Solid only to bar mid — buttons keep their own glass; avoids full opaque past midline */
+	.list-top::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 24px;
+		background: var(--chrome-fade);
+		pointer-events: none;
+		z-index: -1;
+	}
+
+	/* Three-stop fade: solid top → ~80% at control-row mid (24px) → clear */
+	.list-top::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 72px;
 		background: linear-gradient(
 			to bottom,
 			var(--chrome-fade) 0%,
-			color-mix(in srgb, var(--chrome-fade) 55%, transparent) 50%,
+			color-mix(in srgb, var(--chrome-fade) 80%, transparent) 24px,
 			transparent 100%
 		);
+		opacity: var(--chrome-scroll-fade, 0);
+		pointer-events: none;
+		z-index: -1;
+	}
+
+	@media (min-width: 768px) {
+		.list-top > .list-title-row,
+		.list-top > .mail-title-stack,
+		.list-top > .mail-top-row,
+		.list-top > .list-actions,
+		.list-top > .zoom-seg {
+			height: 48px;
+			display: flex;
+			align-items: center;
+		}
 	}
 
 	.list-top > * {
@@ -927,6 +1040,13 @@
 		pointer-events: none;
 	}
 
+	.list-title-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+
 	.list-title {
 		margin: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
@@ -936,7 +1056,7 @@
 		color: var(--white33);
 	}
 
-	.mobile-profile {
+	.mobile-page-title {
 		display: none;
 	}
 
@@ -953,6 +1073,16 @@
 		/* Merge visually with Planning’s sticky head row */
 		background: transparent;
 		z-index: 8;
+	}
+
+	.list-top.planning-top::before,
+	.list-top.planning-top::after {
+		display: none;
+	}
+
+	/* Tasks keep prior feed offset; other feeds sit ~4px higher */
+	.shell.tasks-pad {
+		--feed-pad-top: 48px;
 	}
 
 	.zoom-seg {
@@ -996,12 +1126,33 @@
 		gap: 10px;
 	}
 
+	.mail-title-stack {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 6px;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.mail-top-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+
 	.mail-folder-seg {
 		flex: 1;
 		min-width: 0;
 		max-width: 100%;
 		overflow-x: auto;
 		scrollbar-width: none;
+	}
+
+	.mail-title-stack :global(.mobile-sync-bar) {
+		display: none;
+		align-self: center;
 	}
 
 	.mail-folder-seg::-webkit-scrollbar {
@@ -1067,6 +1218,21 @@
 		flex-direction: column;
 	}
 
+	.pane :global(.ptr) {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.pane-inner {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
 	.sr-only {
 		position: absolute;
 		width: 1px;
@@ -1087,12 +1253,16 @@
 		/* Full-bleed shell — darker than desktop workspace; matches desktop sidebar */
 		.shell {
 			--chrome-fade: var(--shell);
-			/* +4px under title chrome vs previous so first row sits a bit lower */
-			--feed-pad-top: calc(60px + env(safe-area-inset-top, 0px));
+			/* +4px vs prior so feed clears the floating bar with a little air */
+			--feed-pad-top: calc(52px + env(safe-area-inset-top, 0px));
 			--feed-pad-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 			flex-direction: column;
 			padding-bottom: 0;
 			background: var(--shell);
+		}
+
+		.shell.tasks-pad {
+			--feed-pad-top: calc(56px + env(safe-area-inset-top, 0px));
 		}
 
 		.shell.has-mini-player {
@@ -1127,16 +1297,27 @@
 			height: calc(88px + env(safe-area-inset-top, 0px));
 			padding: calc(6px + env(safe-area-inset-top, 0px)) 14px 34px 18px;
 			align-items: center;
+			background: transparent;
+		}
+
+		/* Solid to vertical center of the 44px chrome buttons (pad-top 6 + 22) */
+		.list-top::before {
+			height: calc(28px + env(safe-area-inset-top, 0px));
+		}
+
+		.list-top::after {
+			top: 0;
+			height: 100%;
 			background: linear-gradient(
 				to bottom,
 				var(--chrome-fade) 0%,
-				color-mix(in srgb, var(--chrome-fade) 75%, transparent) 42%,
-				color-mix(in srgb, var(--chrome-fade) 28%, transparent) 72%,
+				color-mix(in srgb, var(--chrome-fade) 80%, transparent)
+					calc(28px + env(safe-area-inset-top, 0px)),
 				transparent 100%
 			);
 		}
 
-		/* Soft veil only — keep content readable through glass bottom nav */
+		/* Soft veil — three-stop; mid ≈ bottom-nav center */
 		.list-bottom-fade {
 			display: block;
 			position: absolute;
@@ -1147,8 +1328,8 @@
 			height: calc(88px + env(safe-area-inset-bottom, 0px));
 			background: linear-gradient(
 				to top,
-				color-mix(in srgb, var(--chrome-fade) 55%, transparent) 0%,
-				color-mix(in srgb, var(--chrome-fade) 22%, transparent) 48%,
+				color-mix(in srgb, var(--chrome-fade) 90%, transparent) 0%,
+				color-mix(in srgb, var(--chrome-fade) 80%, transparent) 50%,
 				transparent 100%
 			);
 		}
@@ -1157,23 +1338,28 @@
 			display: none;
 		}
 
-		.mobile-profile {
+		.mobile-page-title {
 			display: flex;
 			align-items: center;
-			gap: 10px;
+			align-self: center;
 			min-width: 0;
 			flex: 1;
-			margin: 0;
-			padding: 0;
-			border: 0;
-			background: transparent;
-			color: inherit;
-			text-align: left;
-			cursor: pointer;
-			-webkit-tap-highlight-color: transparent;
+			height: 44px;
 		}
 
-		.mobile-profile-name {
+		.mobile-title-stack {
+			position: relative;
+			display: flex;
+			flex-direction: column;
+			align-items: stretch;
+			justify-content: center;
+			min-width: 0;
+			flex: 1;
+			height: 44px;
+		}
+
+		.mobile-page-name {
+			margin: 0;
 			min-width: 0;
 			font-family: 'Inter', var(--font), system-ui, sans-serif;
 			font-size: 22px;
@@ -1184,6 +1370,26 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
+		}
+
+		:global(.mobile-sync-bar) {
+			position: absolute;
+			left: 50%;
+			top: calc(100% + 4px);
+			transform: translateX(-50%);
+			align-self: center;
+		}
+
+		.mail-title-stack :global(.mobile-sync-bar) {
+			display: block;
+			position: static;
+			transform: none;
+			left: auto;
+			top: auto;
+		}
+
+		.mail-title-stack :global(.desktop-mail-sync) {
+			display: none;
 		}
 
 		.list-actions {

@@ -281,9 +281,11 @@
 		flex-shrink: 0;
 		min-width: 1.25rem;
 		text-align: center;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 650;
-		font-variant-numeric: tabular-nums;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 		color: var(--fg);
 	}
 

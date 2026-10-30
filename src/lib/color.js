@@ -1,4 +1,19 @@
-/** Same string → color mapping the Chateau labels and avatars use. */
+/** Same string → color mapping the Chateau / Zapstore / Alpha Chat avatars use. */
+
+/**
+ * Prefer email (stable, unique) for profile hue; fall back to display name.
+ * @param {string} [email]
+ * @param {string} [name]
+ */
+export function profileColorSeed(email, name) {
+	const e = String(email || '')
+		.trim()
+		.toLowerCase();
+	if (e.includes('@')) return e;
+	const n = String(name || '').trim();
+	if (n) return n;
+	return 'A';
+}
 
 /** @param {string} value */
 export function stringToColor(value) {
@@ -53,4 +68,16 @@ export function profileTextColor(rgb, isDark) {
 	const factor = isDark ? 1.08 : 0.95;
 	const clamp = (n) => Math.min(255, Math.max(0, Math.round(n * factor)));
 	return `rgb(${clamp(rgb.r)}, ${clamp(rgb.g)}, ${clamp(rgb.b)})`;
+}
+
+/** Bar / accent rgb() from identity seed. */
+export function profileAccentCss(email, name) {
+	const rgb = stringToColor(profileColorSeed(email, name));
+	return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+}
+
+/** Author-name text color (slightly adjusted for theme). */
+export function profileNameCss(email, name, isDark) {
+	const rgb = stringToColor(profileColorSeed(email, name));
+	return profileTextColor(rgb, isDark);
 }

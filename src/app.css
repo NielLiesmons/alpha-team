@@ -1,11 +1,11 @@
-@import url('https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap');
+@import url('https://fonts.bunny.net/css?family=inter:400,500,600,700|ovo:400&display=swap');
 
 /*
  * Alpha Admin — shared token model with Bley (DESIGN_SYSTEM).
  *
  * Canonical: --bg / --fg (+ --fg-66…--fg-4). Same pole-flip as Bley.
- * Operator UIs stay near-grayscale (low S). Public sites (Bley) raise S
- * and may set --font-display to Ovo — Admin never uses a display face.
+ * Operator UIs stay near-grayscale (low S). Ovo is loaded for letter-mail
+ * hero preview only (matches site / MailBranding defaults).
  *
  * Legacy --white* / --black / --ink* alias the fg/bg scales so older
  * component CSS keeps working while we migrate call sites.
@@ -49,6 +49,11 @@
 	/* Semantic aliases */
 	--accent: var(--accent-1);
 	--accent-66: var(--accent-1-66);
+	/*
+	 * Accent rule: never use accent as default UI text color (body, labels, buttons,
+	 * FABs). Accent is for fills, borders, focus rings, and status marks — not copy.
+	 * Links may use --link (accent nudged for contrast); everything else stays grayscale.
+	 */
 	/* Links: accent nudged toward white (dark) / black (light) for readability */
 	--link: color-mix(in srgb, var(--accent) 78%, #ffffff);
 	--link-hover: color-mix(in srgb, var(--accent) 62%, #ffffff);
@@ -74,6 +79,7 @@
 	/* Active pair — Admin defaults dark (operators); light flips below */
 	--bg: var(--fg-raw);
 	--fg: var(--bg-raw);
+	--fg-83: color-mix(in srgb, var(--fg) 83%, transparent);
 	--fg-66: color-mix(in srgb, var(--fg) 66%, transparent);
 	--fg-33: color-mix(in srgb, var(--fg) 33%, transparent);
 	--fg-16: color-mix(in srgb, var(--fg) 16%, transparent);
@@ -124,10 +130,12 @@
 
 	--ink: var(--fg);
 	--ink-raw: var(--fg-raw);
+	--ink83: var(--fg-83);
 	--ink66: var(--fg-66);
 	--ink33: var(--fg-33);
 
 	--white: var(--fg);
+	--white83: var(--fg-83);
 	--white66: var(--fg-66);
 	--white33: var(--fg-33);
 	--white16: var(--fg-16);
@@ -148,6 +156,7 @@
 :root[data-theme='dark'] {
 	--bg: var(--fg-raw);
 	--fg: var(--bg-raw);
+	--fg-83: color-mix(in srgb, var(--fg) 83%, transparent);
 	--fg-66: color-mix(in srgb, var(--fg) 66%, transparent);
 	--fg-33: color-mix(in srgb, var(--fg) 33%, transparent);
 	--fg-16: color-mix(in srgb, var(--fg) 16%, transparent);
@@ -173,9 +182,11 @@
 	--box-plate: var(--bg);
 	--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
 	--ink: var(--fg);
+	--ink83: var(--fg-83);
 	--ink66: var(--fg-66);
 	--ink33: var(--fg-33);
 	--white: var(--fg);
+	--white83: var(--fg-83);
 	--white66: var(--fg-66);
 	--white33: var(--fg-33);
 	--white16: var(--fg-16);
@@ -191,6 +202,7 @@
 :root[data-theme='light'] {
 	--bg: var(--bg-raw);
 	--fg: var(--fg-raw);
+	--fg-83: color-mix(in srgb, var(--fg) 83%, transparent);
 	--fg-66: color-mix(in srgb, var(--fg) 66%, transparent);
 	--fg-33: color-mix(in srgb, var(--fg) 33%, transparent);
 	--fg-16: color-mix(in srgb, var(--fg) 16%, transparent);
@@ -225,9 +237,11 @@
 	--shadow: color-mix(in srgb, var(--fg-raw) 22%, transparent);
 	--shadow-strong: color-mix(in srgb, var(--fg-raw) 32%, transparent);
 	--ink: var(--fg);
+	--ink83: var(--fg-83);
 	--ink66: var(--fg-66);
 	--ink33: var(--fg-33);
 	--white: var(--fg);
+	--white83: var(--fg-83);
 	--white66: var(--fg-66);
 	--white33: var(--fg-33);
 	--white16: var(--fg-16);
@@ -298,22 +312,37 @@ label {
 	-webkit-tap-highlight-color: transparent;
 }
 
-/* Nav / progress counts — same Inter stack as body, no mono/tabular tricks */
-.sidebar-nav .count,
-.nav-item .count,
-.row-end .count,
+/*
+ * Count / badge / numeric chrome — Inter only.
+ * Culprit: Ovo (letter-mail display) + tabular/oldstyle figure features
+ * leaking onto counts made "1" look like a serif display face. Keep Ovo
+ * scoped to MailHeroEditor; force Inter + lining figures everywhere else.
+ */
+.count,
+.new-count,
+.bento-count,
 .task-group-count,
 .group-count,
 .proj-section-count,
-.upload-chip .chip-label {
-	font-family: var(--font) !important;
+.trigger-count,
+.fab-badge,
+.device-badge,
+.upload-chip .chip-label,
+.chat-pill,
+.reaction-pill .count {
+	font-family: 'Inter', var(--font), system-ui, sans-serif !important;
 	font-style: normal !important;
 	font-weight: 500 !important;
 	font-synthesis: none;
 	letter-spacing: 0 !important;
-	font-variant-numeric: normal !important;
-	font-feature-settings: "kern" 1 !important;
+	font-variant-numeric: lining-nums !important;
+	font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0, 'kern' 1 !important;
 	font-optical-sizing: auto;
+}
+
+.chat-pill .count,
+.fab-badge {
+	font-weight: 600 !important;
 }
 
 button,
@@ -469,7 +498,7 @@ h2 {
 	gap: 10px;
 	width: auto;
 	margin: 0 6px;
-	padding: 6px 10px;
+	padding: 6px 10px 6px 13px;
 	border: 0;
 	border-radius: 10px;
 	background: var(--fg-4);
@@ -853,32 +882,27 @@ table.data tr.selected td {
 	padding: 0;
 }
 
-.pane {
-	flex: 1;
-	min-height: 0;
-	overflow: auto;
-	/* Clears floating list-top so content can scroll under it */
-	padding: 48px 20px 40px;
-}
-
-.pane:has(.feed),
-.pane:has(.fill) {
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	overflow: hidden;
-}
-
-/* Scroll lives on .feed — pad so rows clear then pass under chrome */
-.pane:has(.feed) > .feed,
-.pane:has(.fill) > .fill {
+/* List column scrollport — pad so rows clear then pass under floating list-top.
+   Structure: .list-col > .ptr > .pane-inner > .feed|.fill */
+.list-col:has(.feed) .feed,
+.list-col:has(.fill) .fill,
+.pane:has(.feed) .feed,
+.pane:has(.fill) .fill {
 	flex: 1;
 	min-height: 0;
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
-	padding-top: var(--feed-pad-top, 48px);
+	padding-top: var(--feed-pad-top, 44px);
 	padding-bottom: var(--feed-pad-bottom, 36px);
 	box-sizing: border-box;
+}
+
+.list-col .pane-inner {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 /* Selected feed rows — quiet fill (nav column keeps glass separately) */
@@ -889,14 +913,12 @@ table.data tr.selected td {
 }
 
 @media (max-width: 767px) {
-	.pane {
-		padding: var(--feed-pad-top, calc(60px + env(safe-area-inset-top, 0px))) 16px
-			var(--feed-pad-bottom, calc(100px + env(safe-area-inset-bottom, 0px)));
-	}
-
-	.pane:has(.feed),
-	.pane:has(.fill) {
-		padding: 0;
+	.list-col:has(.feed) .feed,
+	.list-col:has(.fill) .fill,
+	.pane:has(.feed) .feed,
+	.pane:has(.fill) .fill {
+		padding-top: var(--feed-pad-top, calc(60px + env(safe-area-inset-top, 0px)));
+		padding-bottom: var(--feed-pad-bottom, calc(100px + env(safe-area-inset-bottom, 0px)));
 	}
 }
 

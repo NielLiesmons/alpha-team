@@ -1,5 +1,10 @@
 <script>
 	import { goto } from '$app/navigation';
+	import FloatPanel from './FloatPanel.svelte';
+	import EnterpriseBox from './EnterpriseBox.svelte';
+	import Pen from './icons/Pen.svelte';
+	import { parentEnterpriseId } from '$lib/entity-routes.js';
+	import { unitSuffix } from '$lib/format-value.js';
 	import {
 		appendTableRow,
 		captureForms,
@@ -8,8 +13,11 @@
 		saveCaptureForm,
 		saveDataTable,
 		saveTableRow,
-		tableRows
+		selectEntity,
+		tableRows,
+		ui
 	} from '$lib/workspace.svelte.js';
+	import SyncProgressBar from './SyncProgressBar.svelte';
 
 	/** @type {{ table: any }} */
 	let { table } = $props();
@@ -17,9 +25,27 @@
 	let saving = $state(false);
 	/** @type {string | null} */
 	let err = $state(null);
+	/** @type {null | 'key' | 'enterprise'} */
+	let menu = $state(null);
+	/** @type {number | null} */
+	let editIdx = $state(null);
+	let draftLabel = $state('');
+	let draftKey = $state('');
+	let draftType = $state('text');
+	let draftUnit = $state('');
+	let keyDraft = $state('');
+
+	/** @type {HTMLButtonElement | undefined} */
+	let keyBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
+	let entBtn = $state();
 
 	const rows = $derived(tableRows.filter((r) => r.table_id === table.id));
 	const formsForTable = $derived(captureForms.filter((f) => f.table_id === table.id));
+	const parentId = $derived(table.enterprise_id || parentEnterpriseId(ui.selection));
+	const enterprise = $derived(
+		enterprises.find((e) => String(e.id) === String(table.enterprise_id)) ?? null
+	);
 
 	/** @param {Partial<any>} patch */
 	async function persist(patch) {
@@ -36,41 +62,68 @@
 		}
 	}
 
-	function addColumn() {
-		const id = crypto.randomUUID().slice(0, 8);
-		const cols = [
-			...(table.columns || []),
-			{ id, key: `col_${(table.columns || []).length + 1}`, label: 'New column', type: 'number' }
-		];
-		void persist({ columns: cols });
+	function openFieldEdit(/** @type {number} */ i) {
+		const c = (table.columns || [])[i];
+		if (!c) return;
+		editIdx = i;
+		draftLabel = c.label || '';
+		draftKey = c.key || '';
+		draftType = c.type || 'text';
+		draftUnit = c.unit || '';
 	}
 
-	/** @param {number} i @param {string} field @param {string} value */
-	function setCol(i, field, value) {
+	function closeFieldEdit() {
+		editIdx = null;
+	}
+
+	async function saveFieldEdit() {
+		if (editIdx == null) return;
+		const i = editIdx;
 		const cols = (table.columns || []).map((c, idx) => {
 			if (idx !== i) return c;
-			const next = { ...c, [field]: value };
-			if (field === 'label' && (!c.key || c.key.startsWith('col_'))) {
-				next.key = String(value)
-					.toLowerCase()
-					.replace(/[^a-z0-9]+/g, '_')
-					.replace(/^_|_$/g, '') || c.key;
-			}
-			return next;
+			return {
+				...c,
+				label: draftLabel.trim() || c.label,
+				key:
+					draftKey.trim() ||
+					String(draftLabel)
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, '_')
+						.replace(/^_|_$/g, '') ||
+					c.key,
+				type: draftType,
+				unit: draftUnit.trim()
+			};
 		});
-		void persist({ columns: cols });
+		await persist({ columns: cols });
+		closeFieldEdit();
 	}
 
-	/** @param {number} i */
-	function removeCol(i) {
-		void persist({ columns: (table.columns || []).filter((_, idx) => idx !== i) });
+	async function removeField() {
+		if (editIdx == null) return;
+		const i = editIdx;
+		closeFieldEdit();
+		await persist({ columns: (table.columns || []).filter((_, idx) => idx !== i) });
 	}
 
-	async function addRow() {
+	async function addField() {
+		const id = crypto.randomUUID().slice(0, 8);
+		const n = (table.columns || []).length + 1;
+		await persist({
+			columns: [
+				...(table.columns || []),
+				{ id, key: `field_${n}`, label: `Field ${n}`, type: 'number', unit: '' }
+			]
+		});
+		openFieldEdit((table.columns || []).length - 1);
+	}
+
+	async function addEntry() {
 		/** @type {Record<string, unknown>} */
 		const cells = {};
 		for (const c of table.columns || []) {
 			cells[c.id] = c.type === 'number' ? 0 : c.type === 'bool' ? false : '';
+			if (c.key) cells[c.key] = cells[c.id];
 		}
 		await appendTableRow({
 			table_id: table.id,
@@ -93,7 +146,10 @@
 		} else if (type === 'bool') {
 			v = raw === 'true' || raw === '1';
 		}
+		const col = (table.columns || []).find((c) => c.id === colId || c.key === colId);
 		const cells = { ...row.cells, [colId]: v };
+		if (col?.id) cells[col.id] = v;
+		if (col?.key) cells[col.key] = v;
 		void saveTableRow({ ...row, cells });
 	}
 
@@ -118,19 +174,53 @@
 		);
 		void goto(`/capture/${created.id}`);
 	}
+
+	function backToEnterprise() {
+		if (parentId) selectEntity('enterprise', parentId);
+		else clearSelection();
+	}
+
+	function openKeyMenu() {
+		keyDraft = table.key ?? '';
+		menu = menu === 'key' ? null : 'key';
+	}
+
+	async function commitKey() {
+		const next = keyDraft.trim();
+		menu = null;
+		if (next && next !== table.key) await persist({ key: next });
+	}
+
+	async function setEnterprise(/** @type {string | null} */ id) {
+		menu = null;
+		await persist({ enterprise_id: id });
+	}
 </script>
 
 <header class="detail-top desktop-head">
-	<span class="detail-top-label">Table</span>
+	<div class="detail-top-start">
+		{#if parentId}
+			<button type="button" class="icon-hit" aria-label="Back to enterprise" onclick={backToEnterprise}>
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+					<path
+						d="M10 3.5 5.5 8 10 12.5"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</button>
+		{/if}
+		<span class="detail-top-label">Table</span>
+		<SyncProgressBar variant="inline" class="detail-sync" />
+	</div>
 	<div class="detail-top-actions">
 		{#if saving}<span class="save-hint">Saving…</span>{/if}
 		{#if err}<span class="save-hint err">{err}</span>{/if}
 		<button type="button" class="linkish" onclick={() => void ensureCaptureForm()}>Capture</button>
-		<button type="button" class="icon-hit" aria-label="Close" onclick={clearSelection}>
-			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-				<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-			</svg>
-		</button>
+		<button type="button" class="linkish" onclick={() => void addField()}>+ Field</button>
+		<button type="button" class="linkish" onclick={() => void addEntry()}>+ Entry</button>
 	</div>
 </header>
 
@@ -138,237 +228,248 @@
 	<input
 		class="title-input"
 		value={table.title ?? ''}
-		placeholder="Table title"
+		placeholder="Untitled"
 		oninput={(e) => void persist({ title: e.currentTarget.value })}
 	/>
-	<div class="meta">
-		<label>
-			<span>Key</span>
-			<input
-				value={table.key ?? ''}
-				placeholder="egg_actuals"
-				oninput={(e) => void persist({ key: e.currentTarget.value })}
-			/>
-		</label>
-		<label>
-			<span>Enterprise</span>
-			<select
-				value={table.enterprise_id ?? ''}
-				onchange={(e) =>
-					void persist({ enterprise_id: e.currentTarget.value || null })
-				}
+
+	<div class="meta-row" role="list">
+		<div class="meta-item" role="listitem">
+			<button
+				bind:this={keyBtn}
+				type="button"
+				class="meta-pill"
+				class:empty={!table.key}
+				aria-label="Key"
+				aria-expanded={menu === 'key'}
+				onclick={openKeyMenu}
 			>
-				<option value="">—</option>
-				{#each enterprises as ent (ent.id)}
-					<option value={ent.id}>{ent.title}</option>
-				{/each}
-			</select>
-		</label>
+				<span class="pill-k">Key</span>
+				<span class="pill-v">{table.key || '—'}</span>
+			</button>
+		</div>
+		<div class="meta-item" role="listitem">
+			<button
+				bind:this={entBtn}
+				type="button"
+				class="meta-pill"
+				class:empty={!enterprise}
+				aria-label="Enterprise"
+				aria-expanded={menu === 'enterprise'}
+				onclick={() => (menu = menu === 'enterprise' ? null : 'enterprise')}
+			>
+				{#if enterprise}
+					<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={18} />
+					<span class="pill-v">{enterprise.title}</span>
+				{:else}
+					<span class="pill-v muted">Enterprise</span>
+				{/if}
+			</button>
+		</div>
 	</div>
 
-	<section class="block">
-		<div class="block-head">
-			<h3>Columns</h3>
-			<button type="button" class="add" onclick={addColumn}>+ Column</button>
-		</div>
-		{#each table.columns || [] as col, i (col.id)}
-			<div class="col-row">
-				<input value={col.label} oninput={(e) => setCol(i, 'label', e.currentTarget.value)} />
-				<input value={col.key} oninput={(e) => setCol(i, 'key', e.currentTarget.value)} />
-				<select value={col.type} onchange={(e) => setCol(i, 'type', e.currentTarget.value)}>
-					<option value="number">number</option>
-					<option value="text">text</option>
-					<option value="date">date</option>
-					<option value="bool">bool</option>
-					<option value="select">select</option>
-				</select>
-				<button type="button" class="rm" aria-label="Remove" onclick={() => removeCol(i)}>×</button>
-			</div>
-		{/each}
-	</section>
-
-	<section class="block">
-		<div class="block-head">
-			<h3>Rows ({rows.length})</h3>
-			<button type="button" class="add" onclick={() => void addRow()}>+ Row</button>
-		</div>
-		{#if !(table.columns || []).length}
-			<p class="hint">Add columns first.</p>
-		{:else if rows.length === 0}
-			<p class="hint">No rows — add here or use Capture on phone.</p>
-		{:else}
-			<div class="grid-wrap">
-				<table class="grid">
-					<thead>
+	{#if !(table.columns || []).length}
+		<p class="hint">Add a field to start logging.</p>
+	{:else}
+		<div class="grid-wrap">
+			<table class="grid">
+				<thead>
+					<tr>
+						<th class="when">When</th>
+						{#each table.columns as c, ci (c.id || c.key || ci)}
+							<th>
+								<button type="button" class="th-btn" onclick={() => openFieldEdit(ci)}>
+									<span class="th-label">{c.label}{unitSuffix(c.unit)}</span>
+									<span class="th-pen" aria-hidden="true"><Pen size={12} /></span>
+								</button>
+							</th>
+						{/each}
+					</tr>
+				</thead>
+				<tbody>
+					{#if rows.length === 0}
 						<tr>
-							<th>When</th>
-							{#each table.columns as c (c.id)}
-								<th>{c.label}</th>
-							{/each}
+							<td class="empty-cell" colspan={(table.columns || []).length + 1}
+								>Nothing logged yet</td
+							>
 						</tr>
-					</thead>
-					<tbody>
+					{:else}
 						{#each rows as row (row.id)}
 							<tr>
 								<td class="muted">{row.occurred_on || row.created_at?.slice(0, 10) || ''}</td>
-								{#each table.columns as c (c.id)}
+								{#each table.columns as c, ci (c.id || c.key || ci)}
 									<td>
 										<input
 											class="cell"
-											value={row.cells?.[c.id] ?? ''}
-											onchange={(e) => setCell(row, c.id, e.currentTarget.value, c.type)}
+											value={row.cells?.[c.id] ?? row.cells?.[c.key] ?? ''}
+											onchange={(e) =>
+												setCell(row, c.id || c.key, e.currentTarget.value, c.type)}
 										/>
 									</td>
 								{/each}
 							</tr>
 						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</section>
+					{/if}
+				</tbody>
+			</table>
+		</div>
+	{/if}
 </div>
 
+<FloatPanel
+	open={menu === 'key'}
+	anchor={keyBtn}
+	placement="below"
+	width={260}
+	maxHeight={160}
+	onclose={() => (menu = null)}
+>
+	<div class="key-edit">
+		<label>
+			<span>Key</span>
+			<input
+				bind:value={keyDraft}
+				placeholder="egg_actuals"
+				onkeydown={(e) => e.key === 'Enter' && void commitKey()}
+			/>
+		</label>
+		<button type="button" class="done" onclick={() => void commitKey()}>Done</button>
+	</div>
+</FloatPanel>
+
+<FloatPanel
+	open={menu === 'enterprise'}
+	anchor={entBtn}
+	placement="below"
+	width={260}
+	maxHeight={280}
+	onclose={() => (menu = null)}
+>
+	<div class="float-list" role="listbox">
+		<button type="button" class="option" onclick={() => void setEnterprise(null)}>
+			<span class="option-text muted">None</span>
+		</button>
+		{#each enterprises as ent (ent.id)}
+			<button
+				type="button"
+				class="option"
+				class:active={String(table.enterprise_id) === String(ent.id)}
+				onclick={() => void setEnterprise(ent.id)}
+			>
+				<EnterpriseBox state={ent.status ?? 'active'} icon={ent.icon} size={18} />
+				<span class="option-text">{ent.title}</span>
+			</button>
+		{/each}
+	</div>
+</FloatPanel>
+
+{#if editIdx !== null}
+	<div class="modal-scrim" role="presentation" onclick={closeFieldEdit}></div>
+	<div class="field-modal" role="dialog" aria-label="Edit field">
+		<h3>Edit field</h3>
+		<label>
+			<span>Label</span>
+			<input bind:value={draftLabel} />
+		</label>
+		<label>
+			<span>Key</span>
+			<input bind:value={draftKey} />
+		</label>
+		<label>
+			<span>Type</span>
+			<select bind:value={draftType}>
+				<option value="number">number</option>
+				<option value="text">text</option>
+				<option value="date">date</option>
+				<option value="bool">bool</option>
+				<option value="select">select</option>
+			</select>
+		</label>
+		<label>
+			<span>Unit</span>
+			<input bind:value={draftUnit} placeholder="EUR, %, g…" />
+		</label>
+		<div class="modal-actions">
+			<button type="button" class="danger" onclick={() => void removeField()}>Remove</button>
+			<button type="button" class="ghost" onclick={closeFieldEdit}>Cancel</button>
+			<button type="button" class="primary" onclick={() => void saveFieldEdit()}>Save</button>
+		</div>
+	</div>
+{/if}
+
 <style>
-	.detail-top {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
-		height: 48px;
-		padding: 0 8px 0 16px;
-	}
-	.detail-top-label {
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--fg-33);
-	}
-	.detail-top-actions {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-	.save-hint {
-		font-size: 11px;
-		color: var(--fg-33);
-	}
-	.save-hint.err {
-		color: #b44;
-	}
-	.linkish {
-		border: 0;
-		background: var(--fg-8);
-		color: var(--fg);
-		height: 28px;
-		padding: 0 10px;
-		border-radius: 8px;
-		font: inherit;
-		font-size: 12px;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.icon-hit {
-		width: 28px;
-		height: 28px;
-		display: grid;
-		place-items: center;
-		border: 0;
-		border-radius: 10px;
-		background: var(--fg-4);
-		color: var(--fg-66);
-		cursor: pointer;
-	}
 	.body {
-		padding: 8px 16px 32px;
+		padding: 48px 20px 48px;
 		overflow: auto;
+		min-height: 0;
+		flex: 1;
+	}
+
+	@media (min-width: 768px) {
+		.body {
+			padding-left: 24px;
+			padding-right: 24px;
+		}
 	}
 	.title-input {
 		width: 100%;
 		border: 0;
 		background: transparent;
 		font: inherit;
-		font-size: 1.4rem;
-		font-weight: 700;
-		color: var(--fg);
-		margin: 0 0 12px;
-		outline: none;
-	}
-	.meta {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 10px;
-		margin-bottom: 18px;
-	}
-	.meta label {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		font-size: 11px;
-		font-weight: 600;
-		color: var(--fg-33);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-	.meta input,
-	.meta select {
-		height: 34px;
-		border: 1px solid var(--fg-8);
-		border-radius: 10px;
-		background: var(--fg-4);
-		color: var(--fg);
-		font: inherit;
-		font-size: 13px;
-		padding: 0 10px;
-		text-transform: none;
-		letter-spacing: 0;
-		font-weight: 400;
-	}
-	.block {
-		margin-bottom: 20px;
-	}
-	.block-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 8px;
-	}
-	.block-head h3 {
-		margin: 0;
-		font-size: 13px;
+		font-size: 22px;
 		font-weight: 650;
+		color: var(--fg);
+		padding: 0;
+		margin: 0 0 10px;
 	}
-	.add {
+	.meta-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		margin: 0 0 16px;
+	}
+	.meta-item {
+		display: flex;
+	}
+	.meta-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		height: 32px;
+		padding: 0 10px;
 		border: 0;
-		background: transparent;
+		border-radius: 999px;
+		background: var(--fg-4);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
-		font-weight: 600;
+		font-size: 13px;
+		font-weight: 500;
 		cursor: pointer;
 	}
-	.col-row {
-		display: grid;
-		grid-template-columns: 1.2fr 1fr 0.8fr 28px;
-		gap: 6px;
-		margin-bottom: 6px;
-	}
-	.col-row input,
-	.col-row select {
-		height: 32px;
-		border: 0;
-		border-radius: 8px;
-		background: var(--fg-4);
+	.meta-pill:hover,
+	.meta-pill[aria-expanded='true'] {
+		background: var(--fg-8);
 		color: var(--fg);
-		font: inherit;
-		font-size: 12px;
-		padding: 0 8px;
 	}
-	.rm {
-		border: 0;
-		background: transparent;
+	.meta-pill.empty {
 		color: var(--fg-33);
-		cursor: pointer;
-		font-size: 16px;
+	}
+	.pill-k {
+		font-size: 11px;
+		font-weight: 650;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--fg-33);
+	}
+	.pill-v {
+		max-width: 160px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.pill-v.muted,
+	.muted {
+		color: var(--fg-33);
 	}
 	.hint {
 		margin: 0;
@@ -381,17 +482,58 @@
 	.grid {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 12px;
-	}
-	.grid th,
-	.grid td {
-		padding: 4px 6px;
-		border-bottom: 1px solid var(--fg-8);
-		text-align: left;
+		font-size: 13px;
 	}
 	.grid th {
+		text-align: left;
+		padding: 0;
+		border-bottom: 1px solid var(--fg-8);
+	}
+	.grid th.when {
+		padding: 8px 8px 8px 0;
+		font-size: 11px;
+		font-weight: 650;
 		color: var(--fg-33);
-		font-weight: 600;
+		white-space: nowrap;
+	}
+	.th-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		padding: 8px;
+		border: 0;
+		background: transparent;
+		color: var(--fg-33);
+		font: inherit;
+		font-size: 11px;
+		font-weight: 650;
+		text-align: left;
+		cursor: pointer;
+	}
+	.th-btn:hover {
+		color: var(--fg);
+	}
+	.th-pen {
+		opacity: 0;
+		display: inline-flex;
+		color: var(--fg-66);
+	}
+	.th-btn:hover .th-pen {
+		opacity: 1;
+	}
+	.grid td {
+		padding: 4px 6px;
+		border-bottom: 1px solid var(--fg-4);
+	}
+	.grid td.muted {
+		padding-left: 0;
+		white-space: nowrap;
+	}
+	.empty-cell {
+		padding: 16px 0 !important;
+		color: var(--fg-33);
+		font-size: 13px;
 	}
 	.cell {
 		width: 100%;
@@ -400,11 +542,175 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 12px;
-		padding: 4px 0;
+		padding: 4px;
 	}
-	.muted {
+	.save-hint {
+		font-size: 11px;
 		color: var(--fg-33);
+	}
+	.save-hint.err {
+		color: #b44;
+	}
+	.linkish {
+		border: 0;
+		background: transparent;
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.linkish:hover {
+		color: var(--fg);
+	}
+	.key-edit {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 12px;
+	}
+	.key-edit label {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--fg-33);
+	}
+	.key-edit input {
+		height: 32px;
+		padding: 0 8px;
+		border: 1px solid var(--fg-8);
+		border-radius: 8px;
+		background: var(--bg);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+	}
+	.done {
+		align-self: flex-end;
+		height: 30px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 8px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.float-list {
+		display: flex;
+		flex-direction: column;
+		padding: 6px;
+	}
+	.option {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 8px 10px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		text-align: left;
+		cursor: pointer;
+	}
+	.option:hover,
+	.option.active {
+		background: var(--fg-8);
+	}
+	.option-text {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.modal-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 70;
+		background: color-mix(in srgb, var(--fg) 20%, transparent);
+	}
+	.field-modal {
+		position: fixed;
+		z-index: 71;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: min(360px, calc(100vw - 32px));
+		padding: 18px 18px 14px;
+		border-radius: 14px;
+		background: var(--popover, var(--bg));
+		border: 1px solid var(--fg-8);
+		box-shadow: 0 16px 48px var(--shadow, rgba(0, 0, 0, 0.25));
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.field-modal h3 {
+		margin: 0;
+		font-size: 15px;
+		font-weight: 650;
+		color: var(--fg);
+	}
+	.field-modal label {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--fg-33);
+	}
+	.field-modal input,
+	.field-modal select {
+		height: 34px;
+		padding: 0 10px;
+		border: 1px solid var(--fg-8);
+		border-radius: 8px;
+		background: var(--bg);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+	}
+	.modal-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 4px;
+	}
+	.modal-actions .danger {
+		margin-right: auto;
+		border: 0;
+		background: transparent;
+		color: var(--destructive, #b44);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.modal-actions .ghost,
+	.modal-actions .primary {
+		height: 32px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 8px;
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.modal-actions .ghost {
+		background: transparent;
+		color: var(--fg-66);
+	}
+	.modal-actions .primary {
+		background: var(--fg);
+		color: var(--bg);
 	}
 </style>

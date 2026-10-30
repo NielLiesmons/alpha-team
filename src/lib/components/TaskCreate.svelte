@@ -9,6 +9,10 @@
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import LabelsPicker from './LabelsPicker.svelte';
 	import NavIcon from './NavIcon.svelte';
+	import NoteEditor from './NoteEditor.svelte';
+	import EditorToolbar from './EditorToolbar.svelte';
+	import { goto } from '$app/navigation';
+	import { countTaskMoments } from '$lib/moment-expand.js';
 	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
 		closeComposer,
@@ -43,6 +47,8 @@
 	/** @type {HTMLInputElement | undefined} */
 	let titleInput = $state();
 	let body = $state('');
+	/** @type {import('@tiptap/core').Editor | null} */
+	let tipTap = $state(null);
 	let status = $state('open');
 	let priority = $state('none');
 	let statusOpen = $state(false);
@@ -69,9 +75,18 @@
 	/** @type {HTMLButtonElement | undefined} */
 	let labelsBtn = $state();
 	let saving = $state(false);
-	const hasSchedule = $derived(
-		Boolean(deadlineDate || scheduleStart || scheduleEnd || assignees.length)
+	const momentCount = $derived(
+		editing?.id ? countTaskMoments(moments, editing.id) : 0
 	);
+	const hasSchedule = $derived(
+		Boolean(deadlineDate || scheduleStart || scheduleEnd || assignees.length || momentCount > 0)
+	);
+
+	function openPlanningForTask() {
+		bottomMenu = null;
+		closeComposer();
+		void goto('/planning');
+	}
 
 	/** Keep title/body keyboard open while tapping pills / menus. */
 	/** @param {PointerEvent} e */
@@ -98,6 +113,7 @@
 		];
 		assignees = [...(editing?.assignees ?? [])];
 		deadlineDate = toDateInput(editing?.deadline_at);
+		/* One-off window only — recurring / many moments live on Planning. */
 		const linked = editing
 			? moments.find((m) => m.task_id === editing.id && !m.recurrence)
 			: null;
@@ -257,40 +273,19 @@
 
 	<div class="post-form-divider"></div>
 
-	<textarea class="task-body" placeholder="Describe your task" bind:value={body} aria-label="Describe your task"
-	></textarea>
+	<div class="task-body-wrap">
+		{#if open}
+			<NoteEditor
+				value={body}
+				placeholder="Type / for commands"
+				onChange={(html) => (body = html)}
+				onReady={(ed) => (tipTap = ed)}
+			/>
+		{/if}
+	</div>
 
 	<div class="post-action-row">
-		<div class="action-buttons-left">
-			<button type="button" class="action-btn" aria-label="Add photo">
-				<!-- Bley filled camera -->
-				<svg width="20" height="16" viewBox="0 0 23 18" fill="none" aria-hidden="true">
-					<path
-						fill="currentColor"
-						d="M0 4.5C0 3.2625 1.0125 2.25 2.25 2.25H4.79657C5.32701 2.25 5.83571 2.03929 6.21079 1.66421L7.28921 0.585786C7.66429 0.210713 8.17299 0 8.70343 0H13.7966C14.327 0 14.8357 0.210714 15.2108 0.585786L16.2892 1.66421C16.6643 2.03929 17.173 2.25 17.7034 2.25H20.25C20.8467 2.25 21.419 2.48705 21.841 2.90901C22.2629 3.33097 22.5 3.90326 22.5 4.5V15.75C22.5 16.3467 22.2629 16.919 21.841 17.341C21.419 17.7629 20.8467 18 20.25 18H2.25C1.65326 18 1.08097 17.7629 0.65901 17.341C0.237053 16.919 0 16.3467 0 15.75V4.5ZM11.25 15.75C12.7418 15.75 14.1726 15.1574 15.2275 14.1025C16.2824 13.0476 16.875 11.6168 16.875 10.125C16.875 8.63316 16.2824 7.20242 15.2275 6.14752C14.1726 5.09263 12.7418 4.5 11.25 4.5C9.75816 4.5 8.32742 5.09263 7.27252 6.14752C6.21763 7.20242 5.625 8.63316 5.625 10.125C5.625 11.6168 6.21763 13.0476 7.27252 14.1025C8.32742 15.1574 9.75816 15.75 11.25 15.75ZM11.25 13.5C10.8068 13.5 10.3679 13.4127 9.95844 13.2431C9.54897 13.0735 9.17691 12.8249 8.86351 12.5115C8.55012 12.1981 8.30152 11.826 8.13191 11.4166C7.9623 11.0071 7.875 10.5682 7.875 10.125C7.875 9.68179 7.9623 9.24292 8.13191 8.83344C8.30152 8.42397 8.55012 8.05191 8.86351 7.73851C9.17691 7.42512 9.54897 7.17652 9.95844 7.00691C10.3679 6.8373 10.8068 6.75 11.25 6.75C12.1451 6.75 13.0036 7.10558 13.6365 7.73851C14.2694 8.37145 14.625 9.22989 14.625 10.125C14.625 11.0201 14.2694 11.8786 13.6365 12.5115C13.0036 13.1444 12.1451 13.5 11.25 13.5Z"
-					/>
-				</svg>
-			</button>
-			<button type="button" class="action-btn" aria-label="Add emoji">
-				<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
-					<path
-						fill="currentColor"
-						fill-rule="evenodd"
-						d="M0 10C0 4.47715 4.47715 0 10 0C15.5228 0 20 4.47715 20 10C20 15.5228 15.5228 20 10 20C4.47715 20 0 15.5228 0 10ZM7.00002 6.00006C6.24063 6.00006 5.62502 6.61567 5.62502 7.37506C5.62502 8.13445 6.24063 8.75006 7.00002 8.75006C7.75941 8.75006 8.37502 8.13445 8.37502 7.37506C8.37502 6.61567 7.75941 6.00006 7.00002 6.00006ZM13 6.00006C12.2406 6.00006 11.625 6.61567 11.625 7.37506C11.625 8.13445 12.2406 8.75006 13 8.75006C13.7594 8.75006 14.375 8.13445 14.375 7.37506C14.375 6.61567 13.7594 6.00006 13 6.00006ZM6.51915 11.5005C6.18536 11.0976 5.58814 11.0415 5.18523 11.3753C4.78231 11.7091 4.72627 12.3063 5.06006 12.7093C6.3885 14.3128 8.1725 15.1575 10.0001 15.1575C11.8278 15.1575 13.6118 14.3128 14.9402 12.7093C15.274 12.3063 15.2179 11.7091 14.815 11.3753C14.4121 11.0415 13.8149 11.0976 13.4811 11.5005C12.4841 12.7039 11.2203 13.2628 10.0001 13.2628C8.77993 13.2628 7.51612 12.7039 6.51915 11.5005Z"
-					/>
-				</svg>
-			</button>
-			<button type="button" class="action-btn" aria-label="Add attachment">
-				<svg width="16" height="16" viewBox="-0.5 -0.5 15 15" fill="none" aria-hidden="true">
-					<path
-						d="M6.70018 0.699219L6.70018 12.6992M12.7002 6.69912L0.700195 6.69912"
-						stroke="currentColor"
-						stroke-width="2.8"
-						stroke-linecap="round"
-					/>
-				</svg>
-			</button>
-		</div>
+		<EditorToolbar editor={tipTap} />
 	</div>
 
 	<div class="post-form-divider"></div>
@@ -441,14 +436,33 @@
 			<span class="date-label">Deadline</span>
 			<input class="date-input" type="date" bind:value={deadlineDate} />
 		</label>
-		<label class="date-field">
-			<span class="date-label">Moment start</span>
-			<input class="date-input" type="date" bind:value={scheduleStart} />
-		</label>
-		<label class="date-field">
-			<span class="date-label">Moment end</span>
-			<input class="date-input" type="date" bind:value={scheduleEnd} />
-		</label>
+
+		<div class="moments-block">
+			<span class="date-label">Moments</span>
+			<p class="moments-copy">
+				{#if momentCount > 0}
+					{momentCount.toLocaleString()} linked moment{momentCount === 1 ? '' : 's'} (incl. recurring
+					series).
+				{:else}
+					Schedule one-off or daily series on the Planning board — not here.
+				{/if}
+			</p>
+			<button type="button" class="planning-link" onclick={openPlanningForTask}>
+				Open Planning
+			</button>
+			<details class="one-off">
+				<summary>Optional one-off window</summary>
+				<label class="date-field">
+					<span class="date-label">Start</span>
+					<input class="date-input" type="date" bind:value={scheduleStart} />
+				</label>
+				<label class="date-field">
+					<span class="date-label">End</span>
+					<input class="date-input" type="date" bind:value={scheduleEnd} />
+				</label>
+			</details>
+		</div>
+
 		<div class="assignee-block">
 			<span class="date-label">Assignees</span>
 			<div class="float-list assignee-list" role="listbox">
@@ -650,6 +664,54 @@
 		flex-shrink: 0;
 	}
 
+	.moments-block {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding-top: 4px;
+	}
+
+	.moments-copy {
+		margin: 0;
+		font-size: 12px;
+		line-height: 1.4;
+		color: var(--fg-66);
+	}
+
+	.planning-link {
+		align-self: flex-start;
+		height: 32px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 8px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.planning-link:hover {
+		background: var(--fg-12);
+	}
+
+	.one-off {
+		margin: 0;
+		font-size: 12px;
+		color: var(--fg-66);
+	}
+
+	.one-off summary {
+		cursor: pointer;
+		font-weight: 500;
+		margin-bottom: 6px;
+	}
+
+	.one-off[open] summary {
+		margin-bottom: 8px;
+	}
+
 	.schedule-panel {
 		display: flex;
 		flex-direction: column;
@@ -725,60 +787,18 @@
 		color: var(--fg-66);
 	}
 
-	.task-body {
-		display: block;
-		width: 100%;
-		min-height: 160px;
-		max-height: 400px;
-		margin: 0;
+	.task-body-wrap {
+		min-height: 140px;
+		max-height: 360px;
+		overflow: auto;
 		padding: 10px 16px;
-		border: 0;
-		outline: none;
-		resize: none;
-		background: transparent;
-		color: var(--fg);
-		font-family: 'Inter', sans-serif;
-		font-size: 16px;
-		font-weight: 400;
-		line-height: 1.5;
 		box-sizing: border-box;
-	}
-
-	.task-body::placeholder {
-		color: var(--fg-33);
 	}
 
 	.post-action-row {
 		display: flex;
 		align-items: center;
 		padding: 0 16px 10px;
-	}
-
-	.action-buttons-left {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.action-btn {
-		width: 36px;
-		height: 36px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--fg-8);
-		border: none;
-		border-radius: 10px;
-		padding: 0;
-		cursor: pointer;
-		color: var(--fg-33);
-		box-sizing: border-box;
-	}
-
-	.action-btn:hover {
-		color: var(--fg-66);
-		background: var(--fg-11);
 	}
 
 	.task-bottom-row {
@@ -919,8 +939,11 @@
 	}
 
 	.trigger-count {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 14px;
 		font-weight: 600;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 		line-height: 1;
 		color: var(--fg-16);
 	}

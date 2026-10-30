@@ -64,7 +64,7 @@
 	.card-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 0;
 		padding: 6px;
 		box-sizing: border-box;
 	}
@@ -75,7 +75,7 @@
 		align-items: stretch;
 		gap: calc(0.2rem + 2px);
 		width: 100%;
-		padding: calc(0.85rem - 4px) 0.9rem;
+		padding: calc(0.85rem - 4px) calc(0.9rem - 2px);
 		border: 0;
 		border-radius: 12px;
 		background: transparent;

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
+	import { expandMomentsInRange } from '$lib/moment-expand.js';
 	import {
 		DAY_MS,
 		PLANNING_ZOOMS,
@@ -91,7 +92,8 @@
 
 	/** @param {string} taskId */
 	function momentsForTask(taskId) {
-		return moments.filter((m) => m.task_id === taskId && m.status !== 'canceled');
+		const raw = moments.filter((m) => m.task_id === taskId && m.status !== 'canceled');
+		return expandMomentsInRange(raw, range.start, range.end);
 	}
 
 	/** @param {string} projectId */
@@ -685,25 +687,35 @@
 									{#if box}
 										<div
 											class="task-bar tone-{barTone(row.entity.status)}"
+											class:series={Boolean(m._virtual)}
 											style:left="{box.left}px"
 											style:width="{box.width}px"
 											role="button"
 											tabindex="0"
-											title={m.title || row.title}
-											onpointerdown={(e) => onBarPointerDown(e, m, 'move')}
+											title={m._virtual
+												? `${m.title || row.title} (recurring)`
+												: m.title || row.title}
+											onpointerdown={(e) => {
+												if (m._virtual) return;
+												onBarPointerDown(e, m, 'move');
+											}}
 											onclick={() => selectEntity('task', row.id)}
 											onkeydown={(e) => e.key === 'Enter' && selectEntity('task', row.id)}
 										>
-											<span
-												class="bar-handle start"
-												onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
-											></span>
+											{#if !m._virtual}
+												<span
+													class="bar-handle start"
+													onpointerdown={(e) => onBarPointerDown(e, m, 'resize-start')}
+												></span>
+											{/if}
 											<span class="dep-dot start" aria-hidden="true"></span>
 											<span class="dep-dot end" aria-hidden="true"></span>
-											<span
-												class="bar-handle end"
-												onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
-											></span>
+											{#if !m._virtual}
+												<span
+													class="bar-handle end"
+													onpointerdown={(e) => onBarPointerDown(e, m, 'resize-end')}
+												></span>
+											{/if}
 										</div>
 									{/if}
 								{/each}
@@ -1037,6 +1049,11 @@
 
 	.task-bar.tone-done {
 		background: var(--accent-1-66);
+	}
+
+	.task-bar.series {
+		opacity: 0.85;
+		cursor: pointer;
 	}
 
 	.task-bar.draft {

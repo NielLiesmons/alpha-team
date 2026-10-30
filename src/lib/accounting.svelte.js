@@ -18,7 +18,7 @@ export const ACCOUNTING_MODES = /** @type {const} */ ([
 
 export const ACCOUNTING_MODE_LABELS = {
 	enterprises: 'Entreprises',
-	tables: 'Tables',
+	tables: 'Sheets',
 	metrics: 'Metrics',
 	forms: 'Forms',
 	costs: 'Costs',

@@ -6,7 +6,9 @@
 	import { appBoot, bootApp } from '$lib/boot.svelte.js';
 	import { initBrand } from '$lib/brand.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { initPwa } from '$lib/pwa.svelte.js';
 	import { initTheme } from '$lib/theme.svelte.js';
+	import { startViewportBridge } from '$lib/viewport.svelte.js';
 	import AppShell from '$lib/components/AppShell.svelte';
 	import BootSplash from '$lib/components/BootSplash.svelte';
 	import WelcomeGate from '$lib/components/WelcomeGate.svelte';
@@ -17,11 +19,14 @@
 	const webManifestLink = $derived(pwaInfo?.webManifest?.linkTag ?? '');
 
 	onMount(() => {
+		const stopVv = startViewportBridge();
+		const stopPwa = initPwa();
 		initBrand();
 		initTheme();
 		bootApp();
 
 		// Light SW registration — avoid hammering iOS with update checks.
+		// (Must run before cleanup return — previously this was dead code after `return`.)
 		if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 			void import('virtual:pwa-register').then(({ registerSW }) => {
 				registerSW({
@@ -41,6 +46,11 @@
 				});
 			});
 		}
+
+		return () => {
+			stopVv();
+			stopPwa?.();
+		};
 	});
 </script>
 

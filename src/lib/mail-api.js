@@ -72,8 +72,39 @@ export function fetchCampaigns() {
 	return api(`/v1/projects/${PROJECT}/campaigns`);
 }
 
+/** Public site posts / letters / events (no admin token required). */
+export function fetchPosts() {
+	return api(`/v1/projects/${PROJECT}/posts`);
+}
+
+/** Full post detail including body_markdown. */
+export function fetchPost(idOrSlug) {
+	return api(`/v1/projects/${PROJECT}/posts/${encodeURIComponent(idOrSlug)}`);
+}
+
 /**
- * @param {{ subject: string, body: string }} input
+ * Update website post (sets updated_at). Does not re-email subscribers.
+ * @param {string} idOrSlug
+ * @param {{ title?: string, summary?: string, body_html?: string, body_markdown?: string, kind?: string, clear_summary?: boolean }} patch
+ */
+export function updatePost(idOrSlug, patch) {
+	return api(`/v1/projects/${PROJECT}/posts/${encodeURIComponent(idOrSlug)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch)
+	});
+}
+
+/**
+ * @param {string} idOrSlug
+ */
+export function deletePost(idOrSlug) {
+	return api(`/v1/projects/${PROJECT}/posts/${encodeURIComponent(idOrSlug)}`, {
+		method: 'DELETE'
+	});
+}
+
+/**
+ * @param {{ subject: string, body: string, description?: string, image_url?: string }} input
  */
 export function createCampaign(input) {
 	return api(`/v1/projects/${PROJECT}/campaigns`, {
@@ -88,5 +119,16 @@ export function createCampaign(input) {
 export function sendCampaign(id) {
 	return api(`/v1/projects/${PROJECT}/campaigns/${encodeURIComponent(id)}/send`, {
 		method: 'POST'
+	});
+}
+
+/**
+ * @param {string} id
+ * @param {{ deletePost?: boolean }} [opts]
+ */
+export function deleteCampaign(id, opts = {}) {
+	const q = opts.deletePost === false ? '?delete_post=false' : '';
+	return api(`/v1/projects/${PROJECT}/campaigns/${encodeURIComponent(id)}${q}`, {
+		method: 'DELETE'
 	});
 }

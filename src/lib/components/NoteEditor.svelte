@@ -1,33 +1,45 @@
 <script>
+	/**
+	 * Shared rich text editor (notes, tasks, newsletters).
+	 * Empty lines show “Type / for commands”; `/` opens a Linear-style slash menu.
+	 */
 	import { onDestroy, onMount } from 'svelte';
 	import { Editor } from '@tiptap/core';
 	import StarterKit from '@tiptap/starter-kit';
 	import Link from '@tiptap/extension-link';
+	import Image from '@tiptap/extension-image';
 	import Placeholder from '@tiptap/extension-placeholder';
 	import { looksLikeMarkdown, markdownToHtml, noteLooksLikeHtml } from '$lib/note-text.js';
 
+	/** @typedef {{ id: string, label: string, group?: string, run: (ed: Editor) => void }} SlashItem */
+
 	/**
-	 * WYSIWYG note body — type or paste Markdown (##, **, lists, …).
 	 * @type {{
 	 *   value?: string,
 	 *   placeholder?: string,
 	 *   editable?: boolean,
-	 *   onChange?: (html: string) => void
+	 *   onChange?: (html: string) => void,
+	 *   onReady?: (ed: Editor | null) => void
 	 * }}
 	 */
 	let {
 		value = '',
-		placeholder = 'Start writing…',
+		placeholder = 'Type / for commands',
 		editable = true,
-		onChange = undefined
+		onChange = undefined,
+		onReady = undefined
 	} = $props();
 
 	/** @type {HTMLDivElement | undefined} */
 	let host = $state();
+	/** @type {HTMLInputElement | undefined} */
+	let mediaInput = $state();
 	/** @type {Editor | null} */
 	let editor = null;
-	/** Skip echoing our own updates back into setContent */
 	let applyingExternal = false;
+
+	/** @type {{ open: boolean, top: number, left: number, query: string, from: number } | null} */
+	let slash = $state(null);
 
 	/** @param {string} raw */
 	function toDoc(raw) {
@@ -45,7 +57,6 @@
 	}
 
 	/**
-	 * Prefer Markdown when clipboard is plain / trivial HTML wrappers.
 	 * @param {DataTransfer | null} data
 	 */
 	function markdownFromClipboard(data) {
@@ -53,9 +64,146 @@
 		const text = data.getData('text/plain');
 		if (!text || !looksLikeMarkdown(text)) return null;
 		const html = data.getData('text/html') || '';
-		/* Rich paste from Word/Docs — keep browser HTML */
 		if (html && /<(h[1-6]|ul|ol|li|strong|em|b|i)\b/i.test(html)) return null;
 		return markdownToHtml(text);
+	}
+
+	function closeSlash() {
+		slash = null;
+	}
+
+	/** @param {Editor} ed */
+	function syncSlash(ed) {
+		const { from, empty } = ed.state.selection;
+		if (!empty) {
+			closeSlash();
+			return;
+		}
+		const textBefore = ed.state.doc.textBetween(Math.max(0, from - 64), from, '\n', '\0');
+		const m = textBefore.match(/(?:^|\n)\/([^\n]*)$/);
+		if (!m) {
+			closeSlash();
+			return;
+		}
+		const query = m[1] ?? '';
+		const start = from - query.length - 1;
+		const coords = ed.view.coordsAtPos(start);
+		const hostRect = host?.getBoundingClientRect();
+		slash = {
+			open: true,
+			query,
+			from: start,
+			top: coords.bottom - (hostRect?.top ?? 0) + 6,
+			left: Math.max(0, coords.left - (hostRect?.left ?? 0))
+		};
+	}
+
+	/** @type {SlashItem[]} */
+	const slashItems = [
+		{
+			id: 'h1',
+			label: 'Heading 1',
+			group: 'Turn into',
+			run: (ed) => ed.chain().focus().toggleHeading({ level: 1 }).run()
+		},
+		{
+			id: 'h2',
+			label: 'Heading 2',
+			group: 'Turn into',
+			run: (ed) => ed.chain().focus().toggleHeading({ level: 2 }).run()
+		},
+		{
+			id: 'h3',
+			label: 'Heading 3',
+			group: 'Turn into',
+			run: (ed) => ed.chain().focus().toggleHeading({ level: 3 }).run()
+		},
+		{
+			id: 'bullet',
+			label: 'Bullet list',
+			group: 'Lists',
+			run: (ed) => ed.chain().focus().toggleBulletList().run()
+		},
+		{
+			id: 'ordered',
+			label: 'Numbered list',
+			group: 'Lists',
+			run: (ed) => ed.chain().focus().toggleOrderedList().run()
+		},
+		{
+			id: 'quote',
+			label: 'Block quote',
+			group: 'Turn into',
+			run: (ed) => ed.chain().focus().toggleBlockquote().run()
+		},
+		{
+			id: 'code',
+			label: 'Code block',
+			group: 'Insert',
+			run: (ed) => ed.chain().focus().toggleCodeBlock().run()
+		},
+		{
+			id: 'media',
+			label: 'Insert media',
+			group: 'Insert',
+			run: () => mediaInput?.click()
+		},
+		{
+			id: 'attach',
+			label: 'Attach files',
+			group: 'Insert',
+			run: () => mediaInput?.click()
+		},
+		{
+			id: 'emoji',
+			label: 'Emoji',
+			group: 'Insert',
+			run: (ed) => ed.chain().focus().insertContent('🙂').run()
+		},
+		{
+			id: 'diagram',
+			label: 'Diagram',
+			group: 'Insert',
+			run: (ed) =>
+				ed.chain().focus().insertContent('<p><em>Diagram — coming soon</em></p>').run()
+		},
+		{
+			id: 'latex',
+			label: 'LaTeX math',
+			group: 'Insert',
+			run: (ed) => ed.chain().focus().insertContent('<p>$$ … $$</p>').run()
+		}
+	];
+
+	const filteredSlash = $derived.by(() => {
+		const q = (slash?.query || '').trim().toLowerCase();
+		if (!q) return slashItems;
+		return slashItems.filter((i) => i.label.toLowerCase().includes(q) || i.id.includes(q));
+	});
+
+	/** @param {SlashItem} item */
+	function runSlash(item) {
+		if (!editor) return;
+		const from = slash?.from ?? editor.state.selection.from;
+		const to = editor.state.selection.from;
+		editor.chain().focus().deleteRange({ from, to }).run();
+		closeSlash();
+		item.run(editor);
+	}
+
+	/** @param {Event} e */
+	function onMediaFile(e) {
+		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
+		const file = input.files?.[0];
+		if (!file || !editor) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			const src = String(reader.result || '');
+			if (!src) return;
+			editor?.chain().focus().setImage({ src }).run();
+		};
+		reader.readAsDataURL(file);
+		input.value = '';
 	}
 
 	onMount(() => {
@@ -76,7 +224,15 @@
 						target: '_blank'
 					}
 				}),
-				Placeholder.configure({ placeholder })
+				Image.configure({
+					allowBase64: true,
+					HTMLAttributes: { class: 'editor-img' }
+				}),
+				Placeholder.configure({
+					placeholder,
+					showOnlyWhenEditable: true,
+					showOnlyCurrent: true
+				})
 			],
 			content: toDoc(value),
 			editorProps: {
@@ -96,13 +252,35 @@
 					event.preventDefault();
 					editor.chain().focus().insertContent(mdHtml).run();
 					return true;
+				},
+				handleKeyDown(_view, event) {
+					if (!slash?.open) return false;
+					if (event.key === 'Escape') {
+						event.preventDefault();
+						closeSlash();
+						return true;
+					}
+					if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter') {
+						/* Enter handled by menu button focus; Esc closes */
+						if (event.key === 'Enter' && filteredSlash[0]) {
+							event.preventDefault();
+							runSlash(filteredSlash[0]);
+							return true;
+						}
+					}
+					return false;
 				}
 			},
 			onUpdate: ({ editor: ed }) => {
 				if (applyingExternal) return;
 				onChange?.(ed.getHTML());
+				syncSlash(ed);
+			},
+			onSelectionUpdate: ({ editor: ed }) => {
+				syncSlash(ed);
 			}
 		});
+		onReady?.(editor);
 	});
 
 	$effect(() => {
@@ -121,13 +299,37 @@
 	});
 
 	onDestroy(() => {
+		onReady?.(null);
 		editor?.destroy();
 		editor = null;
 	});
 </script>
 
 <div class="note-editor" class:readonly={!editable}>
-	<div class="host" bind:this={host}></div>
+	<div class="host-wrap">
+		<div class="host" bind:this={host}></div>
+		{#if slash?.open && filteredSlash.length}
+			<div
+				class="slash-menu"
+				style:top="{slash.top}px"
+				style:left="{slash.left}px"
+				role="listbox"
+				aria-label="Commands"
+			>
+				{#each filteredSlash as item (item.id)}
+					<button
+						type="button"
+						class="slash-item"
+						role="option"
+						onclick={() => runSlash(item)}
+					>
+						<span class="slash-label">{item.label}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
+	</div>
+	<input bind:this={mediaInput} type="file" accept="image/*" hidden onchange={onMediaFile} />
 </div>
 
 <style>
@@ -140,9 +342,49 @@
 		min-height: 0;
 	}
 
+	.host-wrap {
+		position: relative;
+		width: 100%;
+		min-height: inherit;
+	}
+
 	.host {
 		width: 100%;
 		min-height: inherit;
+	}
+
+	.slash-menu {
+		position: absolute;
+		z-index: 20;
+		min-width: 220px;
+		max-height: 280px;
+		overflow: auto;
+		padding: 6px;
+		border-radius: 12px;
+		border: 1px solid var(--glass-border);
+		background: var(--popover);
+		box-shadow: 0 12px 36px var(--shadow-strong, rgba(0, 0, 0, 0.28));
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+	}
+
+	.slash-item {
+		display: flex;
+		width: 100%;
+		padding: 8px 10px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 550;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.slash-item:hover {
+		background: var(--fg-4);
 	}
 
 	.note-editor :global(.tiptap),
@@ -153,7 +395,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 15px;
 		line-height: 1.55;
-		color: var(--fg-66);
+		color: var(--fg-83);
 		caret-color: var(--fg);
 		overflow-wrap: anywhere;
 		word-break: break-word;
@@ -166,12 +408,13 @@
 		padding: 0;
 	}
 
+	.note-editor :global(.ProseMirror p.is-empty::before),
 	.note-editor :global(.ProseMirror p.is-editor-empty:first-child::before) {
 		content: attr(data-placeholder);
 		float: left;
 		height: 0;
 		pointer-events: none;
-		color: var(--white33);
+		color: var(--fg-33);
 	}
 
 	.note-editor :global(.note-prose p) {
@@ -185,12 +428,12 @@
 	.note-editor :global(.note-prose h1),
 	.note-editor :global(.note-prose h2),
 	.note-editor :global(.note-prose h3) {
-		margin: 0.85em 0 0.35em;
+		margin: 0.85em 0 0.7em;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		line-height: 1.25;
-		color: var(--white);
+		color: var(--fg);
 	}
 
 	.note-editor :global(.note-prose > h1:first-child),
@@ -223,14 +466,14 @@
 		font-size: 0.92em;
 		padding: 0.1em 0.35em;
 		border-radius: 4px;
-		background: var(--white8);
+		background: var(--fg-8);
 	}
 
 	.note-editor :global(.note-prose pre) {
 		margin: 0 0 0.65em;
 		padding: 0.65rem 0.75rem;
 		border-radius: 8px;
-		background: var(--white8);
+		background: var(--fg-8);
 		overflow-x: auto;
 	}
 
@@ -242,8 +485,8 @@
 	.note-editor :global(.note-prose blockquote) {
 		margin: 0 0 0.65em;
 		padding-left: 0.85rem;
-		border-left: 2px solid var(--white16);
-		color: var(--white66);
+		border-left: 2px solid var(--fg-16, var(--fg-8));
+		color: var(--fg-66);
 	}
 
 	.note-editor :global(.note-prose a) {
@@ -256,5 +499,12 @@
 
 	.note-editor :global(.note-prose a:hover) {
 		color: var(--link-hover);
+	}
+
+	.note-editor :global(.note-prose .editor-img) {
+		display: block;
+		max-width: 100%;
+		border-radius: 12px;
+		margin: 0.5em 0;
 	}
 </style>

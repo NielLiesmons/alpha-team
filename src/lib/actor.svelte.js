@@ -3,16 +3,15 @@
  * See ADR-identity-chat-drive-comments.
  */
 
+import { memberFor, members } from './members.svelte.js';
+
 const KEY = 'alpha-admin-actor.v1';
 
 /** @type {{ email: string }} */
 export const actor = $state({ email: '' });
 
-/** Local member directory for assignees / pickers (email = account id). */
-export const members = [
-	{ email: 'niel@bley.farm', name: 'Niel' },
-	{ email: 'sarah@bley.farm', name: 'Sarah' }
-];
+/** Re-export directory for assignee pickers (Drive-backed when connected). */
+export { members };
 
 export function loadActor() {
 	if (typeof localStorage === 'undefined') return;
@@ -43,14 +42,14 @@ export function displayNameFromEmail(email = actor.email) {
 	if (isAnon) {
 		const signedIn = (actor.email || '').trim().toLowerCase();
 		if (signedIn && signedIn !== e && !['you@local', 'local', 'you'].includes(signedIn)) {
-			const known = members.find((m) => m.email === signedIn);
+			const known = memberFor(signedIn);
 			if (known) return known.name;
 			const local = signedIn.split('@')[0] || signedIn;
 			return local.charAt(0).toUpperCase() + local.slice(1);
 		}
 		return 'You';
 	}
-	const known = members.find((m) => m.email === e);
+	const known = memberFor(e);
 	if (known) return known.name;
 	const local = e.split('@')[0] || e;
 	return local.charAt(0).toUpperCase() + local.slice(1);
@@ -59,8 +58,13 @@ export function displayNameFromEmail(email = actor.email) {
 /** Person object for UI stacks — always keyed by email. */
 export function activePerson() {
 	const email = (actor.email || '').trim().toLowerCase();
-	if (!email) return { email: '', name: 'You' };
-	return { email, name: displayNameFromEmail(email) };
+	if (!email) return { email: '', name: 'You', picture: undefined };
+	const known = memberFor(email);
+	return {
+		email,
+		name: displayNameFromEmail(email),
+		...(known?.picture ? { picture: known.picture } : {})
+	};
 }
 
 /**

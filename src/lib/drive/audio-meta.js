@@ -147,6 +147,59 @@ export function hasMpegFrameSync(bytes) {
 }
 
 /**
+ * Sniff container from plaintext prefix (after optional ID3).
+ * Helps when upload content_type is wrong (CD rips, Finder, etc.).
+ * @param {Uint8Array} bytes
+ * @returns {'mp3' | 'mp4' | 'flac' | 'ogg' | 'wav' | 'aac' | 'unknown'}
+ */
+export function sniffAudioKind(bytes) {
+	if (!bytes?.length) return 'unknown';
+	let o = 0;
+	/* Skip ID3v2 so we see the real payload. */
+	if (bytes.length >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+		const size =
+			((bytes[6] & 0x7f) << 21) |
+			((bytes[7] & 0x7f) << 14) |
+			((bytes[8] & 0x7f) << 7) |
+			(bytes[9] & 0x7f);
+		o = Math.min(bytes.length, 10 + size);
+	}
+	const b0 = bytes[o];
+	const b1 = bytes[o + 1];
+	const b2 = bytes[o + 2];
+	const b3 = bytes[o + 3];
+	if (b0 === undefined) return 'unknown';
+	/* fLaC */
+	if (b0 === 0x66 && b1 === 0x4c && b2 === 0x61 && b3 === 0x43) return 'flac';
+	/* OggS */
+	if (b0 === 0x4f && b1 === 0x67 && b2 === 0x67 && b3 === 0x53) return 'ogg';
+	/* RIFF....WAVE */
+	if (b0 === 0x52 && b1 === 0x49 && b2 === 0x46 && b3 === 0x46) return 'wav';
+	/* ....ftyp (MP4/M4A) */
+	if (bytes.length >= o + 8) {
+		const tag = String.fromCharCode(bytes[o + 4], bytes[o + 5], bytes[o + 6], bytes[o + 7]);
+		if (tag === 'ftyp') return 'mp4';
+	}
+	/* ADTS AAC */
+	if (b0 === 0xff && b1 !== undefined && (b1 & 0xf6) === 0xf0) return 'aac';
+	/* MPEG frame sync */
+	if (hasMpegFrameSync(bytes.subarray(o))) return 'mp3';
+	return 'unknown';
+}
+
+/**
+ * @param {'mp3' | 'mp4' | 'flac' | 'ogg' | 'wav' | 'aac' | 'unknown'} kind
+ */
+export function mimeForAudioKind(kind) {
+	if (kind === 'mp3') return 'audio/mpeg';
+	if (kind === 'mp4' || kind === 'aac') return 'audio/mp4';
+	if (kind === 'flac') return 'audio/flac';
+	if (kind === 'ogg') return 'audio/ogg';
+	if (kind === 'wav') return 'audio/wav';
+	return 'application/octet-stream';
+}
+
+/**
  * Browser metadata probe — works for anything <audio> can decode.
  * @param {File | Blob} file
  * @returns {Promise<number | null>}
