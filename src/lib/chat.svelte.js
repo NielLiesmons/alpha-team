@@ -34,10 +34,10 @@ export const chatUi = $state({
 	posting: false,
 	/**
 	 * True after a successful Drive refresh (or a warm cache hydrate).
-	 * Until then the panel shows skeleton — never a false “No messages”.
+	 * Until then the panel shows skeleton — never a false empty flash.
 	 */
 	settled: false,
-	/** Active channel id (list + detail). Default family channel. */
+	/** Active chat id (list + detail). Default General. */
 	activeChannelId: 'general'
 });
 
@@ -114,24 +114,32 @@ export function hydrateChatFeedFromCache() {
 export async function refreshChatFeed() {
 	const session = activeSession();
 	if (!session) {
-		/* Keep cache / in-memory — never wipe to an empty “No messages” flash. */
+		/* Keep cache / in-memory — never wipe to an empty flash. */
 		if (chatFeed.length === 0) hydrateChatFeedFromCache();
 		chatUi.loading = false;
+		if (chatFeed.length > 0) chatUi.settled = true;
 		return;
 	}
 	if (chatFeed.length === 0) hydrateChatFeedFromCache();
+	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
 	chatUi.error = null;
 	try {
+		const pending = chatFeed.filter(
+			(m) =>
+				Boolean(m?._local || m?._pending) || String(m?.id || '').startsWith('local-')
+		);
 		const list = await listFeedMessages(session, 80);
-		chatFeed.length = 0;
-		chatFeed.push(...list);
-		writeChatCache(list);
+		const serverIds = new Set(list.map((m) => String(m.id)));
+		const keepPending = pending.filter((m) => !serverIds.has(String(m.id)));
+		const merged = [...keepPending, ...list];
+		/* One splice → one reactive update; avoids empty→full flicker. */
+		chatFeed.splice(0, chatFeed.length, ...merged);
+		writeChatCache(merged.filter((m) => !String(m.id || '').startsWith('local-')));
 	} catch (e) {
 		chatUi.error = e instanceof Error ? e.message : String(e);
 	} finally {
 		chatUi.loading = false;
-		/* First refresh finished — empty copy is OK only after this. */
 		chatUi.settled = true;
 	}
 }
@@ -415,7 +423,7 @@ export async function postChatMessage(input) {
 			}
 			writeChatCache(chatFeed);
 
-			/* Wake other family devices (Home Screen PWA push). Never block the send UX. */
+			/* Wake other devices (Home Screen PWA push). Never block the send UX. */
 			if (!isReaction && kind !== 'reaction') {
 				const pushBody =
 					kind === 'event'
@@ -486,7 +494,7 @@ export function chatRefLabel(msg) {
 }
 
 /**
- * Stable key for publication comments in the family feed.
+ * Stable key for publication comments in the chat feed.
  * Plain chat / reaction-target `chat` refs return null (no panel grouping).
  * Events are tip-only panels and never share a key with comments.
  * @param {any} msg

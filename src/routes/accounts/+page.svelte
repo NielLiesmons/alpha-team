@@ -15,7 +15,7 @@
 		<section class="block">
 			<p class="field-label">Accounts</p>
 			<p class="hint">
-				Only owners and admins can manage family accounts. Switch to an admin profile on this
+				Only owners and admins can manage accounts. Switch to an admin profile on this
 				device, or ask someone with an admin invite.
 			</p>
 		</section>

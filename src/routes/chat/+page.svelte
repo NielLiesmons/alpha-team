@@ -39,7 +39,6 @@
 		if (ch.kind === 'agent') {
 			return { name: ch.title || 'Agent', email: `agent:${ch.id}`, pictureUrl: null };
 		}
-		/* Family / group: seed from title so General gets a stable round pfp. */
 		return { name: ch.title || 'Chat', email: `chat:${ch.id}`, pictureUrl: null };
 	}
 
@@ -95,7 +94,7 @@
 			onclick={() => openChat(ch.id)}
 		>
 			<span class="avatar" aria-hidden="true">
-				<ProfilePic name={av.name} email={av.email} pictureUrl={av.pictureUrl} size={44} />
+				<ProfilePic name={av.name} email={av.email} pictureUrl={av.pictureUrl} size={40} />
 			</span>
 			<span class="meta">
 				<span class="title-row">
@@ -115,15 +114,16 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 4px 10px 24px;
+		padding: 4px 6px 24px;
+		box-sizing: border-box;
 	}
 
 	.row {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		gap: 12px;
 		width: 100%;
-		padding: 10px 8px;
+		padding: 8px 8px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -131,6 +131,7 @@
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
+		box-sizing: border-box;
 	}
 
 	.row:hover {
@@ -144,7 +145,6 @@
 	.avatar {
 		flex-shrink: 0;
 		line-height: 0;
-		padding-top: 2px;
 	}
 
 	.meta {
@@ -152,23 +152,28 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding-top: 2px;
+		gap: 1px;
+		margin: 0;
+		padding: 0;
 	}
 
 	.title-row {
 		display: flex;
-		align-items: center;
+		align-items: baseline;
 		gap: 8px;
 		min-width: 0;
-		min-height: 20px;
+		margin: 0;
+		padding: 0;
 	}
 
 	.title {
 		flex: 1;
 		min-width: 0;
+		margin: 0;
+		padding: 0;
 		font-size: 14px;
 		font-weight: 600;
+		line-height: 1.25;
 		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -177,14 +182,21 @@
 
 	.when {
 		flex-shrink: 0;
+		margin: 0;
+		padding: 0;
 		font-size: 12px;
 		font-weight: 500;
+		line-height: 1.25;
 		color: var(--fg-33);
 	}
 
 	.preview {
-		font-size: 14px;
-		line-height: 1.35;
+		display: block;
+		width: 100%;
+		margin: 0;
+		padding: 0;
+		font-size: 13px;
+		line-height: 1.25;
 		color: var(--fg-66);
 		overflow: hidden;
 		text-overflow: ellipsis;

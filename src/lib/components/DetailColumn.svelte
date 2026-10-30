@@ -412,8 +412,8 @@
 			};
 		if (path.startsWith('/chat'))
 			return {
-				title: 'Pick a channel',
-				body: 'General is the family chat. DMs and agents will land in the list beside this.'
+				title: 'No chat selected',
+				body: 'Pick a chat from the list to open it here.'
 			};
 		return { title: 'Nothing open', body: 'Select a task, project, note, mail, or chat to view it here.' };
 	});

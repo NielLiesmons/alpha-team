@@ -114,8 +114,8 @@
 	<section class="block">
 		<p class="field-label">Members</p>
 		<p class="hint">
-			Roles gate the Admin UI only (ACL). Drive still uses the shared family key until per-person
-			caps exist — don’t invite people you wouldn’t trust with farm files.
+			Roles gate the Admin UI only (ACL). Drive still uses the shared space key until per-person
+			caps exist — don’t invite people you wouldn’t trust with this Space’s files.
 		</p>
 		<ul class="member-list">
 			{#each members as m (m.email)}
@@ -139,7 +139,7 @@
 		</p>
 		<label class="row stack">
 			<span>Display name</span>
-			<input type="text" bind:value={inviteName} autocomplete="name" placeholder="Sarah" />
+			<input type="text" bind:value={inviteName} autocomplete="name" placeholder="Display name" />
 		</label>
 		<label class="row stack">
 			<span>Mailbox</span>

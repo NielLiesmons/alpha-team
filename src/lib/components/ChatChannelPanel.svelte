@@ -330,7 +330,10 @@
 		{#if chronological.length === 0 && (!chatUi.settled || chatUi.loading)}
 			<FeedSkeleton rows={6} />
 		{:else if chronological.length === 0}
-			<p class="empty">No messages yet — say hi to the family.</p>
+			<div class="empty">
+				<p class="empty-title">No messages yet</p>
+				<p class="empty-body">Write below to start the conversation.</p>
+			</div>
 		{:else}
 			<div class="stack">
 				{#each feedBlocks as block (block.key)}
@@ -610,11 +613,31 @@
 	}
 
 	.empty {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
 		margin: auto;
-		padding: 32px 16px;
-		color: var(--fg-66);
-		font-size: 14px;
+		padding: 2rem 1.5rem;
 		text-align: center;
+	}
+
+	.empty-title {
+		margin: 0;
+		font-family: var(--font);
+		font-size: 1.65rem;
+		font-weight: 650;
+		letter-spacing: -0.02em;
+		color: var(--fg-33);
+	}
+
+	.empty-body {
+		margin: 0.55rem 0 0;
+		max-width: 16rem;
+		font-size: 14px;
+		line-height: 1.5;
+		color: var(--fg-16);
 	}
 
 	.stack {
