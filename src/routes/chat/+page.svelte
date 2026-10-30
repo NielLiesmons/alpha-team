@@ -152,14 +152,14 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
+		gap: 4px;
 		margin: 0;
 		padding: 0;
 	}
 
 	.title-row {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 8px;
 		min-width: 0;
 		margin: 0;

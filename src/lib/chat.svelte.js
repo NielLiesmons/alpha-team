@@ -512,8 +512,7 @@ export function chatPublicationRefKey(msg) {
 	) {
 		return null;
 	}
-	/* Events stay their own tip row — don't merge into a comment thread panel. */
-	if (msg?.kind === 'event') return `event:${ref.type}:${ref.id}:${msg.id}`;
+	/* Events share the entity key so create-tips + comments land in one panel. */
 	return `${ref.type}:${ref.id}`;
 }
 

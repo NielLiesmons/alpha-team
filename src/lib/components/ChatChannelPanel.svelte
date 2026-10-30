@@ -68,7 +68,7 @@
 
 	/**
 	 * @type {{
-	 *   type: 'panel' | 'event' | 'plain',
+	 *   type: 'panel' | 'plain',
 	 *   key: string,
 	 *   refKey?: string | null,
 	 *   refMeta?: any,
@@ -76,19 +76,9 @@
 	 * }[]}
 	 */
 	const feedBlocks = $derived.by(() => {
-		/** @type {{ type: 'panel' | 'event' | 'plain', key: string, refKey?: string | null, refMeta?: any, messages: any[] }[]} */
+		/** @type {{ type: 'panel' | 'plain', key: string, refKey?: string | null, refMeta?: any, messages: any[] }[]} */
 		const blocks = [];
 		for (const msg of chronological) {
-			if (msg?.kind === 'event' && msg.ref?.type && msg.ref?.id) {
-				blocks.push({
-					type: 'event',
-					key: `event-${msg.id}`,
-					refKey: `${msg.ref.type}:${msg.ref.id}`,
-					refMeta: chatRefMeta(msg),
-					messages: [msg]
-				});
-				continue;
-			}
 			const refKey = chatPublicationRefKey(msg);
 			const last = blocks[blocks.length - 1];
 			if (refKey && last?.type === 'panel' && last.refKey === refKey) {
@@ -113,6 +103,29 @@
 		}
 		return blocks;
 	});
+
+	const TIP_PFP = 22;
+	const TIP_PFP_MAX = 4;
+
+	/** Unique authors for tip-row pfps (events + comments). */
+	function tipAuthors(/** @type {any[]} */ messages) {
+		/** @type {string[]} */
+		const out = [];
+		for (const m of messages || []) {
+			const email = String(m?.author || '')
+				.trim()
+				.toLowerCase();
+			if (!email || out.includes(email)) continue;
+			out.push(email);
+			if (out.length >= TIP_PFP_MAX) break;
+		}
+		return out;
+	}
+
+	/** Bubbles only — create-events are tip chrome, not cards. */
+	function panelBubbles(/** @type {any[]} */ messages) {
+		return (messages || []).filter((m) => m?.kind !== 'event');
+	}
 
 	onMount(() => {
 		const warm = hydrateChatFeedFromCache();
@@ -337,76 +350,15 @@
 		{:else}
 			<div class="stack">
 				{#each feedBlocks as block (block.key)}
-					{#if block.type === 'event'}
-						{@const refMeta = block.refMeta}
-						{@const eventMsg = block.messages[0]}
-						{@const eventPerson = asPerson(eventMsg.author)}
-						{@const eventName =
-							eventPerson?.name || displayNameFromEmail(eventMsg.author) || 'Someone'}
-						{@const projectBox =
-							refMeta?.box === 'project' && refMeta.project
-								? chatProjectBoxProps(refMeta.project)
-								: null}
-						<section class="pub-panel event-panel">
-							<button
-								type="button"
-								class="pub-tip event-tip"
-								aria-label={refMeta ? `${eventName} added ${refMeta.kind}: ${refMeta.title}` : 'Open'}
-								onclick={() => openChatRef(eventMsg)}
-							>
-								{#if refMeta?.box === 'task'}
-									<span class="pub-box" aria-hidden="true">
-										<TaskBox state={refMeta.status || 'open'} size={22} />
-									</span>
-								{:else if refMeta?.box === 'project'}
-									<span class="pub-box" aria-hidden="true">
-										<ProjectBox
-											state={projectBox?.state || 'active'}
-											icon={projectBox?.icon}
-											size={22}
-										/>
-									</span>
-								{:else if refMeta?.box === 'enterprise'}
-									<span class="pub-box" aria-hidden="true">
-										<EnterpriseBox
-											state={refMeta.enterprise?.status ?? 'active'}
-											icon={refMeta.enterprise?.icon}
-											size={22}
-										/>
-									</span>
-								{:else}
-									<span class="pub-glyph" aria-hidden="true">
-										<NavIcon name={refMeta?.icon || 'notes'} size={19} />
-									</span>
-								{/if}
-								{#if refMeta}
-									<span class="pub-kind">{refMeta.kind}</span>
-									<span class="pub-title">{refMeta.title}</span>
-								{/if}
-								<span class="event-by">
-									<span class="event-pfp" aria-hidden="true">
-										<ProfilePic
-											name={eventName}
-											email={eventMsg.author}
-											pictureUrl={pictureUrlFor(eventMsg.author)}
-											size={18}
-											bare
-										/>
-									</span>
-									<span class="event-who">By {eventName}</span>
-									{#if eventMsg.created_at}
-										<span class="event-when">{formatWhen(eventMsg.created_at)}</span>
-									{/if}
-								</span>
-							</button>
-						</section>
-					{:else if block.type === 'panel'}
+					{#if block.type === 'panel'}
 						{@const refMeta = block.refMeta}
 						{@const projectBox =
 							refMeta?.box === 'project' && refMeta.project
 								? chatProjectBoxProps(refMeta.project)
 								: null}
-						<section class="pub-panel">
+						{@const authors = tipAuthors(block.messages)}
+						{@const bubbles = panelBubbles(block.messages)}
+						<section class="pub-panel" class:tip-only={bubbles.length === 0}>
 							<button
 								type="button"
 								class="pub-tip"
@@ -415,14 +367,14 @@
 							>
 								{#if refMeta?.box === 'task'}
 									<span class="pub-box" aria-hidden="true">
-										<TaskBox state={refMeta.status || 'open'} size={22} />
+										<TaskBox state={refMeta.status || 'open'} size={TIP_PFP} />
 									</span>
 								{:else if refMeta?.box === 'project'}
 									<span class="pub-box" aria-hidden="true">
 										<ProjectBox
 											state={projectBox?.state || 'active'}
 											icon={projectBox?.icon}
-											size={22}
+											size={TIP_PFP}
 										/>
 									</span>
 								{:else if refMeta?.box === 'enterprise'}
@@ -430,7 +382,7 @@
 										<EnterpriseBox
 											state={refMeta.enterprise?.status ?? 'active'}
 											icon={refMeta.enterprise?.icon}
-											size={22}
+											size={TIP_PFP}
 										/>
 									</span>
 								{:else}
@@ -442,20 +394,39 @@
 									<span class="pub-kind">{refMeta.kind}</span>
 									<span class="pub-title">{refMeta.title}</span>
 								{/if}
+								{#if authors.length}
+									<span class="tip-pfps" aria-hidden="true">
+										{#each authors as email, i (email)}
+											{@const rp = asPerson(email)}
+											{@const rn = rp?.name || displayNameFromEmail(email)}
+											<span class="tip-pfp" style:z-index={authors.length - i}>
+												<ProfilePic
+													name={rn}
+													email={email}
+													pictureUrl={pictureUrlFor(email)}
+													size={TIP_PFP}
+													bare
+												/>
+											</span>
+										{/each}
+									</span>
+								{/if}
 							</button>
-							<div class="pub-body">
-								{#each block.messages as msg (msg.id)}
-									<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
-										<ChatFeedCard
-											{msg}
-											parent={findChatParent(msg.reply_to)}
-											when={formatWhen(msg.created_at)}
-											onReply={() => startReply(msg)}
-											onQuoteClick={scrollToQuoted}
-										/>
-									</div>
-								{/each}
-							</div>
+							{#if bubbles.length}
+								<div class="pub-body">
+									{#each bubbles as msg (msg.id)}
+										<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
+											<ChatFeedCard
+												{msg}
+												parent={findChatParent(msg.reply_to)}
+												when={formatWhen(msg.created_at)}
+												onReply={() => startReply(msg)}
+												onQuoteClick={scrollToQuoted}
+											/>
+										</div>
+									{/each}
+								</div>
+							{/if}
 						</section>
 					{:else}
 						{#each block.messages as msg (msg.id)}
@@ -679,7 +650,7 @@
 		border: 1px solid color-mix(in srgb, var(--fg) 6%, transparent);
 	}
 
-	.pub-panel.event-panel {
+	.pub-panel.tip-only {
 		padding: 6px 8px;
 	}
 
@@ -700,40 +671,30 @@
 		cursor: pointer;
 	}
 
-	.pub-tip.event-tip {
-		height: auto;
-		min-height: 28px;
+	.pub-tip:hover,
+	.pub-tip:focus,
+	.pub-tip:focus-visible {
+		background: transparent;
+		outline: none;
 	}
 
-	.event-by {
+	.tip-pfps {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
 		flex-shrink: 0;
 		margin-left: auto;
 		padding-left: 8px;
-		color: var(--fg-33);
-		font-size: 12px;
-		font-weight: 500;
+		height: 22px;
 	}
 
-	.event-pfp {
-		display: inline-flex;
+	.tip-pfp {
+		position: relative;
+		margin-left: -6px;
 		line-height: 0;
 	}
 
-	.event-who {
-		white-space: nowrap;
-	}
-
-	.event-when {
-		flex-shrink: 0;
-		color: var(--fg-16);
-		white-space: nowrap;
-	}
-
-	.pub-tip:hover {
-		background: var(--fg-8);
+	.tip-pfp:first-child {
+		margin-left: 0;
 	}
 
 	.pub-box {
