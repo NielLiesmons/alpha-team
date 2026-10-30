@@ -283,7 +283,7 @@
 	<section class="block">
 		<p class="field-label">On this device</p>
 		<p class="hint">
-			Only profiles unlocked with an invite code appear here. Admins manage the family directory in
+			Only profiles unlocked with an invite code appear here. Admins manage the member directory in
 			Accounts.
 		</p>
 		<ul class="device-list">

@@ -98,7 +98,7 @@
 		<p class="err" role="alert">{err}</p>
 	{/if}
 	<p class="hint">
-		Stored on your family Drive for recipients who share this Space. Internet SMTP / IMAP is not wired
+		Stored on your Space Drive for recipients who share this Space. Internet SMTP / IMAP is not wired
 		yet.
 	</p>
 	<div class="sheet-bottom">
