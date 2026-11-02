@@ -5,7 +5,7 @@
 
 import { actor } from './actor.svelte.js';
 import { chatEphemeral } from './chat.svelte.js';
-import { pullChatIfNeeded } from './chat-sync.svelte.js';
+import { wakeChatFromTip } from './chat-sync.svelte.js';
 import { apiBase } from './mail-api.js';
 
 const SPACE = 'bley';
@@ -174,7 +174,7 @@ function onMessage(ev) {
 	if (!data || typeof data !== 'object') return;
 	const type = String(data.type || '');
 	if (type === 'tip' && data.tip) {
-		void pullChatIfNeeded(true);
+		void wakeChatFromTip(String(data.tip));
 		return;
 	}
 	if (type === 'ephemeral' && data.ephemeral) {
@@ -228,15 +228,31 @@ function openSocket() {
 	});
 }
 
+function onVisibility() {
+	if (typeof document === 'undefined') return;
+	if (document.visibilityState !== 'visible') return;
+	/* iOS often kills WS in background — reconnect as soon as we're foreground again. */
+	if (!sock || sock.readyState === WebSocket.CLOSED || sock.readyState === WebSocket.CLOSING) {
+		backoff = RECONNECT_MIN_MS;
+		openSocket();
+	}
+}
+
 /** Start from root layout once signed in. */
 export function startRealtime() {
 	wantOpen = true;
 	openSocket();
+	if (typeof document !== 'undefined') {
+		document.addEventListener('visibilitychange', onVisibility);
+	}
 	return () => stopRealtime();
 }
 
 export function stopRealtime() {
 	wantOpen = false;
+	if (typeof document !== 'undefined') {
+		document.removeEventListener('visibilitychange', onVisibility);
+	}
 	clearTimers();
 	if (typingIdleTimer != null) {
 		clearTimeout(typingIdleTimer);

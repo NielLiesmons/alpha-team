@@ -1,5 +1,5 @@
 /**
- * Fast chat wake loop: tip poll while chat is open + focus/push refresh.
+ * Fast chat wake: realtime tip bus first, tip poll as fallback while chat is open.
  * Also refreshes members/avatars when tip moves (cross-device profile pics).
  */
 
@@ -16,6 +16,8 @@ let lastTip = '';
 let lastChatPull = 0;
 let watching = false;
 let inFlight = false;
+/** Tip hash from the bus while a pull was already running — run again after. */
+let pendingBusTip = /** @type {string | null} */ (null);
 
 export async function pullChatIfNeeded(force = false) {
 	const session = activeSession();
@@ -43,6 +45,46 @@ export async function pullChatIfNeeded(force = false) {
 		}
 	} finally {
 		inFlight = false;
+		const queued = pendingBusTip;
+		pendingBusTip = null;
+		if (queued) void wakeChatFromTip(queued);
+	}
+}
+
+/**
+ * Realtime bus tip-wake: skip getTip RTT, refresh feed ASAP.
+ * @param {string} tip
+ */
+export async function wakeChatFromTip(tip) {
+	const t = String(tip || '').trim();
+	if (!t) {
+		void pullChatIfNeeded(true);
+		return;
+	}
+	if (t === lastTip) return;
+	const session = activeSession();
+	if (!session) return;
+	/* Sender may still be posting — receivers never have posting set. */
+	if (chatUi.posting) {
+		pendingBusTip = t;
+		return;
+	}
+	if (inFlight) {
+		pendingBusTip = t;
+		return;
+	}
+	lastTip = t;
+	inFlight = true;
+	try {
+		await refreshChatFeed();
+		lastChatPull = Date.now();
+		void markIncomingMessagesRead();
+		void refreshMembersAndAvatars().catch(() => {});
+	} finally {
+		inFlight = false;
+		const queued = pendingBusTip;
+		pendingBusTip = null;
+		if (queued && queued !== lastTip) void wakeChatFromTip(queued);
 	}
 }
 

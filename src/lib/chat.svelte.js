@@ -374,7 +374,12 @@ export async function toggleReaction(messageId, emoji) {
 				reply_to: target,
 				ref: { type: 'chat', id: target }
 			},
-			{ knownFeedIds: knownFeedIds().filter((id) => id !== localId) }
+			{
+				knownFeedIds: knownFeedIds().filter((id) => id !== localId),
+				onTipWritten: (tip) => {
+					void import('./realtime.svelte.js').then(({ publishTipWake }) => publishTipWake(tip));
+				}
+			}
 		);
 		const idx = chatFeed.findIndex((m) => m.id === localId);
 		if (idx >= 0) chatFeed[idx] = created;
@@ -586,20 +591,16 @@ export async function postChatMessage(input) {
 							...leafMsg,
 							...(attachments.length ? { attachments } : {})
 						});
+					},
+					/* Publish tip hash the instant putTip lands — no extra getTip RTT. */
+					onTipWritten: (tip) => {
+						void import('./realtime.svelte.js').then(({ publishTipWake }) => publishTipWake(tip));
 					}
 				}
 			);
 
 			/* Tip finished — refresh settle fields if leaf callback already ran. */
 			settleFrom(created);
-
-			/* Fast tip-wake on the realtime bus (WS); push remains for background. */
-			void import('./drive/client.js')
-				.then(({ getTip }) => getTip(session))
-				.then((tip) =>
-					import('./realtime.svelte.js').then(({ publishTipWake }) => publishTipWake(tip))
-				)
-				.catch(() => {});
 
 			/* Wake other devices (Home Screen PWA push). Never block the send UX. */
 			if (!isReaction && kind !== 'reaction') {

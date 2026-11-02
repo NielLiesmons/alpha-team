@@ -2380,6 +2380,11 @@ export async function createChatMessage(session, input, opts = {}) {
 		}
 	});
 	if (tipAfter) rememberFeedIds(String(tipAfter), feedIds);
+	try {
+		if (tipAfter) opts.onTipWritten?.(String(tipAfter));
+	} catch {
+		/* realtime wake must never break send */
+	}
 	return msg;
 }
 
