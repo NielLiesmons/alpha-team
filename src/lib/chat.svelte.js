@@ -628,8 +628,8 @@ export async function postChatMessage(input) {
 
 /**
  * Open the entity a chat card refers to.
- * Desktop: select into the third column beside chat (no section navigate).
- * Mobile: navigate to the entity section, then select (after route settles).
+ * Always stay on the current route (usually /chat) and open DetailColumn —
+ * never jump to /tasks|/notes|/… or Back leaves the chat feed.
  * @param {any} msg
  */
 export function openChatRef(msg) {
@@ -638,31 +638,13 @@ export function openChatRef(msg) {
 
 	/** @type {'task' | 'note' | 'project' | 'enterprise' | null} */
 	let kind = null;
-	/** @type {string | null} */
-	let path = null;
-	if (ref.type === 'task') {
-		kind = 'task';
-		path = '/tasks';
-	} else if (ref.type === 'note') {
-		kind = 'note';
-		path = '/notes';
-	} else if (ref.type === 'project') {
-		kind = 'project';
-		path = '/projects';
-	} else if (ref.type === 'enterprise') {
-		kind = 'enterprise';
-		path = '/entreprises';
-	}
-	if (!kind || !path) return;
+	if (ref.type === 'task') kind = 'task';
+	else if (ref.type === 'note') kind = 'note';
+	else if (ref.type === 'project') kind = 'project';
+	else if (ref.type === 'enterprise') kind = 'enterprise';
+	if (!kind) return;
 
-	const mobile =
-		typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
-	if (!mobile) {
-		/* Stay on /chat — DetailColumn renders any ui.selection. */
-		selectEntity(kind, ref.id);
-		return;
-	}
-	void goto(path).then(() => selectEntity(kind, ref.id));
+	selectEntity(kind, ref.id);
 }
 
 /** @param {any} msg */
