@@ -28,12 +28,14 @@
 	const isOperator = $derived(canManageSpace(actor.email));
 	const activeEmail = $derived((actor.email || '').trim().toLowerCase());
 
-	/** Admin = crown; no “owner” / “member” labels on cards. */
+	/** Admin capability = crown; no separate “admin@” identity required. */
 	function isAdminRole(role) {
 		return role === 'owner' || role === 'admin';
 	}
 
-	/** Drive members when connected; otherwise only profiles unlocked on this device. */
+	/**
+	 * Stable name order — never jump the active card to the front (that made switch feel glitchy).
+	 */
 	const orderedProfiles = $derived.by(() => {
 		/** @type {{ email: string, name: string, role?: string, onDevice: boolean }[]} */
 		let list = [];
@@ -54,12 +56,7 @@
 				onDevice: true
 			}));
 		}
-		list.sort((a, b) => {
-			const ae = a.email === activeEmail ? 0 : 1;
-			const be = b.email === activeEmail ? 0 : 1;
-			if (ae !== be) return ae - be;
-			return a.name.localeCompare(b.name);
-		});
+		list.sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email));
 		return list;
 	});
 
@@ -127,11 +124,20 @@
 		}
 	}
 
-	async function shareActive() {
+	/** @param {string} email */
+	function onEditProfile(email) {
+		onSwitchProfile(email);
+		openSection('profile');
+	}
+
+	/** @param {string} email */
+	async function shareProfile(email) {
 		shareMsg = '';
-		const email = activeEmail;
-		const name = displayNameFromEmail(email);
-		const text = name && email ? `${name} <${email}>` : email || name;
+		const e = String(email || '')
+			.trim()
+			.toLowerCase();
+		const name = displayNameFromEmail(e);
+		const text = name && e ? `${name} <${e}>` : e || name;
 		if (!text) return;
 		try {
 			if (navigator.share) {
@@ -140,8 +146,8 @@
 				await navigator.clipboard.writeText(text);
 				shareMsg = 'Copied profile to clipboard.';
 			}
-		} catch (e) {
-			if (e instanceof Error && e.name === 'AbortError') return;
+		} catch (err) {
+			if (err instanceof Error && err.name === 'AbortError') return;
 			try {
 				await navigator.clipboard.writeText(text);
 				shareMsg = 'Copied profile to clipboard.';
@@ -184,7 +190,7 @@
 							name={displayNameFromEmail(p.email) || p.name}
 							email={p.email}
 							pictureUrl={pictureUrlFor(p.email)}
-							size={active ? 56 : 48}
+							size={48}
 						/>
 						<div class="card-meta">
 							<span class="card-name-row">
@@ -198,26 +204,24 @@
 							<span class="card-email">{p.email}</span>
 						</div>
 					</button>
-					{#if active}
-						<div class="card-ctas">
-							<button
-								type="button"
-								class="icon-pill"
-								aria-label="Edit profile"
-								onclick={() => openSection('profile')}
-							>
-								<Pen size={14} />
-							</button>
-							<button
-								type="button"
-								class="icon-pill"
-								aria-label="Share profile"
-								onclick={shareActive}
-							>
-								<Share size={15} />
-							</button>
-						</div>
-					{/if}
+					<div class="card-ctas">
+						<button
+							type="button"
+							class="icon-pill"
+							aria-label="Edit profile"
+							onclick={() => onEditProfile(p.email)}
+						>
+							<Pen size={12} />
+						</button>
+						<button
+							type="button"
+							class="icon-pill"
+							aria-label="Share profile"
+							onclick={() => void shareProfile(p.email)}
+						>
+							<Share size={13} />
+						</button>
+					</div>
 				</article>
 			{/each}
 
@@ -273,22 +277,22 @@
 	.cards-scroll {
 		overflow-x: auto;
 		overflow-y: visible;
-		padding: 4px 16px 8px;
+		padding: 8px 16px 10px;
 		-webkit-overflow-scrolling: touch;
 		scrollbar-width: thin;
 	}
 
 	.cards-row {
 		display: flex;
-		align-items: stretch;
+		align-items: center;
 		gap: 12px;
 		width: max-content;
-		padding-bottom: 4px;
+		min-height: 168px;
 	}
 
 	.profile-card {
-		width: min(228px, 68vw);
-		min-height: 128px;
+		width: 220px;
+		min-height: 132px;
 		padding: 14px;
 		border-radius: 16px;
 		border: 1px solid var(--fg-8, var(--white11));
@@ -297,18 +301,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
-		transition:
-			width 0.18s ease,
-			min-height 0.18s ease,
-			background 0.15s ease;
 	}
 
 	.profile-card.active {
-		width: min(268px, 78vw);
-		min-height: 152px;
-		background: color-mix(in srgb, var(--fg) 7%, transparent);
-		/* Same subtle stroke as other cards — never accent selection chrome */
-		border-color: var(--fg-8, var(--white11));
+		width: 268px;
+		min-height: 156px;
+		padding: 16px;
+		border: 0;
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
 	}
 
 	.card-main {
@@ -358,7 +358,7 @@
 		flex-shrink: 0;
 		display: grid;
 		place-items: center;
-		color: var(--fg-66, var(--white66));
+		color: var(--fg-33, var(--white44));
 	}
 
 	.card-email {
@@ -371,17 +371,18 @@
 
 	.card-ctas {
 		display: flex;
+		justify-content: flex-end;
 		gap: 8px;
 		margin-top: auto;
 	}
 
 	.icon-pill {
-		width: 2.125rem;
-		height: 2.125rem;
+		width: 2rem;
+		height: 2rem;
 		border-radius: 999px;
 		border: 0;
 		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
-		color: var(--fg-66, var(--white66));
+		color: var(--fg-33, var(--white44));
 		display: grid;
 		place-items: center;
 		cursor: pointer;
@@ -390,7 +391,7 @@
 
 	.icon-pill:hover {
 		background: var(--fg-12, color-mix(in srgb, var(--fg) 12%, transparent));
-		color: var(--fg, var(--white));
+		color: var(--fg-66, var(--white66));
 	}
 
 	.add-card {
@@ -398,6 +399,8 @@
 		align-items: center;
 		justify-content: flex-start;
 		gap: 12px;
+		width: 220px;
+		min-height: 132px;
 		cursor: pointer;
 		color: var(--fg-66, var(--white66));
 		background: color-mix(in srgb, var(--fg) 4%, transparent);
@@ -468,7 +471,6 @@
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
 	}
 
-	/* Selection = quiet fill only — no accent outline */
 	.section-row.on {
 		outline: none;
 	}
@@ -508,19 +510,19 @@
 
 	.disconnect {
 		width: 100%;
-		height: 2.5rem;
+		height: 2.35rem;
 		border-radius: 999px;
 		border: 0;
-		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
-		color: var(--fg-66, var(--white66));
+		background: transparent;
+		color: var(--fg-33, var(--white44));
 		font: inherit;
-		font-size: 14px;
-		font-weight: 600;
+		font-size: 13px;
+		font-weight: 500;
 		cursor: pointer;
 	}
 
 	.disconnect:hover {
-		background: var(--fg-12, color-mix(in srgb, var(--fg) 12%, transparent));
-		color: var(--fg, var(--white));
+		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
+		color: var(--fg-66, var(--white66));
 	}
 </style>
