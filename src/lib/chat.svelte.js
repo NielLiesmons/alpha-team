@@ -2,7 +2,6 @@
  * Family Chat — Drive-backed feed + comments (Chatmail notify later).
  */
 
-import { goto } from '$app/navigation';
 import { activePerson, displayNameFromEmail } from './actor.svelte.js';
 import {
 	createChatMessage,
