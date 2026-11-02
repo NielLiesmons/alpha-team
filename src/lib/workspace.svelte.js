@@ -93,13 +93,15 @@ export const ui = $state({
 	selection: null,
 	/** @type {null | { kind: 'task' | 'project' | 'note' | 'newsletter' | 'welcome' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'table' | 'metric' | 'form' | 'view', id?: string, status?: string, to?: string }} */
 	composer: null,
+	/** Feed list filter id (route-specific options in AppShell). */
+	listFilter: 'all',
 	/** @type {'none' | 'drive'} */
 	source: 'none'
 });
 
 /**
  * Open an entity in the third column (does not open the create/edit modal).
- * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'pubs' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'table' | 'metric' | 'form' | 'view'} kind
+ * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'pubs' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'table' | 'metric' | 'form' | 'view' | 'settings'} kind
  * @param {string} id
  */
 export function selectEntity(kind, id) {
@@ -769,10 +771,12 @@ export async function saveNote(draft, isNew) {
 
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
+		const now = Date.now();
 		const optimistic = {
 			...draft,
 			id: tempId,
-			createdAt: Date.now(),
+			createdAt: now,
+			updatedAt: now,
 			targets: draft.targets ?? [],
 			project_ids: draft.project_ids ?? [],
 			labels: draft.labels ?? [],
@@ -828,7 +832,8 @@ export async function saveNote(draft, isNew) {
 	}
 
 	const idx = notes.findIndex((n) => n.id === draft.id);
-	if (idx >= 0) Object.assign(notes[idx], { ...draft, author, _pending: !canPushNote });
+	if (idx >= 0)
+		Object.assign(notes[idx], { ...draft, author, updatedAt: Date.now(), _pending: !canPushNote });
 	ui.noteId = draft.id;
 	ui.selection = { kind: 'note', id: draft.id };
 	scheduleWorkspacePersist();

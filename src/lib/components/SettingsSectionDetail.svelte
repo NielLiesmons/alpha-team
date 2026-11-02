@@ -1,0 +1,543 @@
+<script>
+	import { onMount } from 'svelte';
+	import ProfilePic from './ProfilePic.svelte';
+	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import {
+		clearMemberPicture,
+		pictureUrlFor,
+		setMemberPicture
+	} from '$lib/avatar.svelte.js';
+	import { health } from '$lib/drive/client.js';
+	import { clearSession, driveSession, saveSession } from '$lib/drive/session.svelte.js';
+	import {
+		getMailboxPassword,
+		setMailboxPassword,
+		testMailboxLogin
+	} from '$lib/jmap-mail.js';
+	import { getAdminToken, setAdminToken } from '$lib/mail-api.js';
+	import { canManageSpace, memberFor, upsertMember } from '$lib/members.svelte.js';
+	import { refreshMail } from '$lib/mail.svelte.js';
+	import {
+		promptInstall,
+		pwaUi,
+		refreshPwaStatus,
+		togglePush
+	} from '$lib/pwa.svelte.js';
+	import { clearLocalUiCache } from '$lib/ui-cache.js';
+	import { setTheme, themeChoice } from '$lib/theme.svelte.js';
+	import { refreshFromDrive } from '$lib/workspace.svelte.js';
+	import { formatBytes, storageEstimate } from '$lib/offline-store.js';
+
+	/** @type {{ sectionId: string }} */
+	let { sectionId } = $props();
+
+	const isOperator = $derived(canManageSpace(actor.email));
+	const me = $derived(memberFor(actor.email));
+
+	const choices = [
+		{ id: 'system', label: 'System' },
+		{ id: 'light', label: 'Light' },
+		{ id: 'dark', label: 'Dark' }
+	];
+
+	let nameDraft = $state('');
+	let picBusy = $state(false);
+	let picMsg = $state('');
+	let nameMsg = $state('');
+	let mailboxPw = $state('');
+	let mailboxMsg = $state('');
+	let mailboxBusy = $state(false);
+	let apiTokenDraft = $state('');
+	let apiTokenMsg = $state('');
+	let url = $state(driveSession.url);
+	let token = $state(driveSession.token);
+	let rootKey = $state(driveSession.rootKey);
+	let busy = $state(false);
+	let msg = $state('');
+	let advancedOpen = $state(false);
+	let cacheBusy = $state(false);
+	let cacheMsg = $state('');
+	let storageLabel = $state('');
+
+	/** @type {HTMLInputElement | undefined} */
+	let fileInput = $state();
+
+	$effect(() => {
+		const m = memberFor(actor.email);
+		nameDraft = m?.name || displayNameFromEmail(actor.email);
+	});
+
+	$effect(() => {
+		actor.email;
+		mailboxPw = getMailboxPassword(actor.email);
+		mailboxMsg = '';
+		picMsg = '';
+		nameMsg = '';
+	});
+
+	onMount(() => {
+		apiTokenDraft = getAdminToken();
+		mailboxPw = getMailboxPassword(actor.email);
+		void refreshPwaStatus();
+		void storageEstimate().then((e) => {
+			if (e.quota) storageLabel = `${formatBytes(e.usage)} / ${formatBytes(e.quota)}`;
+		});
+	});
+
+	async function onTogglePush() {
+		try {
+			await togglePush(actor.email);
+		} catch {
+			/* pwaUi.message */
+		}
+	}
+
+	async function saveName() {
+		nameMsg = '';
+		const m = memberFor(actor.email);
+		if (!m) {
+			nameMsg = 'Unknown profile — ask an admin to add you to members.';
+			return;
+		}
+		const name = nameDraft.trim() || m.email.split('@')[0] || m.email;
+		try {
+			await upsertMember({ ...m, name });
+			nameMsg = 'Name saved.';
+		} catch (err) {
+			nameMsg = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	function pickPicture() {
+		fileInput?.click();
+	}
+
+	/** @param {Event} e */
+	async function onPictureChosen(e) {
+		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		picBusy = true;
+		picMsg = '';
+		try {
+			await setMemberPicture(actor.email, file);
+			picMsg = 'Profile picture updated.';
+		} catch (err) {
+			picMsg = err instanceof Error ? err.message : String(err);
+		} finally {
+			picBusy = false;
+		}
+	}
+
+	async function removePicture() {
+		picBusy = true;
+		picMsg = '';
+		try {
+			await clearMemberPicture(actor.email);
+			picMsg = 'Profile picture removed.';
+		} catch (err) {
+			picMsg = err instanceof Error ? err.message : String(err);
+		} finally {
+			picBusy = false;
+		}
+	}
+
+	function saveApiToken() {
+		setAdminToken(apiTokenDraft);
+		apiTokenMsg = 'Saved on this device.';
+	}
+
+	async function saveMailboxPw() {
+		if (!actor.email) {
+			mailboxMsg = 'Pick who you are first.';
+			return;
+		}
+		mailboxBusy = true;
+		mailboxMsg = '';
+		try {
+			if (mailboxPw.trim()) {
+				await testMailboxLogin(actor.email, mailboxPw.trim());
+				setMailboxPassword(actor.email, mailboxPw.trim());
+				await refreshMail();
+				mailboxMsg = `Stalwart OK for ${actor.email}.`;
+			} else {
+				setMailboxPassword(actor.email, '');
+				mailboxMsg = 'Cleared mailbox password on this device.';
+			}
+		} catch (e) {
+			mailboxMsg = e instanceof Error ? e.message : String(e);
+		} finally {
+			mailboxBusy = false;
+		}
+	}
+
+	async function connect() {
+		busy = true;
+		msg = '';
+		try {
+			const session = {
+				url: url.trim().replace(/\/$/, ''),
+				token: token.trim(),
+				rootKey: rootKey.trim()
+			};
+			const ok = await health(session);
+			if (ok !== 'ok') throw new Error(`unexpected health: ${ok}`);
+			saveSession(session);
+			await refreshFromDrive();
+			msg = driveSession.error
+				? `Connected, but load failed: ${driveSession.error}`
+				: 'Connected.';
+		} catch (e) {
+			msg = e instanceof Error ? e.message : String(e);
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function disconnectDrive() {
+		clearSession();
+		await refreshFromDrive();
+		token = '';
+		rootKey = '';
+		msg = 'Disconnected.';
+	}
+
+	async function clearCache() {
+		cacheBusy = true;
+		cacheMsg = '';
+		try {
+			const r = await clearLocalUiCache();
+			cacheMsg = `Cleared ${r.clearedKeys.length || 0} cache keys + leaf DB. Reload to rehydrate.`;
+		} catch (e) {
+			cacheMsg = e instanceof Error ? e.message : String(e);
+		} finally {
+			cacheBusy = false;
+		}
+	}
+</script>
+
+{#if sectionId === 'profile'}
+	<section class="block">
+		<p class="field-label">Edit profile</p>
+		<div class="pic-row">
+			<ProfilePic
+				name={displayNameFromEmail(actor.email)}
+				email={actor.email}
+				pictureUrl={pictureUrlFor(actor.email)}
+				size={64}
+			/>
+			<div class="pic-actions">
+				<button type="button" class="btn primary" disabled={picBusy || !me} onclick={pickPicture}>
+					{picBusy ? 'Uploading…' : me?.picture ? 'Change photo' : 'Set photo'}
+				</button>
+				{#if me?.picture}
+					<button type="button" class="btn ghost" disabled={picBusy} onclick={removePicture}
+						>Remove</button
+					>
+				{/if}
+				<input
+					bind:this={fileInput}
+					type="file"
+					accept="image/jpeg,image/png,image/webp,image/*"
+					hidden
+					onchange={onPictureChosen}
+				/>
+			</div>
+		</div>
+		{#if picMsg}<p class="status on">{picMsg}</p>{/if}
+		<label class="row stack">
+			<span>Display name</span>
+			<input type="text" bind:value={nameDraft} autocomplete="nickname" disabled={!me} />
+		</label>
+		<div class="actions">
+			<button type="button" class="btn primary" disabled={!me} onclick={saveName}>Save name</button>
+		</div>
+		{#if nameMsg}<p class="status on">{nameMsg}</p>{/if}
+	</section>
+{:else if sectionId === 'notifications'}
+	<section class="block">
+		<p class="field-label">Notifications</p>
+		{#if pwaUi.standalone}
+			<p class="hint">Running as an installed app — good for push and offline storage.</p>
+		{:else if pwaUi.ios}
+			<p class="hint">
+				On iPhone: Safari → Share → Add to Home Screen, then open Alpha from the icon.
+			</p>
+		{:else}
+			<p class="hint">Install Alpha for faster cold starts and notifications.</p>
+		{/if}
+		<div class="actions">
+			{#if !pwaUi.standalone && (pwaUi.canInstall || !pwaUi.ios)}
+				<button type="button" class="btn primary" onclick={() => promptInstall()}>
+					{pwaUi.canInstall ? 'Install app' : 'How to install'}
+				</button>
+			{/if}
+			<button
+				type="button"
+				class="btn primary"
+				disabled={pwaUi.busy || !actor.email}
+				onclick={onTogglePush}
+			>
+				{#if pwaUi.busy}
+					Working…
+				{:else if pwaUi.pushSubscribed}
+					Disable notifications
+				{:else}
+					Enable notifications
+				{/if}
+			</button>
+		</div>
+		<p class="hint tight">
+			Permission: {pwaUi.pushPermission}
+			{#if pwaUi.pushSubscribed}· subscribed{/if}
+		</p>
+		{#if pwaUi.message}<p class="status on">{pwaUi.message}</p>{/if}
+	</section>
+{:else if sectionId === 'appearance'}
+	<section class="block">
+		<p class="field-label">Appearance</p>
+		<div class="seg" role="radiogroup" aria-label="Appearance">
+			{#each choices as choice (choice.id)}
+				<button
+					type="button"
+					class:on={themeChoice.value === choice.id}
+					role="radio"
+					aria-checked={themeChoice.value === choice.id}
+					onclick={() => setTheme(choice.id)}
+				>
+					{choice.label}
+				</button>
+			{/each}
+		</div>
+	</section>
+{:else if sectionId === 'storage'}
+	<section class="block">
+		<p class="field-label">Storage</p>
+		<p class="hint">
+			{#if storageLabel}
+				This browser: {storageLabel}.
+			{:else}
+				Local caches speed up chat and workspace after the first load.
+			{/if}
+			{pwaUi.storagePersisted ? ' Kept on device.' : ''}
+		</p>
+		<div class="actions">
+			<button type="button" class="btn primary" disabled={cacheBusy} onclick={clearCache}>
+				{cacheBusy ? 'Clearing…' : 'Clear local UI cache'}
+			</button>
+		</div>
+		<p class="hint tight">
+			Drops chat feed snapshot + Drive leaf cache. Does not sign you out or remove profiles.
+		</p>
+		{#if cacheMsg}<p class="status on">{cacheMsg}</p>{/if}
+	</section>
+{:else if sectionId === 'mail'}
+	<section class="block">
+		<p class="field-label">Mail</p>
+		<p class="hint">
+			Mailbox password for <code>mail.bley.farm</code> (JMAP). Stored on this device for the active
+			profile.
+		</p>
+		<label class="row stack">
+			<span>Password</span>
+			<input
+				type="password"
+				bind:value={mailboxPw}
+				autocomplete="current-password"
+				spellcheck="false"
+				disabled={!actor.email}
+			/>
+		</label>
+		<div class="actions">
+			<button
+				type="button"
+				class="btn primary"
+				disabled={mailboxBusy || !actor.email}
+				onclick={saveMailboxPw}
+			>
+				{mailboxBusy ? 'Checking…' : 'Save & test'}
+			</button>
+		</div>
+		{#if mailboxMsg}<p class="status on">{mailboxMsg}</p>{/if}
+	</section>
+{:else if sectionId === 'publications' && isOperator}
+	<section class="block">
+		<p class="field-label">Publications API</p>
+		<p class="hint">Bearer token for welcome + newsletters. Stored only in this browser.</p>
+		<label class="row stack">
+			<span>Admin token</span>
+			<input type="password" bind:value={apiTokenDraft} autocomplete="off" spellcheck="false" />
+		</label>
+		<div class="actions">
+			<button type="button" class="btn primary" onclick={saveApiToken}>Save token</button>
+		</div>
+		{#if apiTokenMsg}<p class="status on">{apiTokenMsg}</p>{/if}
+	</section>
+{:else if sectionId === 'drive' && isOperator}
+	<section class="block">
+		<p class="field-label">Drive</p>
+		<p class="hint">
+			{#if driveSession.connected}
+				Connected to {driveSession.url}. Manual credentials only for recovery.
+			{:else}
+				Not connected — add a profile with an invite code.
+			{/if}
+		</p>
+		<button type="button" class="btn ghost" onclick={() => (advancedOpen = !advancedOpen)}>
+			{advancedOpen ? 'Hide' : 'Show'} manual fields
+		</button>
+		{#if advancedOpen}
+			<label class="row stack">
+				<span>URL</span>
+				<input type="url" bind:value={url} autocomplete="off" spellcheck="false" />
+			</label>
+			<label class="row stack">
+				<span>API token</span>
+				<input type="password" bind:value={token} autocomplete="off" spellcheck="false" />
+			</label>
+			<label class="row stack">
+				<span>Root key</span>
+				<input type="password" bind:value={rootKey} autocomplete="off" spellcheck="false" />
+			</label>
+			<div class="actions">
+				<button
+					type="button"
+					class="btn primary"
+					disabled={busy || !token.trim() || !rootKey.trim()}
+					onclick={connect}
+				>
+					{busy ? 'Connecting…' : driveSession.connected ? 'Reconnect' : 'Connect'}
+				</button>
+				{#if driveSession.connected}
+					<button type="button" class="btn ghost" disabled={busy} onclick={disconnectDrive}
+						>Disconnect Drive</button
+					>
+				{/if}
+			</div>
+		{/if}
+		{#if msg}<p class="status">{msg}</p>{/if}
+	</section>
+{:else}
+	<p class="hint">Unknown section.</p>
+{/if}
+
+<style>
+	.block {
+		max-width: 520px;
+	}
+	.field-label {
+		margin: 0 0 0.75rem;
+		font-size: 13px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--white66);
+	}
+	.hint {
+		margin: 0 0 0.85rem;
+		font-size: 13px;
+		color: var(--white66);
+	}
+	.hint.tight {
+		margin-top: -0.35rem;
+	}
+	.pic-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+	.pic-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.row {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.35rem;
+		margin-bottom: 0.75rem;
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.row span {
+		color: var(--white66);
+		font-weight: 500;
+	}
+	.row input {
+		width: 100%;
+		height: 2.25rem;
+		padding: 0 0.65rem;
+		border-radius: 10px;
+		border: 1px solid var(--white11);
+		background: var(--surface);
+		color: var(--white);
+		font: inherit;
+		font-weight: 400;
+		box-sizing: border-box;
+	}
+	.actions {
+		display: flex;
+		gap: 0.5rem;
+		margin: 0.5rem 0 0.75rem;
+		flex-wrap: wrap;
+	}
+	.btn {
+		height: 2.25rem;
+		padding: 0 1rem;
+		border-radius: 10px;
+		border: none;
+		background-image: var(--button-primary-bg);
+		background-color: transparent;
+		color: var(--whiteEnforced);
+		font: inherit;
+		font-weight: 600;
+		font-size: 14px;
+		cursor: pointer;
+	}
+	.btn:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+	.btn.ghost {
+		background-image: none;
+		background: transparent;
+		color: var(--white66);
+		border: 1px solid var(--white11);
+	}
+	.status {
+		margin: 0.25rem 0 0;
+		font-size: 13px;
+		color: var(--white66);
+	}
+	.status.on {
+		color: var(--accent, var(--white));
+	}
+	.seg {
+		display: flex;
+		gap: 0.35rem;
+		padding: 0.25rem;
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
+		border: 1px solid var(--white11);
+	}
+	.seg button {
+		flex: 1;
+		height: 2.1rem;
+		border: 0;
+		border-radius: 9px;
+		background: transparent;
+		color: var(--white66);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.seg button.on {
+		background: var(--surface);
+		color: var(--white);
+		box-shadow: 0 1px 2px color-mix(in srgb, #000 18%, transparent);
+	}
+</style>

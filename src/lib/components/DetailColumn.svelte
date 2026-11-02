@@ -51,12 +51,13 @@
 	import CommentThread from './CommentThread.svelte';
 	import FormDetail from './FormDetail.svelte';
 	import PublicationsHub from './PublicationsHub.svelte';
+	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById } from '$lib/chat.svelte.js';
 	import MetricDetail from './MetricDetail.svelte';
 	import TableDetail from './TableDetail.svelte';
 	import ViewDetail from './ViewDetail.svelte';
 	import PullToRefresh from './PullToRefresh.svelte';
-	import SyncProgressBar from './SyncProgressBar.svelte';
+	import { syncUi } from '$lib/sync-progress.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
 	import { attachChromeScrollFade } from '$lib/chrome-scroll-fade.js';
 	import { openEntreprisesEntity } from '$lib/entity-routes.js';
@@ -216,6 +217,18 @@
 	const welcomeSelected = $derived(selection?.kind === 'welcome');
 	const pubsHub = $derived(selection?.kind === 'pubs');
 	const mailMsg = $derived(selection?.kind === 'mail' ? findMail(selection.id) : null);
+	const settingsSectionId = $derived(
+		selection?.kind === 'settings' ? String(selection.id || '') : ''
+	);
+	const SETTINGS_TITLES = {
+		profile: 'Profile',
+		notifications: 'Notifications',
+		appearance: 'Appearance',
+		storage: 'Storage',
+		mail: 'Mail',
+		publications: 'Publications',
+		drive: 'Drive'
+	};
 
 	$effect(() => {
 		const id = mailMsg?.id;
@@ -337,6 +350,7 @@
 		if (pubsHub) return 'Publications';
 		if (mailMsg) return 'Mail';
 		if (chatChannel) return chatChannel.title || 'Chat';
+		if (settingsSectionId) return SETTINGS_TITLES[settingsSectionId] || 'Settings';
 		return 'Detail';
 	});
 
@@ -361,6 +375,7 @@
 		if (pubsHub) return 'Publications';
 		if (mailMsg?.subject) return mailMsg.subject;
 		if (chatChannel) return chatChannel.title || 'General';
+		if (settingsSectionId) return SETTINGS_TITLES[settingsSectionId] || 'Settings';
 		return typeLabel;
 	});
 
@@ -384,7 +399,8 @@
 				welcomeSelected ||
 				pubsHub ||
 				mailMsg ||
-				chatChannel
+				chatChannel ||
+				settingsSectionId
 		)
 	);
 
@@ -414,6 +430,11 @@
 			return {
 				title: 'No chat selected',
 				body: 'Pick a chat from the list to open it here.'
+			};
+		if (path.startsWith('/settings'))
+			return {
+				title: 'Settings',
+				body: 'Pick a profile card action or a section to open it here.'
 			};
 		return { title: 'Nothing open', body: 'Select a task, project, note, mail, or chat to view it here.' };
 	});
@@ -649,6 +670,8 @@
 	aria-label="Detail"
 	bind:this={detailRoot}
 	style="--chrome-scroll-fade: {detailFade}"
+	class:titles-syncing={syncUi.active}
+	aria-busy={syncUi.active || undefined}
 >
 	{#if renderBody}
 		<header class="mobile-bar">
@@ -670,7 +693,6 @@
 			</button>
 			<span class="mobile-title-stack">
 				<span class="mobile-type">{isPlayer ? mobileTitle : typeLabel}</span>
-				<SyncProgressBar variant="under" class="mobile-sync-bar" />
 			</span>
 			{#if showMoreMenu}
 				<button
@@ -781,7 +803,6 @@
 					</button>
 				{/if}
 				<span class="detail-top-label">{playerTitle}</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				{#if playerConnected}
@@ -824,7 +845,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Task</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
@@ -889,7 +909,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Project</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
@@ -1032,7 +1051,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Note</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
@@ -1086,7 +1104,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Publications</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 		</header>
 		<div class="body">
@@ -1107,7 +1124,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Welcome</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				{#if showMoreMenu}
@@ -1147,7 +1163,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Newsletter</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				{#if newsletter.status === 'draft' || newsletter.status === 'failed'}
@@ -1209,7 +1224,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">{typeLabel}</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				<button
@@ -1271,7 +1285,6 @@
 				<span class="detail-top-label"
 					>{thread.length > 1 ? `Thread · ${thread.length}` : 'Mail'}</span
 				>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				<button
@@ -1300,6 +1313,27 @@
 				</article>
 			{/each}
 		</div>
+	{:else if settingsSectionId}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{SETTINGS_TITLES[settingsSectionId] || 'Settings'}</span>
+			</div>
+			<div class="detail-top-actions"></div>
+		</header>
+		<div class="body settings-section-body">
+			<SettingsSectionDetail sectionId={settingsSectionId} />
+		</div>
 	{:else if chatChannel}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1315,7 +1349,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">{chatChannel.title || 'General'}</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions"></div>
 		</header>
@@ -1339,7 +1372,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Ledger</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 		</header>
 		<div class="body">
@@ -1379,7 +1411,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Cost</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 		</header>
 		<div class="body">
@@ -1405,7 +1436,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Sales</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 		</header>
 		<div class="body">
@@ -1439,7 +1469,6 @@
 					</svg>
 				</button>
 				<span class="detail-top-label">Enterprise</span>
-				<SyncProgressBar variant="inline" class="detail-sync" />
 			</div>
 			<div class="detail-top-actions">
 				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
@@ -1828,20 +1857,7 @@
 		background: transparent;
 	}
 
-	/* Solid only to bar mid — avoid full opaque past control-row center */
-	:global(.detail .detail-top)::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: 24px;
-		background: var(--bg);
-		pointer-events: none;
-		z-index: -1;
-	}
-
-	/* Three-stop fade: solid top → ~80% at control-row mid (24px) → clear */
+	/* Three-stop fade: solid near bar → ~80% mid → clear (no solid ::before cliff) */
 	:global(.detail .detail-top)::after {
 		content: '';
 		position: absolute;
@@ -1852,7 +1868,7 @@
 		background: linear-gradient(
 			to bottom,
 			var(--bg) 0%,
-			color-mix(in srgb, var(--bg) 80%, transparent) 24px,
+			color-mix(in srgb, var(--bg) 80%, transparent) 50%,
 			transparent 100%
 		);
 		opacity: var(--chrome-scroll-fade, 0);
@@ -2102,6 +2118,11 @@
 		/* Match Task/Note column chrome; list scrolls inside PlayerDetail */
 		overflow: hidden;
 		width: 100%;
+	}
+
+	.body.settings-section-body {
+		padding: 16px 18px 24px;
+		overflow: auto;
 	}
 
 	.body.chat-channel-body {
@@ -2465,19 +2486,6 @@
 			background: transparent;
 		}
 
-		/* Solid to vertical center of the 44px chrome buttons */
-		.mobile-bar::before {
-			content: '';
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			height: calc(28px + env(safe-area-inset-top, 0px));
-			background: var(--shell);
-			pointer-events: none;
-			z-index: -1;
-		}
-
 		.mobile-bar::after {
 			content: '';
 			position: absolute;
@@ -2488,8 +2496,7 @@
 			background: linear-gradient(
 				to bottom,
 				var(--shell) 0%,
-				color-mix(in srgb, var(--shell) 80%, transparent)
-					calc(28px + env(safe-area-inset-top, 0px)),
+				color-mix(in srgb, var(--shell) 80%, transparent) 50%,
 				transparent 100%
 			);
 			opacity: var(--chrome-scroll-fade, 0);
@@ -2525,19 +2532,6 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
-		}
-
-		:global(.mobile-sync-bar) {
-			position: absolute;
-			left: 50%;
-			top: calc(100% + 4px);
-			transform: translateX(-50%);
-			align-self: center;
-		}
-
-		:global(.detail .detail-top .detail-sync),
-		:global(.detail .detail-top .sync-bar.detail-sync) {
-			display: none;
 		}
 
 		.chrome-btn {

@@ -30,6 +30,16 @@ function sessionCacheKey(session) {
 }
 
 /**
+ * In-memory tip from last successful load/put — no network.
+ * @param {DriveSession} session
+ */
+export function peekCachedTip(session) {
+	if (!session || !rootDirCache) return '';
+	if (rootDirCache.key !== sessionCacheKey(session)) return '';
+	return rootDirCache.tip || '';
+}
+
+/**
  * @param {string} path
  */
 function normalizePath(path) {

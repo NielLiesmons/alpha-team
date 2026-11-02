@@ -2323,12 +2323,15 @@ export async function createChatMessage(session, input, opts = {}) {
 	let feedIds;
 	/** @type {string[]} */
 	let commentIds = [];
-	let tipNow = '';
-	try {
-		const { getTip } = await import('./client.js');
-		tipNow = await getTip(session);
-	} catch {
-		tipNow = '';
+	const { getTip, peekCachedTip } = await import('./client.js');
+	/* Prefer memory tip (0 RTT) — only hit the network when we have no warm tip. */
+	let tipNow = peekCachedTip(session) || '';
+	if (!tipNow || tipNow !== cachedFeedTip) {
+		try {
+			tipNow = await getTip(session);
+		} catch {
+			tipNow = tipNow || '';
+		}
 	}
 	if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments) {
 		/* Tip unchanged since last feed load — skip feed.json download. */
