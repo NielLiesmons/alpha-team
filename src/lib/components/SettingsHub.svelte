@@ -1,10 +1,13 @@
 <script>
 	/**
-	 * Zapchat-style Settings hub:
-	 * horizontal profile cards (active + others + add) → section list → detail column / mobile modal.
+	 * Settings hub: horizontal profile cards → section list → detail column.
+	 * Follow ADR-shared-design-system + .cursor/rules/alpha-design-system.mdc
 	 */
 	import AddProfileSheet from './AddProfileSheet.svelte';
 	import ProfilePic from './ProfilePic.svelte';
+	import Crown from './icons/Crown.svelte';
+	import Pen from './icons/Pen.svelte';
+	import Share from './icons/Share.svelte';
 	import { actor, clearActor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
@@ -23,8 +26,12 @@
 	let shareMsg = $state('');
 
 	const isOperator = $derived(canManageSpace(actor.email));
-	const myRole = $derived(roleFor(actor.email));
 	const activeEmail = $derived((actor.email || '').trim().toLowerCase());
+
+	/** Admin = crown; no “owner” / “member” labels on cards. */
+	function isAdminRole(role) {
+		return role === 'owner' || role === 'admin';
+	}
 
 	/** Drive members when connected; otherwise only profiles unlocked on this device. */
 	const orderedProfiles = $derived.by(() => {
@@ -150,7 +157,6 @@
 		if (!confirm(`Disconnect ${label} on this device?`)) return;
 		try {
 			if (email) removeDeviceProfile(email);
-			/* Last profile on device → drop Drive session too. */
 			if (deviceProfiles.length === 0) {
 				clearSession();
 				clearActor();
@@ -163,29 +169,11 @@
 </script>
 
 <div class="hub">
-	<header class="profiles-head">
-		<span class="profiles-icon" aria-hidden="true">
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-				<path
-					d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Z"
-					stroke="currentColor"
-					stroke-width="1.6"
-				/>
-				<path
-					d="M4.5 20.25a7.5 7.5 0 0 1 15 0"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-				/>
-			</svg>
-		</span>
-		<h2 class="profiles-title">Profiles</h2>
-	</header>
-
 	<div class="cards-scroll">
 		<div class="cards-row">
 			{#each orderedProfiles as p (p.email)}
 				{@const active = p.email === activeEmail}
+				{@const admin = isAdminRole(p.role)}
 				<article class="profile-card" class:active class:other={!active}>
 					<button
 						type="button"
@@ -196,28 +184,38 @@
 							name={displayNameFromEmail(p.email) || p.name}
 							email={p.email}
 							pictureUrl={pictureUrlFor(p.email)}
-							size={48}
+							size={active ? 56 : 48}
 						/>
 						<div class="card-meta">
-							<span class="card-name">{displayNameFromEmail(p.email) || p.name}</span>
+							<span class="card-name-row">
+								<span class="card-name">{displayNameFromEmail(p.email) || p.name}</span>
+								{#if admin}
+									<span class="crown" title="Admin" aria-label="Admin">
+										<Crown size={13} />
+									</span>
+								{/if}
+							</span>
 							<span class="card-email">{p.email}</span>
-							{#if active && myRole}
-								<span class="card-role">{myRole}</span>
-							{:else if p.role}
-								<span class="card-role">{p.role}</span>
-							{/if}
 						</div>
 					</button>
 					{#if active}
 						<div class="card-ctas">
-							<button type="button" class="cta" onclick={() => openSection('profile')}>Edit</button>
-							<button type="button" class="cta" onclick={shareActive}>Share</button>
-						</div>
-					{:else}
-						<div class="card-ctas">
-							<button type="button" class="cta" onclick={() => onSwitchProfile(p.email)}
-								>Switch</button
+							<button
+								type="button"
+								class="icon-pill"
+								aria-label="Edit profile"
+								onclick={() => openSection('profile')}
 							>
+								<Pen size={14} />
+							</button>
+							<button
+								type="button"
+								class="icon-pill"
+								aria-label="Share profile"
+								onclick={shareActive}
+							>
+								<Share size={15} />
+							</button>
 						</div>
 					{/if}
 				</article>
@@ -268,66 +266,49 @@
 
 <style>
 	.hub {
-		padding: 8px 0 28px;
+		padding: 4px 0 28px;
 		box-sizing: border-box;
-	}
-
-	.profiles-head {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 4px 16px 12px;
-	}
-
-	.profiles-icon {
-		width: 32px;
-		height: 32px;
-		border-radius: 50%;
-		display: grid;
-		place-items: center;
-		background: color-mix(in srgb, var(--fg) 10%, transparent);
-		color: var(--white66);
-	}
-
-	.profiles-title {
-		margin: 0;
-		font-size: 1.15rem;
-		font-weight: 650;
-		letter-spacing: -0.02em;
-		color: var(--white);
 	}
 
 	.cards-scroll {
 		overflow-x: auto;
 		overflow-y: visible;
-		padding: 0 16px 4px;
+		padding: 4px 16px 8px;
 		-webkit-overflow-scrolling: touch;
 		scrollbar-width: thin;
 	}
 
 	.cards-row {
 		display: flex;
-		gap: 14px;
+		align-items: stretch;
+		gap: 12px;
 		width: max-content;
-		padding-bottom: 8px;
+		padding-bottom: 4px;
 	}
 
 	.profile-card {
-		width: min(256px, 72vw);
-		min-height: 144px;
+		width: min(228px, 68vw);
+		min-height: 128px;
 		padding: 14px;
 		border-radius: 16px;
-		border: 1px solid var(--white11);
-		background: color-mix(in srgb, var(--fg) 5%, var(--surface, transparent));
+		border: 1px solid var(--fg-8, var(--white11));
+		background: color-mix(in srgb, var(--fg) 4%, transparent);
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
+		transition:
+			width 0.18s ease,
+			min-height 0.18s ease,
+			background 0.15s ease;
 	}
 
 	.profile-card.active {
-		border-color: color-mix(in srgb, var(--accent, #3d7ea6) 45%, var(--white11));
-		background: color-mix(in srgb, var(--accent, #3d7ea6) 10%, var(--surface, transparent));
+		width: min(268px, 78vw);
+		min-height: 152px;
+		background: color-mix(in srgb, var(--fg) 7%, transparent);
+		/* Same subtle stroke as other cards — never accent selection chrome */
+		border-color: var(--fg-8, var(--white11));
 	}
 
 	.card-main {
@@ -342,28 +323,47 @@
 		font: inherit;
 		cursor: pointer;
 		min-width: 0;
+		flex: 1;
 	}
 
 	.card-meta {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		justify-content: center;
+		gap: 3px;
+		min-width: 0;
+	}
+
+	.card-name-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		min-width: 0;
 	}
 
 	.card-name {
 		font-size: 15px;
 		font-weight: 650;
-		color: var(--white);
+		color: var(--fg, var(--white));
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.card-email,
-	.card-role {
+	.profile-card.active .card-name {
+		font-size: 16px;
+	}
+
+	.crown {
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
+		color: var(--fg-66, var(--white66));
+	}
+
+	.card-email {
 		font-size: 12px;
-		color: var(--white66);
+		color: var(--fg-66, var(--white66));
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -375,59 +375,67 @@
 		margin-top: auto;
 	}
 
-	.cta {
-		flex: 1;
-		height: 2rem;
-		border-radius: 10px;
-		border: 1px solid var(--white11);
-		background: color-mix(in srgb, var(--fg) 6%, transparent);
-		color: var(--white);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 600;
+	.icon-pill {
+		width: 2.125rem;
+		height: 2.125rem;
+		border-radius: 999px;
+		border: 0;
+		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
+		color: var(--fg-66, var(--white66));
+		display: grid;
+		place-items: center;
 		cursor: pointer;
+		padding: 0;
 	}
 
-	.cta:hover {
-		border-color: color-mix(in srgb, var(--accent, #3d7ea6) 40%, var(--white11));
+	.icon-pill:hover {
+		background: var(--fg-12, color-mix(in srgb, var(--fg) 12%, transparent));
+		color: var(--fg, var(--white));
 	}
 
 	.add-card {
-		align-items: flex-start;
-		justify-content: center;
+		flex-direction: row;
+		align-items: center;
+		justify-content: flex-start;
 		gap: 12px;
 		cursor: pointer;
-		color: var(--white66);
+		color: var(--fg-66, var(--white66));
 		background: color-mix(in srgb, var(--fg) 4%, transparent);
-		border-style: dashed;
+		border: 1px solid var(--fg-8, var(--white11));
+		font: inherit;
+		text-align: left;
 	}
 
 	.add-plus {
-		width: 38px;
-		height: 38px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		background: color-mix(in srgb, var(--fg) 8%, transparent);
-		font-size: 22px;
+		border: 2px solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
+		background: transparent;
+		font-size: 28px;
+		font-weight: 400;
 		line-height: 1;
-		color: var(--white66);
+		color: var(--fg-66, var(--white66));
+		flex-shrink: 0;
 	}
 
 	.add-label {
 		font-size: 14px;
 		font-weight: 600;
+		color: var(--fg-66, var(--white66));
 	}
 
 	.toast {
 		margin: 0 16px 8px;
 		font-size: 13px;
-		color: var(--accent, var(--white));
+		color: var(--fg-66, var(--white66));
 	}
 
 	.rule {
 		border: 0;
-		border-top: 1px solid var(--white11);
+		border-top: 1px solid var(--fg-8, var(--white11));
 		margin: 10px 0;
 	}
 
@@ -460,8 +468,9 @@
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
 	}
 
+	/* Selection = quiet fill only — no accent outline */
 	.section-row.on {
-		outline: 1px solid color-mix(in srgb, var(--accent, #3d7ea6) 35%, transparent);
+		outline: none;
 	}
 
 	.section-text {
@@ -475,12 +484,12 @@
 	.section-title {
 		font-size: 15px;
 		font-weight: 650;
-		color: var(--white);
+		color: var(--fg, var(--white));
 	}
 
 	.section-desc {
 		font-size: 12px;
-		color: var(--white66);
+		color: var(--fg-66, var(--white66));
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -489,7 +498,7 @@
 	.chev {
 		font-size: 22px;
 		line-height: 1;
-		color: var(--white44, var(--white66));
+		color: var(--fg-33, var(--white44));
 		padding-right: 4px;
 	}
 
@@ -500,13 +509,18 @@
 	.disconnect {
 		width: 100%;
 		height: 2.5rem;
-		border-radius: 12px;
-		border: 1px solid color-mix(in srgb, #c44 35%, var(--white11));
-		background: color-mix(in srgb, #c44 10%, transparent);
-		color: #e87878;
+		border-radius: 999px;
+		border: 0;
+		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
+		color: var(--fg-66, var(--white66));
 		font: inherit;
 		font-size: 14px;
-		font-weight: 650;
+		font-weight: 600;
 		cursor: pointer;
+	}
+
+	.disconnect:hover {
+		background: var(--fg-12, color-mix(in srgb, var(--fg) 12%, transparent));
+		color: var(--fg, var(--white));
 	}
 </style>

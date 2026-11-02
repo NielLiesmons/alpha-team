@@ -1,0 +1,39 @@
+---
+description: Alpha Admin visual system — accents, icons, buttons, destructive chrome
+globs: src/**/*.{svelte,css,js}
+alwaysApply: true
+---
+
+# Alpha Admin design system (agents)
+
+Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §3 / §3b).
+
+## Accent
+
+- Accent is a **whisper** for checks, sparse marks, focus — **not** selected cards, section rows, FABs, body text, or primary CTAs.
+- Never paint selected Settings cards / list rows with accent border or accent wash. Use grayscale fill (`--fg-4` / `--fg-8`).
+
+## Icons
+
+- Prefer existing icons: `Pen`, `Share` (filled), `Crown`, `Trash`, `NavIcon`, `@alpha/ui` SVGs.
+- Do **not** invent inline person/share glyphs when a product icon exists.
+- Icon color on quiet chrome: `currentColor` at `--fg-66`, not full ink.
+
+## Buttons
+
+- Default chrome actions: **pill / round** with subtle `--fg-8` background, no heavy stroke.
+- Avoid stroked rectangular buttons inside cards.
+- Primary CTAs: ink-on-bg (existing `--button-primary-*`), not accent-filled.
+
+## Destructive
+
+- Disconnect, Delete, cancel-danger: **grayscale only** (muted text + quiet fill).
+- Never use `--destructive` rose, `--accent-2`, or `--accent-3` for these.
+
+## Settings profiles
+
+- No duplicate “Profiles” header under the shell Settings title.
+- Admin = **crown** beside name; do not print owner/admin/member labels on cards.
+- Selected card slightly larger; same subtle stroke as unselected + Add Profile.
+- Add Profile: horizontal row, fatter stroked `+` circle, larger plus.
+- Active card actions: round icon pills (Pen, filled Share) — not text CTAs.

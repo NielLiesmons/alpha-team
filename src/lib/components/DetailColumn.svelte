@@ -5,25 +5,12 @@
 	import EnterpriseBox from './EnterpriseBox.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import NoteEditor from './NoteEditor.svelte';
-	import PlayerDetail from './PlayerDetail.svelte';
 	import DetailMetaPills from './DetailMetaPills.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import TaskFieldPicker from './TaskFieldPicker.svelte';
 	import Pen from './icons/Pen.svelte';
 	import Trash from './icons/Trash.svelte';
-	import {
-		currentTrack,
-		openUploadModal,
-		playerBack,
-		playerBrowse,
-		playerHeading,
-		playerUi,
-		setPlayerBrowse,
-		uploadAudioFiles,
-		uploadUi
-	} from '$lib/player.svelte.js';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
-	import { activeSession } from '$lib/drive/session.svelte.js';
 	import {
 		campaigns,
 		mailSettings,
@@ -114,14 +101,9 @@
 	}
 
 	const selection = $derived(ui.selection);
-	const isPlayer = $derived($page.url.pathname.startsWith('/player'));
 	const chatChannelId = $derived(selection?.kind === 'chat' ? String(selection.id) : null);
 	const chatChannel = $derived(chatChannelId ? channelById(chatChannelId) : null);
-	const playerTitle = $derived(isPlayer ? playerHeading() : '');
-	const playerConnected = $derived(Boolean(activeSession()));
 
-	/** @type {HTMLInputElement | undefined} */
-	let playerFileInput = $state();
 	/** @type {HTMLElement | undefined} */
 	let detailRoot = $state();
 	/** 0 at rest → 1 after ~16px scroll (detail-top / mobile-bar fade) */
@@ -129,29 +111,11 @@
 
 	$effect(() => {
 		selection;
-		isPlayer;
-		playerBrowse;
 		const root = detailRoot;
 		return attachChromeScrollFade(root, (v) => {
 			detailFade = v;
 		});
 	});
-
-	async function onPlayerFiles(/** @type {Event} */ e) {
-		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
-		const files = input.files;
-		if (!files?.length) return;
-		// Copy FileList before clearing input — upload is async
-		const list = [...files];
-		input.value = '';
-		openUploadModal();
-		try {
-			await uploadAudioFiles(list);
-		} catch (err) {
-			playerUi.error = err instanceof Error ? err.message : String(err);
-			openUploadModal();
-		}
-	}
 
 	const task = $derived(
 		selection?.kind === 'task' ? tasks.find((t) => t.id === selection.id) : null
@@ -322,11 +286,10 @@
 		)
 	);
 	const showMoreMenu = $derived(
-		Boolean(canDelete || canShare || canComposerEdit || (isPlayer && playerConnected))
+		Boolean(canDelete || canShare || canComposerEdit)
 	);
 
 	const typeLabel = $derived.by(() => {
-		if (isPlayer) return 'Player';
 		if (task) return 'Task';
 		if (project) return 'Project';
 		if (note) return 'Note';
@@ -356,7 +319,6 @@
 
 	/** Centered mobile detail title (entity name when available). */
 	const mobileTitle = $derived.by(() => {
-		if (isPlayer) return playerTitle || 'Player';
 		if (task?.title) return task.title;
 		if (project?.title) return project.title;
 		if (note?.title) return note.title;
@@ -381,7 +343,6 @@
 
 	const open = $derived(
 		Boolean(
-			(isPlayer && playerBrowse.detailOpen) ||
 				task ||
 				project ||
 				note ||
@@ -665,8 +626,6 @@
 	class="detail"
 	class:open={panelOpen}
 	class:empty={!renderBody}
-	class:player-mode={isPlayer}
-	class:has-mini={isPlayer && Boolean(currentTrack())}
 	aria-label="Detail"
 	bind:this={detailRoot}
 	style="--chrome-scroll-fade: {detailFade}"
@@ -679,7 +638,7 @@
 				type="button"
 				class="chrome-btn chev-back"
 				aria-label="Back"
-				onclick={() => (isPlayer ? playerBack() : close())}
+				onclick={close}
 			>
 				<svg width="22" height="22" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 					<path
@@ -692,7 +651,7 @@
 				</svg>
 			</button>
 			<span class="mobile-title-stack">
-				<span class="mobile-type">{isPlayer ? mobileTitle : typeLabel}</span>
+				<span class="mobile-type">{mobileTitle || typeLabel}</span>
 			</span>
 			{#if showMoreMenu}
 				<button
@@ -723,18 +682,6 @@
 			onclose={() => (menuOpen = false)}
 		>
 			<div class="float-list" role="menu">
-				{#if isPlayer && playerConnected}
-					<button
-						type="button"
-						class="menu-item"
-						role="menuitem"
-						onclick={() => {
-							menuOpen = false;
-							if (uploadUi.active) openUploadModal();
-							else playerFileInput?.click();
-						}}>{uploadUi.active ? 'Uploads' : 'Upload'}</button
-					>
-				{/if}
 				{#if canShare}
 					<button type="button" class="menu-item" role="menuitem" onclick={() => void shareCurrent()}>
 						Share
@@ -756,81 +703,7 @@
 		</FloatPanel>
 
 	<PullToRefresh onRefresh={() => refreshAllDrive()}>
-	{#if isPlayer}
-		<input
-			bind:this={playerFileInput}
-			class="sr-only"
-			type="file"
-			accept="audio/*,.mp3,.m4a,.flac,.ogg,.wav"
-			multiple
-			onchange={onPlayerFiles}
-		/>
-		<header class="detail-top desktop-head">
-			<div class="detail-top-start">
-				{#if playerBrowse.mode === 'artists' && playerBrowse.artist}
-					<button
-						type="button"
-						class="icon-hit"
-						aria-label="Back to artists"
-						onclick={() => setPlayerBrowse('artists')}
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path
-								d="M10 3.5 5.5 8 10 12.5"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-					</button>
-				{:else if playerBrowse.mode === 'albums' && playerBrowse.album}
-					<button
-						type="button"
-						class="icon-hit"
-						aria-label="Back to albums"
-						onclick={() => setPlayerBrowse('albums')}
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path
-								d="M10 3.5 5.5 8 10 12.5"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-					</button>
-				{/if}
-				<span class="detail-top-label">{playerTitle}</span>
-			</div>
-			<div class="detail-top-actions">
-				{#if playerConnected}
-					<button
-						type="button"
-						class="icon-hit"
-						aria-label="Upload audio"
-						onclick={() => {
-							if (uploadUi.active) openUploadModal();
-							else playerFileInput?.click();
-						}}
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path
-								d="M8 3.25v9.5M3.25 8h9.5"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-							/>
-						</svg>
-					</button>
-				{/if}
-			</div>
-		</header>
-		<div class="body player-body">
-			<PlayerDetail />
-		</div>
-	{:else if task}
+	{#if task}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
 				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
@@ -2366,12 +2239,12 @@
 	}
 
 	.menu-item.danger {
-		color: var(--destructive);
+		color: var(--fg-66);
 	}
 
 	.menu-item.danger:hover {
-		background: var(--destructive-16);
-		color: var(--destructive);
+		background: var(--fg-8);
+		color: var(--fg);
 	}
 
 	.menu-item svg {

@@ -33,7 +33,7 @@
 	/** @type {string | null} */
 	let editingEmail = $state(null);
 	let editName = $state('');
-	/** @type {'owner' | 'admin' | 'member'} */
+	/** @type {'admin' | 'member'} */
 	let editRole = $state('member');
 	/** @type {'active' | 'invited' | 'disabled'} */
 	let editStatus = $state('active');
@@ -147,7 +147,8 @@
 	function startEdit(m) {
 		editingEmail = m.email;
 		editName = m.name;
-		editRole = m.role;
+		/* UI: owner collapses to admin (crown); no separate owner label. */
+		editRole = m.role === 'member' ? 'member' : 'admin';
 		editStatus = m.status || 'active';
 		editMsg = '';
 		reshareEmail = null;
@@ -300,7 +301,7 @@
 						<button type="button" class="btn ghost sm" onclick={() => startReshare(m)}
 							>Share code</button
 						>
-						<button type="button" class="btn ghost sm danger" onclick={() => void onDelete(m)}
+						<button type="button" class="btn ghost sm" onclick={() => void onDelete(m)}
 							>Delete</button
 						>
 					</div>
@@ -316,7 +317,6 @@
 								<select bind:value={editRole}>
 									<option value="member">Member</option>
 									<option value="admin">Admin</option>
-									<option value="owner">Owner</option>
 								</select>
 							</label>
 							<label class="row stack">
@@ -636,11 +636,6 @@
 		background: transparent;
 		color: var(--white66);
 		border: 1px solid var(--white11);
-	}
-
-	.btn.ghost.danger {
-		color: var(--destructive, #e66);
-		border-color: color-mix(in srgb, var(--destructive, #e66) 35%, var(--white11));
 	}
 
 	.status {
