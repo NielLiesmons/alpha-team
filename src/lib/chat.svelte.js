@@ -118,6 +118,54 @@ export function hydrateChatFeedFromCache() {
 	return true;
 }
 
+/**
+ * Merge server rows with in-memory pending / recent settles. Never drops in-flight sends.
+ * @param {any[]} list
+ * @param {any[]} prev
+ */
+function mergeFeedRows(list, prev) {
+	const byId = new Map();
+	for (const m of list) {
+		const id = String(m?.id || '');
+		if (id) byId.set(id, m);
+	}
+	const now = Date.now();
+	for (const m of prev) {
+		const id = String(m?.id || '');
+		if (!id) continue;
+		if (byId.has(id)) {
+			if (Array.isArray(m.attachments)) {
+				const server = byId.get(id);
+				const prevAtt = m.attachments;
+				const nextAtt = Array.isArray(server.attachments) ? server.attachments : [];
+				byId.set(id, {
+					...server,
+					attachments: nextAtt.map((a) => ({
+						...a,
+						...(prevAtt.find((p) => p?.path === a?.path)?.previewUrl
+							? { previewUrl: prevAtt.find((p) => p?.path === a?.path)?.previewUrl }
+							: {})
+					}))
+				});
+			}
+			continue;
+		}
+		const pending =
+			Boolean(m?._local || m?._pending) || String(id).startsWith('local-');
+		const created = Date.parse(m.created_at || '');
+		const recent =
+			Number.isFinite(created) && now - created >= 0 && now - created < SETTLE_GRACE_MS;
+		if (pending || recent) byId.set(id, m);
+	}
+
+	const serverOrder = list.map((m) => String(m.id)).filter(Boolean);
+	const extras = [...byId.keys()].filter((id) => !serverOrder.includes(id));
+	return [
+		...extras.map((id) => byId.get(id)),
+		...serverOrder.map((id) => byId.get(id))
+	].filter(Boolean);
+}
+
 export async function refreshChatFeed() {
 	const session = activeSession();
 	if (!session) {
@@ -134,57 +182,25 @@ export async function refreshChatFeed() {
 	const gen = ++feedFetchGen;
 	const prev = chatFeed.slice();
 	try {
-		const list = await listFeedMessages(session, CHAT_FEED_LIMIT);
+		const apply = (/** @type {any[]} */ list) => {
+			if (gen !== feedFetchGen) return;
+			const merged = mergeFeedRows(list, prev);
+			if (!merged.length && !chatFeed.length) return;
+			chatFeed.splice(0, chatFeed.length, ...merged);
+			chatUi.loading = false;
+			chatUi.settled = true;
+			writeChatCache(merged.filter((m) => !String(m.id || '').startsWith('local-')));
+		};
+
+		const list = await listFeedMessages(session, CHAT_FEED_LIMIT, {
+			onPartial: (partial) => {
+				/* Leaf-cache hits / early batches — drop skeleton before network misses finish. */
+				if (partial?.length) apply(partial);
+			}
+		});
 		/* A newer refresh or settle won — do not clobber. */
 		if (gen !== feedFetchGen) return;
-
-		const byId = new Map();
-		for (const m of list) {
-			const id = String(m?.id || '');
-			if (id) byId.set(id, m);
-		}
-		const now = Date.now();
-		for (const m of prev) {
-			const id = String(m?.id || '');
-			if (!id || byId.has(id)) {
-				/* Preserve local attachment previews over bare server rows. */
-				if (id && byId.has(id) && Array.isArray(m.attachments)) {
-					const server = byId.get(id);
-					const prevAtt = m.attachments;
-					const nextAtt = Array.isArray(server.attachments) ? server.attachments : [];
-					byId.set(id, {
-						...server,
-						attachments: nextAtt.map((a, i) => ({
-							...a,
-							...(prevAtt[i]?.previewUrl ? { previewUrl: prevAtt[i].previewUrl } : {}),
-							...(prevAtt.find((p) => p?.path === a?.path)?.previewUrl
-								? {
-										previewUrl: prevAtt.find((p) => p?.path === a?.path)?.previewUrl
-									}
-								: {})
-						}))
-					});
-				}
-				continue;
-			}
-			const pending =
-				Boolean(m?._local || m?._pending) || String(id).startsWith('local-');
-			const created = Date.parse(m.created_at || '');
-			const recent =
-				Number.isFinite(created) && now - created >= 0 && now - created < SETTLE_GRACE_MS;
-			if (pending || recent) byId.set(id, m);
-		}
-
-		const serverOrder = list.map((m) => String(m.id)).filter(Boolean);
-		const extras = [...byId.keys()].filter((id) => !serverOrder.includes(id));
-		/* Newest-first: pending/recent extras first, then server feed order. */
-		const merged = [
-			...extras.map((id) => byId.get(id)),
-			...serverOrder.map((id) => byId.get(id))
-		].filter(Boolean);
-
-		chatFeed.splice(0, chatFeed.length, ...merged);
-		writeChatCache(merged.filter((m) => !String(m.id || '').startsWith('local-')));
+		apply(list);
 	} catch (e) {
 		if (gen === feedFetchGen) {
 			chatUi.error = e instanceof Error ? e.message : String(e);

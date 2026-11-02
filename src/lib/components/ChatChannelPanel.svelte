@@ -146,11 +146,13 @@
 	onMount(() => {
 		mountedChannel = channelId;
 		startChatTipPoll();
-		const warm = hydrateChatFeedFromCache();
+		const warm = hydrateChatFeedFromCache() || chatFeed.length > 0;
 		if (warm) {
+			chatUi.loading = false;
+			chatUi.settled = true;
 			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
 			void scrollToBottom(true);
-		} else {
+		} else if (chatFeed.length === 0) {
 			chatUi.loading = true;
 		}
 		void refreshChatFeed().then(() => {

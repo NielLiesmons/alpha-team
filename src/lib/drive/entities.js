@@ -465,6 +465,7 @@ export async function listNotes(session, projectId) {
 export function toUiNote(n, projectList) {
 	const byId = new Map(projectList.map((p) => [p.id, p]));
 	const createdMs = n.created_at ? Date.parse(n.created_at) : 0;
+	const updatedMs = n.updated_at ? Date.parse(n.updated_at) : createdMs;
 	const authorEmail =
 		typeof n.author === 'string' ? n.author : n.author?.email || n.author?.pubkey || '';
 	return {
@@ -480,6 +481,7 @@ export function toUiNote(n, projectList) {
 		author: authorEmail || null,
 		assignees: [],
 		createdAt: Number.isFinite(createdMs) ? createdMs : 0,
+		updatedAt: Number.isFinite(updatedMs) ? updatedMs : Number.isFinite(createdMs) ? createdMs : 0,
 		_drive: n
 	};
 }
@@ -1994,10 +1996,23 @@ const FEED_MAX = 200;
 /**
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
+ * @param {any} [dir]
  */
-export async function getChatMessage(session, id) {
-	const bytes = await getPath(session, `chat/messages/${id}.json`);
-	return JSON.parse(new TextDecoder().decode(bytes));
+export async function getChatMessage(session, id, dir) {
+	const path = `chat/messages/${id}.json`;
+	const root = dir || (await loadRootDir(session));
+	const hash = root?.children?.[path]?.hash || root?.children?.[path.replace(/^\//, '')]?.hash;
+	const { getCachedLeaf, putCachedLeaf } = await import('./leaf-cache.js');
+	if (hash) {
+		const hit = await getCachedLeaf(hash);
+		if (hit) return hit;
+	}
+	const { bytes } = dir
+		? await getPathFromDir(session, dir, path)
+		: { bytes: await getPath(session, path) };
+	const doc = JSON.parse(new TextDecoder().decode(bytes));
+	if (hash) void putCachedLeaf(hash, doc);
+	return doc;
 }
 
 /**
@@ -2055,20 +2070,70 @@ export async function listFeedIds(session) {
 }
 
 /**
+ * Load feed messages with leaf-cache + one tip/dir load (same pattern as listTracks).
+ * Optional onPartial paints cache hits / early batches before misses finish.
  * @param {import('./client.js').DriveSession} session
  * @param {number} [limit]
+ * @param {{ onPartial?: (rows: any[]) => void }} [opts]
  */
-export async function listFeedMessages(session, limit = FEED_MAX) {
-	const ids = (await listFeedIds(session)).slice(0, limit);
-	const { mapPool } = await import('./leaf-cache.js');
-	const rows = await mapPool(ids, 16, async (id) => {
+export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
+	const { dir } = await loadRootDirWithTip(session);
+	const ids = (await listFeedIdsFromDir(session, dir)).slice(0, limit);
+	if (!ids.length) return [];
+
+	const { getCachedLeaf, mapPool, putCachedLeaf } = await import('./leaf-cache.js');
+	/** @type {{ id: string, path: string, hash: string | null }[]} */
+	const entries = ids.map((id) => {
+		const path = `chat/messages/${id}.json`;
+		const child = dir.children?.[path];
+		return { id: String(id), path, hash: child?.hash ? String(child.hash) : null };
+	});
+
+	/** @type {(any | null)[]} */
+	const slots = new Array(entries.length).fill(null);
+
+	await mapPool(entries, 48, async (entry, i) => {
+		if (!entry.hash) return;
+		const hit = await getCachedLeaf(entry.hash);
+		if (hit) slots[i] = hit;
+	});
+
+	const partial = () => {
+		if (typeof opts.onPartial !== 'function') return;
+		opts.onPartial(slots.filter(Boolean));
+	};
+	/* Paint IndexedDB hits immediately — hard refresh should not wait on network. */
+	if (slots.some(Boolean)) partial();
+
+	/** @type {number[]} */
+	const missIdx = [];
+	for (let i = 0; i < slots.length; i++) {
+		if (!slots[i]) missIdx.push(i);
+	}
+
+	let lastPartialCount = slots.filter(Boolean).length;
+	await mapPool(missIdx, 32, async (i) => {
+		const entry = entries[i];
 		try {
-			return await getChatMessage(session, id);
+			const { bytes } = await getPathFromDir(session, dir, entry.path);
+			const doc = JSON.parse(new TextDecoder().decode(bytes));
+			if (entry.hash) void putCachedLeaf(entry.hash, doc);
+			slots[i] = doc;
 		} catch {
-			return null;
+			slots[i] = null;
+		}
+		const filled = slots.filter(Boolean).length;
+		/* First screenful ASAP, then every ~24 newly filled leaves. */
+		if (filled >= 24 && filled - lastPartialCount >= 24) {
+			lastPartialCount = filled;
+			partial();
+		} else if (filled >= 12 && lastPartialCount < 12) {
+			lastPartialCount = filled;
+			partial();
 		}
 	});
-	return rows.filter(Boolean);
+	partial();
+	return slots.filter(Boolean);
 }
 
 /**
