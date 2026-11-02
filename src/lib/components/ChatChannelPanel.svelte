@@ -33,6 +33,7 @@
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { putPath } from '$lib/drive/client.js';
 	import { putMediaBlob } from '$lib/drive/media.js';
+	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 
 	/** @type {{ channelId?: string }} */
@@ -403,6 +404,7 @@
 	function openVoiceShell() {
 		voiceOpen = true;
 		voiceSecs = 0;
+		signalRecording(channelId, true);
 		if (voiceTimer != null) clearInterval(voiceTimer);
 		voiceTimer = setInterval(() => {
 			voiceSecs += 1;
@@ -412,6 +414,7 @@
 	function cancelVoiceShell() {
 		voiceOpen = false;
 		voiceSecs = 0;
+		signalRecording(channelId, false);
 		if (voiceTimer != null) {
 			clearInterval(voiceTimer);
 			voiceTimer = null;
@@ -450,6 +453,7 @@
 		el.style.height = `${next}px`;
 		fieldTall = next > COMPOSER_TALL_PX || draft.includes('\n');
 		updateInputFade();
+		if (draft.trim()) signalTyping(channelId);
 	}
 
 	const isDark = $derived.by(() => {

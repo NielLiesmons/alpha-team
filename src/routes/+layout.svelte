@@ -8,6 +8,7 @@
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { initChatWakeListeners } from '$lib/chat-sync.svelte.js';
 	import { initPwa } from '$lib/pwa.svelte.js';
+	import { startRealtime, stopRealtime } from '$lib/realtime.svelte.js';
 	import { initTheme } from '$lib/theme.svelte.js';
 	import { startViewportBridge } from '$lib/viewport.svelte.js';
 	import AppShell from '$lib/components/AppShell.svelte';
@@ -18,6 +19,14 @@
 
 	const signedIn = $derived(Boolean(driveSession.connected && actor.email));
 	const webManifestLink = $derived(pwaInfo?.webManifest?.linkTag ?? '');
+
+	$effect(() => {
+		if (!signedIn) {
+			stopRealtime();
+			return;
+		}
+		return startRealtime();
+	});
 
 	onMount(() => {
 		const stopVv = startViewportBridge();

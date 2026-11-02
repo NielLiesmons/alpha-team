@@ -594,6 +594,14 @@ export async function postChatMessage(input) {
 			/* Tip finished — refresh settle fields if leaf callback already ran. */
 			settleFrom(created);
 
+			/* Fast tip-wake on the realtime bus (WS); push remains for background. */
+			void import('./drive/client.js')
+				.then(({ getTip }) => getTip(session))
+				.then((tip) =>
+					import('./realtime.svelte.js').then(({ publishTipWake }) => publishTipWake(tip))
+				)
+				.catch(() => {});
+
 			/* Wake other devices (Home Screen PWA push). Never block the send UX. */
 			if (!isReaction && kind !== 'reaction') {
 				const pushBody =
