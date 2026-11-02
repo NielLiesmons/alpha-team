@@ -5,15 +5,16 @@
 	 */
 	import AddProfileSheet from './AddProfileSheet.svelte';
 	import ProfilePic from './ProfilePic.svelte';
-	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { actor, clearActor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		deviceProfiles,
+		hasDeviceProfile,
 		removeDeviceProfile,
 		switchDeviceProfile
 	} from '$lib/device-profiles.svelte.js';
 	import { clearSession, driveSession } from '$lib/drive/session.svelte.js';
-	import { canManageSpace, roleFor } from '$lib/members.svelte.js';
+	import { canManageSpace, members, roleFor } from '$lib/members.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { pwaUi } from '$lib/pwa.svelte.js';
 	import { refreshFromDrive, selectEntity, ui } from '$lib/workspace.svelte.js';
@@ -25,12 +26,32 @@
 	const myRole = $derived(roleFor(actor.email));
 	const activeEmail = $derived((actor.email || '').trim().toLowerCase());
 
+	/** Drive members when connected; otherwise only profiles unlocked on this device. */
 	const orderedProfiles = $derived.by(() => {
-		const list = [...deviceProfiles];
+		/** @type {{ email: string, name: string, role?: string, onDevice: boolean }[]} */
+		let list = [];
+		if (driveSession.connected && members.length) {
+			list = members
+				.filter((m) => m.status !== 'disabled')
+				.map((m) => ({
+					email: m.email,
+					name: m.name,
+					role: m.role,
+					onDevice: hasDeviceProfile(m.email)
+				}));
+		} else {
+			list = deviceProfiles.map((p) => ({
+				email: p.email,
+				name: p.name,
+				role: roleFor(p.email) || undefined,
+				onDevice: true
+			}));
+		}
 		list.sort((a, b) => {
 			const ae = a.email === activeEmail ? 0 : 1;
 			const be = b.email === activeEmail ? 0 : 1;
-			return ae - be;
+			if (ae !== be) return ae - be;
+			return a.name.localeCompare(b.name);
 		});
 		return list;
 	});
@@ -132,6 +153,7 @@
 			/* Last profile on device → drop Drive session too. */
 			if (deviceProfiles.length === 0) {
 				clearSession();
+				clearActor();
 				await refreshFromDrive();
 			}
 		} catch (e) {
@@ -171,16 +193,18 @@
 						onclick={() => (active ? openSection('profile') : onSwitchProfile(p.email))}
 					>
 						<ProfilePic
-							name={displayNameFromEmail(p.email)}
+							name={displayNameFromEmail(p.email) || p.name}
 							email={p.email}
 							pictureUrl={pictureUrlFor(p.email)}
 							size={48}
 						/>
 						<div class="card-meta">
-							<span class="card-name">{displayNameFromEmail(p.email)}</span>
+							<span class="card-name">{displayNameFromEmail(p.email) || p.name}</span>
 							<span class="card-email">{p.email}</span>
 							{#if active && myRole}
 								<span class="card-role">{myRole}</span>
+							{:else if p.role}
+								<span class="card-role">{p.role}</span>
 							{/if}
 						</div>
 					</button>

@@ -253,3 +253,27 @@ export async function markMemberJoined(email) {
 		}
 	}
 }
+
+/**
+ * Remove a member from the Space directory (does not revoke Drive root key).
+ * @param {string} email
+ * @param {{ actorEmail?: string }} [opts]
+ */
+export async function removeMember(email, opts = {}) {
+	const e = normalizeEmail(email);
+	const m = memberFor(e);
+	if (!m) throw new Error('Unknown member');
+	const actorEmail = normalizeEmail(opts.actorEmail || '');
+	if (actorEmail && e === actorEmail) {
+		throw new Error('You cannot delete the profile you are signed in as.');
+	}
+	if (m.role === 'owner') {
+		const owners = members.filter((x) => x.role === 'owner' && x.status !== 'disabled');
+		if (owners.length <= 1) throw new Error('Cannot delete the last owner.');
+	}
+	const next = members.filter((x) => x.email !== e);
+	const session = activeSession();
+	if (session) await saveMembers(session, next);
+	else replaceMembers(next);
+	return true;
+}

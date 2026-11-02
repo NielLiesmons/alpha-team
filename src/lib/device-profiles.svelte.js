@@ -1,9 +1,11 @@
 /**
  * Profiles unlocked on *this device* via invite QR/code.
- * Switching only happens among these — not the full Drive member directory.
+ * With a connected Drive session, Settings can also switch among Space members
+ * (shared root key) — that adds them to this device list.
  */
 
 import { actor, setActiveEmail } from './actor.svelte.js';
+import { memberFor } from './members.svelte.js';
 
 const KEY = 'alpha-admin-device-profiles.v1';
 
@@ -97,8 +99,17 @@ export function switchDeviceProfile(email) {
 	const e = String(email || '')
 		.trim()
 		.toLowerCase();
-	const row = deviceProfiles.find((p) => p.email === e);
-	if (!row) throw new Error('That profile is not on this device — add it with an invite code.');
+	const onDevice = deviceProfiles.find((p) => p.email === e);
+	if (onDevice) {
+		setActiveEmail(onDevice.email);
+		return onDevice;
+	}
+	/* Connected Space: any Drive member can be assumed on this device (shared root). */
+	const m = memberFor(e);
+	if (!m || m.status === 'disabled') {
+		throw new Error('That profile is not on this Space — invite them from Accounts first.');
+	}
+	const row = addDeviceProfile({ email: m.email, name: m.name });
 	setActiveEmail(row.email);
 	return row;
 }

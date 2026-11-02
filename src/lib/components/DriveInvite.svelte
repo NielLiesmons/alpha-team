@@ -1,4 +1,5 @@
 <script>
+	import { onMount } from 'svelte';
 	import QRCode from 'qrcode';
 	import { actor } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
@@ -6,7 +7,9 @@
 	import {
 		canInvite,
 		canManageMembers,
+		ensureMembers,
 		members,
+		removeMember,
 		upsertMember
 	} from '$lib/members.svelte.js';
 	import { generateMailboxPassword, provisionMailbox } from '$lib/stalwart-provision.js';
@@ -27,17 +30,49 @@
 	let shareBusy = $state(false);
 	let shareMsg = $state('');
 
+	/** @type {string | null} */
+	let editingEmail = $state(null);
+	let editName = $state('');
+	/** @type {'owner' | 'admin' | 'member'} */
+	let editRole = $state('member');
+	/** @type {'active' | 'invited' | 'disabled'} */
+	let editStatus = $state('active');
+	let editBusy = $state(false);
+	let editMsg = $state('');
+
+	/** Re-share invite for an existing member (no new account / mailbox). */
+	/** @type {string | null} */
+	let reshareEmail = $state(null);
+	let resharePass = $state('');
+	let resharePass2 = $state('');
+	let reshareBusy = $state(false);
+	let reshareMsg = $state('');
+	let reshareLink = $state('');
+	let reshareQr = $state('');
+
 	const inviteEmail = $derived(
 		inviteLocal.trim()
 			? `${inviteLocal.trim().toLowerCase().replace(/@.*$/, '')}@${mailDomain}`
 			: ''
 	);
 
-	async function makeMemberInvite() {
-		shareMsg = '';
+	const sortedMembers = $derived(
+		[...members].sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email))
+	);
+
+	onMount(() => {
+		void ensureMembers().catch(() => {});
+	});
+
+	function clearNewInviteOutput() {
 		qrDataUrl = '';
 		inviteLink = '';
 		lastMailboxPw = '';
+	}
+
+	async function makeMemberInvite() {
+		shareMsg = '';
+		clearNewInviteOutput();
 		if (!inviter) {
 			shareMsg = 'Only owners and admins can invite.';
 			return;
@@ -108,22 +143,244 @@
 		}
 	}
 
+	/** @param {{ email: string, name: string, role: 'owner'|'admin'|'member', status?: 'active'|'invited'|'disabled' }} m */
+	function startEdit(m) {
+		editingEmail = m.email;
+		editName = m.name;
+		editRole = m.role;
+		editStatus = m.status || 'active';
+		editMsg = '';
+		reshareEmail = null;
+	}
+
+	function cancelEdit() {
+		editingEmail = null;
+		editMsg = '';
+	}
+
+	async function saveEdit() {
+		if (!editingEmail) return;
+		editBusy = true;
+		editMsg = '';
+		try {
+			await upsertMember({
+				email: editingEmail,
+				name: editName.trim() || editingEmail.split('@')[0] || editingEmail,
+				role: editRole,
+				status: editStatus
+			});
+			editMsg = 'Saved.';
+			editingEmail = null;
+		} catch (e) {
+			editMsg = e instanceof Error ? e.message : String(e);
+		} finally {
+			editBusy = false;
+		}
+	}
+
+	/** @param {{ email: string, name: string }} m */
+	async function onDelete(m) {
+		const label = m.name || m.email;
+		if (!confirm(`Delete ${label} (${m.email}) from this Space?`)) return;
+		shareMsg = '';
+		editMsg = '';
+		try {
+			await removeMember(m.email, { actorEmail: actor.email });
+			if (editingEmail === m.email) editingEmail = null;
+			if (reshareEmail === m.email) closeReshare();
+		} catch (e) {
+			shareMsg = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	/** @param {{ email: string, name: string }} m */
+	function startReshare(m) {
+		reshareEmail = m.email;
+		resharePass = '';
+		resharePass2 = '';
+		reshareMsg = '';
+		reshareLink = '';
+		reshareQr = '';
+		editingEmail = null;
+		clearNewInviteOutput();
+	}
+
+	function closeReshare() {
+		reshareEmail = null;
+		resharePass = '';
+		resharePass2 = '';
+		reshareMsg = '';
+		reshareLink = '';
+		reshareQr = '';
+	}
+
+	async function makeReshareInvite() {
+		if (!reshareEmail) return;
+		reshareMsg = '';
+		reshareLink = '';
+		reshareQr = '';
+		const m = members.find((x) => x.email === reshareEmail);
+		if (!m) {
+			reshareMsg = 'Member not found.';
+			return;
+		}
+		if (!driveSession.connected) {
+			reshareMsg = 'Connect Drive first.';
+			return;
+		}
+		if (resharePass !== resharePass2) {
+			reshareMsg = 'Passphrases do not match.';
+			return;
+		}
+		if (resharePass.trim().length < 6) {
+			reshareMsg = 'Passphrase must be at least 6 characters.';
+			return;
+		}
+		reshareBusy = true;
+		try {
+			/* Existing account — Drive session + profile only. No new mailbox / member row. */
+			const payload = await encodeInvite(
+				{
+					url: driveSession.url,
+					token: driveSession.token,
+					rootKey: driveSession.rootKey,
+					email: m.email,
+					displayName: m.name,
+					role: m.role === 'owner' ? 'admin' : m.role
+				},
+				resharePass
+			);
+			reshareLink = inviteShareUrl(payload);
+			reshareQr = await QRCode.toDataURL(reshareLink, {
+				errorCorrectionLevel: 'L',
+				margin: 1,
+				width: 280,
+				color: { dark: '#111111', light: '#ffffff' }
+			});
+			reshareMsg = `Code ready for ${m.email}. Share QR/link + passphrase — no new account was created.`;
+		} catch (e) {
+			reshareMsg = e instanceof Error ? e.message : String(e);
+		} finally {
+			reshareBusy = false;
+		}
+	}
+
+	async function copyReshare() {
+		if (!reshareLink) return;
+		try {
+			await navigator.clipboard.writeText(reshareLink);
+			reshareMsg = 'Link copied — whisper the passphrase separately.';
+		} catch {
+			reshareMsg = 'Could not copy — select the link text manually.';
+		}
+	}
 </script>
 
 {#if operator}
 	<section class="block">
 		<p class="field-label">Members</p>
 		<p class="hint">
-			Roles gate the Admin UI only (ACL). Drive still uses the shared space key until per-person
-			caps exist — don’t invite people you wouldn’t trust with this Space’s files.
+			Edit people on this Space, delete them, or re-share an invite code for an existing profile
+			(does not create a new account). Roles gate the Admin UI only — Drive still uses the shared
+			space key.
 		</p>
 		<ul class="member-list">
-			{#each members as m (m.email)}
-				<li>
-					<span class="m-name">{m.name}</span>
-					<span class="m-email">{m.email}</span>
-					<span class="m-role">{m.role}</span>
-					<span class="m-status">{m.status || 'active'}</span>
+			{#each sortedMembers as m (m.email)}
+				<li class="member-row">
+					<div class="m-main">
+						<span class="m-name">{m.name}</span>
+						<span class="m-email">{m.email}</span>
+						<span class="m-meta">
+							<span class="m-role">{m.role}</span>
+							<span class="m-status">{m.status || 'active'}</span>
+						</span>
+					</div>
+					<div class="m-actions">
+						<button type="button" class="btn ghost sm" onclick={() => startEdit(m)}>Edit</button>
+						<button type="button" class="btn ghost sm" onclick={() => startReshare(m)}
+							>Share code</button
+						>
+						<button type="button" class="btn ghost sm danger" onclick={() => void onDelete(m)}
+							>Delete</button
+						>
+					</div>
+
+					{#if editingEmail === m.email}
+						<div class="panel">
+							<label class="row stack">
+								<span>Display name</span>
+								<input type="text" bind:value={editName} autocomplete="name" />
+							</label>
+							<label class="row stack">
+								<span>Role</span>
+								<select bind:value={editRole}>
+									<option value="member">Member</option>
+									<option value="admin">Admin</option>
+									<option value="owner">Owner</option>
+								</select>
+							</label>
+							<label class="row stack">
+								<span>Status</span>
+								<select bind:value={editStatus}>
+									<option value="active">Active</option>
+									<option value="invited">Invited</option>
+									<option value="disabled">Disabled</option>
+								</select>
+							</label>
+							<div class="actions">
+								<button type="button" class="btn" disabled={editBusy} onclick={() => void saveEdit()}
+									>{editBusy ? 'Saving…' : 'Save'}</button
+								>
+								<button type="button" class="btn ghost" onclick={cancelEdit}>Cancel</button>
+							</div>
+							{#if editMsg}
+								<p class="status">{editMsg}</p>
+							{/if}
+						</div>
+					{/if}
+
+					{#if reshareEmail === m.email}
+						<div class="panel">
+							<p class="hint tight">
+								Re-share Drive access for <strong>{m.name}</strong> — same profile, no new mailbox.
+							</p>
+							<label class="row stack">
+								<span>Passphrase</span>
+								<input type="password" bind:value={resharePass} autocomplete="new-password" />
+							</label>
+							<label class="row stack">
+								<span>Confirm</span>
+								<input type="password" bind:value={resharePass2} autocomplete="new-password" />
+							</label>
+							<div class="actions">
+								<button
+									type="button"
+									class="btn"
+									disabled={reshareBusy || resharePass.trim().length < 6}
+									onclick={() => void makeReshareInvite()}
+								>
+									{reshareBusy ? 'Encrypting…' : 'Make share code'}
+								</button>
+								{#if reshareLink}
+									<button type="button" class="btn ghost" onclick={() => void copyReshare()}
+										>Copy link</button
+									>
+								{/if}
+								<button type="button" class="btn ghost" onclick={closeReshare}>Close</button>
+							</div>
+							{#if reshareLink}
+								<p class="link-out">{reshareLink}</p>
+							{/if}
+							{#if reshareQr}
+								<figure class="qr-wrap">
+									<img src={reshareQr} alt="Re-share invite QR" width="280" height="280" />
+								</figure>
+							{/if}
+							{#if reshareMsg}
+								<p class="status">{reshareMsg}</p>
+							{/if}
+						</div>
+					{/if}
 				</li>
 			{/each}
 		</ul>
@@ -132,10 +389,10 @@
 
 {#if driveSession.connected && inviter}
 	<section class="block">
-		<p class="field-label">Invite someone</p>
+		<p class="field-label">Invite someone new</p>
 		<p class="hint">
-			Creates a QR + link. They open it, type <strong>only the passphrase</strong> — email, role,
-			Drive, and mailbox password are inside the invite.
+			Creates a <strong>new</strong> profile + mailbox password inside the invite. For an existing
+			person, use <strong>Share code</strong> on their row above instead.
 		</p>
 		<label class="row stack">
 			<span>Display name</span>
@@ -174,12 +431,12 @@
 				type="button"
 				class="btn"
 				disabled={shareBusy || sharePass.trim().length < 6}
-				onclick={makeMemberInvite}
+				onclick={() => void makeMemberInvite()}
 			>
 				{shareBusy ? 'Encrypting…' : 'Make invite QR'}
 			</button>
 			{#if inviteLink}
-				<button type="button" class="btn ghost" onclick={copyInvite}>Copy link</button>
+				<button type="button" class="btn ghost" onclick={() => void copyInvite()}>Copy link</button>
 			{/if}
 		</div>
 		{#if inviteLink}
@@ -204,14 +461,19 @@
 
 <style>
 	.block {
-		max-width: 520px;
+		max-width: 560px;
 		margin-bottom: 1.75rem;
 	}
 
 	.hint {
 		margin: 0 0 0.85rem;
 		font-size: 13px;
+		line-height: 1.45;
 		color: var(--white66);
+	}
+
+	.hint.tight {
+		margin-bottom: 0.65rem;
 	}
 
 	.row {
@@ -236,10 +498,10 @@
 	}
 
 	.row input,
-	.row textarea,
 	.row select {
 		width: 100%;
-		padding: 0.55rem 0.65rem;
+		height: 2.25rem;
+		padding: 0 0.65rem;
 		border-radius: 10px;
 		border: 1px solid var(--white11);
 		background: var(--surface);
@@ -247,19 +509,6 @@
 		font: inherit;
 		font-weight: 400;
 		box-sizing: border-box;
-	}
-
-	.row input,
-	.row select {
-		height: 2.25rem;
-		padding-top: 0;
-		padding-bottom: 0;
-	}
-
-	.row textarea {
-		min-height: 4.5rem;
-		resize: vertical;
-		line-height: 1.4;
 	}
 
 	.local-row {
@@ -289,34 +538,45 @@
 		overflow: hidden;
 	}
 
-	.member-list li {
+	.member-row {
+		padding: 0.75rem 0.85rem;
+		border-top: 1px solid var(--white11);
+	}
+
+	.member-row:first-child {
+		border-top: none;
+	}
+
+	.m-main {
 		display: grid;
 		grid-template-columns: 1fr auto;
 		gap: 0.15rem 0.75rem;
-		padding: 0.65rem 0.85rem;
-		border-top: 1px solid var(--white11);
-		font-size: 13px;
-	}
-
-	.member-list li:first-child {
-		border-top: none;
 	}
 
 	.m-name {
 		font-weight: 600;
+		font-size: 14px;
 		color: var(--white);
 	}
 
 	.m-email {
 		grid-column: 1;
-		color: var(--white66);
 		font-size: 12px;
+		color: var(--white66);
+	}
+
+	.m-meta {
+		grid-column: 2;
+		grid-row: 1 / span 2;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		justify-content: center;
+		gap: 0.15rem;
 	}
 
 	.m-role,
 	.m-status {
-		justify-self: end;
-		align-self: center;
 		font-size: 11px;
 		font-weight: 600;
 		text-transform: uppercase;
@@ -324,14 +584,19 @@
 		color: var(--white66);
 	}
 
-	.m-status {
-		grid-column: 2;
-		grid-row: 2;
+	.m-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin-top: 0.55rem;
 	}
 
-	.m-role {
-		grid-column: 2;
-		grid-row: 1;
+	.panel {
+		margin-top: 0.75rem;
+		padding: 0.75rem;
+		border-radius: 10px;
+		border: 1px solid var(--white11);
+		background: color-mix(in srgb, var(--fg) 4%, transparent);
 	}
 
 	.actions {
@@ -355,6 +620,12 @@
 		cursor: pointer;
 	}
 
+	.btn.sm {
+		height: 1.85rem;
+		padding: 0 0.65rem;
+		font-size: 12px;
+	}
+
 	.btn:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
@@ -365,6 +636,11 @@
 		background: transparent;
 		color: var(--white66);
 		border: 1px solid var(--white11);
+	}
+
+	.btn.ghost.danger {
+		color: var(--destructive, #e66);
+		border-color: color-mix(in srgb, var(--destructive, #e66) 35%, var(--white11));
 	}
 
 	.status {

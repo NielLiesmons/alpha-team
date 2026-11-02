@@ -21,8 +21,9 @@
 		</section>
 	{:else}
 		<p class="intro">
-			Invite people with a QR code, and manage who exists on the Drive. Profiles only appear on a
-			phone after that invite is claimed.
+			Manage Space profiles: edit, delete, or re-share an invite code for someone who already
+			exists — without creating a new account. Use “Invite someone new” only for a brand-new
+			mailbox.
 		</p>
 		<DriveInvite />
 	{/if}
