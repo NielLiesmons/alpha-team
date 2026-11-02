@@ -1993,6 +1993,21 @@ export async function putView(session, view) {
 
 const FEED_MAX = 200;
 
+/** Tip-scoped feed id cache — skip feed.json download on send when tip unchanged. */
+let cachedFeedTip = '';
+/** @type {string[]} */
+let cachedFeedIds = [];
+
+/**
+ * @param {string} tip
+ * @param {string[]} ids
+ */
+function rememberFeedIds(tip, ids) {
+	if (!tip || !Array.isArray(ids)) return;
+	cachedFeedTip = tip;
+	cachedFeedIds = ids.map(String);
+}
+
 /**
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
@@ -2077,8 +2092,9 @@ export async function listFeedIds(session) {
  * @param {{ onPartial?: (rows: any[]) => void }} [opts]
  */
 export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
-	const { dir } = await loadRootDirWithTip(session);
+	const { tip, dir } = await loadRootDirWithTip(session);
 	const ids = (await listFeedIdsFromDir(session, dir)).slice(0, limit);
+	rememberFeedIds(tip, ids);
 	if (!ids.length) return [];
 
 	const { getCachedLeaf, mapPool, putCachedLeaf } = await import('./leaf-cache.js');
@@ -2270,80 +2286,131 @@ export async function createChatMessage(session, input, opts = {}) {
 		return writes;
 	}
 
-	/** Always merge with live feed index — knownFeedIds alone loses concurrent sends. */
-	let serverFeed = [];
-	try {
-		serverFeed = await listFeedIds(session);
-	} catch {
-		serverFeed = [];
-	}
-	const feedIds = [id, ...serverFeed, ...known]
-		.filter((x, i, arr) => x && arr.indexOf(x) === i)
-		.slice(0, FEED_MAX);
-
-	/** @type {string[]} */
-	let commentIds = [];
-	if (wantsComments && refType && refId) {
-		try {
-			commentIds = await listCommentIds(session, refType, refId);
-		} catch {
-			commentIds = [];
+	/**
+	 * Merge live feed ids from dir (or tip-scoped memory cache).
+	 * @param {any} dir
+	 * @param {string} tip
+	 */
+	async function resolveFeedIds(dir, tip) {
+		if (tip && tip === cachedFeedTip && cachedFeedIds.length) {
+			return [id, ...cachedFeedIds, ...known]
+				.filter((x, i, arr) => x && arr.indexOf(x) === i)
+				.slice(0, FEED_MAX);
 		}
-		commentIds = [...commentIds, ...knownComments, id].filter(
+		const liveFeed = await listFeedIdsFromDir(session, dir);
+		rememberFeedIds(tip, liveFeed);
+		return [id, ...liveFeed, ...known]
+			.filter((x, i, arr) => x && arr.indexOf(x) === i)
+			.slice(0, FEED_MAX);
+	}
+
+	/**
+	 * @param {any} dir
+	 */
+	async function resolveCommentIds(dir) {
+		if (!wantsComments || !refType || !refId) return /** @type {string[]} */ ([]);
+		const liveComments = await listCommentIdsFromDir(session, dir, refType, refId);
+		return [...liveComments, ...knownComments, id].filter(
 			(x, i, arr) => x && arr.indexOf(x) === i
 		);
 	}
 
-	await putPaths(session, buildWrites(feedIds, commentIds), {
+	/*
+	 * Fast send: if tip matches last feed refresh, skip feed.json download entirely.
+	 * Rematerialize only on tip conflict. No pre-listFeedIds round-trip.
+	 */
+	/** @type {string[]} */
+	let feedIds;
+	/** @type {string[]} */
+	let commentIds = [];
+	let tipNow = '';
+	try {
+		const { getTip } = await import('./client.js');
+		tipNow = await getTip(session);
+	} catch {
+		tipNow = '';
+	}
+	if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments) {
+		/* Tip unchanged since last feed load — skip feed.json download. */
+		feedIds = [id, ...cachedFeedIds, ...known]
+			.filter((x, i, arr) => x && arr.indexOf(x) === i)
+			.slice(0, FEED_MAX);
+	} else {
+		const { tip: tipAtStart, dir: dirAtStart } = await loadRootDirWithTip(session);
+		feedIds = await resolveFeedIds(dirAtStart, tipAtStart);
+		commentIds = await resolveCommentIds(dirAtStart);
+	}
+
+	const tipAfter = await putPaths(session, buildWrites(feedIds, commentIds), {
 		rematerialize: async (dir) => {
+			/* Tip conflict — always re-read live feed; do not trust memory cache. */
 			const liveFeed = await listFeedIdsFromDir(session, dir);
 			const nextFeed = [id, ...liveFeed, ...known]
 				.filter((x, i, arr) => x && arr.indexOf(x) === i)
 				.slice(0, FEED_MAX);
-			/** @type {string[]} */
-			let nextComments = commentIds;
-			if (wantsComments && refType && refId) {
-				const liveComments = await listCommentIdsFromDir(session, dir, refType, refId);
-				nextComments = [...liveComments, ...knownComments, id].filter(
-					(x, i, arr) => x && arr.indexOf(x) === i
-				);
-			}
+			const nextComments = await resolveCommentIds(dir);
 			return buildWrites(nextFeed, nextComments);
 		}
 	});
+	if (tipAfter) rememberFeedIds(String(tipAfter), feedIds);
 	return msg;
 }
 
 /**
  * Persist read receipts on a message leaf (delivery=read when another account opens chat).
+ * Prefer markChatMessagesRead for batches — one tip write, not N.
  * @param {import('./client.js').DriveSession} session
  * @param {any} msg
  * @param {string} readerEmail
  */
 export async function markChatMessageRead(session, msg, readerEmail) {
-	const id = String(msg?.id || '').trim();
+	const [next] = await markChatMessagesRead(session, [msg], readerEmail);
+	return next || msg;
+}
+
+/**
+ * Batch read receipts into a single tip update (was N tip writes = multi-second stalls).
+ * @param {import('./client.js').DriveSession} session
+ * @param {any[]} messages
+ * @param {string} readerEmail
+ * @returns {Promise<any[]>}
+ */
+export async function markChatMessagesRead(session, messages, readerEmail) {
 	const reader = String(readerEmail || '')
 		.trim()
 		.toLowerCase();
-	if (!id || id.startsWith('local-') || !reader) return msg;
-	const author = String(msg.author || '')
-		.trim()
-		.toLowerCase();
-	if (author === reader) return msg;
-	const prev = Array.isArray(msg.read_by) ? msg.read_by.map((e) => String(e).toLowerCase()) : [];
-	if (prev.includes(reader)) return msg;
-	const next = {
-		...msg,
-		read_by: [...prev, reader],
-		delivery: 'read'
-	};
-	await putPath(
-		session,
-		`chat/messages/${id}.json`,
-		'chat_message',
-		JSON.stringify(next, null, 2)
-	);
-	return next;
+	if (!session || !reader || !Array.isArray(messages) || !messages.length) return [];
+
+	/** @type {{ path: string, kind: string, plaintext: string }[]} */
+	const writes = [];
+	/** @type {any[]} */
+	const updated = [];
+	for (const msg of messages) {
+		const id = String(msg?.id || '').trim();
+		if (!id || id.startsWith('local-')) continue;
+		const author = String(msg.author || '')
+			.trim()
+			.toLowerCase();
+		if (!author || author === reader) continue;
+		const prev = Array.isArray(msg.read_by)
+			? msg.read_by.map((e) => String(e).toLowerCase())
+			: [];
+		if (prev.includes(reader)) continue;
+		const next = {
+			...msg,
+			read_by: [...prev, reader],
+			delivery: 'read'
+		};
+		writes.push({
+			path: `chat/messages/${id}.json`,
+			kind: 'chat_message',
+			plaintext: JSON.stringify(next)
+		});
+		updated.push(next);
+	}
+	if (!writes.length) return [];
+	await putPaths(session, writes);
+	return updated;
 }
 
 /**

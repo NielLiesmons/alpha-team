@@ -49,6 +49,12 @@ export async function refreshBackgroundDrive() {
 	driveSession.error = null;
 
 	try {
+		const { chatUi } = await import('./chat.svelte.js');
+		/* Yield while a send is in flight — don't steal bandwidth from tip commit / ✓. */
+		for (let i = 0; i < 40 && chatUi.posting; i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
+
 		let tip = '';
 		try {
 			tip = await getTip(session);

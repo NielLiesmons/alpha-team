@@ -9,7 +9,7 @@ import {
 	deleteChatMessage,
 	listComments,
 	listFeedMessages,
-	markChatMessageRead
+	markChatMessagesRead
 } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
@@ -391,12 +391,12 @@ export async function toggleReaction(messageId, emoji) {
 
 /**
  * Mark others' visible messages as read by this account (double-check for them).
- * Fire-and-forget; updates feed in place.
+ * One tip write for the batch — never N serial tip updates (that made sends feel multi-second).
  */
 export async function markIncomingMessagesRead() {
 	const session = activeSession();
 	const me = (activePerson().email || '').trim().toLowerCase();
-	if (!session || !me) return;
+	if (!session || !me || chatUi.posting) return;
 	const channel = chatUi.activeChannelId || 'general';
 	const targets = chatFeed.filter((m) => {
 		if (!m?.id || String(m.id).startsWith('local-')) return false;
@@ -411,16 +411,18 @@ export async function markIncomingMessagesRead() {
 			: [];
 		return !readBy.includes(me);
 	});
-	for (const msg of targets.slice(0, 40)) {
-		try {
-			const next = await markChatMessageRead(session, msg, me);
-			const idx = chatFeed.findIndex((m) => m.id === msg.id);
+	const batch = targets.slice(0, 25);
+	if (!batch.length) return;
+	try {
+		const updated = await markChatMessagesRead(session, batch, me);
+		for (const next of updated) {
+			const idx = chatFeed.findIndex((m) => m.id === next.id);
 			if (idx >= 0) chatFeed[idx] = { ...chatFeed[idx], ...next };
-		} catch {
-			/* ignore single leaf */
 		}
+		if (updated.length) writeChatCache(chatFeed);
+	} catch {
+		/* ignore — next wake retries */
 	}
-	if (targets.length) writeChatCache(chatFeed);
 }
 
 /**

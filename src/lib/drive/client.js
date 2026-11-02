@@ -190,6 +190,7 @@ export async function putPath(session, logicalPath, kind, plaintext) {
  * @param {DriveSession} session
  * @param {{ path: string, kind: string, plaintext: Uint8Array | string }[]} entries
  * @param {{
+ *   mergeFirst?: boolean,
  *   rematerialize?: (
  *     dir: any,
  *     entries: { path: string, kind: string, plaintext: Uint8Array | string }[]
@@ -201,12 +202,15 @@ export async function putPaths(session, entries, opts = {}) {
 	const root = parseRootKey(session.rootKey);
 	/** @type {{ path: string, kind: string, plaintext: Uint8Array | string }[]} */
 	let current = entries;
+	/** Reuse ciphertext across tip-conflict retries when plaintext unchanged (chat leaf). */
+	/** @type {Map<string, { ptKey: string, row: { name: string, kind: string, hash: string, wrapped_key: string } }>} */
+	const preparedByName = new Map();
 
 	let dir = /** @type {any} */ (null);
 	let dirHash = '';
 	for (let attempt = 0; attempt < 3; attempt++) {
 		const { tip: tipAtLoad, dir: fresh } = await loadRootDirWithTip(session);
-		if (attempt > 0 && typeof opts.rematerialize === 'function') {
+		if ((attempt > 0 || opts.mergeFirst) && typeof opts.rematerialize === 'function') {
 			current = await opts.rematerialize(fresh, current);
 		}
 
@@ -219,10 +223,18 @@ export async function putPaths(session, entries, opts = {}) {
 					typeof entry.plaintext === 'string'
 						? new TextEncoder().encode(entry.plaintext)
 						: entry.plaintext;
+				const ptKey =
+					typeof entry.plaintext === 'string'
+						? entry.plaintext
+						: await sha256Hex(bytes);
+				const prev = preparedByName.get(name);
+				if (prev && prev.ptKey === ptKey) return prev.row;
 				const { ciphertext, fileKeyHex } = await encrypt(root, name, bytes);
 				const hash = await sha256Hex(ciphertext);
 				await putBlock(session, hash, ciphertext);
-				return { name, kind: entry.kind, hash, wrapped_key: fileKeyHex };
+				const row = { name, kind: entry.kind, hash, wrapped_key: fileKeyHex };
+				preparedByName.set(name, { ptKey, row });
+				return row;
 			})
 		);
 
@@ -283,6 +295,8 @@ export async function putPaths(session, entries, opts = {}) {
 	} catch {
 		/* non-JSON blobs (media) — ignore */
 	}
+
+	return dirHash;
 }
 
 /**
