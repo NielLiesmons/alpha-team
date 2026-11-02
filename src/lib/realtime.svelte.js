@@ -6,12 +6,23 @@
 import { actor } from './actor.svelte.js';
 import { chatEphemeral } from './chat.svelte.js';
 import { pullChatIfNeeded } from './chat-sync.svelte.js';
-import { apiBase, getAdminToken } from './mail-api.js';
+import { apiBase } from './mail-api.js';
 
 const SPACE = 'bley';
 const PING_MS = 25_000;
 const RECONNECT_MIN_MS = 800;
 const RECONNECT_MAX_MS = 20_000;
+
+function realtimeToken() {
+	if (typeof localStorage === 'undefined') return '';
+	return (
+		localStorage.getItem('alpha-realtime-token') ||
+		(typeof import.meta !== 'undefined' && import.meta.env?.PUBLIC_ALPHA_REALTIME_TOKEN
+			? String(import.meta.env.PUBLIC_ALPHA_REALTIME_TOKEN)
+			: '') ||
+		''
+	);
+}
 
 /** @type {WebSocket | null} */
 let sock = null;
@@ -32,7 +43,7 @@ export const realtimeUi = $state({
 function wsUrl() {
 	const base = apiBase().replace(/^http/, 'ws');
 	const params = new URLSearchParams({ space: SPACE });
-	const token = getAdminToken();
+	const token = realtimeToken();
 	if (token) params.set('token', token);
 	const email = actor.email;
 	if (email) params.set('actor', email);
