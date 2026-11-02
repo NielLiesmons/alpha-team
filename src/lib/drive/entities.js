@@ -2058,7 +2058,7 @@ export async function listFeedIds(session) {
  * @param {import('./client.js').DriveSession} session
  * @param {number} [limit]
  */
-export async function listFeedMessages(session, limit = 80) {
+export async function listFeedMessages(session, limit = FEED_MAX) {
 	const ids = (await listFeedIds(session)).slice(0, limit);
 	const { mapPool } = await import('./leaf-cache.js');
 	const rows = await mapPool(ids, 16, async (id) => {
@@ -2069,6 +2069,42 @@ export async function listFeedMessages(session, limit = 80) {
 		}
 	});
 	return rows.filter(Boolean);
+}
+
+/**
+ * Read feed ids from an already-loaded root dir (no tip GET).
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} dir
+ */
+async function listFeedIdsFromDir(session, dir) {
+	try {
+		const { bytes } = await getPathFromDir(session, dir, 'chat/feed.json');
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		if (Array.isArray(doc?.ids)) return doc.ids.map(String);
+		if (Array.isArray(doc)) return doc.map(String);
+		return [];
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} dir
+ * @param {'task' | 'note' | 'project'} type
+ * @param {string} entityId
+ */
+async function listCommentIdsFromDir(session, dir, type, entityId) {
+	const path = `${type}s/${entityId}/comments.json`;
+	try {
+		const { bytes } = await getPathFromDir(session, dir, path);
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		if (Array.isArray(doc)) return doc.map(String);
+		if (Array.isArray(doc?.ids)) return doc.ids.map(String);
+		return [];
+	} catch {
+		return [];
+	}
 }
 
 /**
@@ -2120,6 +2156,55 @@ export async function createChatMessage(session, input, opts = {}) {
 			: {})
 	};
 
+	const known = Array.isArray(opts.knownFeedIds) ? opts.knownFeedIds : [];
+	const knownComments = Array.isArray(opts.knownCommentIds) ? opts.knownCommentIds : [];
+	const wantsComments =
+		kind !== 'event' &&
+		Boolean(
+			input.ref &&
+				(input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')
+		);
+	const refType = wantsComments
+		? /** @type {'task'|'note'|'project'} */ (input.ref.type)
+		: null;
+	const refId = wantsComments ? String(input.ref.id) : '';
+	const leafPlain = JSON.stringify(msg);
+
+	/**
+	 * @param {string[]} feedIds
+	 * @param {string[]} [commentIds]
+	 */
+	function buildWrites(feedIds, commentIds) {
+		/** @type {{ path: string, kind: string, plaintext: string }[]} */
+		const writes = [
+			{
+				path: `chat/messages/${id}.json`,
+				kind: 'chat_message',
+				plaintext: leafPlain
+			},
+			{
+				path: 'chat/feed.json',
+				kind: 'chat_feed',
+				plaintext: JSON.stringify({
+					schema: 'alpha.chat_feed/1',
+					ids: feedIds,
+					updated_at: created
+				})
+			}
+		];
+		if (wantsComments && refType && refId) {
+			writes.push({
+				path: `${refType}s/${refId}/comments.json`,
+				kind: 'blob',
+				plaintext: JSON.stringify({
+					schema: 'alpha.comments_index/1',
+					ids: commentIds || []
+				})
+			});
+		}
+		return writes;
+	}
+
 	/** Always merge with live feed index — knownFeedIds alone loses concurrent sends. */
 	let serverFeed = [];
 	try {
@@ -2127,56 +2212,40 @@ export async function createChatMessage(session, input, opts = {}) {
 	} catch {
 		serverFeed = [];
 	}
-	const known = Array.isArray(opts.knownFeedIds) ? opts.knownFeedIds : [];
 	const feedIds = [id, ...serverFeed, ...known]
 		.filter((x, i, arr) => x && arr.indexOf(x) === i)
 		.slice(0, FEED_MAX);
 
-	/** @type {{ path: string, kind: string, plaintext: string }[]} */
-	const writes = [
-		{
-			path: `chat/messages/${id}.json`,
-			kind: 'chat_message',
-			plaintext: JSON.stringify(msg, null, 2)
-		},
-		{
-			path: 'chat/feed.json',
-			kind: 'chat_feed',
-			plaintext: JSON.stringify(
-				{ schema: 'alpha.chat_feed/1', ids: feedIds, updated_at: created },
-				null,
-				2
-			)
-		}
-	];
-
-	/* Events announce in the feed only — never land in entity comments.json. */
-	if (
-		kind !== 'event' &&
-		input.ref &&
-		(input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')
-	) {
-		const indexPath = `${input.ref.type}s/${input.ref.id}/comments.json`;
-		let ids = [];
+	/** @type {string[]} */
+	let commentIds = [];
+	if (wantsComments && refType && refId) {
 		try {
-			ids = await listCommentIds(
-				session,
-				/** @type {'task'|'note'|'project'} */ (input.ref.type),
-				input.ref.id
-			);
+			commentIds = await listCommentIds(session, refType, refId);
 		} catch {
-			ids = [];
+			commentIds = [];
 		}
-		const knownComments = Array.isArray(opts.knownCommentIds) ? opts.knownCommentIds : [];
-		ids = [...ids, ...knownComments, id].filter((x, i, arr) => x && arr.indexOf(x) === i);
-		writes.push({
-			path: indexPath,
-			kind: 'blob',
-			plaintext: JSON.stringify({ schema: 'alpha.comments_index/1', ids }, null, 2)
-		});
+		commentIds = [...commentIds, ...knownComments, id].filter(
+			(x, i, arr) => x && arr.indexOf(x) === i
+		);
 	}
 
-	await putPaths(session, writes);
+	await putPaths(session, buildWrites(feedIds, commentIds), {
+		rematerialize: async (dir) => {
+			const liveFeed = await listFeedIdsFromDir(session, dir);
+			const nextFeed = [id, ...liveFeed, ...known]
+				.filter((x, i, arr) => x && arr.indexOf(x) === i)
+				.slice(0, FEED_MAX);
+			/** @type {string[]} */
+			let nextComments = commentIds;
+			if (wantsComments && refType && refId) {
+				const liveComments = await listCommentIdsFromDir(session, dir, refType, refId);
+				nextComments = [...liveComments, ...knownComments, id].filter(
+					(x, i, arr) => x && arr.indexOf(x) === i
+				);
+			}
+			return buildWrites(nextFeed, nextComments);
+		}
+	});
 	return msg;
 }
 

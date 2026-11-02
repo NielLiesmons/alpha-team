@@ -1,7 +1,9 @@
 /**
  * Fast chat wake loop: tip poll while chat is open + focus/push refresh.
+ * Also refreshes members/avatars when tip moves (cross-device profile pics).
  */
 
+import { refreshMembersAndAvatars } from './avatar.svelte.js';
 import { refreshChatFeed, chatUi, markIncomingMessagesRead } from './chat.svelte.js';
 import { getTip } from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
@@ -18,6 +20,8 @@ let inFlight = false;
 export async function pullChatIfNeeded(force = false) {
 	const session = activeSession();
 	if (!session || inFlight) return;
+	/* Don't clobber an in-flight send with a mid-write tip snapshot. */
+	if (chatUi.posting) return;
 	const now = Date.now();
 	if (!force && now - lastChatPull < 800) return;
 	inFlight = true;
@@ -35,6 +39,7 @@ export async function pullChatIfNeeded(force = false) {
 			await refreshChatFeed();
 			lastChatPull = Date.now();
 			void markIncomingMessagesRead();
+			if (tipChanged || force) void refreshMembersAndAvatars().catch(() => {});
 		}
 	} finally {
 		inFlight = false;
@@ -82,13 +87,16 @@ export function stopChatTipPoll() {
 /** Once from root layout — focus/push wake without requiring chat mount. */
 export function initChatWakeListeners() {
 	if (typeof window === 'undefined') return () => {};
+	const onFocus = () => void pullChatIfNeeded(true);
+	const onPageShow = () => void pullChatIfNeeded(true);
 	document.addEventListener('visibilitychange', onVisibility);
-	window.addEventListener('focus', () => void pullChatIfNeeded(true));
-	window.addEventListener('pageshow', () => void pullChatIfNeeded(true));
+	window.addEventListener('focus', onFocus);
+	window.addEventListener('pageshow', onPageShow);
 	navigator.serviceWorker?.addEventListener?.('message', onSwMessage);
 	return () => {
 		document.removeEventListener('visibilitychange', onVisibility);
-		window.removeEventListener('focus', () => void pullChatIfNeeded(true));
+		window.removeEventListener('focus', onFocus);
+		window.removeEventListener('pageshow', onPageShow);
 		navigator.serviceWorker?.removeEventListener?.('message', onSwMessage);
 		stopChatTipPoll();
 	};

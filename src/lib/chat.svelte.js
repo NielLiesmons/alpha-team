@@ -75,6 +75,12 @@ function commentKey(type, id) {
 }
 
 const CHAT_CACHE_KEY = 'alpha.chat.feed.v1';
+const CHAT_FEED_LIMIT = 200;
+/** Keep recently settled sends that a stale tip fetch has not listed yet. */
+const SETTLE_GRACE_MS = 120_000;
+
+/** Bumped on each refresh / settle so stale fetches cannot clobber newer state. */
+let feedFetchGen = 0;
 
 function readChatCache() {
 	if (typeof localStorage === 'undefined') return null;
@@ -89,7 +95,7 @@ function readChatCache() {
 function writeChatCache(list) {
 	if (typeof localStorage === 'undefined') return;
 	try {
-		localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(list.slice(0, 80)));
+		localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(list.slice(0, CHAT_FEED_LIMIT)));
 	} catch {
 		/* quota */
 	}
@@ -125,23 +131,69 @@ export async function refreshChatFeed() {
 	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
 	chatUi.error = null;
+	const gen = ++feedFetchGen;
+	const prev = chatFeed.slice();
 	try {
-		const pending = chatFeed.filter(
-			(m) =>
-				Boolean(m?._local || m?._pending) || String(m?.id || '').startsWith('local-')
-		);
-		const list = await listFeedMessages(session, 80);
-		const serverIds = new Set(list.map((m) => String(m.id)));
-		const keepPending = pending.filter((m) => !serverIds.has(String(m.id)));
-		const merged = [...keepPending, ...list];
-		/* One splice → one reactive update; avoids empty→full flicker. */
+		const list = await listFeedMessages(session, CHAT_FEED_LIMIT);
+		/* A newer refresh or settle won — do not clobber. */
+		if (gen !== feedFetchGen) return;
+
+		const byId = new Map();
+		for (const m of list) {
+			const id = String(m?.id || '');
+			if (id) byId.set(id, m);
+		}
+		const now = Date.now();
+		for (const m of prev) {
+			const id = String(m?.id || '');
+			if (!id || byId.has(id)) {
+				/* Preserve local attachment previews over bare server rows. */
+				if (id && byId.has(id) && Array.isArray(m.attachments)) {
+					const server = byId.get(id);
+					const prevAtt = m.attachments;
+					const nextAtt = Array.isArray(server.attachments) ? server.attachments : [];
+					byId.set(id, {
+						...server,
+						attachments: nextAtt.map((a, i) => ({
+							...a,
+							...(prevAtt[i]?.previewUrl ? { previewUrl: prevAtt[i].previewUrl } : {}),
+							...(prevAtt.find((p) => p?.path === a?.path)?.previewUrl
+								? {
+										previewUrl: prevAtt.find((p) => p?.path === a?.path)?.previewUrl
+									}
+								: {})
+						}))
+					});
+				}
+				continue;
+			}
+			const pending =
+				Boolean(m?._local || m?._pending) || String(id).startsWith('local-');
+			const created = Date.parse(m.created_at || '');
+			const recent =
+				Number.isFinite(created) && now - created >= 0 && now - created < SETTLE_GRACE_MS;
+			if (pending || recent) byId.set(id, m);
+		}
+
+		const serverOrder = list.map((m) => String(m.id)).filter(Boolean);
+		const extras = [...byId.keys()].filter((id) => !serverOrder.includes(id));
+		/* Newest-first: pending/recent extras first, then server feed order. */
+		const merged = [
+			...extras.map((id) => byId.get(id)),
+			...serverOrder.map((id) => byId.get(id))
+		].filter(Boolean);
+
 		chatFeed.splice(0, chatFeed.length, ...merged);
 		writeChatCache(merged.filter((m) => !String(m.id || '').startsWith('local-')));
 	} catch (e) {
-		chatUi.error = e instanceof Error ? e.message : String(e);
+		if (gen === feedFetchGen) {
+			chatUi.error = e instanceof Error ? e.message : String(e);
+		}
 	} finally {
-		chatUi.loading = false;
-		chatUi.settled = true;
+		if (gen === feedFetchGen) {
+			chatUi.loading = false;
+			chatUi.settled = true;
+		}
 	}
 }
 
@@ -491,6 +543,8 @@ export async function postChatMessage(input) {
 				_pending: false,
 				_local: false
 			};
+			/* Invalidate in-flight refreshes that may still hold a pre-send tip. */
+			feedFetchGen += 1;
 			const idx = chatFeed.findIndex((m) => m.id === localId);
 			if (idx >= 0) chatFeed[idx] = settledMsg;
 			else chatFeed.unshift(settledMsg);

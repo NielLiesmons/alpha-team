@@ -185,34 +185,47 @@ export async function putPath(session, logicalPath, kind, plaintext) {
 
 /**
  * Write many logical paths with a single tip update (encrypt + putBlock in parallel).
- * Retries once if tip moved between load and commit (reduces lost sibling leaves).
+ * Retries if tip moved between load and commit. Pass `rematerialize` for index docs
+ * (e.g. chat/feed.json) so concurrent writers re-merge instead of clobbering ids.
  * @param {DriveSession} session
  * @param {{ path: string, kind: string, plaintext: Uint8Array | string }[]} entries
+ * @param {{
+ *   rematerialize?: (
+ *     dir: any,
+ *     entries: { path: string, kind: string, plaintext: Uint8Array | string }[]
+ *   ) => Promise<{ path: string, kind: string, plaintext: Uint8Array | string }[]>
+ * }} [opts]
  */
-export async function putPaths(session, entries) {
+export async function putPaths(session, entries, opts = {}) {
 	if (!entries?.length) return;
 	const root = parseRootKey(session.rootKey);
-
-	/** @type {{ name: string, kind: string, hash: string, wrapped_key: string }[]} */
-	const prepared = await Promise.all(
-		entries.map(async (entry) => {
-			const name = normalizePath(entry.path);
-			if (!name) throw new Error('empty path');
-			const bytes =
-				typeof entry.plaintext === 'string'
-					? new TextEncoder().encode(entry.plaintext)
-					: entry.plaintext;
-			const { ciphertext, fileKeyHex } = await encrypt(root, name, bytes);
-			const hash = await sha256Hex(ciphertext);
-			await putBlock(session, hash, ciphertext);
-			return { name, kind: entry.kind, hash, wrapped_key: fileKeyHex };
-		})
-	);
+	/** @type {{ path: string, kind: string, plaintext: Uint8Array | string }[]} */
+	let current = entries;
 
 	let dir = /** @type {any} */ (null);
 	let dirHash = '';
-	for (let attempt = 0; attempt < 2; attempt++) {
+	for (let attempt = 0; attempt < 3; attempt++) {
 		const { tip: tipAtLoad, dir: fresh } = await loadRootDirWithTip(session);
+		if (attempt > 0 && typeof opts.rematerialize === 'function') {
+			current = await opts.rematerialize(fresh, current);
+		}
+
+		/** @type {{ name: string, kind: string, hash: string, wrapped_key: string }[]} */
+		const prepared = await Promise.all(
+			current.map(async (entry) => {
+				const name = normalizePath(entry.path);
+				if (!name) throw new Error('empty path');
+				const bytes =
+					typeof entry.plaintext === 'string'
+						? new TextEncoder().encode(entry.plaintext)
+						: entry.plaintext;
+				const { ciphertext, fileKeyHex } = await encrypt(root, name, bytes);
+				const hash = await sha256Hex(ciphertext);
+				await putBlock(session, hash, ciphertext);
+				return { name, kind: entry.kind, hash, wrapped_key: fileKeyHex };
+			})
+		);
+
 		dir = fresh;
 		dir.schema = 'alpha.dir/1';
 		dir.children = dir.children ?? {};
@@ -229,8 +242,8 @@ export async function putPaths(session, entries) {
 		dirHash = await sha256Hex(dirCt);
 		await putBlock(session, dirHash, dirCt);
 
-		/* Tip moved under us — rebuild from newest dir and retry once. */
-		if (attempt === 0) {
+		/* Tip moved under us — rematerialize indexes and retry. */
+		if (attempt < 2) {
 			let tipNow = tipAtLoad;
 			try {
 				tipNow = await getTip(session);
@@ -257,7 +270,7 @@ export async function putPaths(session, entries) {
 	/* Warm leaf cache so the next refresh skips re-download of what we just wrote. */
 	try {
 		const { putCachedLeaf } = await import('./leaf-cache.js');
-		for (const entry of entries) {
+		for (const entry of current) {
 			const name = normalizePath(entry.path);
 			const hash = dir.children?.[name]?.hash;
 			if (!hash) continue;

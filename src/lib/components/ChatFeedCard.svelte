@@ -454,11 +454,15 @@
 
 	.card.stack-mid,
 	.card:not(.stack-first):not(.stack-last) {
-		margin-top: 2px;
+		margin-top: 1px;
+	}
+
+	.card.stack-last:not(.stack-first) {
+		margin-top: 1px;
 	}
 
 	.card.stack-first {
-		margin-top: 8px;
+		margin-top: 10px;
 	}
 
 	/* Clear hanging reaction pills without shifting pfp / hover rail off the bubble */

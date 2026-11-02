@@ -803,9 +803,14 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		/* Tight like alpha-chat — stack groups use card margins, not a fat gap. */
+		gap: 0;
 		padding: 8px 0 12px;
 		margin-top: auto;
+	}
+
+	.stack > .pub-panel {
+		margin-top: 10px;
 	}
 
 	.bubble-anchor {
@@ -925,7 +930,7 @@
 	.pub-body {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 0;
 	}
 
 	.presence-row {

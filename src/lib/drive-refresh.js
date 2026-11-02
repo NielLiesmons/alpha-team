@@ -1,7 +1,9 @@
 /**
  * Coordinated Drive refresh with tip short-circuit + shared progress.
+ * Chat-first: feed always before workspace / media / mail.
  */
-import { chatFeed, refreshChatFeed } from './chat.svelte.js';
+import { refreshMembersAndAvatars } from './avatar.svelte.js';
+import { refreshChatFeed } from './chat.svelte.js';
 import { getTip } from './drive/client.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { getLastAppliedTip, setLastAppliedTip } from './drive/tip-gate.js';
@@ -26,8 +28,62 @@ function hasLocalWorkspace() {
 }
 
 /**
- * Pull-to-refresh / boot: one tip check, then parallel domain refreshes.
- * Skips heavy work when tip is unchanged and cache is warm.
+ * Urgent path — paint / refresh chat feed only.
+ */
+export async function refreshChatUrgent() {
+	const session = activeSession();
+	if (!session) return;
+	await refreshChatFeed();
+}
+
+/**
+ * Heavy domains after chat — counters, notes, player, mail.
+ * Safe to fire-and-forget once chat has settled.
+ */
+export async function refreshBackgroundDrive() {
+	const session = activeSession();
+	if (!session) return;
+
+	beginSync('Updating');
+	driveSession.syncing = true;
+	driveSession.error = null;
+
+	try {
+		let tip = '';
+		try {
+			tip = await getTip(session);
+		} catch {
+			tip = '';
+		}
+
+		void refreshMembersAndAvatars().catch(() => {});
+
+		const last = getLastAppliedTip(session);
+		if (tip && tip === last && hasLocalWorkspace()) {
+			setSyncRatio(1, 1);
+			return;
+		}
+
+		await refreshFromDrive({ skipTipGate: true, outerProgress: true });
+		setSyncRatio(0.72, 1);
+		await refreshTracks();
+		setSyncRatio(0.88, 1);
+		await refreshMail();
+		setSyncRatio(1, 1);
+
+		if (tip) setLastAppliedTip(session, tip);
+	} catch (e) {
+		driveSession.error = e instanceof Error ? e.message : String(e);
+	} finally {
+		driveSession.syncing = false;
+		driveSession.loading = false;
+		endSync();
+	}
+}
+
+/**
+ * Pull-to-refresh / boot: chat first, then background domains.
+ * Tip-unchanged still refreshes chat (peer messages).
  */
 export async function refreshAllDrive() {
 	const session = activeSession();
@@ -45,21 +101,22 @@ export async function refreshAllDrive() {
 			tip = '';
 		}
 
+		/* Chat always first — never wait on workspace crawl. */
+		await refreshChatFeed();
+		setSyncRatio(0.18, 1);
+		void refreshMembersAndAvatars().catch(() => {});
+		setSyncRatio(0.24, 1);
+
 		const last = getLastAppliedTip(session);
 		if (tip && tip === last && hasLocalWorkspace()) {
-			/* Tip unchanged — still refresh chat (warm cache can be stale vs peers). */
-			await refreshChatFeed();
 			setSyncRatio(1, 1);
 			return;
 		}
 
-		/* Workspace reports fine-grained leaf progress; then media / chat / mail. */
 		await refreshFromDrive({ skipTipGate: true, outerProgress: true });
 		setSyncRatio(0.72, 1);
 		await refreshTracks();
 		setSyncRatio(0.84, 1);
-		await refreshChatFeed();
-		setSyncRatio(0.92, 1);
 		await refreshMail();
 		setSyncRatio(1, 1);
 

@@ -30,11 +30,24 @@ export function pictureUrlFor(email) {
 
 /**
  * Prefetch object URLs for every member that has a picture path.
+ * Safe to call after ensureMembers / tip wake so pics set on another device appear.
  */
 export function hydrateAvatarUrls() {
 	for (const m of members) {
 		if (m.picture) void ensureAvatarUrl(m.picture);
 	}
+}
+
+/**
+ * Reload members.json from Drive and hydrate picture blobs.
+ * Call on boot (after chat) and whenever the tip moves.
+ */
+export async function refreshMembersAndAvatars() {
+	const session = activeSession();
+	if (!session) return;
+	const { ensureMembers } = await import('./members.svelte.js');
+	await ensureMembers(session);
+	hydrateAvatarUrls();
 }
 
 /**
