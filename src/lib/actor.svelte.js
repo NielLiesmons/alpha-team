@@ -33,6 +33,11 @@ export function setActiveEmail(email) {
 	localStorage.setItem(KEY, JSON.stringify({ email: actor.email }));
 }
 
+export function clearActor() {
+	actor.email = '';
+	if (typeof localStorage !== 'undefined') localStorage.removeItem(KEY);
+}
+
 /**
  * @param {string} [email]
  */
