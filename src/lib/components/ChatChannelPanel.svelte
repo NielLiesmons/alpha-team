@@ -28,10 +28,12 @@
 	} from '$lib/chat.svelte.js';
 	import { startChatTipPoll, stopChatTipPoll } from '$lib/chat-sync.svelte.js';
 	import { chatStackFlags } from '$lib/chat-stack.js';
+	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { putPath } from '$lib/drive/client.js';
 	import { putMediaBlob } from '$lib/drive/media.js';
+	import { themeChoice } from '$lib/theme.svelte.js';
 
 	/** @type {{ channelId?: string }} */
 	let { channelId = 'general' } = $props();
@@ -450,19 +452,35 @@
 		updateInputFade();
 	}
 
+	const isDark = $derived.by(() => {
+		const choice = themeChoice.value;
+		if (choice === 'light') return false;
+		if (choice === 'gray' || choice === 'dark') return true;
+		if (typeof document === 'undefined') return true;
+		return document.documentElement.dataset.theme !== 'light';
+	});
+
 	const replyPreview = $derived.by(() => {
 		if (!replyTo) return null;
-		const p = asPerson(replyTo.author);
-		const n = p?.name || displayNameFromEmail(replyTo.author);
+		const email = String(replyTo.author || '');
+		const p = asPerson(email);
+		const n = p?.name || displayNameFromEmail(email);
 		const plain = String(replyTo.body || '')
 			.replace(/\s+/g, ' ')
 			.trim();
-		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain;
-		return { name: n, text };
+		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain || 'Message';
+		return {
+			email,
+			name: n,
+			text,
+			accent: profileAccentCss(email, n),
+			nameColor: profileNameCss(email, n, isDark)
+		};
 	});
 
-	const pillExpanded = $derived(
-		Boolean(replyPreview) || fieldTall || pendingFiles.length > 0 || voiceOpen
+	/* Full capsule by default; squared top only for quote / media / voice — not tall text. */
+	const chromeExpanded = $derived(
+		Boolean(replyPreview) || pendingFiles.length > 0 || voiceOpen
 	);
 
 	function presenceLabel(/** @type {any} */ e) {
@@ -638,16 +656,28 @@
 
 	<div class="composer-fade" aria-hidden="true"></div>
 	<div class="composer-dock">
-		<div class="composer-pill" class:expanded={pillExpanded}>
+		<div class="composer-pill" class:chrome-expanded={chromeExpanded}>
 			{#if replyPreview}
-				<div class="reply-bar">
-					<div class="reply-meta">
-						<span class="reply-label">Reply to {replyPreview.name}</span>
-						<span class="reply-text">{replyPreview.text}</span>
+				<div class="composer-quote-wrap">
+					<div class="composer-quote" role="group" aria-label={`Replying to ${replyPreview.name}`}>
+						<div
+							class="composer-quote-bar"
+							style:background={replyPreview.accent}
+							aria-hidden="true"
+						></div>
+						<div class="composer-quote-body">
+							<span class="composer-quote-name" style:color={replyPreview.nameColor}
+								>{replyPreview.name}</span
+							>
+							<span class="composer-quote-text">{replyPreview.text}</span>
+						</div>
+						<button
+							type="button"
+							class="composer-quote-clear"
+							aria-label="Cancel reply"
+							onclick={clearReply}>×</button
+						>
 					</div>
-					<button type="button" class="reply-clear" aria-label="Cancel reply" onclick={clearReply}>
-						×
-					</button>
 				</div>
 			{/if}
 			{#if pendingFiles.length}
@@ -1161,6 +1191,7 @@
 		gap: 0;
 		min-height: 47px;
 		padding: 0;
+		/* Full capsule — all corners match. Tall text alone must not change this. */
 		border-radius: 9999px;
 		box-sizing: border-box;
 		/*
@@ -1201,54 +1232,73 @@
 		mask-composite: exclude;
 	}
 
-	.composer-pill.expanded {
+	/* Quote / attach / voice: soften top corners only; bottom stays pill. */
+	.composer-pill.chrome-expanded {
 		border-radius: 16px 16px 23.5px 23.5px;
 	}
 
-	.reply-bar {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin: 0;
-		padding: 8px 10px 0;
-		border: 0;
-		background: transparent;
+	.composer-quote-wrap {
+		padding: 8px 8px 0;
+		box-sizing: border-box;
 	}
 
-	.reply-meta {
+	.composer-quote {
+		display: flex;
+		align-items: stretch;
+		min-width: 0;
+		width: 100%;
+		border-radius: 8px;
+		overflow: hidden;
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
+	}
+
+	.composer-quote-bar {
+		width: 2.8px;
+		flex-shrink: 0;
+		align-self: stretch;
+	}
+
+	.composer-quote-body {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
+		padding: 4px 8px 5px;
 	}
 
-	.reply-label {
-		font-size: 12px;
-		font-weight: 600;
-		color: var(--accent-1);
-	}
-
-	.reply-text {
-		font-size: 12px;
-		color: var(--fg-66);
+	.composer-quote-name {
+		font-size: 13px;
+		font-weight: 700;
+		line-height: 1.35;
+		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
-	.reply-clear {
+	.composer-quote-text {
+		font-size: 13px;
+		line-height: 1.35;
+		color: var(--fg-66);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.composer-quote-clear {
 		flex-shrink: 0;
+		align-self: flex-start;
 		width: 28px;
 		height: 28px;
 		display: grid;
 		place-items: center;
+		margin: 2px 2px 0 0;
 		padding: 0;
 		border: 0;
 		border-radius: 999px;
 		background: transparent;
 		color: var(--fg-33);
-		font-size: 20px;
+		font-size: 18px;
 		line-height: 1;
 		cursor: pointer;
 	}
@@ -1262,7 +1312,7 @@
 		box-sizing: border-box;
 	}
 
-	.composer-pill:has(.reply-bar) .composer-row {
+	.composer-pill.chrome-expanded .composer-row {
 		padding-top: 4px;
 	}
 
