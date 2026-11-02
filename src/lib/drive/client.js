@@ -201,6 +201,8 @@ export async function putPath(session, logicalPath, kind, plaintext) {
  * @param {{ path: string, kind: string, plaintext: Uint8Array | string }[]} entries
  * @param {{
  *   mergeFirst?: boolean,
+ *   skipTipProbe?: boolean,
+ *   prePrepared?: Record<string, { hash: string, wrapped_key: string, kind: string }>,
  *   rematerialize?: (
  *     dir: any,
  *     entries: { path: string, kind: string, plaintext: Uint8Array | string }[]
@@ -215,6 +217,16 @@ export async function putPaths(session, entries, opts = {}) {
 	/** Reuse ciphertext across tip-conflict retries when plaintext unchanged (chat leaf). */
 	/** @type {Map<string, { ptKey: string, row: { name: string, kind: string, hash: string, wrapped_key: string } }>} */
 	const preparedByName = new Map();
+	if (opts.prePrepared) {
+		for (const [path, row] of Object.entries(opts.prePrepared)) {
+			const name = normalizePath(path);
+			if (!name || !row?.hash || !row?.wrapped_key) continue;
+			preparedByName.set(name, {
+				ptKey: '\0pre',
+				row: { name, kind: row.kind || 'blob', hash: row.hash, wrapped_key: row.wrapped_key }
+			});
+		}
+	}
 
 	let dir = /** @type {any} */ (null);
 	let dirHash = '';
@@ -238,7 +250,11 @@ export async function putPaths(session, entries, opts = {}) {
 						? entry.plaintext
 						: await sha256Hex(bytes);
 				const prev = preparedByName.get(name);
-				if (prev && prev.ptKey === ptKey) return prev.row;
+				/* prePrepared rows keep '\0pre' until plaintext changes on rematerialize. */
+				if (prev && (prev.ptKey === ptKey || prev.ptKey === '\0pre')) {
+					if (prev.ptKey === '\0pre') preparedByName.set(name, { ptKey, row: prev.row });
+					return prev.row;
+				}
 				const { ciphertext, fileKeyHex } = await encrypt(root, name, bytes);
 				const hash = await sha256Hex(ciphertext);
 				await putBlock(session, hash, ciphertext);
@@ -265,7 +281,7 @@ export async function putPaths(session, entries, opts = {}) {
 		await putBlock(session, dirHash, dirCt);
 
 		/* Tip moved under us — rematerialize indexes and retry. */
-		if (attempt < 2) {
+		if (attempt < 2 && !opts.skipTipProbe) {
 			let tipNow = tipAtLoad;
 			try {
 				tipNow = await getTip(session);

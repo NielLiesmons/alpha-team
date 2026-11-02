@@ -519,6 +519,53 @@ export async function postChatMessage(input) {
 							.filter((id) => id && !id.startsWith('local-'))
 					: undefined;
 
+			const previewByName = new Map(
+				(Array.isArray(attachments) ? attachments : [])
+					.filter((a) => a?.previewUrl)
+					.map((a) => [String(a.name || a.path), a.previewUrl])
+			);
+
+			/** Paint ✓ as soon as the message leaf ciphertext is on the server (before tip). */
+			function settleFrom(/** @type {any} */ created) {
+				const settledAtt = Array.isArray(created.attachments)
+					? created.attachments.map((a) => ({
+							...a,
+							...(previewByName.get(String(a.name || a.path))
+								? { previewUrl: previewByName.get(String(a.name || a.path)) }
+								: {})
+						}))
+					: attachments.filter((a) => a?.previewUrl);
+				const settledMsg = {
+					...created,
+					channel_id: created.channel_id || channelId,
+					delivery: 'sent',
+					read_by: Array.isArray(created.read_by) ? created.read_by : [],
+					...(settledAtt.length ? { attachments: settledAtt } : {}),
+					...(previewByName.size && !settledAtt.length && attachments.length
+						? { attachments }
+						: {}),
+					_pending: false,
+					_local: false
+				};
+				feedFetchGen += 1;
+				const idx = chatFeed.findIndex((m) => m.id === localId);
+				if (idx >= 0) chatFeed[idx] = settledMsg;
+				else chatFeed.unshift(settledMsg);
+				if (
+					!isEvent &&
+					input.ref &&
+					(input.ref.type === 'task' ||
+						input.ref.type === 'note' ||
+						input.ref.type === 'project')
+				) {
+					const key = commentKey(/** @type {any} */ (input.ref.type), input.ref.id);
+					const prev = commentsByKey[key] ?? [];
+					commentsByKey[key] = prev.map((m) => (m.id === localId ? settledMsg : m));
+				}
+				writeChatCache(chatFeed);
+				return settledMsg;
+			}
+
 			const created = await createChatMessage(
 				session,
 				{
@@ -534,49 +581,18 @@ export async function postChatMessage(input) {
 				},
 				{
 					knownFeedIds: knownFeedIds().filter((id) => id !== localId),
-					knownCommentIds: knownComments
+					knownCommentIds: knownComments,
+					onLeafStored: (leafMsg) => {
+						settleFrom({
+							...leafMsg,
+							...(attachments.length ? { attachments } : {})
+						});
+					}
 				}
 			);
 
-			const previewByName = new Map(
-				(Array.isArray(attachments) ? attachments : [])
-					.filter((a) => a?.previewUrl)
-					.map((a) => [String(a.name || a.path), a.previewUrl])
-			);
-			const settledAtt = Array.isArray(created.attachments)
-				? created.attachments.map((a) => ({
-						...a,
-						...(previewByName.get(String(a.name || a.path))
-							? { previewUrl: previewByName.get(String(a.name || a.path)) }
-							: {})
-					}))
-				: attachments.filter((a) => a?.previewUrl);
-
-			const settledMsg = {
-				...created,
-				channel_id: created.channel_id || channelId,
-				delivery: 'sent',
-				read_by: Array.isArray(created.read_by) ? created.read_by : [],
-				...(settledAtt.length ? { attachments: settledAtt } : {}),
-				_pending: false,
-				_local: false
-			};
-			/* Invalidate in-flight refreshes that may still hold a pre-send tip. */
-			feedFetchGen += 1;
-			const idx = chatFeed.findIndex((m) => m.id === localId);
-			if (idx >= 0) chatFeed[idx] = settledMsg;
-			else chatFeed.unshift(settledMsg);
-
-			if (
-				!isEvent &&
-				input.ref &&
-				(input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')
-			) {
-				const key = commentKey(/** @type {any} */ (input.ref.type), input.ref.id);
-				const prev = commentsByKey[key] ?? [];
-				commentsByKey[key] = prev.map((m) => (m.id === localId ? settledMsg : m));
-			}
-			writeChatCache(chatFeed);
+			/* Tip finished — refresh settle fields if leaf callback already ran. */
+			settleFrom(created);
 
 			/* Wake other devices (Home Screen PWA push). Never block the send UX. */
 			if (!isReaction && kind !== 'reaction') {

@@ -5,12 +5,15 @@ import {
 	deletePaths,
 	getPath,
 	getPathFromDir,
+	getTip,
 	loadRootDir,
 	loadRootDirWithTip,
+	peekCachedTip,
+	putBlock,
 	putPath,
 	putPaths
 } from './client.js';
-import { sha256Hex } from './crypto.js';
+import { encrypt, parseRootKey, sha256Hex } from './crypto.js';
 import { putMediaBlob } from './media.js';
 
 function nowRfc3339() {
@@ -2203,7 +2206,11 @@ async function listCommentIdsFromDir(session, dir, type, entityId) {
  *   attachments?: any[],
  *   delivery?: string
  * }} input
- * @param {{ knownFeedIds?: string[], knownCommentIds?: string[] }} [opts]
+ * @param {{
+ *   knownFeedIds?: string[],
+ *   knownCommentIds?: string[],
+ *   onLeafStored?: (msg: any) => void
+ * }} [opts]
  */
 export async function createChatMessage(session, input, opts = {}) {
 	const id = newId();
@@ -2316,15 +2323,27 @@ export async function createChatMessage(session, input, opts = {}) {
 	}
 
 	/*
-	 * Fast send: if tip matches last feed refresh, skip feed.json download entirely.
-	 * Rematerialize only on tip conflict. No pre-listFeedIds round-trip.
+	 * DeltaChat-ish send:
+	 * 1) Encrypt + putBlock the leaf immediately → onLeafStored (✓) before tip work.
+	 * 2) Tip/dir update can finish after; peers discover via tip shortly after.
 	 */
+	const leafPath = `chat/messages/${id}.json`;
+	const root = parseRootKey(session.rootKey);
+	const leafBytes = new TextEncoder().encode(leafPlain);
+	const { ciphertext: leafCt, fileKeyHex: leafKey } = await encrypt(root, leafPath, leafBytes);
+	const leafHash = await sha256Hex(leafCt);
+	await putBlock(session, leafHash, leafCt);
+	try {
+		opts.onLeafStored?.(msg);
+	} catch {
+		/* UI settle must never break the tip write */
+	}
+
 	/** @type {string[]} */
 	let feedIds;
 	/** @type {string[]} */
 	let commentIds = [];
-	const { getTip, peekCachedTip } = await import('./client.js');
-	/* Prefer memory tip (0 RTT) — only hit the network when we have no warm tip. */
+	let tipWarm = false;
 	let tipNow = peekCachedTip(session) || '';
 	if (!tipNow || tipNow !== cachedFeedTip) {
 		try {
@@ -2334,7 +2353,7 @@ export async function createChatMessage(session, input, opts = {}) {
 		}
 	}
 	if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments) {
-		/* Tip unchanged since last feed load — skip feed.json download. */
+		tipWarm = true;
 		feedIds = [id, ...cachedFeedIds, ...known]
 			.filter((x, i, arr) => x && arr.indexOf(x) === i)
 			.slice(0, FEED_MAX);
@@ -2345,8 +2364,13 @@ export async function createChatMessage(session, input, opts = {}) {
 	}
 
 	const tipAfter = await putPaths(session, buildWrites(feedIds, commentIds), {
+		/* Leaf already on the server — reuse ciphertext, don't re-upload. */
+		prePrepared: {
+			[leafPath]: { hash: leafHash, wrapped_key: leafKey, kind: 'chat_message' }
+		},
+		/* Warm tip + memory feed ids: skip confirmatory getTip (saves ~1 RTT). */
+		skipTipProbe: tipWarm,
 		rematerialize: async (dir) => {
-			/* Tip conflict — always re-read live feed; do not trust memory cache. */
 			const liveFeed = await listFeedIdsFromDir(session, dir);
 			const nextFeed = [id, ...liveFeed, ...known]
 				.filter((x, i, arr) => x && arr.indexOf(x) === i)

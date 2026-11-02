@@ -454,20 +454,20 @@
 
 	.card.stack-mid,
 	.card:not(.stack-first):not(.stack-last) {
-		margin-top: 1px;
+		margin-top: 2px;
 	}
 
 	.card.stack-last:not(.stack-first) {
-		margin-top: 1px;
+		margin-top: 2px;
 	}
 
 	.card.stack-first {
 		margin-top: 10px;
 	}
 
-	/* Clear hanging reaction pills without shifting pfp / hover rail off the bubble */
+	/* Clear hanging reaction pills so they never cover the next bubble */
 	.card:has(.reaction-pills) {
-		margin-bottom: 22px;
+		margin-bottom: 28px;
 	}
 
 	.card.mine {
@@ -726,6 +726,11 @@
 		color: #fff;
 	}
 
+	/* Mid-stack outgoing: +1px under text only (not image-only bubbles). */
+	.bubble.mine:not(.stack-last) .text {
+		padding-bottom: 1px;
+	}
+
 	.fail-hint {
 		margin: 6px 0 0;
 		padding: 0 11px;
@@ -839,8 +844,8 @@
 		gap: 4px;
 		width: max-content;
 		max-width: min(100vw, 280px);
-		/* Hang ~3px onto the bubble bottom edge */
-		margin-top: -3px;
+		/* Hang ~4px onto the bubble bottom edge */
+		margin-top: -4px;
 		padding-left: 4px;
 		z-index: 2;
 	}
