@@ -10,7 +10,7 @@
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
-	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { activePerson, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		chatEphemeral,
@@ -26,7 +26,12 @@
 		refreshChatFeed,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { startChatTipPoll, stopChatTipPoll } from '$lib/chat-sync.svelte.js';
+	import { chatStackFlags } from '$lib/chat-stack.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { activeSession } from '$lib/drive/session.svelte.js';
+	import { putPath } from '$lib/drive/client.js';
+	import { putMediaBlob } from '$lib/drive/media.js';
 
 	/** @type {{ channelId?: string }} */
 	let { channelId = 'general' } = $props();
@@ -38,6 +43,14 @@
 	let messagesEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
+	/** @type {HTMLInputElement | undefined} */
+	let fileInputEl = $state();
+	/** @type {any[]} */
+	let pendingFiles = $state([]);
+	let voiceOpen = $state(false);
+	let voiceSecs = $state(0);
+	/** @type {ReturnType<typeof setInterval> | null} */
+	let voiceTimer = null;
 
 	/** Near bottom → follow new messages; else show FABs / bump unread. */
 	let nearBottom = $state(true);
@@ -45,6 +58,8 @@
 	let pendingNewCount = $state(0);
 	/** @type {string} */
 	let lastTailId = $state('');
+	/** @type {string} */
+	let mountedChannel = $state('');
 	/** Briefly highlight a jumped-to quoted message. */
 	let highlightId = $state(/** @type {string | null} */ (null));
 	/** @type {ReturnType<typeof setTimeout> | null} */
@@ -61,7 +76,8 @@
 	const chronological = $derived(
 		[...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)].reverse()
 	);
-	const canSend = $derived(Boolean(draft.trim()));
+	const stackMap = $derived(chatStackFlags(chronological, activePerson().email || ''));
+	const canSend = $derived(Boolean(draft.trim()) || pendingFiles.length > 0);
 	const presence = $derived(
 		(chatEphemeral || []).filter((e) => e.channel_id === channelId && e.state !== 'idle')
 	);
@@ -128,6 +144,8 @@
 	}
 
 	onMount(() => {
+		mountedChannel = channelId;
+		startChatTipPoll();
 		const warm = hydrateChatFeedFromCache();
 		if (warm) {
 			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
@@ -137,20 +155,27 @@
 		}
 		void refreshChatFeed().then(() => {
 			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
-			void scrollToBottom(true);
+			if (nearBottom) void scrollToBottom(true);
 		});
 		return () => {
+			stopChatTipPoll();
 			if (highlightTimer != null) clearTimeout(highlightTimer);
+			if (voiceTimer != null) clearInterval(voiceTimer);
 		};
 	});
 
 	$effect(() => {
-		channelId;
-		lastTailId = '';
-		pendingNewCount = 0;
-		nearBottom = true;
-		showScrollFab = false;
-		void scrollToBottom(true);
+		const id = channelId;
+		if (mountedChannel && mountedChannel !== id) {
+			lastTailId = '';
+			pendingNewCount = 0;
+			nearBottom = true;
+			showScrollFab = false;
+			mountedChannel = id;
+			void scrollToBottom(true);
+		} else if (!mountedChannel) {
+			mountedChannel = id;
+		}
 	});
 
 	/** Only follow the tail when pinned near bottom — never on reactions / mid-feed edits. */
@@ -244,10 +269,83 @@
 		replyTo = null;
 	}
 
+	function openAttach() {
+		fileInputEl?.click();
+	}
+
+	/** @param {Event} e */
+	function onFilesPicked(e) {
+		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
+		const files = [...(input.files || [])];
+		input.value = '';
+		if (!files.length) return;
+		pendingFiles = [
+			...pendingFiles,
+			...files.map((file) => ({
+				file,
+				previewUrl: file.type.startsWith('image/') || file.type.startsWith('video/')
+					? URL.createObjectURL(file)
+					: null,
+				kind: file.type.startsWith('image/')
+					? 'image'
+					: file.type.startsWith('video/')
+						? 'video'
+						: 'file'
+			}))
+		];
+	}
+
+	function clearPendingFiles() {
+		for (const f of pendingFiles) {
+			if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+		}
+		pendingFiles = [];
+	}
+
+	/**
+	 * @param {File} file
+	 * @param {string} msgId
+	 */
+	async function uploadChatAttachment(file, msgId) {
+		const session = activeSession();
+		if (!session) throw new Error('Connect Drive first');
+		const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'file';
+		const path = `chat/media/${msgId}/${safe}`;
+		const kind = file.type.startsWith('image/')
+			? 'image'
+			: file.type.startsWith('video/')
+				? 'video'
+				: file.type.startsWith('audio/')
+					? 'voice'
+					: 'file';
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		if (file.size > 512 * 1024 || kind === 'video' || kind === 'voice') {
+			const mediaPath = `chat/media/${msgId}/media.json`;
+			await putMediaBlob(session, mediaPath, file.type || 'application/octet-stream', bytes);
+			return {
+				path: mediaPath,
+				content_type: file.type || 'application/octet-stream',
+				kind,
+				name: file.name,
+				bytes: file.size
+			};
+		}
+		await putPath(session, path, 'blob', bytes);
+		return {
+			path,
+			content_type: file.type || 'application/octet-stream',
+			kind,
+			name: file.name,
+			bytes: file.size
+		};
+	}
+
 	async function send() {
 		const body = draft.trim();
-		if (!body) return;
+		const files = pendingFiles;
+		if (!body && !files.length) return;
 		draft = '';
+		pendingFiles = [];
 		fieldTall = false;
 		fadeTop = false;
 		fadeBottom = false;
@@ -258,20 +356,61 @@
 			parent && chatPublicationRefKey(parent) && parent.ref?.type && parent.ref?.id
 				? { type: String(parent.ref.type), id: String(parent.ref.id) }
 				: null;
+
+		/** Optimistic local previews — upload runs after bubble paints; ✓ only after Drive settle. */
+		const localAtt = files.map((f) => ({
+			kind: f.kind,
+			name: f.file.name,
+			bytes: f.file.size,
+			content_type: f.file.type,
+			previewUrl: f.previewUrl,
+			path: `local:${f.file.name}`
+		}));
+
 		try {
 			nearBottom = true;
-			/* Optimistic paint returns immediately — Drive write is backgrounded. */
+			const uploadId = crypto.randomUUID().slice(0, 16);
 			await postChatMessage({
 				body,
 				kind: pubRef ? 'comment' : 'chat',
 				ref: pubRef,
 				reply_to: parent?.id ?? null,
-				channel_id: channelId
+				channel_id: channelId,
+				...(localAtt.length ? { attachments: localAtt } : {}),
+				...(files.length
+					? {
+							resolveAttachments: async () =>
+								Promise.all(
+									files.map(async (f) => {
+										const meta = await uploadChatAttachment(f.file, uploadId);
+										return { ...meta, previewUrl: f.previewUrl };
+									})
+								)
+						}
+					: {})
 			});
 			inputEl?.focus();
 			void scrollToBottom(true);
 		} catch (e) {
 			chatUi.error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	function openVoiceShell() {
+		voiceOpen = true;
+		voiceSecs = 0;
+		if (voiceTimer != null) clearInterval(voiceTimer);
+		voiceTimer = setInterval(() => {
+			voiceSecs += 1;
+		}, 1000);
+	}
+
+	function cancelVoiceShell() {
+		voiceOpen = false;
+		voiceSecs = 0;
+		if (voiceTimer != null) {
+			clearInterval(voiceTimer);
+			voiceTimer = null;
 		}
 	}
 
@@ -320,7 +459,9 @@
 		return { name: n, text };
 	});
 
-	const pillExpanded = $derived(Boolean(replyPreview) || fieldTall);
+	const pillExpanded = $derived(
+		Boolean(replyPreview) || fieldTall || pendingFiles.length > 0 || voiceOpen
+	);
 
 	function presenceLabel(/** @type {any} */ e) {
 		if (e.label) return e.label;
@@ -415,6 +556,7 @@
 							{#if bubbles.length}
 								<div class="pub-body">
 									{#each bubbles as msg (msg.id)}
+										{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
 										<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
 											<ChatFeedCard
 												{msg}
@@ -422,6 +564,8 @@
 												when={formatWhen(msg.created_at)}
 												onReply={() => startReply(msg)}
 												onQuoteClick={scrollToQuoted}
+												stackFirst={st.isFirst}
+												stackLast={st.isLast}
 											/>
 										</div>
 									{/each}
@@ -430,6 +574,7 @@
 						</section>
 					{:else}
 						{#each block.messages as msg (msg.id)}
+							{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
 							<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
 								<ChatFeedCard
 									{msg}
@@ -437,6 +582,8 @@
 									when={formatWhen(msg.created_at)}
 									onReply={() => startReply(msg)}
 									onQuoteClick={scrollToQuoted}
+									stackFirst={st.isFirst}
+									stackLast={st.isLast}
 								/>
 							</div>
 						{/each}
@@ -501,8 +648,50 @@
 					</button>
 				</div>
 			{/if}
+			{#if pendingFiles.length}
+				<div class="attach-bar">
+					{#each pendingFiles as f, i (f.file.name + i)}
+						<span class="attach-chip">
+							{f.kind === 'image' ? 'Image' : f.kind === 'video' ? 'Video' : f.file.name}
+							<button
+								type="button"
+								class="attach-x"
+								aria-label="Remove"
+								onclick={() => {
+									if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+									pendingFiles = pendingFiles.filter((_, j) => j !== i);
+								}}>×</button
+							>
+						</span>
+					{/each}
+					<button type="button" class="attach-clear" onclick={clearPendingFiles}>Clear</button>
+				</div>
+			{/if}
+			{#if voiceOpen}
+				<div class="voice-shell">
+					<span class="voice-pulse" aria-hidden="true"></span>
+					<span class="voice-label">Recording… {voiceSecs}s</span>
+					<button type="button" class="voice-cancel" onclick={cancelVoiceShell}>Cancel</button>
+					<button
+						type="button"
+						class="voice-send"
+						onclick={() => {
+							cancelVoiceShell();
+							chatUi.error = 'Voice capture ships next — attach an audio file via + for now.';
+						}}>Send</button
+					>
+				</div>
+			{/if}
 			<div class="composer-row">
-				<button type="button" class="side-btn plus" aria-label="Attach" disabled>
+				<input
+					bind:this={fileInputEl}
+					type="file"
+					class="file-input"
+					multiple
+					accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip"
+					onchange={onFilesPicked}
+				/>
+				<button type="button" class="side-btn plus" aria-label="Attach" onclick={openAttach}>
 					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 						<path
 							d="M9 3.5v11M3.5 9h11"
@@ -538,8 +727,8 @@
 						type="button"
 						class="side-btn mic"
 						aria-label="Voice message"
-						disabled
-						title="Voice coming soon"
+						title="Voice message"
+						onclick={openVoiceShell}
 					>
 						<Voice size={22} />
 					</button>
@@ -1088,8 +1277,7 @@
 		color: var(--fg-66);
 	}
 
-	.side-btn.plus:disabled,
-	.side-btn.mic:disabled {
+	.side-btn.plus:disabled {
 		opacity: 0.55;
 		cursor: default;
 	}
@@ -1164,5 +1352,95 @@
 
 	.composer-input::placeholder {
 		color: var(--fg-33);
+	}
+
+	.file-input {
+		position: absolute;
+		width: 0;
+		height: 0;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.attach-bar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		padding: 8px 10px 0;
+	}
+
+	.attach-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 8px;
+		border-radius: 999px;
+		background: var(--fg-8);
+		font-size: 12px;
+		color: var(--fg-66);
+	}
+
+	.attach-x,
+	.attach-clear {
+		border: 0;
+		background: transparent;
+		color: var(--fg-33);
+		cursor: pointer;
+		font: inherit;
+		font-size: 12px;
+		padding: 0 2px;
+	}
+
+	.voice-shell {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 12px 0;
+	}
+
+	.voice-pulse {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: #e44;
+		animation: voice-blink 1s ease infinite;
+	}
+
+	@keyframes voice-blink {
+		0%,
+		100% {
+			opacity: 0.35;
+		}
+		50% {
+			opacity: 1;
+		}
+	}
+
+	.voice-label {
+		flex: 1;
+		font-size: 13px;
+		color: var(--fg-66);
+	}
+
+	.voice-cancel,
+	.voice-send {
+		border: 0;
+		border-radius: 999px;
+		padding: 6px 12px;
+		font: inherit;
+		font-size: 12px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.voice-cancel {
+		background: var(--fg-8);
+		color: var(--fg-66);
+	}
+
+	.voice-send {
+		background: var(--gradient-accent-1);
+		color: #fff;
 	}
 </style>

@@ -185,6 +185,7 @@ export async function putPath(session, logicalPath, kind, plaintext) {
 
 /**
  * Write many logical paths with a single tip update (encrypt + putBlock in parallel).
+ * Retries once if tip moved between load and commit (reduces lost sibling leaves).
  * @param {DriveSession} session
  * @param {{ path: string, kind: string, plaintext: Uint8Array | string }[]} entries
  */
@@ -208,22 +209,43 @@ export async function putPaths(session, entries) {
 		})
 	);
 
-	const dir = await loadRootDir(session);
-	dir.schema = 'alpha.dir/1';
-	dir.children = dir.children ?? {};
-	for (const row of prepared) {
-		dir.children[row.name] = {
-			hash: row.hash,
-			kind: row.kind,
-			wrapped_key: row.wrapped_key
-		};
+	let dir = /** @type {any} */ (null);
+	let dirHash = '';
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const { tip: tipAtLoad, dir: fresh } = await loadRootDirWithTip(session);
+		dir = fresh;
+		dir.schema = 'alpha.dir/1';
+		dir.children = dir.children ?? {};
+		for (const row of prepared) {
+			dir.children[row.name] = {
+				hash: row.hash,
+				kind: row.kind,
+				wrapped_key: row.wrapped_key
+			};
+		}
+
+		const dirBytes = new TextEncoder().encode(JSON.stringify(dir));
+		const dirCt = await encryptWithRoot(root, '', dirBytes);
+		dirHash = await sha256Hex(dirCt);
+		await putBlock(session, dirHash, dirCt);
+
+		/* Tip moved under us — rebuild from newest dir and retry once. */
+		if (attempt === 0) {
+			let tipNow = tipAtLoad;
+			try {
+				tipNow = await getTip(session);
+			} catch {
+				/* proceed */
+			}
+			if (tipNow && tipAtLoad && tipNow !== tipAtLoad) {
+				continue;
+			}
+		}
+
+		await putTip(session, dirHash);
+		break;
 	}
 
-	const dirBytes = new TextEncoder().encode(JSON.stringify(dir));
-	const dirCt = await encryptWithRoot(root, '', dirBytes);
-	const dirHash = await sha256Hex(dirCt);
-	await putBlock(session, dirHash, dirCt);
-	await putTip(session, dirHash);
 	rememberRootDir(dir, dirHash, session);
 	try {
 		const { markTipApplied } = await import('./tip-gate.js');

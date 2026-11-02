@@ -6,6 +6,7 @@
 	import { appBoot, bootApp } from '$lib/boot.svelte.js';
 	import { initBrand } from '$lib/brand.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { initChatWakeListeners } from '$lib/chat-sync.svelte.js';
 	import { initPwa } from '$lib/pwa.svelte.js';
 	import { initTheme } from '$lib/theme.svelte.js';
 	import { startViewportBridge } from '$lib/viewport.svelte.js';
@@ -21,6 +22,7 @@
 	onMount(() => {
 		const stopVv = startViewportBridge();
 		const stopPwa = initPwa();
+		const stopChatWake = initChatWakeListeners();
 		initBrand();
 		initTheme();
 		bootApp();
@@ -50,6 +52,7 @@
 		return () => {
 			stopVv();
 			stopPwa?.();
+			stopChatWake?.();
 		};
 	});
 </script>

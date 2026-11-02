@@ -12,8 +12,13 @@
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+	import { activeSession } from '$lib/drive/session.svelte.js';
+	import { getPath } from '$lib/drive/client.js';
+	import { getMediaBlob } from '$lib/drive/media.js';
 
 	const REACTION_PFP_MAX = 3;
+	/** @type {Record<string, string>} path → object URL for remote attachments */
+	let attUrls = $state(/** @type {Record<string, string>} */ ({}));
 
 	/**
 	 * @type {{
@@ -21,10 +26,22 @@
 	 *   parent?: any | null,
 	 *   when?: string,
 	 *   onReply?: () => void,
-	 *   onQuoteClick?: (parentId: string) => void
+	 *   onQuoteClick?: (parentId: string) => void,
+	 *   stackFirst?: boolean,
+	 *   stackLast?: boolean,
+	 *   showAuthor?: boolean
 	 * }}
 	 */
-	let { msg, parent = null, when = '', onReply, onQuoteClick } = $props();
+	let {
+		msg,
+		parent = null,
+		when = '',
+		onReply,
+		onQuoteClick,
+		stackFirst = true,
+		stackLast = true,
+		showAuthor = true
+	} = $props();
 
 	let pickerOpen = $state(false);
 	/** @type {ReturnType<typeof setTimeout> | null} */
@@ -54,8 +71,22 @@
 		return Boolean(me && author && me === author);
 	});
 	const reactions = $derived(reactionsForMessage(msg.id));
-	const delivery = $derived(
-		msg._pending || msg.delivery === 'sending' ? 'sending' : msg.delivery || 'sent'
+	/** sending = not on Drive yet (no check); sent = single ✓; read = double ✓✓ (other account). */
+	const delivery = $derived.by(() => {
+		if (msg._failed) return 'failed';
+		if (msg._pending || msg.delivery === 'sending' || String(msg.id || '').startsWith('local-')) {
+			return 'sending';
+		}
+		const me = (actor.email || '').trim().toLowerCase();
+		const readBy = Array.isArray(msg.read_by)
+			? msg.read_by.map((e) => String(e).trim().toLowerCase()).filter(Boolean)
+			: [];
+		/* Double-check only when at least one *other* account is in read_by. */
+		if (readBy.some((e) => e && e !== me)) return 'read';
+		return 'sent';
+	});
+	const showReceipt = $derived(
+		isMine && stackLast && (delivery === 'sent' || delivery === 'read')
 	);
 
 	function nameColor(email, label) {
@@ -151,17 +182,68 @@
 		document.addEventListener('pointerdown', onDoc, true);
 		return () => document.removeEventListener('pointerdown', onDoc, true);
 	});
+
+	$effect(() => {
+		const atts = Array.isArray(msg.attachments) ? msg.attachments : [];
+		const session = activeSession();
+		const need = atts.filter(
+			(a) =>
+				a?.path &&
+				!String(a.path).startsWith('local:') &&
+				!a.previewUrl &&
+				!a.url &&
+				!attUrls[a.path] &&
+				(a.kind === 'image' || a.kind === 'video' || a.kind === 'voice')
+		);
+		if (!session || !need.length) return;
+		let cancelled = false;
+		/** @type {string[]} */
+		const created = [];
+		void (async () => {
+			for (const a of need) {
+				try {
+					const path = String(a.path);
+					/** @type {Uint8Array} */
+					let bytes;
+					/** @type {string} */
+					let type = a.content_type || 'application/octet-stream';
+					if (path.endsWith('media.json') || a.kind === 'voice' || a.kind === 'video') {
+						const loaded = await getMediaBlob(session, path);
+						bytes = loaded.bytes;
+						type = loaded.manifest?.content_type || type;
+					} else {
+						bytes = await getPath(session, path);
+					}
+					if (cancelled) return;
+					const url = URL.createObjectURL(new Blob([bytes], { type }));
+					created.push(url);
+					attUrls = { ...attUrls, [path]: url };
+				} catch {
+					/* leave placeholder */
+				}
+			}
+		})();
+		return () => {
+			cancelled = true;
+			for (const u of created) URL.revokeObjectURL(u);
+		};
+	});
 </script>
 
 <article
 	class="card desktop-bubble-actions-target"
 	class:mine={isMine}
 	class:failed={msg._failed}
+	class:stack-first={stackFirst}
+	class:stack-last={stackLast}
+	class:stack-mid={!stackFirst && !stackLast}
 	data-chat-bubble={msg.id}
 >
 	{#if !isMine}
-		<div class="avatar-wrap">
-			<ProfilePic name={name} email={msg.author} pictureUrl={pictureUrlFor(msg.author)} size={34} />
+		<div class="avatar-wrap" class:hidden-slot={!stackLast}>
+			{#if stackLast}
+				<ProfilePic name={name} email={msg.author} pictureUrl={pictureUrlFor(msg.author)} size={34} />
+			{/if}
 		</div>
 	{/if}
 
@@ -172,6 +254,9 @@
 				class="bubble"
 				class:quoted={isReply}
 				class:mine={isMine}
+				class:stack-first={stackFirst}
+				class:stack-last={stackLast}
+				class:stack-mid={!stackFirst && !stackLast}
 			onpointerdown={onBubblePointerDown}
 			onpointerup={onBubblePointerUp}
 			onpointermove={onBubblePointerMove}
@@ -180,7 +265,7 @@
 			role="group"
 			aria-label={isMine ? 'Your message' : `Message from ${name}`}
 		>
-			{#if !isMine}
+			{#if !isMine && showAuthor && stackFirst}
 				<div class="bubble-head">
 					<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
 					{#if when}<span class="when">{when}</span>{/if}
@@ -209,44 +294,63 @@
 					</div>
 				</button>
 			{/if}
-			<p class="text">{msg.body}</p>
-			{#if isMine}
+			{#if msg.body}
+				<p class="text">{msg.body}</p>
+			{/if}
+			{#if Array.isArray(msg.attachments) && msg.attachments.length}
+				<div class="attachments">
+					{#each msg.attachments as att, ai (att.path || att.name || ai)}
+						{@const src = att.previewUrl || att.url || (att.path ? attUrls[att.path] : '')}
+						{#if att.kind === 'image' && src}
+							<img class="att-image" src={src} alt={att.name || 'Image'} />
+						{:else if att.kind === 'video' && src}
+							<video class="att-video" src={src} controls playsinline></video>
+						{:else if att.kind === 'voice' && src}
+							<audio class="att-voice" src={src} controls preload="metadata"></audio>
+						{:else}
+							<div class="att-file">
+								<span class="att-name">{att.name || att.kind || 'File'}</span>
+								{#if att.bytes}
+									<span class="att-size">{Math.round(att.bytes / 1024)} KB</span>
+								{/if}
+							</div>
+						{/if}
+					{/each}
+				</div>
+			{/if}
+			{#if isMine && stackLast && (showReceipt || when)}
 				<div class="meta-out">
 					{#if when}<span class="when">{when}</span>{/if}
-					<span
-						class="receipt"
-						class:read={delivery === 'read'}
-						title={delivery === 'read'
-							? 'Read'
-							: delivery === 'delivered'
-								? 'Delivered'
-								: delivery === 'sending'
-									? 'Sending'
-									: 'Sent'}
-						aria-label={delivery}
-					>
-						{#if delivery === 'read' || delivery === 'delivered'}
-							<svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
-								<path
-									d="M1.2 5.2 3.6 7.6 8.8 1.6M6.2 5.2 8.6 7.6 14.2 1.6"
-									stroke="currentColor"
-									stroke-width="1.4"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								/>
-							</svg>
-						{:else}
-							<svg width="12" height="10" viewBox="0 0 12 10" fill="none" aria-hidden="true">
-								<path
-									d="M1.2 5.2 4.1 8.1 10.6 1.5"
-									stroke="currentColor"
-									stroke-width="1.4"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								/>
-							</svg>
-						{/if}
-					</span>
+					{#if showReceipt}
+						<span
+							class="receipt"
+							class:read={delivery === 'read'}
+							title={delivery === 'read' ? 'Read' : 'Sent'}
+							aria-label={delivery}
+						>
+							{#if delivery === 'read'}
+								<svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
+									<path
+										d="M1.2 5.2 3.6 7.6 8.8 1.6M6.2 5.2 8.6 7.6 14.2 1.6"
+										stroke="currentColor"
+										stroke-width="1.4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							{:else}
+								<svg width="12" height="10" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+									<path
+										d="M1.2 5.2 4.1 8.1 10.6 1.5"
+										stroke="currentColor"
+										stroke-width="1.4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							{/if}
+						</span>
+					{/if}
 				</div>
 			{/if}
 			{#if msg._failed}
@@ -348,6 +452,15 @@
 		position: relative;
 	}
 
+	.card.stack-mid,
+	.card:not(.stack-first):not(.stack-last) {
+		margin-top: 2px;
+	}
+
+	.card.stack-first {
+		margin-top: 8px;
+	}
+
 	/* Clear hanging reaction pills without shifting pfp / hover rail off the bubble */
 	.card:has(.reaction-pills) {
 		margin-bottom: 22px;
@@ -364,8 +477,13 @@
 
 	.avatar-wrap {
 		flex-shrink: 0;
+		width: 34px;
 		line-height: 0;
 		align-self: flex-end;
+	}
+
+	.avatar-wrap.hidden-slot {
+		visibility: hidden;
 	}
 
 	.bubble-trailing {
@@ -419,8 +537,67 @@
 		padding-bottom: 4px;
 	}
 
+	/* Mid-stack: all corners full. Tail only on last. */
+	.bubble.stack-mid,
+	.bubble:not(.stack-last) {
+		border-radius: 16px;
+	}
+
+	.bubble.mine.stack-last {
+		border-radius: 16px 16px 4px 16px;
+	}
+
+	.bubble:not(.mine).stack-last {
+		border-radius: 16px 16px 16px 4px;
+	}
+
 	.bubble.quoted {
 		min-width: min(240px, 100%);
+	}
+
+	.attachments {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 4px 8px 6px;
+	}
+
+	.att-image,
+	.att-video {
+		display: block;
+		max-width: min(260px, 72vw);
+		max-height: 220px;
+		border-radius: 10px;
+		object-fit: cover;
+	}
+
+	.att-voice {
+		display: block;
+		width: min(240px, 70vw);
+		margin: 2px 0;
+	}
+
+	.att-file {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 8px 10px;
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
+	}
+
+	.bubble.mine .att-file {
+		background: rgba(0, 0, 0, 0.18);
+	}
+
+	.att-name {
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.att-size {
+		font-size: 11px;
+		opacity: 0.7;
 	}
 
 	.bubble-head {

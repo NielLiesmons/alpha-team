@@ -90,12 +90,38 @@ export async function enablePushNotifications(email) {
 
 	const vapid = await fetchVapidPublicKey();
 	const reg = await readyRegistration();
+	if (!reg.active) {
+		throw new Error('Service worker not ready yet — wait a second and try again.');
+	}
+	const appKey = urlBase64ToUint8Array(vapid);
 	let sub = await reg.pushManager.getSubscription();
-	if (!sub) {
-		sub = await reg.pushManager.subscribe({
-			userVisibleOnly: true,
-			applicationServerKey: urlBase64ToUint8Array(vapid)
-		});
+	if (sub) {
+		const existing = sub.options?.applicationServerKey;
+		const sameKey =
+			existing &&
+			existing.byteLength === appKey.byteLength &&
+			[...new Uint8Array(existing)].every((b, i) => b === appKey[i]);
+		if (!sameKey) {
+			await sub.unsubscribe();
+			sub = null;
+		}
+	}
+	try {
+		if (!sub) {
+			sub = await reg.pushManager.subscribe({
+				userVisibleOnly: true,
+				applicationServerKey: appKey
+			});
+		}
+	} catch (e) {
+		const name = e instanceof Error ? e.name : '';
+		const msg = e instanceof Error ? e.message : String(e);
+		if (/push service error/i.test(msg) || name === 'AbortError') {
+			throw new Error(
+				'Push service unavailable on this device. On Android you need Google Play services and a normal network — then try again.'
+			);
+		}
+		throw e instanceof Error ? e : new Error(msg);
 	}
 
 	const json = sub.toJSON();

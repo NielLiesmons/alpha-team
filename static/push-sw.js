@@ -13,7 +13,12 @@ self.addEventListener('notificationclick', (event) => {
 	const raw = event.notification?.data;
 	const data = raw && typeof raw === 'object' ? raw : {};
 	const target = typeof data.url === 'string' && data.url ? data.url : '/chat';
-	event.waitUntil(openOrFocus(target));
+	event.waitUntil(
+		(async () => {
+			await wakeClients();
+			await openOrFocus(target);
+		})()
+	);
 });
 
 self.addEventListener('pushsubscriptionchange', (event) => {
@@ -24,7 +29,19 @@ self.addEventListener('pushsubscriptionchange', (event) => {
 /**
  * @param {PushEvent} event
  */
+async function wakeClients() {
+	const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+	for (const client of all) {
+		try {
+			client.postMessage({ type: 'chat-wake' });
+		} catch {
+			/* ignore */
+		}
+	}
+}
+
 async function handlePush(event) {
+	void wakeClients();
 	/** @type {{ title?: string, body?: string, url?: string, tag?: string, badge?: number | null }} */
 	let payload = {
 		title: 'Alpha',

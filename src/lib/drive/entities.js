@@ -2081,7 +2081,10 @@ export async function listFeedMessages(session, limit = 80) {
  *   kind?: 'comment' | 'chat' | 'reaction' | 'event',
  *   ref?: { type: string, id: string } | null,
  *   reaction?: string,
- *   reply_to?: string | null
+ *   reply_to?: string | null,
+ *   channel_id?: string,
+ *   attachments?: any[],
+ *   delivery?: string
  * }} input
  * @param {{ knownFeedIds?: string[], knownCommentIds?: string[] }} [opts]
  */
@@ -2089,6 +2092,7 @@ export async function createChatMessage(session, input, opts = {}) {
 	const id = newId();
 	const created = nowRfc3339();
 	const kind = input.kind || (input.ref ? 'comment' : 'chat');
+	const channelId = String(input.channel_id || 'general');
 	const msg = {
 		schema: 'alpha.chat_message/1',
 		id,
@@ -2096,10 +2100,37 @@ export async function createChatMessage(session, input, opts = {}) {
 		author: input.author,
 		body: input.body ?? '',
 		created_at: created,
+		channel_id: channelId,
+		delivery: input.delivery || 'sent',
+		read_by: [],
 		...(input.ref ? { ref: { type: input.ref.type, id: input.ref.id } } : {}),
 		...(input.reaction ? { reaction: input.reaction } : {}),
-		...(input.reply_to ? { reply_to: input.reply_to } : {})
+		...(input.reply_to ? { reply_to: input.reply_to } : {}),
+		...(Array.isArray(input.attachments) && input.attachments.length
+			? {
+					attachments: input.attachments.map((a) => ({
+						path: String(a.path || ''),
+						content_type: String(a.content_type || 'application/octet-stream'),
+						kind: a.kind === 'image' || a.kind === 'video' || a.kind === 'voice' ? a.kind : 'file',
+						...(a.name ? { name: String(a.name) } : {}),
+						...(typeof a.bytes === 'number' ? { bytes: a.bytes } : {}),
+						...(typeof a.duration_ms === 'number' ? { duration_ms: a.duration_ms } : {})
+					}))
+				}
+			: {})
 	};
+
+	/** Always merge with live feed index — knownFeedIds alone loses concurrent sends. */
+	let serverFeed = [];
+	try {
+		serverFeed = await listFeedIds(session);
+	} catch {
+		serverFeed = [];
+	}
+	const known = Array.isArray(opts.knownFeedIds) ? opts.knownFeedIds : [];
+	const feedIds = [id, ...serverFeed, ...known]
+		.filter((x, i, arr) => x && arr.indexOf(x) === i)
+		.slice(0, FEED_MAX);
 
 	/** @type {{ path: string, kind: string, plaintext: string }[]} */
 	const writes = [
@@ -2107,6 +2138,15 @@ export async function createChatMessage(session, input, opts = {}) {
 			path: `chat/messages/${id}.json`,
 			kind: 'chat_message',
 			plaintext: JSON.stringify(msg, null, 2)
+		},
+		{
+			path: 'chat/feed.json',
+			kind: 'chat_feed',
+			plaintext: JSON.stringify(
+				{ schema: 'alpha.chat_feed/1', ids: feedIds, updated_at: created },
+				null,
+				2
+			)
 		}
 	];
 
@@ -2117,19 +2157,18 @@ export async function createChatMessage(session, input, opts = {}) {
 		(input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')
 	) {
 		const indexPath = `${input.ref.type}s/${input.ref.id}/comments.json`;
-		let ids = Array.isArray(opts.knownCommentIds) ? [...opts.knownCommentIds] : null;
-		if (!ids) {
-			try {
-				ids = await listCommentIds(
-					session,
-					/** @type {'task'|'note'|'project'} */ (input.ref.type),
-					input.ref.id
-				);
-			} catch {
-				ids = [];
-			}
+		let ids = [];
+		try {
+			ids = await listCommentIds(
+				session,
+				/** @type {'task'|'note'|'project'} */ (input.ref.type),
+				input.ref.id
+			);
+		} catch {
+			ids = [];
 		}
-		ids = [...ids, id];
+		const knownComments = Array.isArray(opts.knownCommentIds) ? opts.knownCommentIds : [];
+		ids = [...ids, ...knownComments, id].filter((x, i, arr) => x && arr.indexOf(x) === i);
 		writes.push({
 			path: indexPath,
 			kind: 'blob',
@@ -2137,27 +2176,40 @@ export async function createChatMessage(session, input, opts = {}) {
 		});
 	}
 
-	let feedIds = Array.isArray(opts.knownFeedIds) ? [...opts.knownFeedIds] : null;
-	if (!feedIds) {
-		try {
-			feedIds = await listFeedIds(session);
-		} catch {
-			feedIds = [];
-		}
-	}
-	feedIds = [id, ...feedIds.filter((x) => x !== id)].slice(0, FEED_MAX);
-	writes.push({
-		path: 'chat/feed.json',
-		kind: 'chat_feed',
-		plaintext: JSON.stringify(
-			{ schema: 'alpha.chat_feed/1', ids: feedIds, updated_at: created },
-			null,
-			2
-		)
-	});
-
 	await putPaths(session, writes);
 	return msg;
+}
+
+/**
+ * Persist read receipts on a message leaf (delivery=read when another account opens chat).
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} msg
+ * @param {string} readerEmail
+ */
+export async function markChatMessageRead(session, msg, readerEmail) {
+	const id = String(msg?.id || '').trim();
+	const reader = String(readerEmail || '')
+		.trim()
+		.toLowerCase();
+	if (!id || id.startsWith('local-') || !reader) return msg;
+	const author = String(msg.author || '')
+		.trim()
+		.toLowerCase();
+	if (author === reader) return msg;
+	const prev = Array.isArray(msg.read_by) ? msg.read_by.map((e) => String(e).toLowerCase()) : [];
+	if (prev.includes(reader)) return msg;
+	const next = {
+		...msg,
+		read_by: [...prev, reader],
+		delivery: 'read'
+	};
+	await putPath(
+		session,
+		`chat/messages/${id}.json`,
+		'chat_message',
+		JSON.stringify(next, null, 2)
+	);
+	return next;
 }
 
 /**
@@ -2171,14 +2223,14 @@ export async function deleteChatMessage(session, id, opts = {}) {
 	const sid = String(id || '').trim();
 	if (!sid || sid.startsWith('local-')) return;
 
-	let feedIds = Array.isArray(opts.knownFeedIds) ? [...opts.knownFeedIds] : null;
-	if (!feedIds) {
-		try {
-			feedIds = await listFeedIds(session);
-		} catch {
-			feedIds = [];
-		}
+	let serverFeed = [];
+	try {
+		serverFeed = await listFeedIds(session);
+	} catch {
+		serverFeed = [];
 	}
+	const known = Array.isArray(opts.knownFeedIds) ? opts.knownFeedIds : [];
+	const feedIds = [...serverFeed, ...known].filter((x, i, arr) => x && arr.indexOf(x) === i);
 	const nextIds = feedIds.filter((x) => x !== sid).slice(0, FEED_MAX);
 	const updated = nowRfc3339();
 	await putPaths(session, [

@@ -47,8 +47,8 @@ export async function refreshAllDrive() {
 
 		const last = getLastAppliedTip(session);
 		if (tip && tip === last && hasLocalWorkspace()) {
-			/* Tip unchanged — still pull chat if the feed cache is cold. */
-			if (chatFeed.length === 0) await refreshChatFeed();
+			/* Tip unchanged — still refresh chat (warm cache can be stale vs peers). */
+			await refreshChatFeed();
 			setSyncRatio(1, 1);
 			return;
 		}

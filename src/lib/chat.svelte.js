@@ -8,7 +8,8 @@ import {
 	createChatMessage,
 	deleteChatMessage,
 	listComments,
-	listFeedMessages
+	listFeedMessages,
+	markChatMessageRead
 } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
@@ -321,13 +322,49 @@ export async function toggleReaction(messageId, emoji) {
 }
 
 /**
+ * Mark others' visible messages as read by this account (double-check for them).
+ * Fire-and-forget; updates feed in place.
+ */
+export async function markIncomingMessagesRead() {
+	const session = activeSession();
+	const me = (activePerson().email || '').trim().toLowerCase();
+	if (!session || !me) return;
+	const channel = chatUi.activeChannelId || 'general';
+	const targets = chatFeed.filter((m) => {
+		if (!m?.id || String(m.id).startsWith('local-')) return false;
+		if (m.kind === 'reaction' || m.kind === 'event') return false;
+		if ((m.channel_id || 'general') !== channel) return false;
+		const author = String(m.author || '')
+			.trim()
+			.toLowerCase();
+		if (!author || author === me) return false;
+		const readBy = Array.isArray(m.read_by)
+			? m.read_by.map((e) => String(e).toLowerCase())
+			: [];
+		return !readBy.includes(me);
+	});
+	for (const msg of targets.slice(0, 40)) {
+		try {
+			const next = await markChatMessageRead(session, msg, me);
+			const idx = chatFeed.findIndex((m) => m.id === msg.id);
+			if (idx >= 0) chatFeed[idx] = { ...chatFeed[idx], ...next };
+		} catch {
+			/* ignore single leaf */
+		}
+	}
+	if (targets.length) writeChatCache(chatFeed);
+}
+
+/**
  * @param {{
  *   body: string,
  *   kind?: 'comment' | 'chat' | 'reaction' | 'event',
  *   ref?: { type: string, id: string } | null,
  *   reply_to?: string | null,
  *   reaction?: string,
- *   channel_id?: string
+ *   channel_id?: string,
+ *   attachments?: any[],
+ *   resolveAttachments?: () => Promise<any[]>
  * }} input
  */
 export async function postChatMessage(input) {
@@ -336,10 +373,13 @@ export async function postChatMessage(input) {
 	if (!author) throw new Error('Pick who you are in Settings first');
 	const isReaction = input.kind === 'reaction';
 	const isEvent = input.kind === 'event';
-	if (!isReaction && !isEvent && !input.body?.trim()) throw new Error('Empty message');
+	const hasAtt =
+		(Array.isArray(input.attachments) && input.attachments.length > 0) ||
+		typeof input.resolveAttachments === 'function';
+	if (!isReaction && !isEvent && !input.body?.trim() && !hasAtt) throw new Error('Empty message');
 	if (isEvent && !(input.ref?.type && input.ref?.id)) throw new Error('Event needs a ref');
 
-	const body = isReaction || isEvent ? String(input.body || '').trim() : input.body.trim();
+	const body = isReaction || isEvent ? String(input.body || '').trim() : String(input.body || '').trim();
 	const kind = input.kind || (input.ref ? 'comment' : 'chat');
 	const channelId = String(input.channel_id || chatUi.activeChannelId || 'general');
 	const localId = `local-${crypto.randomUUID()}`;
@@ -352,9 +392,13 @@ export async function postChatMessage(input) {
 		created_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
 		channel_id: channelId,
 		delivery: 'sending',
+		read_by: [],
 		...(input.ref ? { ref: input.ref } : {}),
 		...(input.reaction ? { reaction: input.reaction } : {}),
 		...(input.reply_to ? { reply_to: input.reply_to } : {}),
+		...(Array.isArray(input.attachments) && input.attachments.length
+			? { attachments: input.attachments }
+			: {}),
 		_local: true,
 		_pending: true
 	};
@@ -374,10 +418,28 @@ export async function postChatMessage(input) {
 
 	if (!session) return optimistic;
 
-	/* Drive write runs in background — bubble already at full opacity with ✓ pending. */
+	/* Drive write in background — no ✓ until leaf+feed are on the server. */
 	void (async () => {
 		chatUi.posting = true;
 		try {
+			/** @type {any[]} */
+			let attachments = Array.isArray(input.attachments) ? input.attachments : [];
+			if (typeof input.resolveAttachments === 'function') {
+				attachments = await input.resolveAttachments();
+				const idxAtt = chatFeed.findIndex((m) => m.id === localId);
+				if (idxAtt >= 0) {
+					chatFeed[idxAtt] = {
+						...chatFeed[idxAtt],
+						attachments: attachments.map((a) => ({
+							...a,
+							previewUrl: a.previewUrl || chatFeed[idxAtt].attachments?.find(
+								(/** @type {any} */ x) => x.name === a.name
+							)?.previewUrl
+						}))
+					};
+				}
+			}
+
 			const knownComments =
 				!isEvent &&
 				input.ref &&
@@ -393,9 +455,12 @@ export async function postChatMessage(input) {
 					body,
 					author,
 					kind,
+					channel_id: channelId,
 					ref: input.ref ?? null,
 					reply_to: input.reply_to ?? null,
-					...(input.reaction ? { reaction: input.reaction } : {})
+					delivery: 'sent',
+					...(input.reaction ? { reaction: input.reaction } : {}),
+					...(attachments.length ? { attachments } : {})
 				},
 				{
 					knownFeedIds: knownFeedIds().filter((id) => id !== localId),
@@ -403,10 +468,28 @@ export async function postChatMessage(input) {
 				}
 			);
 
+			const previewByName = new Map(
+				(Array.isArray(attachments) ? attachments : [])
+					.filter((a) => a?.previewUrl)
+					.map((a) => [String(a.name || a.path), a.previewUrl])
+			);
+			const settledAtt = Array.isArray(created.attachments)
+				? created.attachments.map((a) => ({
+						...a,
+						...(previewByName.get(String(a.name || a.path))
+							? { previewUrl: previewByName.get(String(a.name || a.path)) }
+							: {})
+					}))
+				: attachments.filter((a) => a?.previewUrl);
+
 			const settledMsg = {
 				...created,
 				channel_id: created.channel_id || channelId,
-				delivery: created.delivery || 'sent'
+				delivery: 'sent',
+				read_by: Array.isArray(created.read_by) ? created.read_by : [],
+				...(settledAtt.length ? { attachments: settledAtt } : {}),
+				_pending: false,
+				_local: false
 			};
 			const idx = chatFeed.findIndex((m) => m.id === localId);
 			if (idx >= 0) chatFeed[idx] = settledMsg;
@@ -428,7 +511,7 @@ export async function postChatMessage(input) {
 				const pushBody =
 					kind === 'event'
 						? `${displayNameFromEmail(author)} ${chatEventLabel({ ref: input.ref })}`
-						: body;
+						: body || (attachments.length ? '📎 Attachment' : '');
 				void notifyChatRecipients({
 					authorEmail: author,
 					authorName: displayNameFromEmail(author),
