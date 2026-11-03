@@ -114,9 +114,11 @@
 			<span class="meta">
 				<span class="title-row">
 					<span class="title">{ch.title}</span>
-					{#if last?.created_at}
-						<span class="when">{whenLabel(last.created_at)}</span>
-					{/if}
+					<span class="when-slot">
+						{#if last?.created_at}
+							<span class="when">{whenLabel(last.created_at)}</span>
+						{/if}
+					</span>
 				</span>
 				<span class="preview-row">
 					<span class="preview">{previewLine(last)}</span>
@@ -142,7 +144,7 @@
 
 	.row {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 12px;
 		width: 100%;
 		padding: 10px 8px;
@@ -160,8 +162,9 @@
 		background: var(--fg-4);
 	}
 
+	/* Selected fill = feed standard (--fg-4); see app.css .feed .row.on */
 	.row.on {
-		background: var(--fg-8);
+		background: var(--fg-4);
 	}
 
 	.avatar {
@@ -177,6 +180,8 @@
 		gap: 6px;
 		margin: 0;
 		padding: 0;
+		/* Optical top align with avatar round */
+		padding-top: 2px;
 	}
 
 	.title-row {
@@ -202,14 +207,24 @@
 		white-space: nowrap;
 	}
 
-	.when {
+	.when-slot {
 		flex-shrink: 0;
+		min-width: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		padding-right: 2px;
+		box-sizing: border-box;
+	}
+
+	.when {
 		margin: 0;
 		padding: 0;
 		font-size: 12px;
 		font-weight: 500;
 		line-height: 1.25;
 		color: var(--fg-33);
+		white-space: nowrap;
 	}
 
 	.preview-row {

@@ -216,7 +216,7 @@
 	}
 
 	.row.on {
-		background: var(--selection);
+		background: var(--fg-4);
 	}
 
 	.meta {
@@ -243,6 +243,7 @@
 
 	.time {
 		flex-shrink: 0;
+		padding-right: 2px;
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--fg-33);

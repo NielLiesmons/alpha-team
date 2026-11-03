@@ -138,12 +138,14 @@
 		text-align: left;
 	}
 
+	/* Feed title / preview — match Chat list type scale */
 	.title {
 		flex: 1;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 15px;
+		font-size: 14px;
 		font-weight: 600;
+		line-height: 1.25;
 		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -152,11 +154,12 @@
 
 	.time {
 		flex-shrink: 0;
+		padding-right: 2px;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
+		font-size: 12px;
 		font-weight: 500;
+		line-height: 1.25;
 		color: var(--fg-33);
-		letter-spacing: 0.01em;
 		white-space: nowrap;
 	}
 
@@ -164,8 +167,8 @@
 		width: 100%;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
-		line-height: 1.4;
-		color: var(--fg-33);
+		line-height: 1.25;
+		color: var(--fg-66);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

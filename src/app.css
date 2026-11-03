@@ -907,9 +907,10 @@ table.data tr.selected td {
 	overflow: hidden;
 }
 
-/* Selected feed rows — quiet fill (nav column keeps glass separately) */
+/* Selected feed rows — always --fg-4 (Chat / Notes / Tasks / …). See ADR §3c. */
 .task-card.selected,
 .project-card.selected,
+.enterprise-card.selected,
 .feed .row.on {
 	background: var(--fg-4);
 }
