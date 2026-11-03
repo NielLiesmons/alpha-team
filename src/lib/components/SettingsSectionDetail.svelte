@@ -523,10 +523,10 @@
 	</section>
 {:else if sectionId === 'drive' && isOperator}
 	<section class="block">
-		<p class="field-label">Drive</p>
+		<p class="field-label">Files</p>
 		<p class="hint">
 			{#if driveSession.connected}
-				Connected to {driveSession.url}. Manual credentials only for recovery.
+				Space storage connected ({driveSession.url}). Manual credentials only for recovery.
 			{:else}
 				Not connected — add a profile with an invite code.
 			{/if}
@@ -558,7 +558,7 @@
 				</button>
 				{#if driveSession.connected}
 					<button type="button" class="btn ghost" disabled={busy} onclick={disconnectDrive}
-						>Disconnect Drive</button
+						>Disconnect</button
 					>
 				{/if}
 			</div>

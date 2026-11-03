@@ -916,6 +916,7 @@
 		margin-left: auto;
 		padding-left: 8px;
 		height: 22px;
+		opacity: 0.66;
 	}
 
 	.tip-pfp {

@@ -194,7 +194,8 @@
 		storage: 'Storage',
 		mail: 'Mail',
 		publications: 'Publications',
-		drive: 'Drive'
+		drive: 'Files',
+		file: 'Files'
 	};
 
 	$effect(() => {

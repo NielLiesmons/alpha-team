@@ -122,8 +122,10 @@
 				},
 				{
 					id: 'drive',
-					title: 'Drive',
-					description: driveSession.connected ? driveSession.url || 'Connected' : 'Not connected'
+					title: 'Files',
+					description: driveSession.connected
+						? driveSession.url || 'Drive connected'
+						: 'Drive not connected'
 				}
 			);
 		}

@@ -169,6 +169,7 @@
 		flex-shrink: 0;
 		line-height: 0;
 		padding-right: 2px;
+		opacity: 0.66;
 	}
 
 	.preview {

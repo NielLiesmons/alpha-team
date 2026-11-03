@@ -148,6 +148,7 @@
 		display: flex;
 		align-items: center;
 		line-height: 0;
+		opacity: 0.66;
 	}
 
 	.priority-col {
