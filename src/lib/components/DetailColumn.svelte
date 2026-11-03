@@ -37,16 +37,20 @@
 	import AccountingDetail from './AccountingDetail.svelte';
 	import ChatChannelPanel from './ChatChannelPanel.svelte';
 	import CommentThread from './CommentThread.svelte';
+	import FilesFolderDetail from './FilesFolderDetail.svelte';
 	import FormDetail from './FormDetail.svelte';
 	import PublicationsHub from './PublicationsHub.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById } from '$lib/chat.svelte.js';
+	import { fileDisplayTitle, fileTypeColors, splitFileTitle } from '$lib/file-display.js';
+	import { filesView } from '$lib/files-view.svelte.js';
 	import { settingsUi } from '$lib/settings-ui.svelte.js';
 	import { space } from '$lib/sections.js';
 	import MetricDetail from './MetricDetail.svelte';
 	import TableDetail from './TableDetail.svelte';
 	import ViewDetail from './ViewDetail.svelte';
 	import PullToRefresh from './PullToRefresh.svelte';
+	import ChromeMobileBar from '@alpha/ui/ChromeMobileBar.svelte';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
 	import { attachChromeScrollFade } from '$lib/chrome-scroll-fade.js';
@@ -105,6 +109,25 @@
 
 	const selection = $derived(ui.selection);
 	const chatChannelId = $derived(selection?.kind === 'chat' ? String(selection.id) : null);
+	const filePath = $derived(selection?.kind === 'file' ? String(selection.id) : '');
+	const fileEntry = $derived.by(() => {
+		if (!filePath) return null;
+		const hit = filesView.entries.find((e) => e.path === filePath);
+		const isFolder =
+			hit?.kind === 'folder' ||
+			filesView.entries.some((e) => e.path !== filePath && e.path.startsWith(`${filePath}/`));
+		const name = filePath.includes('/') ? filePath.slice(filePath.lastIndexOf('/') + 1) : filePath;
+		return {
+			path: filePath,
+			name,
+			kind: hit?.kind || (isFolder ? 'folder' : 'blob'),
+			isFolder,
+			display_name: hit?.display_name ?? null
+		};
+	});
+	const fileTitle = $derived(fileEntry ? fileDisplayTitle(fileEntry) : '');
+	const fileParts = $derived(splitFileTitle(fileTitle, { isFolder: Boolean(fileEntry?.isFolder) }));
+	const fileColors = $derived(fileTypeColors(fileParts.ext || 'file'));
 	const chatChannel = $derived(chatChannelId ? channelById(chatChannelId) : null);
 
 	/** @type {HTMLElement | undefined} */
@@ -317,6 +340,8 @@
 		if (pubsHub) return 'Publications';
 		if (mailMsg) return 'Mail';
 		if (chatChannel) return chatChannel.title || 'Chat';
+		if (fileEntry?.isFolder) return 'Folder';
+		if (fileEntry) return 'File';
 		if (settingsSectionId) return SETTINGS_TITLES[settingsSectionId] || 'Settings';
 		return 'Detail';
 	});
@@ -341,6 +366,7 @@
 		if (pubsHub) return 'Publications';
 		if (mailMsg?.subject) return mailMsg.subject;
 		if (chatChannel) return chatChannel.title || 'General';
+		if (fileEntry) return fileTitle;
 		if (settingsSectionId) return SETTINGS_TITLES[settingsSectionId] || 'Settings';
 		return typeLabel;
 	});
@@ -365,6 +391,7 @@
 				pubsHub ||
 				mailMsg ||
 				chatChannel ||
+				fileEntry ||
 				settingsSectionId
 		)
 	);
@@ -395,6 +422,11 @@
 			return {
 				title: 'No chat selected',
 				body: 'Pick a chat from the list to open it here.'
+			};
+		if (path.startsWith('/drive'))
+			return {
+				title: 'No file selected',
+				body: 'Open a folder or file from the list — it appears here in the detail column.'
 			};
 		if (path.startsWith('/settings'))
 			return {
@@ -636,44 +668,27 @@
 	aria-busy={syncUi.active || undefined}
 >
 	{#if renderBody}
-		<header class="mobile-bar">
-			<button
-				type="button"
-				class="chrome-btn chev-back"
-				aria-label="Back"
-				onclick={close}
-			>
-				<svg width="22" height="22" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-					<path
-						d="M11.5 3.5 6 9l5.5 5.5"
-						stroke="currentColor"
-						stroke-width="1.7"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-			</button>
-			<span class="mobile-title-stack">
-				<span class="mobile-type">{mobileTitle || typeLabel}</span>
-			</span>
-			{#if showMoreMenu}
-				<button
-					type="button"
-					class="chrome-btn more-btn"
-					aria-label="More"
-					aria-expanded={menuOpen}
-					onclick={toggleMoreMenu}
-				>
-					<svg width="26" height="26" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-						<circle cx="9" cy="3.75" r="1.65" fill="currentColor" />
-						<circle cx="9" cy="9" r="1.65" fill="currentColor" />
-						<circle cx="9" cy="14.25" r="1.65" fill="currentColor" />
-					</svg>
-				</button>
-			{:else}
-				<span class="menu-spacer" aria-hidden="true"></span>
-			{/if}
-		</header>
+		{#if showMoreMenu}
+			<ChromeMobileBar title={mobileTitle || typeLabel} onBack={close}>
+				{#snippet trailing()}
+					<button
+						type="button"
+						class="chrome-btn more-btn"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="26" height="26" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+							<circle cx="9" cy="3.75" r="1.65" fill="currentColor" />
+							<circle cx="9" cy="9" r="1.65" fill="currentColor" />
+							<circle cx="9" cy="14.25" r="1.65" fill="currentColor" />
+						</svg>
+					</button>
+				{/snippet}
+			</ChromeMobileBar>
+		{:else}
+			<ChromeMobileBar title={mobileTitle || typeLabel} onBack={close} />
+		{/if}
 
 		<DropdownMenu
 			open={menuOpen}
@@ -1234,6 +1249,63 @@
 		<div class="body chat-channel-body">
 			<ChatChannelPanel channelId={chatChannel.id} />
 		</div>
+	{:else if fileEntry?.isFolder}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{fileTitle}</span>
+			</div>
+			<div class="detail-top-actions"></div>
+		</header>
+		<div class="body">
+			<FilesFolderDetail folderPath={filePath} entries={filesView.entries} title={fileTitle} />
+		</div>
+	{:else if fileEntry}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{fileTitle}</span>
+			</div>
+			<div class="detail-top-actions"></div>
+		</header>
+		<div class="body file-detail-body">
+			<div class="file-hero">
+				<span
+					class="file-type-box"
+					style:color={fileColors.ink}
+					style:background={fileColors.wash}
+					aria-hidden="true">{fileParts.label || 'FILE'}</span
+				>
+				<h2 class="file-title">
+					<span class="file-stem">{fileParts.stem}</span>
+					{#if fileParts.ext}
+						<span class="file-ext">.{fileParts.ext}</span>
+					{/if}
+				</h2>
+			</div>
+			<p class="muted">Encrypted on your Space Drive. Preview coming soon.</p>
+			<p class="muted mono">{filePath}</p>
+		</div>
 	{:else if accountingPanel}
 		<AccountingDetail />
 	{:else if ledger}
@@ -1710,10 +1782,6 @@
 		overflow: hidden;
 	}
 
-	.mobile-bar {
-		display: none;
-	}
-
 	/* Floating detail header — solid control row; fade veil only as content scrolls under.
 	   :global so Table/Metric/View detail children share the same chrome. */
 	:global(.detail .detail-top) {
@@ -1785,10 +1853,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.mobile-title-stack {
-		display: none;
 	}
 
 	:global(.detail .ptr) {
@@ -2010,6 +2074,61 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+	}
+
+	.body.file-detail-body {
+		padding: 16px 18px 24px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.file-hero {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		min-width: 0;
+	}
+
+	.file-type-box {
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		display: grid;
+		place-items: center;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		line-height: 1;
+	}
+
+	.file-title {
+		margin: 0;
+		min-width: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 20px;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.file-stem {
+		color: var(--fg);
+	}
+
+	.file-ext {
+		color: var(--fg-33);
+		font-weight: 500;
+	}
+
+	.mono {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-size: 12px;
+		word-break: break-all;
 	}
 
 	.note-body-wrap {
@@ -2346,109 +2465,6 @@
 			display: flex;
 		}
 
-		.mobile-bar {
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			z-index: 8;
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: 12px;
-			height: calc(88px + env(safe-area-inset-top, 0px));
-			padding: calc(6px + env(safe-area-inset-top, 0px)) 14px 34px;
-			border-bottom: none;
-			flex-shrink: 0;
-			box-sizing: border-box;
-			pointer-events: none;
-			background: transparent;
-		}
-
-		.mobile-bar::after {
-			content: '';
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			height: 100%;
-			background: linear-gradient(
-				to bottom,
-				var(--shell) 0%,
-				color-mix(in srgb, var(--shell) 80%, transparent) 50%,
-				transparent 100%
-			);
-			opacity: var(--chrome-scroll-fade, 0);
-			pointer-events: none;
-			z-index: -1;
-		}
-
-		.mobile-bar > * {
-			pointer-events: auto;
-		}
-
-		.mobile-title-stack {
-			position: relative;
-			flex: 1;
-			min-width: 0;
-			height: 44px;
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-		}
-
-		.mobile-type {
-			min-width: 0;
-			max-width: 100%;
-			text-align: center;
-			font-family: 'Inter', var(--font), system-ui, sans-serif;
-			font-size: 17px;
-			font-weight: 600;
-			letter-spacing: -0.01em;
-			line-height: 1.15;
-			color: var(--fg-66);
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-
-		.chrome-btn {
-			width: 44px;
-			height: 44px;
-			display: grid;
-			place-items: center;
-			border: 1px solid transparent;
-			border-radius: 9999px;
-			background:
-				linear-gradient(var(--glass), var(--glass)) padding-box,
-				var(--glass-shine) border-box;
-			color: var(--fg-66);
-			padding: 0;
-			cursor: pointer;
-			flex-shrink: 0;
-			box-sizing: border-box;
-			backdrop-filter: blur(var(--glass-blur));
-			-webkit-backdrop-filter: blur(var(--glass-blur));
-			-webkit-tap-highlight-color: transparent;
-			transition: transform 0.15s var(--ease);
-		}
-
-		.chrome-btn:hover,
-		.chrome-btn[aria-expanded='true'] {
-			transform: scale(1.04);
-		}
-
-		.chrome-btn :global(svg) {
-			width: 22px;
-			height: 22px;
-		}
-
-		.chrome-btn.more-btn :global(svg) {
-			width: 26px;
-			height: 26px;
-		}
-
 		.title-row {
 			padding-top: 10px;
 		}
@@ -2458,19 +2474,6 @@
 			/* Body already has 14px side inset — don’t double-pad */
 			padding: 8px 0 0;
 			gap: 10px;
-		}
-
-		/* Empty space on the side the chevron does not point toward */
-		.chrome-btn.chev-back :global(svg) {
-			padding-right: 2px;
-			box-sizing: content-box;
-		}
-
-		/* Keep equal-width side slots so the title stays optically centered */
-		.mobile-bar > .chrome-btn,
-		.mobile-bar > .menu-spacer {
-			width: 44px;
-			flex-shrink: 0;
 		}
 
 		.desktop-head,

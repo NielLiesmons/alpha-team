@@ -55,6 +55,8 @@ Stroke weight from CSS `--icon-stroke` with `vector-effect: non-scaling-stroke`.
 |--------|------|
 | `UiShell.svelte` | Configurable app frame: sidebar nav, list column + scroll fader, mobile bottom pill, optional detail slot, create menu, filters, pull-to-refresh |
 | `DetailChrome.svelte` | Detail column frame (desktop pane + mobile slide-over) |
+| `ChromeMobileBar.svelte` | Round back + centered muted title (Admin/Player mobile detail) |
+| `ListTitleChrome.svelte` | List-column title (root large / nested round-back + muted) |
 | `Modal.svelte` | Bottom / floating sheet |
 | `CreateSheet.svelte` | Create/edit overlay (keyboard-aware) |
 | `FloatPanel.svelte` | Portaled glass popover |

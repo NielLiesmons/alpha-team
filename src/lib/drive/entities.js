@@ -155,13 +155,18 @@ export async function listEntries(session) {
 	return Object.entries(dir.children ?? {})
 		.map(([path, child]) => ({
 			path,
-			kind: child.kind ?? 'blob'
+			kind: child.kind ?? 'blob',
+			display_name:
+				typeof child.display_name === 'string' && child.display_name.trim()
+					? child.display_name.trim()
+					: null
 		}))
 		.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /**
  * Upload a browser File under a folder prefix (content-type tree).
+ * Stores human `display_name` on the dir child so encrypted paths stay readable in UI.
  * @param {import('./client.js').DriveSession} session
  * @param {string} folder e.g. media/photos
  * @param {File} file
@@ -171,7 +176,9 @@ export async function uploadFile(session, folder, file) {
 	const prefix = folder.replace(/^\/+|\/+$/g, '');
 	const path = prefix ? `${prefix}/${safeName}` : safeName;
 	const bytes = new Uint8Array(await file.arrayBuffer());
-	await putPath(session, path, 'blob', bytes);
+	await putPaths(session, [
+		{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safeName }
+	]);
 	return path;
 }
 

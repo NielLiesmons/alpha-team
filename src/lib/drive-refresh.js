@@ -40,9 +40,19 @@ export async function refreshChatUrgent() {
  * Heavy domains after chat — counters, notes, mail.
  * Safe to fire-and-forget once chat has settled.
  */
+function isOffline() {
+	return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 export async function refreshBackgroundDrive() {
 	const session = activeSession();
 	if (!session) return;
+
+	if (isOffline() && hasLocalWorkspace()) {
+		driveSession.loading = false;
+		driveSession.syncing = false;
+		return;
+	}
 
 	beginSync('Updating');
 	driveSession.syncing = true;
@@ -66,6 +76,11 @@ export async function refreshBackgroundDrive() {
 
 		const last = getLastAppliedTip(session);
 		if (tip && tip === last && hasLocalWorkspace()) {
+			setSyncRatio(1, 1);
+			return;
+		}
+		/* No tip (offline) but we have local data — keep it. */
+		if (!tip && hasLocalWorkspace()) {
 			setSyncRatio(1, 1);
 			return;
 		}
@@ -93,6 +108,18 @@ export async function refreshAllDrive() {
 	const session = activeSession();
 	if (!session) return;
 
+	if (isOffline() && hasLocalWorkspace()) {
+		/* Still refresh chat from local cache path if any — skip network crawl. */
+		try {
+			await refreshChatFeed();
+		} catch {
+			/* ignore */
+		}
+		driveSession.loading = false;
+		driveSession.syncing = false;
+		return;
+	}
+
 	beginSync('Updating');
 	driveSession.syncing = true;
 	driveSession.error = null;
@@ -113,6 +140,10 @@ export async function refreshAllDrive() {
 
 		const last = getLastAppliedTip(session);
 		if (tip && tip === last && hasLocalWorkspace()) {
+			setSyncRatio(1, 1);
+			return;
+		}
+		if (!tip && hasLocalWorkspace()) {
 			setSyncRatio(1, 1);
 			return;
 		}

@@ -4,9 +4,10 @@ import adapter from '@sveltejs/adapter-static';
 const config = {
 	kit: {
 		adapter: adapter({
-			fallback: undefined,
+			/* SPA fallback so deep routes reopen offline from the PWA shell */
+			fallback: 'index.html',
 			precompress: false,
-			strict: true
+			strict: false
 		}),
 		prerender: {
 			entries: ['*']

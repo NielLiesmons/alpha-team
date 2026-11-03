@@ -203,6 +203,12 @@ export async function refreshChatFeed() {
 		return;
 	}
 	if (chatFeed.length === 0) hydrateChatFeedFromCache();
+	const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+	if (offline && chatFeed.length > 0) {
+		chatUi.loading = false;
+		chatUi.settled = true;
+		return;
+	}
 	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
 	chatUi.error = null;

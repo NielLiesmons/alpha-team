@@ -3,6 +3,7 @@
  * Root key stays in the browser; server never sees plaintext.
  */
 
+import { idbGet, idbSet } from '../local-db.js';
 import {
 	bytesToHex,
 	decrypt,
@@ -29,6 +30,10 @@ function sessionCacheKey(session) {
 	return `${session.url}\0${session.rootKey}`;
 }
 
+function rootDirIdbKey(session) {
+	return `alpha.drive.rootdir.v1:${sessionCacheKey(session)}`;
+}
+
 /**
  * In-memory tip from last successful load/put — no network.
  * @param {DriveSession} session
@@ -37,6 +42,27 @@ export function peekCachedTip(session) {
 	if (!session || !rootDirCache) return '';
 	if (rootDirCache.key !== sessionCacheKey(session)) return '';
 	return rootDirCache.tip || '';
+}
+
+/**
+ * Last known root dir (memory, then IDB) — never invent an empty tree on tip failure.
+ * @param {DriveSession} session
+ */
+async function fallbackRootDir(session) {
+	const cacheKey = sessionCacheKey(session);
+	if (rootDirCache && rootDirCache.key === cacheKey && rootDirCache.dir) {
+		return { tip: rootDirCache.tip || '', dir: structuredClone(rootDirCache.dir) };
+	}
+	try {
+		const snap = await idbGet(rootDirIdbKey(session));
+		if (snap?.dir && typeof snap.dir === 'object') {
+			rememberRootDir(snap.dir, snap.tip || '', session);
+			return { tip: snap.tip || '', dir: structuredClone(snap.dir) };
+		}
+	} catch {
+		/* ignore */
+	}
+	return null;
 }
 
 /**
@@ -125,35 +151,54 @@ function rememberRootDir(dir, tip, session) {
 		tip,
 		dir: structuredClone(dir)
 	};
+	void idbSet(rootDirIdbKey(session), {
+		at: Date.now(),
+		tip: tip || '',
+		dir: structuredClone(dir)
+	}).catch(() => {});
 }
 
 /**
- * Load tip + decrypted root dir once per tip (cached in memory).
+ * Load tip + decrypted root dir once per tip (cached in memory + IDB).
+ * Offline / tip failure returns the last good dir — never an empty wipe.
  * @param {DriveSession} session
  * @param {AbortSignal} [signal]
  * @returns {Promise<{ tip: string, dir: any }>}
  */
 export async function loadRootDirWithTip(session, signal) {
 	const root = parseRootKey(session.rootKey);
+	const cacheKey = sessionCacheKey(session);
 	let tip;
 	try {
 		tip = await getTip(session, signal);
 	} catch (e) {
 		if (e?.name === 'AbortError') throw e;
-		return { tip: '', dir: { schema: 'alpha.dir/1', children: {} } };
+		const local = await fallbackRootDir(session);
+		if (local) return local;
+		throw new Error('Drive unreachable and no local directory cache');
 	}
-	if (!tip) return { tip: '', dir: { schema: 'alpha.dir/1', children: {} } };
+	if (!tip) {
+		const local = await fallbackRootDir(session);
+		if (local) return local;
+		throw new Error('Drive tip missing and no local directory cache');
+	}
 
-	const cacheKey = sessionCacheKey(session);
 	if (rootDirCache && rootDirCache.key === cacheKey && rootDirCache.tip === tip) {
 		return { tip, dir: structuredClone(rootDirCache.dir) };
 	}
 
-	const ct = await getBlock(session, tip, signal);
-	const pt = await decrypt(root, '', ct);
-	const dir = JSON.parse(new TextDecoder().decode(pt));
-	rememberRootDir(dir, tip, session);
-	return { tip, dir: structuredClone(dir) };
+	try {
+		const ct = await getBlock(session, tip, signal);
+		const pt = await decrypt(root, '', ct);
+		const dir = JSON.parse(new TextDecoder().decode(pt));
+		rememberRootDir(dir, tip, session);
+		return { tip, dir: structuredClone(dir) };
+	} catch (e) {
+		if (e?.name === 'AbortError') throw e;
+		const local = await fallbackRootDir(session);
+		if (local) return local;
+		throw e instanceof Error ? e : new Error(String(e));
+	}
 }
 
 /**
@@ -198,15 +243,15 @@ export async function putPath(session, logicalPath, kind, plaintext) {
  * Retries if tip moved between load and commit. Pass `rematerialize` for index docs
  * (e.g. chat/feed.json) so concurrent writers re-merge instead of clobbering ids.
  * @param {DriveSession} session
- * @param {{ path: string, kind: string, plaintext: Uint8Array | string }[]} entries
+ * @param {{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]} entries
  * @param {{
  *   mergeFirst?: boolean,
  *   skipTipProbe?: boolean,
- *   prePrepared?: Record<string, { hash: string, wrapped_key: string, kind: string }>,
+ *   prePrepared?: Record<string, { hash: string, wrapped_key: string, kind: string, display_name?: string }>,
  *   rematerialize?: (
  *     dir: any,
- *     entries: { path: string, kind: string, plaintext: Uint8Array | string }[]
- *   ) => Promise<{ path: string, kind: string, plaintext: Uint8Array | string }[]>
+ *     entries: { path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]
+ *   ) => Promise<{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]>
  * }} [opts]
  */
 export async function putPaths(session, entries, opts = {}) {
@@ -258,7 +303,13 @@ export async function putPaths(session, entries, opts = {}) {
 				const { ciphertext, fileKeyHex } = await encrypt(root, name, bytes);
 				const hash = await sha256Hex(ciphertext);
 				await putBlock(session, hash, ciphertext);
-				const row = { name, kind: entry.kind, hash, wrapped_key: fileKeyHex };
+				const row = {
+					name,
+					kind: entry.kind,
+					hash,
+					wrapped_key: fileKeyHex,
+					...(entry.display_name ? { display_name: String(entry.display_name) } : {})
+				};
 				preparedByName.set(name, { ptKey, row });
 				return row;
 			})
@@ -268,10 +319,13 @@ export async function putPaths(session, entries, opts = {}) {
 		dir.schema = 'alpha.dir/1';
 		dir.children = dir.children ?? {};
 		for (const row of prepared) {
+			const prev = dir.children[row.name];
+			const display_name = row.display_name || prev?.display_name || undefined;
 			dir.children[row.name] = {
 				hash: row.hash,
 				kind: row.kind,
-				wrapped_key: row.wrapped_key
+				wrapped_key: row.wrapped_key,
+				...(display_name ? { display_name: String(display_name) } : {})
 			};
 		}
 

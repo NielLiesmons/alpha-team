@@ -143,6 +143,12 @@ export async function refreshMail() {
 	const me = mailActorEmail();
 	const pw = me ? getMailboxPassword(me) : '';
 	const folder = mailView.folder;
+	const hadLocal = mailMessages.length > 0;
+	const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+	if (offline && hadLocal) {
+		mailUi.loading = false;
+		return;
+	}
 	mailUi.loading = mailMessages.length === 0;
 	mailUi.error = null;
 	try {
@@ -174,7 +180,10 @@ export async function refreshMail() {
 				'Showing Drive drafts only — add mailbox password in Settings to sync Stalwart.';
 		}
 	} catch (e) {
-		mailUi.error = e instanceof Error ? e.message : String(e);
+		/* Keep whatever was already painted — never wipe on network blips. */
+		if (!hadLocal) {
+			mailUi.error = e instanceof Error ? e.message : String(e);
+		}
 	} finally {
 		mailUi.loading = false;
 	}

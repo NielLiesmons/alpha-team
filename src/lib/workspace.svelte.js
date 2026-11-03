@@ -101,7 +101,7 @@ export const ui = $state({
 
 /**
  * Open an entity in the third column (does not open the create/edit modal).
- * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'pubs' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'table' | 'metric' | 'form' | 'view' | 'settings'} kind
+ * @param {'task' | 'project' | 'note' | 'mail' | 'chat' | 'newsletter' | 'welcome' | 'pubs' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'table' | 'metric' | 'form' | 'view' | 'settings' | 'file'} kind
  * @param {string} id
  */
 export function selectEntity(kind, id) {
@@ -344,6 +344,12 @@ export async function refreshFromDrive(opts = {}) {
 		costItems.length > 0 ||
 		salesLines.length > 0 ||
 		enterprises.length > 0;
+	/* Offline + local data: keep painting cache; never clear. */
+	if (isOffline() && hadLocal) {
+		ui.source = 'drive';
+		driveSession.loading = false;
+		return;
+	}
 	driveSession.loading = !hadLocal;
 	const ownProgress = !opts.outerProgress;
 	if (ownProgress) {
@@ -360,7 +366,11 @@ export async function refreshFromDrive(opts = {}) {
 					return;
 				}
 			} catch {
-				/* fall through */
+				/* Tip unreachable — keep local workspace. */
+				if (hadLocal) {
+					if (ownProgress) setSyncRatio(1, 1);
+					return;
+				}
 			}
 		}
 
@@ -430,7 +440,8 @@ export async function refreshFromDrive(opts = {}) {
 		void persistWorkspaceCache(session);
 	} catch (e) {
 		driveSession.error = e instanceof Error ? e.message : String(e);
-		if (!hadLocal) clearWorkspace();
+		/* Never wipe a warm cache on network / tip failure. */
+		if (!hadLocal && !isOffline()) clearWorkspace();
 	} finally {
 		driveSession.loading = false;
 		if (ownProgress) {

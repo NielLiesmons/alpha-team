@@ -26,6 +26,7 @@
 		setPlanningZoom
 	} from '$lib/planning-view.svelte.js';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
+	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
 	import UiShell from '@alpha/ui/UiShell.svelte';
 	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
@@ -258,14 +259,11 @@
 	{/snippet}
 
 	{#snippet listTitleSlot()}
-		<div class="list-title-row desktop-only-title" class:titles-syncing={syncUi.active} aria-busy={syncUi.active || undefined}>
-			<h1 class="list-title" class:planning-title={planningList}>{activeItem.label}</h1>
-		</div>
-		<div class="mobile-page-title">
-			<span class="mobile-title-stack" class:titles-syncing={syncUi.active} aria-busy={syncUi.active || undefined}>
-				<h1 class="mobile-page-name">{activeItem.label}</h1>
-			</span>
-		</div>
+		<ListTitleChrome
+			title={activeItem.label}
+			syncing={syncUi.active}
+			titleClass={planningList ? 'planning-title' : ''}
+		/>
 	{/snippet}
 
 	{#snippet listActionsSlot()}
@@ -372,49 +370,6 @@
 		color: var(--fg);
 	}
 
-	.list-title-row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		min-width: 0;
-	}
-
-	/* Match UiShell control-row height so slotted titles don’t pin to the top */
-	@media (min-width: 768px) {
-		.list-title-row {
-			height: 48px;
-		}
-	}
-
-	.list-title {
-		margin: 0;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--fg-33);
-	}
-
-	.list-title.planning-title {
-		width: 200px;
-		max-width: 200px;
-		box-sizing: border-box;
-		padding-right: 8px;
-	}
-
-	.mobile-page-title {
-		display: none;
-	}
-
-	.mobile-page-name {
-		margin: 0;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 22px;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		line-height: 1.1;
-		color: var(--fg);
-	}
-
 	.chrome-btn {
 		width: 28px;
 		height: 28px;
@@ -440,19 +395,6 @@
 	}
 
 	@media (max-width: 767px) {
-		.list-title-row.desktop-only-title {
-			display: none;
-		}
-
-		.mobile-page-title {
-			display: flex;
-			align-items: center;
-			align-self: center;
-			min-width: 0;
-			flex: 1;
-			height: 44px;
-		}
-
 		.chrome-btn {
 			width: 44px;
 			height: 44px;

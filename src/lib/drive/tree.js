@@ -2,10 +2,18 @@
  * Build Miller-column folders from flat Drive paths (names with `/`).
  */
 
-/** @typedef {{ name: string, path: string, kind: 'folder' | string, isFolder: boolean }} TreeItem */
+/**
+ * @typedef {{
+ *   name: string,
+ *   path: string,
+ *   kind: 'folder' | string,
+ *   isFolder: boolean,
+ *   display_name?: string | null
+ * }} TreeItem
+ */
 
 /**
- * @param {{ path: string, kind: string }[]} entries
+ * @param {{ path: string, kind: string, display_name?: string | null }[]} entries
  * @param {string} folderPath  '' = root
  * @returns {TreeItem[]}
  */
@@ -26,7 +34,8 @@ export function childrenOf(entries, folderPath) {
 				name: rest,
 				path: entry.path,
 				kind: entry.kind,
-				isFolder: false
+				isFolder: false,
+				display_name: entry.display_name ?? null
 			});
 		} else {
 			const seg = rest.slice(0, slash);
@@ -36,7 +45,8 @@ export function childrenOf(entries, folderPath) {
 					name: seg,
 					path: childPath,
 					kind: 'folder',
-					isFolder: true
+					isFolder: true,
+					display_name: null
 				});
 			} else {
 				const existing = map.get(seg);
@@ -46,7 +56,8 @@ export function childrenOf(entries, folderPath) {
 						name: seg,
 						path: childPath,
 						kind: 'folder',
-						isFolder: true
+						isFolder: true,
+						display_name: null
 					});
 				}
 			}

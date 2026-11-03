@@ -1,9 +1,7 @@
 /**
  * App boot + signed-in gate.
  * Signed in = Drive session on this device + mailbox email (“I am”).
- * PWA: hydrate local cache first so reopen never flashes empty/disconnected.
- * Chat-first: feed refresh before workspace / mail crawl.
- * Media library lives on player.{apex} (shared apex-domain session).
+ * Local-first: hydrate IDB/LS caches before listsReady; skip network when offline.
  */
 
 import { actor, loadActor } from './actor.svelte.js';
@@ -32,8 +30,12 @@ function activeSessionSafe() {
 	return Boolean(driveSession.connected && driveSession.token && driveSession.rootKey);
 }
 
+function isOffline() {
+	return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 /**
- * Restore localStorage + cache, unlock UI, then refresh Drive in background.
+ * Restore localStorage + cache, unlock UI, then refresh Drive in background when online.
  * Call once from the root layout.
  */
 export async function bootApp() {
@@ -55,31 +57,34 @@ export async function bootApp() {
 		return;
 	}
 
-	// Connected — unlock shell immediately; never block Chat on Drive crawl.
+	// Shell chrome first; lists wait on hydrate so we never flash empty offline.
 	ui.source = 'drive';
 	hydrateChatFeedFromCache();
 	appBoot.ready = true;
-	appBoot.listsReady = true;
 	driveSession.loading = false;
 	void ensurePersistentStorage();
 
+	try {
+		await hydrateWorkspaceFromCache();
+	} catch {
+		/* ignore */
+	}
+	appBoot.listsReady = true;
+
+	if (isOffline()) {
+		driveSession.syncing = false;
+		return;
+	}
+
 	void (async () => {
 		try {
-			await hydrateWorkspaceFromCache();
-		} catch {
-			/* ignore */
-		}
-		try {
-			/* 1) Chat feed — only thing that must feel instant. */
 			await refreshChatFeed();
-			/* 2) Members + avatars (light) so pics set on another device show up. */
 			void refreshMembersAndAvatars().catch((e) => console.warn('members/avatars', e));
-			/* 3) Heavy workspace / mail — never blocks chat. Player is a separate app. */
 			void refreshBackgroundDrive().then(() => {
 				void ensureEggsExample().catch((e) => console.warn('ensureEggsExample', e));
 			});
 		} catch {
-			/* errors land on driveSession / chatUi */
+			/* errors land on driveSession / chatUi — local data stays */
 		}
 	})();
 }

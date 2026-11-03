@@ -5,9 +5,14 @@
 	let {
 		open = false,
 		label = 'Create',
+		fullscreen = false,
+		dragDismiss = true,
+		showHandle = true,
 		onclose = () => {},
 		children
 	} = $props();
 </script>
 
-<CreateSheet {open} {label} {onclose}>{@render children?.()}</CreateSheet>
+<CreateSheet {open} {label} {fullscreen} {dragDismiss} {showHandle} {onclose}
+	>{@render children?.()}</CreateSheet
+>

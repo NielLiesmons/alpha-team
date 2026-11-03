@@ -48,6 +48,7 @@ export default defineConfig({
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
 				importScripts: ['/push-sw.js'],
+				/* SPA shell for deep links offline (URL stays /drive, /chat, …). */
 				navigateFallback: '/',
 				navigateFallbackDenylist: [/^\/api/, /^\/jmap/, /\/sw\.js$/],
 				navigationPreload: false,

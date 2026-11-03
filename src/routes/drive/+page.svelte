@@ -6,21 +6,22 @@
 	import { childrenOf } from '$lib/drive/tree.js';
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
 	import { driveUploadUi } from '$lib/drive/upload-ui.svelte.js';
-	import { ui } from '$lib/workspace.svelte.js';
+	import {
+		fileDisplayTitle,
+		fileTypeColors,
+		splitFileTitle
+	} from '$lib/file-display.js';
+	import { filesView } from '$lib/files-view.svelte.js';
+	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	const RECENT_KEY = 'alpha.files.recent.v1';
 	const FAV_KEY = 'alpha.files.favorites.v1';
 	const RECENT_MAX = 12;
+	const ENTRIES_CACHE_KEY = 'alpha.files.entries.v1';
 
-	/** @type {{ path: string, kind: string }[]} */
-	let entries = $state([]);
-	/** Current folder path (`''` = files root). */
-	let cwd = $state('');
-	/** Highlighted item path within the current folder. */
+	/** Highlighted item path in the list. */
 	let selected = $state(/** @type {string | null} */ (null));
-	let loading = $state(false);
 	let uploading = $state(false);
-	let err = $state('');
 	/** @type {string[]} */
 	let recentPaths = $state(readPathList(RECENT_KEY));
 	/** @type {string[]} */
@@ -28,22 +29,13 @@
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput;
 
-	const items = $derived(childrenOf(entries, cwd));
-	const atRoot = $derived(!cwd);
-
-	const uploadFolder = $derived(cwd || 'files');
-
-	const backLabel = $derived.by(() => {
-		if (!cwd) return '';
-		const i = cwd.lastIndexOf('/');
-		if (i < 0) return 'Files';
-		const parent = cwd.slice(0, i);
-		const seg = parent.includes('/') ? parent.slice(parent.lastIndexOf('/') + 1) : parent;
-		return seg || 'Files';
-	});
+	const entries = $derived(filesView.entries);
+	const loading = $derived(filesView.loading);
+	const err = $derived(filesView.error);
+	const items = $derived(childrenOf(entries, ''));
 
 	const pathIndex = $derived.by(() => {
-		/** @type {Map<string, { path: string, kind: string }>} */
+		/** @type {Map<string, { path: string, kind: string, display_name?: string | null }>} */
 		const map = new Map();
 		for (const e of entries) map.set(e.path, e);
 		return map;
@@ -67,7 +59,8 @@
 				name,
 				path,
 				kind: isFolder ? 'folder' : entry.kind,
-				isFolder
+				isFolder,
+				display_name: entry.display_name ?? null
 			});
 		}
 		return out;
@@ -97,6 +90,28 @@
 		}
 	}
 
+	function hydrateEntriesFromCache() {
+		if (typeof localStorage === 'undefined') return;
+		try {
+			const raw = JSON.parse(localStorage.getItem(ENTRIES_CACHE_KEY) || 'null');
+			if (Array.isArray(raw?.entries)) {
+				filesView.entries = raw.entries;
+			}
+		} catch {
+			/* ignore */
+		}
+	}
+
+	/** @param {typeof filesView.entries} list */
+	function persistEntries(list) {
+		if (typeof localStorage === 'undefined') return;
+		try {
+			localStorage.setItem(ENTRIES_CACHE_KEY, JSON.stringify({ at: Date.now(), entries: list }));
+		} catch {
+			/* ignore */
+		}
+	}
+
 	/** @param {string} path */
 	function touchRecent(path) {
 		const next = [path, ...recentPaths.filter((p) => p !== path)].slice(0, RECENT_MAX);
@@ -112,31 +127,34 @@
 		writePathList(FAV_KEY, next);
 	}
 
-	/** @param {string} name */
-	function labelOf(name) {
-		if (!name) return name;
-		return name.charAt(0).toUpperCase() + name.slice(1);
-	}
-
 	async function reload() {
 		const session = activeSession();
 		if (!session) {
-			entries = [];
+			filesView.entries = [];
 			return;
 		}
-		loading = true;
-		err = '';
+		const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+		if (offline && filesView.entries.length > 0) {
+			filesView.loading = false;
+			return;
+		}
+		filesView.loading = filesView.entries.length === 0;
+		filesView.error = '';
 		try {
-			entries = await listEntries(session);
+			const list = await listEntries(session);
+			filesView.entries = list;
+			persistEntries(list);
 		} catch (e) {
-			err = e instanceof Error ? e.message : String(e);
+			filesView.error = e instanceof Error ? e.message : String(e);
+			/* keep cached entries */
 		} finally {
-			loading = false;
+			filesView.loading = false;
 		}
 	}
 
 	$effect(() => {
-		if (ui.source === 'drive' || driveSession.connected) reload();
+		hydrateEntriesFromCache();
+		if (ui.source === 'drive' || driveSession.connected) void reload();
 	});
 
 	$effect(() => {
@@ -156,18 +174,8 @@
 	function onItem(item) {
 		selected = item.path;
 		touchRecent(item.path);
-		if (item.isFolder) {
-			cwd = item.path;
-			selected = null;
-		}
-	}
-
-	function goUp() {
-		if (!cwd) return;
-		const i = cwd.lastIndexOf('/');
-		const parent = i >= 0 ? cwd.slice(0, i) : '';
-		selected = cwd;
-		cwd = parent;
+		/* Folders + files open in the detail (3rd) column — never replace the list. */
+		selectEntity('file', item.path);
 	}
 
 	async function onFiles(/** @type {Event} */ e) {
@@ -176,21 +184,65 @@
 		const session = activeSession();
 		if (!session || !files?.length) return;
 		uploading = true;
-		err = '';
+		filesView.error = '';
 		try {
 			for (const file of files) {
-				const path = await uploadFile(session, uploadFolder, file);
+				const path = await uploadFile(session, 'files', file);
 				touchRecent(path);
 			}
 			await reload();
 		} catch (ex) {
-			err = ex instanceof Error ? ex.message : String(ex);
+			filesView.error = ex instanceof Error ? ex.message : String(ex);
 		} finally {
 			uploading = false;
 			input.value = '';
 		}
 	}
 </script>
+
+{#snippet fileCard(item)}
+	{@const titleText = fileDisplayTitle(item)}
+	{@const parts = splitFileTitle(titleText, { isFolder: item.isFolder })}
+	{@const colors = fileTypeColors(parts.ext || 'file')}
+	<button
+		type="button"
+		class="drive-card"
+		class:selected={selected === item.path ||
+			(ui.selection?.kind === 'file' && ui.selection?.id === item.path)}
+		onclick={() => onItem(item)}
+		oncontextmenu={(e) => {
+			e.preventDefault();
+			toggleFavorite(item.path);
+		}}
+	>
+		{#if item.isFolder}
+			<img class="folder-ico" src={folderUrl} alt="" width="18" height="18" />
+			<span class="folder-name">{parts.stem}</span>
+			<svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+				<path
+					d="M6 3.5 10.5 8 6 12.5"
+					stroke="currentColor"
+					stroke-width="1.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
+			</svg>
+		{:else}
+			<span
+				class="type-box"
+				style:color={colors.ink}
+				style:background={colors.wash}
+				aria-hidden="true">{parts.label || 'FILE'}</span
+			>
+			<span class="name-line">
+				<span class="stem">{parts.stem}</span>
+				{#if parts.ext}
+					<span class="ext">.{parts.ext}</span>
+				{/if}
+			</span>
+		{/if}
+	</button>
+{/snippet}
 
 <svelte:head><title>Files</title></svelte:head>
 
@@ -205,18 +257,12 @@
 		{#if err}
 			<p class="err">{err}</p>
 		{/if}
-		{#if cwd}
-			<button type="button" class="back" onclick={goUp}>
-				<span class="back-chev" aria-hidden="true">‹</span>
-				<span>{labelOf(backLabel)}</span>
-			</button>
-		{/if}
 		{#if uploading}
-			<p class="status">Uploading to <code>{uploadFolder}/</code>…</p>
+			<p class="status">Uploading…</p>
 		{/if}
 		{#if loading && entries.length === 0}
 			<FeedSkeleton rows={8} />
-		{:else if atRoot}
+		{:else}
 			<section class="file-section">
 				<div class="group-header">
 					<span class="eyebrow-label-xs">Recent</span>
@@ -227,18 +273,7 @@
 				{:else}
 					<div class="card-stack">
 						{#each recentItems as item (item.path)}
-							<button
-								type="button"
-								class="drive-card"
-								class:selected={selected === item.path}
-								onclick={() => onItem(item)}
-							>
-								{#if item.isFolder}
-									<img class="folder-ico" src={folderUrl} alt="" width="28" height="28" />
-								{/if}
-								<span class="title">{labelOf(item.name)}</span>
-								<span class="meta">{item.isFolder ? 'Folder' : item.kind}</span>
-							</button>
+							{@render fileCard(item)}
 						{/each}
 					</div>
 				{/if}
@@ -250,26 +285,11 @@
 					<span class="group-count">{favoriteItems.length}</span>
 				</div>
 				{#if favoriteItems.length === 0}
-					<p class="section-empty">Star items from Files to pin them here</p>
+					<p class="section-empty">Right-click a file to favorite it</p>
 				{:else}
 					<div class="card-stack">
 						{#each favoriteItems as item (item.path)}
-							<button
-								type="button"
-								class="drive-card"
-								class:selected={selected === item.path}
-								onclick={() => onItem(item)}
-								oncontextmenu={(e) => {
-									e.preventDefault();
-									toggleFavorite(item.path);
-								}}
-							>
-								{#if item.isFolder}
-									<img class="folder-ico" src={folderUrl} alt="" width="28" height="28" />
-								{/if}
-								<span class="title">{labelOf(item.name)}</span>
-								<span class="meta">{item.isFolder ? 'Folder' : item.kind}</span>
-							</button>
+							{@render fileCard(item)}
 						{/each}
 					</div>
 				{/if}
@@ -285,49 +305,11 @@
 				{:else}
 					<div class="card-stack">
 						{#each items as item (item.path)}
-							<button
-								type="button"
-								class="drive-card"
-								class:selected={selected === item.path}
-								onclick={() => onItem(item)}
-								oncontextmenu={(e) => {
-									e.preventDefault();
-									toggleFavorite(item.path);
-								}}
-							>
-								{#if item.isFolder}
-									<img class="folder-ico" src={folderUrl} alt="" width="28" height="28" />
-								{/if}
-								<span class="title">{labelOf(item.name)}</span>
-								<span class="meta">{item.isFolder ? 'Folder' : item.kind}</span>
-							</button>
+							{@render fileCard(item)}
 						{/each}
 					</div>
 				{/if}
 			</section>
-		{:else if items.length === 0}
-			<p class="empty">Empty folder</p>
-		{:else}
-			<div class="card-stack">
-				{#each items as item (item.path)}
-					<button
-						type="button"
-						class="drive-card"
-						class:selected={selected === item.path}
-						onclick={() => onItem(item)}
-						oncontextmenu={(e) => {
-							e.preventDefault();
-							toggleFavorite(item.path);
-						}}
-					>
-						{#if item.isFolder}
-							<img class="folder-ico" src={folderUrl} alt="" width="28" height="28" />
-						{/if}
-						<span class="title">{labelOf(item.name)}</span>
-						<span class="meta">{item.isFolder ? 'Folder' : item.kind}</span>
-					</button>
-				{/each}
-			</div>
 		{/if}
 	{/if}
 </div>
@@ -372,34 +354,6 @@
 		color: var(--fg-33);
 	}
 
-	.back {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		align-self: flex-start;
-		margin: 0 10px 4px;
-		padding: 6px 8px;
-		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	.back:hover {
-		background: var(--fg-4);
-		color: var(--fg);
-	}
-
-	.back-chev {
-		font-size: 16px;
-		line-height: 1;
-		color: var(--fg-33);
-	}
-
 	.status,
 	.empty,
 	.err {
@@ -413,10 +367,6 @@
 		color: var(--danger, #c44);
 	}
 
-	.status code {
-		color: var(--fg-33);
-	}
-
 	.card-stack {
 		display: flex;
 		flex-direction: column;
@@ -428,10 +378,10 @@
 	.drive-card {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: 10px;
 		width: 100%;
-		min-height: 44px;
-		padding: 8px 10px;
+		min-height: 40px;
+		padding: 6px 10px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -452,30 +402,62 @@
 
 	.folder-ico {
 		flex-shrink: 0;
-		width: 28px;
-		height: 28px;
+		width: 18px;
+		height: 18px;
 		object-fit: contain;
 		display: block;
+		opacity: 0.72;
 	}
 
-	.title {
+	.folder-name {
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 15px;
-		font-weight: 600;
+		font-size: 13px;
+		font-weight: 400;
+		color: var(--fg-66);
+	}
+
+	.chev {
+		flex-shrink: 0;
+		color: var(--fg-33);
+		opacity: 0.55;
+	}
+
+	.type-box {
+		flex-shrink: 0;
+		width: 28px;
+		height: 28px;
+		border-radius: 8px;
+		display: grid;
+		place-items: center;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 8px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		line-height: 1;
+	}
+
+	.name-line {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.stem {
 		color: var(--fg);
 	}
 
-	.meta {
-		flex-shrink: 0;
-		font-size: 11px;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
+	.ext {
 		color: var(--fg-33);
+		font-weight: 500;
 	}
 </style>
