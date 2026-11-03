@@ -881,7 +881,10 @@
 		}
 	}
 
-	.list-top > * {
+	/* :global(*) — slotted ListTitleChrome roots are other components' scoped
+	   nodes; without :global, Svelte rewrites this to >:where(.svelte-…) and
+	   back/title clicks stay dead under list-top's pointer-events: none. */
+	.list-top > :global(*) {
 		pointer-events: auto;
 	}
 

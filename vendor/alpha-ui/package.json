@@ -22,6 +22,7 @@
 		"./AppNav.svelte": "./src/lib/AppNav.svelte",
 		"./DetailChrome.svelte": "./src/lib/DetailChrome.svelte",
 		"./ChromeMobileBar.svelte": "./src/lib/ChromeMobileBar.svelte",
+		"./ChromeActionButton.svelte": "./src/lib/ChromeActionButton.svelte",
 		"./ListTitleChrome.svelte": "./src/lib/ListTitleChrome.svelte",
 		"./NavIcon.svelte": "./src/lib/NavIcon.svelte",
 		"./icons/BaseIcon.svelte": "./src/lib/icons/BaseIcon.svelte",
