@@ -1,14 +1,19 @@
 /**
- * Stalwart JMAP client for personal mailboxes (mail.bley.farm).
+ * Stalwart JMAP client for Space mailboxes.
  * Auth: HTTP Basic with mailbox email + password (or app password).
  *
- * Browser calls are same-origin `/jmap/*` (Vite proxy in dev; Caddy on admin.bley.farm
- * in prod). Direct mail.bley.farm fetch fails with NetworkError — no CORS.
+ * Browser calls are same-origin `/jmap/*` (Vite proxy in dev; Caddy on admin.{apex}
+ * in prod). Direct mail.{apex} fetch fails with NetworkError — no CORS.
  */
 
 import { MAIL_FOLDER_ROLES } from './mail-view.svelte.js';
 
-export const JMAP_ORIGIN = 'https://mail.bley.farm';
+import { serviceOrigin } from './space-host.js';
+
+export const JMAP_ORIGIN = serviceOrigin(
+	typeof import.meta !== 'undefined' ? import.meta.env?.PUBLIC_MAIL_URL : '',
+	'mail'
+) || 'http://127.0.0.1:8080';
 
 const PW_KEY = 'alpha-admin-mailbox-pw.v1';
 
@@ -26,7 +31,7 @@ function jmapBase() {
 function networkHint(e) {
 	const msg = e instanceof Error ? e.message : String(e);
 	if (/NetworkError|Failed to fetch|Load failed|network/i.test(msg)) {
-		return 'Cannot reach Stalwart from this page (CORS). Use Admin via admin.bley.farm with /jmap proxied, or local Vite (proxy enabled).';
+		return 'Cannot reach Stalwart from this page (CORS). Use Admin with /jmap proxied, or local Vite (proxy enabled).';
 	}
 	return msg;
 }

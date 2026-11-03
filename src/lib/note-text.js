@@ -65,10 +65,44 @@ export function looksLikeMarkdown(s) {
 		/^\s{0,3}>/m.test(t) ||
 		/(\*\*|__)[^*\n]+(\*\*|__)/.test(t) ||
 		/(^|[^*])\*[^*\n]+\*(?!\*)/.test(t) ||
+		/(^|[^_])_[^_\n]+_(?!_)/.test(t) ||
 		/`[^`\n]+`/.test(t) ||
 		/\[[^\]]+\]\([^)]+\)/.test(t) ||
 		/^```/m.test(t)
 	);
+}
+
+/**
+ * True when clipboard HTML is real rich content (Word/Docs/Notion).
+ * Ignores Chromium/WebKit paste wrappers that falsely look like markup
+ * (e.g. `<b style="font-weight:normal">`, Apple span soup around plain MD).
+ * @param {string} html
+ */
+export function clipboardHtmlIsRich(html) {
+	let s = String(html || '');
+	if (!s.trim()) return false;
+	s = s
+		.replace(/<!--StartFragment-->/gi, '')
+		.replace(/<!--EndFragment-->/gi, '')
+		.replace(/<!--[\s\S]*?-->/g, '')
+		.replace(/<meta[^>]*>/gi, '')
+		.replace(/<\/?(html|head|body|fragment)[^>]*>/gi, '')
+		/* Chromium wraps plain selections in <b style="font-weight:normal"> */
+		.replace(/<b\b[^>]*font-weight\s*:\s*normal[^>]*>/gi, '')
+		.replace(/<\/b>/gi, '')
+		/* WebKit / Apple Notes noise */
+		.replace(/<span\b[^>]*Apple-[^>]*>/gi, '')
+		.replace(/<\/span>/gi, '')
+		.replace(/<br\s*\/?>/gi, '\n')
+		.trim();
+	if (!s) return false;
+	/* Structural / semantic rich paste — keep browser HTML.
+	 * <pre>/<code>/<div>/<p>/<span> alone are often editors wrapping MD source. */
+	if (/<(h[1-6]|ul|ol|li|table|blockquote|img)\b/i.test(s)) return true;
+	if (/<(strong|em)\b/i.test(s)) return true;
+	/* Real bold/italic — not the Chromium wrapper already stripped */
+	if (/<b\b/i.test(s) || /<i\b/i.test(s)) return true;
+	return false;
 }
 
 /** @param {string} s */

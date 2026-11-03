@@ -1,6 +1,6 @@
 /**
  * Web Push: subscribe this device, store subscription on Drive, fan-out via alpha-api relay.
- * Browsers cannot POST to APNs/FCM (CORS) — api.bley.farm encrypts + delivers.
+ * Browsers cannot POST to APNs/FCM (CORS) — the Space api host encrypts + delivers.
  */
 
 import { apiBase } from './mail-api.js';

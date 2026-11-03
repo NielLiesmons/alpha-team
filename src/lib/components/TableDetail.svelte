@@ -17,7 +17,6 @@
 		tableRows,
 		ui
 	} from '$lib/workspace.svelte.js';
-	import SyncProgressBar from './SyncProgressBar.svelte';
 
 	/** @type {{ table: any }} */
 	let { table } = $props();
@@ -213,7 +212,6 @@
 			</button>
 		{/if}
 		<span class="detail-top-label">Table</span>
-		<SyncProgressBar variant="inline" class="detail-sync" />
 	</div>
 	<div class="detail-top-actions">
 		{#if saving}<span class="save-hint">Saving…</span>{/if}

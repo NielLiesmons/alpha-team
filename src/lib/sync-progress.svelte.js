@@ -1,5 +1,5 @@
 /**
- * Shared Drive sync progress — feeds list + detail chrome bars.
+ * Shared Drive sync progress — drives title shimmer on list/detail chrome.
  */
 
 /** @type {{ active: boolean, ratio: number | null, label: string }} */

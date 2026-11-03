@@ -1,72 +1,93 @@
 <script>
 	/**
-	 * Settings hub: horizontal profile cards → section list → detail column.
-	 * Follow ADR-shared-design-system + .cursor/rules/alpha-design-system.mdc
+	 * Settings list: stacked active profile + expandable roster, then section rows.
+	 * Detail opens in the third column via selectEntity('settings', id).
 	 */
 	import AddProfileSheet from './AddProfileSheet.svelte';
+	import ProfileInviteModal from './ProfileInviteModal.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import Crown from './icons/Crown.svelte';
-	import Pen from './icons/Pen.svelte';
-	import Share from './icons/Share.svelte';
-	import { actor, clearActor, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		deviceProfiles,
 		hasDeviceProfile,
-		removeDeviceProfile,
 		switchDeviceProfile
 	} from '$lib/device-profiles.svelte.js';
-	import { clearSession, driveSession } from '$lib/drive/session.svelte.js';
-	import { canManageSpace, members, roleFor } from '$lib/members.svelte.js';
+	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { canManageMembers, members, roleFor } from '$lib/members.svelte.js';
+	import { setProfileTarget, clearProfileTarget } from '$lib/settings-ui.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { pwaUi } from '$lib/pwa.svelte.js';
-	import { refreshFromDrive, selectEntity, ui } from '$lib/workspace.svelte.js';
+	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	let addProfileOpen = $state(false);
+	let profilesOpen = $state(false);
 	let shareMsg = $state('');
+	let inviteOpen = $state(false);
+	/** @type {string} */
+	let inviteEmail = $state('');
+	/** @type {string | null} */
+	let menuEmail = $state(null);
 
-	const isOperator = $derived(canManageSpace(actor.email));
+	const isAdmin = $derived(canManageMembers(actor.email));
 	const activeEmail = $derived((actor.email || '').trim().toLowerCase());
+	const selectedSection = $derived(
+		ui.selection?.kind === 'settings' ? String(ui.selection.id || '') : ''
+	);
 
-	/** Admin capability = crown; no separate “admin@” identity required. */
 	function isAdminRole(role) {
 		return role === 'owner' || role === 'admin';
 	}
 
-	/**
-	 * Stable name order — never jump the active card to the front (that made switch feel glitchy).
-	 */
-	const orderedProfiles = $derived.by(() => {
-		/** @type {{ email: string, name: string, role?: string, onDevice: boolean }[]} */
+	/** Active profile first; admins see full Space directory, others device profiles. */
+	const roster = $derived.by(() => {
+		/** @type {{ email: string, name: string, role?: string }[]} */
 		let list = [];
-		if (driveSession.connected && members.length) {
+		if (isAdmin && driveSession.connected && members.length) {
 			list = members
 				.filter((m) => m.status !== 'disabled')
-				.map((m) => ({
-					email: m.email,
-					name: m.name,
-					role: m.role,
-					onDevice: hasDeviceProfile(m.email)
+				.map((m) => ({ email: m.email, name: m.name, role: m.role }));
+		} else if (driveSession.connected && members.length) {
+			list = members
+				.filter((m) => m.status !== 'disabled' && hasDeviceProfile(m.email))
+				.map((m) => ({ email: m.email, name: m.name, role: m.role }));
+			if (!list.length) {
+				list = deviceProfiles.map((p) => ({
+					email: p.email,
+					name: p.name,
+					role: roleFor(p.email) || undefined
 				}));
+			}
 		} else {
 			list = deviceProfiles.map((p) => ({
 				email: p.email,
 				name: p.name,
-				role: roleFor(p.email) || undefined,
-				onDevice: true
+				role: roleFor(p.email) || undefined
 			}));
 		}
-		list.sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email));
+		const active = activeEmail;
+		list.sort((a, b) => {
+			const aA = a.email === active ? 0 : 1;
+			const bA = b.email === active ? 0 : 1;
+			if (aA !== bA) return aA - bA;
+			return a.name.localeCompare(b.name) || a.email.localeCompare(b.email);
+		});
 		return list;
 	});
 
-	const activeSection = $derived(
-		ui.selection?.kind === 'settings' ? String(ui.selection.id) : ''
-	);
+	const activeProfile = $derived(roster.find((p) => p.email === activeEmail) || roster[0]);
+	const otherProfiles = $derived(roster.filter((p) => p.email !== activeEmail));
+	const stackDepth = $derived(Math.min(3, otherProfiles.length));
 
 	const sections = $derived.by(() => {
 		/** @type {{ id: string, title: string, description: string }[]} */
 		const rows = [
+			{
+				id: 'profile',
+				title: 'Profile',
+				description: activeEmail || 'Name, photo, disconnect'
+			},
 			{
 				id: 'notifications',
 				title: 'Notifications',
@@ -92,7 +113,7 @@
 				description: actor.email ? actor.email : 'Mailbox password'
 			}
 		];
-		if (isOperator) {
+		if (isAdmin) {
 			rows.push(
 				{
 					id: 'publications',
@@ -109,209 +130,276 @@
 		return rows;
 	});
 
+	function toggleProfiles() {
+		profilesOpen = !profilesOpen;
+		menuEmail = null;
+	}
+
 	/** @param {string} id */
 	function openSection(id) {
+		menuEmail = null;
+		if (id === 'profile') setProfileTarget(activeEmail);
+		else clearProfileTarget();
 		selectEntity('settings', id);
 	}
 
 	/** @param {string} email */
-	function onSwitchProfile(email) {
+	function onSwitch(email) {
 		try {
 			switchDeviceProfile(email);
 			shareMsg = '';
+			menuEmail = null;
+			profilesOpen = false;
 		} catch (err) {
 			shareMsg = err instanceof Error ? err.message : String(err);
 		}
 	}
 
 	/** @param {string} email */
-	function onEditProfile(email) {
-		onSwitchProfile(email);
-		openSection('profile');
+	function onEdit(email) {
+		menuEmail = null;
+		setProfileTarget(email);
+		selectEntity('settings', 'profile');
 	}
 
 	/** @param {string} email */
-	async function shareProfile(email) {
+	function onShare(email) {
 		shareMsg = '';
+		menuEmail = null;
 		const e = String(email || '')
 			.trim()
 			.toLowerCase();
-		const name = displayNameFromEmail(e);
-		const text = name && e ? `${name} <${e}>` : e || name;
-		if (!text) return;
-		try {
-			if (navigator.share) {
-				await navigator.share({ title: name || 'Profile', text });
-			} else {
-				await navigator.clipboard.writeText(text);
-				shareMsg = 'Copied profile to clipboard.';
-			}
-		} catch (err) {
-			if (err instanceof Error && err.name === 'AbortError') return;
-			try {
-				await navigator.clipboard.writeText(text);
-				shareMsg = 'Copied profile to clipboard.';
-			} catch {
-				shareMsg = 'Could not share.';
-			}
+		if (!e.includes('@')) {
+			shareMsg = 'Missing profile email.';
+			return;
 		}
+		if (!driveSession.connected) {
+			shareMsg = 'Connect Drive first to share an invite QR.';
+			return;
+		}
+		inviteEmail = e;
+		inviteOpen = true;
 	}
 
-	async function disconnectProfile() {
-		const email = activeEmail;
-		const label = displayNameFromEmail(email) || email || 'this profile';
-		if (!confirm(`Disconnect ${label} on this device?`)) return;
-		try {
-			if (email) removeDeviceProfile(email);
-			if (deviceProfiles.length === 0) {
-				clearSession();
-				clearActor();
-				await refreshFromDrive();
-			}
-		} catch (e) {
-			shareMsg = e instanceof Error ? e.message : String(e);
-		}
+	/** @param {MouseEvent} e */
+	function onDocClick(e) {
+		const t = /** @type {Node} */ (e.target);
+		if (!(t instanceof Element) || !t.closest('.menu-wrap')) menuEmail = null;
 	}
+
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		document.addEventListener('click', onDocClick);
+		return () => document.removeEventListener('click', onDocClick);
+	});
 </script>
 
-<div class="hub">
-	<div class="cards-scroll">
-		<div class="cards-row">
-			{#each orderedProfiles as p (p.email)}
-				{@const active = p.email === activeEmail}
-				{@const admin = isAdminRole(p.role)}
-				<article class="profile-card" class:active class:other={!active}>
+<div class="hub" class:expanded={profilesOpen}>
+	<div class="stack" class:open={profilesOpen}>
+		{#if activeProfile}
+			{@const admin = isAdminRole(activeProfile.role)}
+			<article class="face">
+				<button type="button" class="face-main" onclick={() => openSection('profile')}>
+					<ProfilePic
+						name={displayNameFromEmail(activeProfile.email) || activeProfile.name}
+						email={activeProfile.email}
+						pictureUrl={pictureUrlFor(activeProfile.email)}
+						size={48}
+					/>
+					<span class="meta">
+						<span class="name-row">
+							<span class="name"
+								>{displayNameFromEmail(activeProfile.email) || activeProfile.name}</span
+							>
+							{#if admin}
+								<span class="crown" title="Admin" aria-label="Admin"><Crown size={13} /></span>
+							{/if}
+						</span>
+						<span class="email">{activeProfile.email}</span>
+					</span>
+				</button>
+				<button
+					type="button"
+					class="chev"
+					class:up={profilesOpen}
+					aria-expanded={profilesOpen}
+					aria-label={profilesOpen ? 'Collapse profiles' : 'Expand profiles'}
+					onclick={(e) => {
+						e.stopPropagation();
+						toggleProfiles();
+					}}
+				>
+					<svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M4 6.5 8 10.5 12 6.5"
+							stroke="currentColor"
+							stroke-width="1.6"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<div class="menu-wrap">
 					<button
 						type="button"
-						class="card-main"
-						onclick={() => (active ? openSection('profile') : onSwitchProfile(p.email))}
+						class="dots"
+						aria-label="Profile actions"
+						aria-expanded={menuEmail === activeProfile.email}
+						onclick={(e) => {
+							e.stopPropagation();
+							menuEmail = menuEmail === activeProfile.email ? null : activeProfile.email;
+						}}
 					>
-						<ProfilePic
-							name={displayNameFromEmail(p.email) || p.name}
-							email={p.email}
-							pictureUrl={pictureUrlFor(p.email)}
-							size={48}
-						/>
-						<div class="card-meta">
-							<span class="card-name-row">
-								<span class="card-name">{displayNameFromEmail(p.email) || p.name}</span>
-								{#if admin}
-									<span class="crown" title="Admin" aria-label="Admin">
-										<Crown size={13} />
-									</span>
-								{/if}
-							</span>
-							<span class="card-email">{p.email}</span>
-						</div>
+						⋮
 					</button>
-					<div class="card-ctas">
-						<button
-							type="button"
-							class="icon-pill"
-							aria-label="Edit profile"
-							onclick={() => onEditProfile(p.email)}
-						>
-							<Pen size={12} />
-						</button>
-						<button
-							type="button"
-							class="icon-pill"
-							aria-label="Share profile"
-							onclick={() => void shareProfile(p.email)}
-						>
-							<Share size={13} />
-						</button>
-					</div>
-				</article>
-			{/each}
+					{#if menuEmail === activeProfile.email}
+						<div class="menu" role="menu">
+							<button type="button" role="menuitem" onclick={() => onEdit(activeProfile.email)}
+								>Edit profile</button
+							>
+							<button type="button" role="menuitem" onclick={() => onShare(activeProfile.email)}
+								>Share invite</button
+							>
+						</div>
+					{/if}
+				</div>
+			</article>
+		{/if}
 
-			<button type="button" class="profile-card add-card" onclick={() => (addProfileOpen = true)}>
-				<span class="add-plus" aria-hidden="true">+</span>
-				<span class="add-label">Add Profile</span>
-			</button>
-		</div>
+		{#if !profilesOpen && stackDepth > 0}
+			{#each Array(stackDepth) as _, i}
+				<div
+					class="layer"
+					style="--i: {i + 1}"
+					aria-hidden="true"
+				></div>
+			{/each}
+		{/if}
+
+		{#if profilesOpen}
+			<div class="roster">
+				{#each otherProfiles as p (p.email)}
+					{@const admin = isAdminRole(p.role)}
+					<article class="row-card">
+						<button type="button" class="row-main" onclick={() => onSwitch(p.email)}>
+							<ProfilePic
+								name={displayNameFromEmail(p.email) || p.name}
+								email={p.email}
+								pictureUrl={pictureUrlFor(p.email)}
+								size={40}
+							/>
+							<span class="meta">
+								<span class="name-row">
+									<span class="name">{displayNameFromEmail(p.email) || p.name}</span>
+									{#if admin}
+										<span class="crown" title="Admin" aria-label="Admin"><Crown size={12} /></span>
+									{/if}
+								</span>
+								<span class="email">{p.email}</span>
+							</span>
+						</button>
+						<div class="menu-wrap">
+							<button
+								type="button"
+								class="dots"
+								aria-label="Profile actions"
+								aria-expanded={menuEmail === p.email}
+								onclick={(e) => {
+									e.stopPropagation();
+									menuEmail = menuEmail === p.email ? null : p.email;
+								}}
+							>
+								⋮
+							</button>
+							{#if menuEmail === p.email}
+								<div class="menu" role="menu">
+									<button type="button" role="menuitem" onclick={() => onSwitch(p.email)}
+										>Switch to</button
+									>
+									<button type="button" role="menuitem" onclick={() => onEdit(p.email)}
+										>Edit profile</button
+									>
+									<button type="button" role="menuitem" onclick={() => onShare(p.email)}
+										>Share invite</button
+									>
+								</div>
+							{/if}
+						</div>
+					</article>
+				{/each}
+				<button type="button" class="add-row" onclick={() => (addProfileOpen = true)}>
+					<span class="add-plus" aria-hidden="true">+</span>
+					<span>Add profile</span>
+				</button>
+			</div>
+		{/if}
 	</div>
 
 	{#if shareMsg}
 		<p class="toast">{shareMsg}</p>
 	{/if}
 
-	<hr class="rule" />
-
-	<ul class="section-list">
+	<ul class="sections" class:pushed={profilesOpen}>
 		{#each sections as s (s.id)}
 			<li>
 				<button
 					type="button"
 					class="section-row"
-					class:on={activeSection === s.id}
+					class:on={selectedSection === s.id}
 					onclick={() => openSection(s.id)}
 				>
 					<span class="section-text">
 						<span class="section-title">{s.title}</span>
 						<span class="section-desc">{s.description}</span>
 					</span>
-					<span class="chev" aria-hidden="true">›</span>
+					<span class="row-chev" aria-hidden="true">›</span>
 				</button>
 			</li>
 		{/each}
 	</ul>
-
-	<hr class="rule" />
-
-	<div class="disconnect-wrap">
-		<button type="button" class="disconnect" onclick={disconnectProfile}>
-			Disconnect {displayNameFromEmail(activeEmail) || 'profile'}
-		</button>
-	</div>
 </div>
 
 <AddProfileSheet open={addProfileOpen} onclose={() => (addProfileOpen = false)} />
+<ProfileInviteModal bind:open={inviteOpen} email={inviteEmail} />
 
 <style>
 	.hub {
-		padding: 4px 0 28px;
+		padding: 8px 16px 28px;
 		box-sizing: border-box;
+		max-width: 720px;
 	}
 
-	.cards-scroll {
-		overflow-x: auto;
-		overflow-y: visible;
-		padding: 8px 16px 10px;
-		-webkit-overflow-scrolling: touch;
-		scrollbar-width: thin;
-	}
-
-	.cards-row {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		width: max-content;
-		min-height: 168px;
-	}
-
-	.profile-card {
-		width: 220px;
-		min-height: 132px;
-		padding: 14px;
-		border-radius: 16px;
-		border: 1px solid var(--fg-8, var(--white11));
-		background: color-mix(in srgb, var(--fg) 4%, transparent);
-		box-sizing: border-box;
+	.stack {
+		position: relative;
+		z-index: 2;
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		align-items: center;
+		width: 100%;
 	}
 
-	.profile-card.active {
-		width: 268px;
-		min-height: 156px;
-		padding: 16px;
-		border: 0;
+	.face {
+		position: relative;
+		z-index: 4;
+		width: 100%;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 14px 10px 14px 14px;
+		border-radius: 16px;
 		background: color-mix(in srgb, var(--fg) 8%, transparent);
+		box-sizing: border-box;
+		transition: border-radius 0.28s ease;
 	}
 
-	.card-main {
+	.stack.open .face {
+		border-radius: 16px 16px 0 0;
+	}
+
+	.face-main,
+	.row-main {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		align-items: center;
 		gap: 12px;
@@ -322,26 +410,23 @@
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
-		min-width: 0;
-		flex: 1;
 	}
 
-	.card-meta {
+	.meta {
 		display: flex;
 		flex-direction: column;
-		justify-content: center;
-		gap: 3px;
+		gap: 2px;
 		min-width: 0;
 	}
 
-	.card-name-row {
+	.name-row {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		min-width: 0;
 	}
 
-	.card-name {
+	.name {
 		font-size: 15px;
 		font-weight: 650;
 		color: var(--fg, var(--white));
@@ -350,8 +435,12 @@
 		white-space: nowrap;
 	}
 
-	.profile-card.active .card-name {
-		font-size: 16px;
+	.email {
+		font-size: 12px;
+		color: var(--fg-66, var(--white66));
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.crown {
@@ -361,94 +450,170 @@
 		color: var(--fg-33, var(--white44));
 	}
 
-	.card-email {
-		font-size: 12px;
-		color: var(--fg-66, var(--white66));
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.card-ctas {
-		display: flex;
-		justify-content: flex-end;
-		gap: 8px;
-		margin-top: auto;
-	}
-
-	.icon-pill {
-		width: 2rem;
-		height: 2rem;
-		border-radius: 999px;
+	.chev,
+	.dots {
+		flex-shrink: 0;
+		width: 2.25rem;
+		height: 2.25rem;
 		border: 0;
-		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
-		color: var(--fg-33, var(--white44));
+		border-radius: 999px;
+		background: transparent;
+		color: var(--fg-66, var(--white66));
 		display: grid;
 		place-items: center;
 		cursor: pointer;
 		padding: 0;
-	}
-
-	.icon-pill:hover {
-		background: var(--fg-12, color-mix(in srgb, var(--fg) 12%, transparent));
-		color: var(--fg-66, var(--white66));
-	}
-
-	.add-card {
-		flex-direction: row;
-		align-items: center;
-		justify-content: flex-start;
-		gap: 12px;
-		width: 220px;
-		min-height: 132px;
-		cursor: pointer;
-		color: var(--fg-66, var(--white66));
-		background: color-mix(in srgb, var(--fg) 4%, transparent);
-		border: 1px solid var(--fg-8, var(--white11));
 		font: inherit;
+		font-size: 18px;
+		line-height: 1;
+	}
+
+	.chev:hover,
+	.dots:hover {
+		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
+		color: var(--fg, var(--white));
+	}
+
+	.chev svg {
+		transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	.chev.up svg {
+		transform: rotate(180deg);
+	}
+
+	.layer {
+		--i: 1;
+		width: calc(100% - var(--i) * 18px);
+		height: calc(10px - var(--i) * 1.5px);
+		margin-top: -1px;
+		border-radius: 0 0 calc(14px - var(--i) * 3px) calc(14px - var(--i) * 3px);
+		background: color-mix(in srgb, var(--fg) calc(7% - var(--i) * 1.8%), transparent);
+		z-index: calc(3 - var(--i));
+		pointer-events: none;
+	}
+
+	.roster {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+		border-radius: 0 0 16px 16px;
+		background: color-mix(in srgb, var(--fg) 5%, transparent);
+		animation: roster-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+	}
+
+	@keyframes roster-in {
+		from {
+			opacity: 0;
+			transform: translateY(-8px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
+	.row-card {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 10px 10px 10px 14px;
+		border-top: 1px solid var(--fg-8, var(--white11));
+		box-sizing: border-box;
+	}
+
+	.add-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		padding: 12px 14px;
+		border: 0;
+		border-top: 1px solid var(--fg-8, var(--white11));
+		background: transparent;
+		color: var(--fg-66, var(--white66));
+		font: inherit;
+		font-size: 14px;
+		font-weight: 600;
+		cursor: pointer;
 		text-align: left;
 	}
 
+	.add-row:hover {
+		color: var(--fg, var(--white));
+		background: color-mix(in srgb, var(--fg) 4%, transparent);
+	}
+
 	.add-plus {
-		width: 44px;
-		height: 44px;
+		width: 28px;
+		height: 28px;
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		border: 2px solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
-		background: transparent;
-		font-size: 28px;
-		font-weight: 400;
+		border: 1.5px solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
+		font-size: 18px;
 		line-height: 1;
-		color: var(--fg-66, var(--white66));
+	}
+
+	.menu-wrap {
+		position: relative;
 		flex-shrink: 0;
 	}
 
-	.add-label {
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--fg-66, var(--white66));
+	.menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		z-index: 20;
+		min-width: 148px;
+		padding: 6px;
+		border-radius: 12px;
+		background: var(--popover, var(--bg));
+		border: 1px solid var(--fg-8, var(--white11));
+		box-shadow: 0 12px 32px color-mix(in srgb, #000 22%, transparent);
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.menu button {
+		border: 0;
+		background: transparent;
+		color: var(--fg, var(--white));
+		font: inherit;
+		font-size: 13px;
+		font-weight: 550;
+		text-align: left;
+		padding: 9px 10px;
+		border-radius: 8px;
+		cursor: pointer;
+	}
+
+	.menu button:hover {
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
 	}
 
 	.toast {
-		margin: 0 16px 8px;
+		margin: 10px 0 0;
 		font-size: 13px;
 		color: var(--fg-66, var(--white66));
 	}
 
-	.rule {
-		border: 0;
-		border-top: 1px solid var(--fg-8, var(--white11));
-		margin: 10px 0;
-	}
-
-	.section-list {
+	.sections {
 		list-style: none;
-		margin: 0;
-		padding: 4px 10px 8px;
+		margin: 18px 0 0;
+		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		transition:
+			transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+			margin-top 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	.sections.pushed {
+		margin-top: 22px;
+		transform: translateY(4px);
 	}
 
 	.section-row {
@@ -456,9 +621,10 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 12px 10px;
+		padding: 13px 4px;
 		border: 0;
-		border-radius: 14px;
+		border-bottom: 1px solid var(--fg-8, var(--white11));
+		border-radius: 0;
 		background: transparent;
 		color: inherit;
 		font: inherit;
@@ -466,13 +632,13 @@
 		cursor: pointer;
 	}
 
-	.section-row:hover,
-	.section-row.on {
-		background: color-mix(in srgb, var(--fg) 6%, transparent);
+	.sections li:last-child .section-row {
+		border-bottom: 0;
 	}
 
+	.section-row:hover,
 	.section-row.on {
-		outline: none;
+		background: color-mix(in srgb, var(--fg) 5%, transparent);
 	}
 
 	.section-text {
@@ -497,32 +663,9 @@
 		white-space: nowrap;
 	}
 
-	.chev {
+	.row-chev {
 		font-size: 22px;
 		line-height: 1;
 		color: var(--fg-33, var(--white44));
-		padding-right: 4px;
-	}
-
-	.disconnect-wrap {
-		padding: 8px 16px 0;
-	}
-
-	.disconnect {
-		width: 100%;
-		height: 2.35rem;
-		border-radius: 999px;
-		border: 0;
-		background: transparent;
-		color: var(--fg-33, var(--white44));
-		font: inherit;
-		font-size: 13px;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	.disconnect:hover {
-		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
-		color: var(--fg-66, var(--white66));
 	}
 </style>

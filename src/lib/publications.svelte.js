@@ -4,13 +4,17 @@
  */
 
 import {
+	approveComment,
+	banComment,
 	createCampaign,
 	deleteCampaign,
 	deletePost,
 	fetchCampaigns,
 	fetchMailSettings,
+	fetchModerationComments,
 	fetchPost,
 	fetchPosts,
+	rejectComment,
 	saveMailSettings,
 	sendCampaign,
 	updatePost
@@ -23,7 +27,7 @@ export const campaigns = $state([]);
 /** @type {any[]} */
 export const publicPosts = $state([]);
 
-/** Bley / site defaults — match alpha-api `MailBranding::default`. */
+/** Site mail branding defaults — match alpha-api `MailBranding::default`. */
 export const defaultMailBranding = {
 	font_display: "'Ovo', Georgia, 'Times New Roman', serif",
 	font_body: 'Inter, Helvetica, Arial, sans-serif',
@@ -31,7 +35,7 @@ export const defaultMailBranding = {
 	accent: '#dd8f87',
 	page_bg: '#f7f3f1',
 	ink: '#160b0f',
-	logo_url: 'https://bley.farm/icons/bley-logo-ink.svg',
+	logo_url: '',
 	eyebrow_fr: 'Lettre',
 	eyebrow_en: 'Letter',
 	read_cta_fr: 'Open Online',
@@ -52,7 +56,7 @@ export const defaultMailBranding = {
  * }} */
 export const mailSettings = $state({
 	from: '',
-	brand_name: 'Bley',
+	brand_name: 'Space',
 	branding: { ...defaultMailBranding },
 	welcome: {
 		enabled: false,
@@ -68,7 +72,7 @@ export const mailSettings = $state({
  */
 function applyMailSettings(raw) {
 	mailSettings.from = raw?.from || '';
-	mailSettings.brand_name = raw?.brand_name || 'Bley';
+	mailSettings.brand_name = raw?.brand_name || 'Space';
 	mailSettings.branding = {
 		...defaultMailBranding,
 		...(raw?.branding && typeof raw.branding === 'object' ? raw.branding : {})
@@ -88,6 +92,13 @@ export const pubsUi = $state({
 	/** @type {string | null} */
 	loadedAt: null
 });
+
+/** @type {any[]} */
+export const pendingComments = $state([]);
+
+/** Recent comments for reactive moderation (approved / pending / rejected). */
+/** @type {any[]} */
+export const moderationComments = $state([]);
 
 /**
  * Unified feed row for hub + /publications list.
@@ -169,20 +180,62 @@ export async function refreshPublications() {
 	pubsUi.error = '';
 	try {
 		const postsP = fetchPosts().catch(() => ({ items: [] }));
-		const [settings, list, posts] = await Promise.all([
+		const modP = fetchModerationComments().catch(() => ({ items: [] }));
+		const [settings, list, posts, mod] = await Promise.all([
 			fetchMailSettings(),
 			fetchCampaigns(),
-			postsP
+			postsP,
+			modP
 		]);
 		applyMailSettings(settings);
 		campaigns.splice(0, campaigns.length, ...(list.items || []));
 		publicPosts.splice(0, publicPosts.length, ...(posts.items || []));
+		moderationComments.splice(0, moderationComments.length, ...(mod.items || []));
+		pendingComments.splice(
+			0,
+			pendingComments.length,
+			...(mod.items || []).filter((c) => c.status === 'pending')
+		);
 		pubsUi.loadedAt = new Date().toISOString();
 	} catch (e) {
 		pubsUi.error = e instanceof Error ? e.message : String(e);
 	} finally {
 		pubsUi.loading = false;
 	}
+}
+
+/** @param {string} id */
+export async function persistApproveComment(id) {
+	const c = await approveComment(id);
+	const idx = moderationComments.findIndex((x) => x.id === id);
+	if (idx >= 0) moderationComments[idx] = { ...moderationComments[idx], ...c, status: 'approved' };
+	const pidx = pendingComments.findIndex((x) => x.id === id);
+	if (pidx >= 0) pendingComments.splice(pidx, 1);
+}
+
+/** @param {string} id */
+export async function persistRejectComment(id) {
+	const c = await rejectComment(id);
+	const idx = moderationComments.findIndex((x) => x.id === id);
+	if (idx >= 0) moderationComments[idx] = { ...moderationComments[idx], ...c, status: 'rejected' };
+	const pidx = pendingComments.findIndex((x) => x.id === id);
+	if (pidx >= 0) pendingComments.splice(pidx, 1);
+}
+
+/** @param {string} id */
+export async function persistBanComment(id) {
+	const c = await banComment(id);
+	const idx = moderationComments.findIndex((x) => x.id === id);
+	if (idx >= 0) {
+		moderationComments[idx] = {
+			...moderationComments[idx],
+			...c,
+			status: 'rejected',
+			commenter_banned: true
+		};
+	}
+	const pidx = pendingComments.findIndex((x) => x.id === id);
+	if (pidx >= 0) pendingComments.splice(pidx, 1);
 }
 
 /**

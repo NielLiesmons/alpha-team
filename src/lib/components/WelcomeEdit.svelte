@@ -91,7 +91,7 @@
 	</label>
 	<div class="form-divider"></div>
 	<div class="sheet-title-row">
-		<input class="sheet-input" placeholder="From — Bley &lt;news@bley.farm&gt;" bind:value={from} />
+		<input class="sheet-input" placeholder="From — Space &lt;news@example.com&gt;" bind:value={from} />
 	</div>
 	<div class="form-divider"></div>
 	<div class="lang-seg" role="group" aria-label="Language">
@@ -100,8 +100,8 @@
 	</div>
 	<div class="pad">
 		<MailHeroEditor
-			brand={mailSettings.brand_name || 'Bley'}
-			logoUrl={mailSettings.branding?.logo_url || 'https://bley.farm/icons/bley-logo-ink.svg'}
+			brand={mailSettings.brand_name || 'Space'}
+			logoUrl={mailSettings.branding?.logo_url || ''}
 			eyebrow={lang === 'en'
 				? mailSettings.branding?.eyebrow_en || 'Letter'
 				: mailSettings.branding?.eyebrow_fr || 'Lettre'}

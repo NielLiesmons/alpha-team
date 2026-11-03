@@ -6,6 +6,7 @@
 	import TaskBox from './TaskBox.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import DetailMetaPills from './DetailMetaPills.svelte';
+	import DropdownMenu from './DropdownMenu.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import TaskFieldPicker from './TaskFieldPicker.svelte';
 	import Pen from './icons/Pen.svelte';
@@ -40,6 +41,8 @@
 	import PublicationsHub from './PublicationsHub.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById } from '$lib/chat.svelte.js';
+	import { settingsUi } from '$lib/settings-ui.svelte.js';
+	import { space } from '$lib/sections.js';
 	import MetricDetail from './MetricDetail.svelte';
 	import TableDetail from './TableDetail.svelte';
 	import ViewDetail from './ViewDetail.svelte';
@@ -524,10 +527,9 @@
 	async function shareCurrent() {
 		menuOpen = false;
 		const base = typeof window !== 'undefined' ? window.location.origin : '';
-		const site =
-			newsletter?.post_slug || pubPost?.slug
-				? `https://bley.farm/fr/publications/${newsletter?.post_slug || pubPost?.slug}`
-				: '';
+		const slug = newsletter?.post_slug || pubPost?.slug;
+		const siteBase = String(space.siteUrl || '').replace(/\/$/, '');
+		const site = slug && siteBase ? `${siteBase}/publications/${slug}` : '';
 		const url = site || (typeof window !== 'undefined' ? window.location.href : '') || base;
 		if (!url) return;
 		try {
@@ -672,7 +674,7 @@
 			{/if}
 		</header>
 
-		<FloatPanel
+		<DropdownMenu
 			open={menuOpen}
 			anchor={menuAnchor}
 			placement="below"
@@ -681,26 +683,26 @@
 			maxHeight={280}
 			onclose={() => (menuOpen = false)}
 		>
-			<div class="float-list" role="menu">
+			<div class="dropdown-list" role="menu">
 				{#if canShare}
-					<button type="button" class="menu-item" role="menuitem" onclick={() => void shareCurrent()}>
+					<button type="button" class="dropdown-item" role="menuitem" onclick={() => void shareCurrent()}>
 						Share
 					</button>
 				{/if}
 				{#if canComposerEdit}
-					<button type="button" class="menu-item" role="menuitem" onclick={editCurrent}>
+					<button type="button" class="dropdown-item" role="menuitem" onclick={editCurrent}>
 						<Pen size={13} />
 						Edit
 					</button>
 				{/if}
 				{#if canDelete}
-					<button type="button" class="menu-item danger" role="menuitem" onclick={deleteCurrent}>
+					<button type="button" class="dropdown-item danger" role="menuitem" onclick={deleteCurrent}>
 						<Trash size={15} />
 						Delete
 					</button>
 				{/if}
 			</div>
-		</FloatPanel>
+		</DropdownMenu>
 
 	<PullToRefresh onRefresh={() => refreshAllDrive()}>
 	{#if task}
@@ -1205,7 +1207,10 @@
 			<div class="detail-top-actions"></div>
 		</header>
 		<div class="body settings-section-body">
-			<SettingsSectionDetail sectionId={settingsSectionId} />
+			<SettingsSectionDetail
+				sectionId={settingsSectionId}
+				profileEmail={settingsSectionId === 'profile' ? settingsUi.profileTargetEmail : ''}
+			/>
 		</div>
 	{:else if chatChannel}
 		<header class="detail-top desktop-head">

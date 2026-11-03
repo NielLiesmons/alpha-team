@@ -1,8 +1,8 @@
 <script>
 	/**
 	 * FAB → comment panel (Zapstore-style threads + ChatFeedCard parity).
-	 * Desktop: wider bottom-right panel. No scrim, no title chrome.
-	 * Nested replies: panel-on-panel; Escape / outside tap to back/close.
+	 * Desktop: wider bottom-right panel (FAB inset). Quiet “Comments” top fader.
+	 * Composer overlays the feed (ChatChannelPanel pattern). Nested replies: panel-on-panel.
 	 */
 	import { fade, fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -318,6 +318,9 @@
 				class:grow-in={depth === 0 && isTop}
 				transition:fly={{ y: depth === 0 ? 48 : 36, duration: 240, easing: cubicOut }}
 			>
+				<div class="sheet-top" aria-hidden="true">
+					<span class="sheet-title">Comments</span>
+				</div>
 				<div
 					class="list"
 					bind:this={listEl}
@@ -436,7 +439,7 @@
 					{#if error}
 						<p class="err">{error}</p>
 					{/if}
-
+					<div class="composer-fade" aria-hidden="true"></div>
 					<div class="composer-dock">
 						<div class="composer-pill" class:expanded={pillExpanded}>
 							{#if replyPreview}
@@ -577,6 +580,7 @@
 	}
 
 	.sheet {
+		position: relative;
 		pointer-events: auto;
 		display: flex;
 		flex-direction: column;
@@ -608,14 +612,43 @@
 		}
 	}
 
+	/* Subtle top fader + quiet centered title (≤ bubble text size) */
+	.sheet-top {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 0;
+		z-index: 3;
+		height: 36px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		pointer-events: none;
+		background: linear-gradient(
+			to bottom,
+			var(--modal-bg) 0%,
+			color-mix(in srgb, var(--modal-bg) 80%, transparent) 55%,
+			transparent 100%
+		);
+	}
+
+	.sheet-title {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 13px;
+		font-weight: 550;
+		letter-spacing: 0.01em;
+		color: var(--fg-66);
+	}
+
 	@media (min-width: 768px) {
+		/* Match FAB inset: right/bottom 20px */
 		.wrap {
 			justify-content: flex-end;
-			padding: 0 16px 16px;
+			padding: 0 20px max(20px, env(safe-area-inset-bottom));
 		}
 
 		.sheet {
-			width: min(560px, calc(100vw - 32px));
+			width: min(560px, calc(100vw - 40px));
 			max-width: 560px;
 			margin: 0;
 			border-radius: 28px;
@@ -628,7 +661,8 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		padding: 14px 14px 8px;
+		/* ~4px tighter than prior 14px; bottom clears floating composer */
+		padding: 36px 10px calc(72px + env(safe-area-inset-bottom, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
@@ -753,16 +787,51 @@
 	}
 
 	.err {
-		margin: 0 14px 6px;
+		position: absolute;
+		left: 10px;
+		right: 10px;
+		bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+		z-index: 5;
+		margin: 0;
 		font-size: 12px;
 		color: #b44;
+		pointer-events: none;
 	}
 
+	/* Soft veil behind composer — ChatChannelPanel pattern */
+	.composer-fade {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 3;
+		height: calc(88px + env(safe-area-inset-bottom, 0px));
+		pointer-events: none;
+		background: linear-gradient(
+			to top,
+			var(--modal-bg) 0%,
+			color-mix(in srgb, var(--modal-bg) 80%, transparent)
+				calc(28px + env(safe-area-inset-bottom, 0px) * 0.5),
+			transparent 100%
+		);
+	}
+
+	/* Float over bubbles — feed scrolls underneath */
 	.composer-dock {
-		flex-shrink: 0;
-		padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 4;
+		padding: 4px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+		box-sizing: border-box;
+		pointer-events: none;
 		border-top: 0;
 		background: transparent;
+	}
+
+	.composer-dock > * {
+		pointer-events: auto;
 	}
 
 	.composer-pill {

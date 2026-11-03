@@ -1,11 +1,12 @@
-# Merge into the admin.bley.farm site block on the Alpha VPS.
-# Browser Admin cannot call mail.bley.farm directly (no CORS) — proxy JMAP same-origin.
+# Merge into the admin.{apex} site block on the Alpha VPS.
+# Browser Admin cannot call mail.{apex} directly (no CORS) — proxy JMAP same-origin.
 #
 # Keep the /jmap path prefix (do not use handle_path) so Stalwart still sees /jmap/session.
+# Replace {apex} with the Space domain (e.g. customer.example).
 
 handle /jmap* {
-	reverse_proxy https://mail.bley.farm {
-		header_up Host mail.bley.farm
+	reverse_proxy https://mail.{apex} {
+		header_up Host mail.{apex}
 		transport http {
 			tls
 		}

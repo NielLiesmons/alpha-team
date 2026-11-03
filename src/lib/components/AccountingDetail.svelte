@@ -10,7 +10,6 @@
 		selectEntity,
 		ui
 	} from '$lib/workspace.svelte.js';
-	import SyncProgressBar from './SyncProgressBar.svelte';
 
 	/** @param {number} cents */
 	function formatMoney(cents, currency = 'EUR') {
@@ -58,12 +57,11 @@
 {#if mode === 'home'}
 	<div class="empty desktop-empty">
 		<p class="empty-title">Pick a category</p>
-		<p class="empty-body">Ledger, Costs, Sales, or Enterprises — same pattern as Player library.</p>
+		<p class="empty-body">Ledger, Costs, Sales, or Enterprises — pick a category in the list.</p>
 	</div>
 {:else}
 	<header class="detail-top desktop-head">
 		<span class="detail-top-label">{title}</span>
-		<SyncProgressBar variant="inline" class="detail-sync" />
 		<div class="detail-top-actions">
 			<button type="button" class="chrome-add" aria-label="Add" onclick={onCreate}>
 				<svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">

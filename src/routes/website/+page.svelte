@@ -60,9 +60,15 @@
 			</article>
 		{/each}
 	</div>
-	<p class="hint">
-		{space.name}: publications, shop, and public content for {space.siteUrl.replace(/^https?:\/\//, '')}.
-	</p>
+	{#if websites.length === 0}
+		<p class="hint">No public site linked to this Space yet.</p>
+	{:else}
+		<p class="hint">
+			{space.name}: publications, shop, and public content{space.siteUrl
+				? ` for ${hostLabel(space.siteUrl)}`
+				: ''}.
+		</p>
+	{/if}
 </nav>
 
 <style>

@@ -4,6 +4,30 @@
 	import { notePlainText } from '$lib/note-text.js';
 	import { notes, selectEntity, ui } from '$lib/workspace.svelte.js';
 
+	const RECENT_MS = 7 * 86_400_000;
+
+	/** @param {any} note */
+	function noteEditedAt(note) {
+		return note.updatedAt || note.createdAt || 0;
+	}
+
+	const filtered = $derived.by(() => {
+		const f = ui.listFilter;
+		const now = Date.now();
+		let list = [...notes];
+		if (f === 'recent') {
+			list = list.filter((n) => {
+				const t = noteEditedAt(n);
+				return t > 0 && now - t < RECENT_MS;
+			});
+		} else if (f === 'linked') {
+			list = list.filter((n) => (n.project_ids ?? []).length > 0);
+		} else if (f === 'unlinked') {
+			list = list.filter((n) => (n.project_ids ?? []).length === 0);
+		}
+		return list.sort((a, b) => noteEditedAt(b) - noteEditedAt(a));
+	});
+
 	/** @param {number | undefined} ts */
 	function formatNoteTime(ts) {
 		if (!ts) return '';
@@ -26,9 +50,11 @@
 		<FeedSkeleton rows={8} />
 	{:else if notes.length === 0}
 		<p class="empty">No notes yet</p>
+	{:else if filtered.length === 0}
+		<p class="empty">No notes match this filter</p>
 	{:else}
 		<div class="card-stack">
-			{#each notes as note (note.id)}
+			{#each filtered as note (note.id)}
 				<button
 					type="button"
 					class="row"
@@ -37,8 +63,8 @@
 				>
 					<span class="title-row">
 						<span class="title">{note.title}</span>
-						{#if note.createdAt}
-							<span class="time">{formatNoteTime(note.createdAt)}</span>
+						{#if noteEditedAt(note)}
+							<span class="time">{formatNoteTime(noteEditedAt(note))}</span>
 						{/if}
 					</span>
 					<span class="preview">{notePlainText(note.body).slice(0, 140)}</span>

@@ -605,7 +605,7 @@ async function runEnsure() {
 		const rateRows = tableRows.filter((r) => r.table_id === rates.id);
 		if (!rateRows.length) {
 			await ensureRows(rates, [
-				{ person: 'Niel', role: 'Operator', rate_eur_h: p.labor_eur_h },
+				{ person: 'Operator', role: 'Operator', rate_eur_h: p.labor_eur_h },
 				{ person: 'Wife', role: 'Operator', rate_eur_h: p.labor_eur_h }
 			]);
 		}

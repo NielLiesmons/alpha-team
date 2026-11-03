@@ -1,29 +1,27 @@
 # Alpha Admin
 
-Operator dashboard for a customer Space. Hostname picks the space (`admin.bley.farm`).
+Operator dashboard for a **Space** (team / family / SMB). Hostname picks the apex (`admin.{apex}`).
 
-Public farm site stays in `bley`.
+## What it is
 
-## Status
+- Drive client — browser encrypt/decrypt against `drive.{apex}` (session shared with Player via `Domain=.{apex}` cookies).
+- **Player** — standalone app at `player.{apex}` (not embedded in Admin).
+- Mail via same-origin `/jmap` proxy to Stalwart on `mail.{apex}`.
+- Public content API client → `api.{apex}` (project slug derived from apex or `PUBLIC_ALPHA_PROJECT`).
 
-- **Tasks / Projects / Drive** — create & upload against Drive when connected (no CLI seed).
-- Drive client — browser encrypt/decrypt against `drive.bley.farm` (root key in localStorage only).
-- Mail / Chat / Publications / Notes / Calendar — stubs.
-- Settings — Drive credentials + appearance + brand knobs.
-- Nav — line icons (placeholders); no emoji stickers.
+Product direction (feature modules, multi-Space): see [ADR-alpha-spaces-product](../alpha-docs/ADR-alpha-spaces-product.md).
 
-## Run
+## Env (optional overrides)
 
-```bash
-bun install
-bun run dev
-```
+| Variable | Purpose |
+|----------|---------|
+| `PUBLIC_ALPHA_API_URL` | API origin |
+| `PUBLIC_ALPHA_PROJECT` | `projects/{slug}` on the API |
+| `PUBLIC_MAIL_DOMAIN` | Invite mailbox domain |
+| `PUBLIC_PLAYER_URL` | Player redirect |
+| `PUBLIC_MAIL_URL` | Mail origin (JMAP client fallback) |
+| `ALPHA_JMAP_PROXY` | Vite dev proxy target for `/jmap` |
 
-## Sidebar IA
+## Deploy
 
-Drive · Mail · Chat · Publications · Projects · Tasks · Notes · Calendar  
-(+ Settings in the footer)
-
-## Drive model
-
-See `../alpha-docs/DRIVE-LAYOUT.md`: content-type folders + project **labels** (multi-label), not “one project folder only.”
+Static build → rsync to the Admin host. Prefer GitHub Actions on `main`.

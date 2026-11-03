@@ -21,17 +21,15 @@ import { activeSession } from './drive/session.svelte.js';
  * }} Member
  */
 
-/** Default directory — kept in sync with Stalwart mailboxes on bley.farm. */
-/** @type {Member[]} */
-const DEFAULT_MEMBERS = [
-	{ email: 'niel@bley.farm', name: 'Niel', role: 'owner', status: 'active' },
-	{ email: 'sarah@bley.farm', name: 'Sarah', role: 'member', status: 'active' },
-	{ email: 'admin@bley.farm', name: 'Admin', role: 'admin', status: 'active' },
-	{ email: 'news@bley.farm', name: 'Bley News', role: 'member', status: 'active' }
-];
+/**
+ * Empty until Drive `meta/members.json` loads (or first invite).
+ * Never ship personal/customer seed rows in the product binary.
+ * @type {Member[]}
+ */
+const DEFAULT_MEMBERS = [];
 
 /** @type {Member[]} */
-export const members = $state(DEFAULT_MEMBERS.map((m) => ({ ...m })));
+export const members = $state([]);
 
 const MEMBERS_PATH = 'meta/members.json';
 
@@ -151,10 +149,15 @@ export async function ensureMembers(session = activeSession()) {
 			return members;
 		}
 	} catch {
-		/* missing — seed */
+		/* missing file */
 	}
-	const seed = DEFAULT_MEMBERS.map((m) => ({ ...m }));
-	await saveMembers(session, seed);
+	/* No personal seed rows — first Admin invite / upsert creates the directory. */
+	if (DEFAULT_MEMBERS.length) {
+		const seed = DEFAULT_MEMBERS.map((m) => ({ ...m }));
+		await saveMembers(session, seed);
+	} else {
+		replaceMembers([]);
+	}
 	return members;
 }
 

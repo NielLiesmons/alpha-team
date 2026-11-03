@@ -9,7 +9,12 @@
 	import Link from '@tiptap/extension-link';
 	import Image from '@tiptap/extension-image';
 	import Placeholder from '@tiptap/extension-placeholder';
-	import { looksLikeMarkdown, markdownToHtml, noteLooksLikeHtml } from '$lib/note-text.js';
+	import {
+		clipboardHtmlIsRich,
+		looksLikeMarkdown,
+		markdownToHtml,
+		noteLooksLikeHtml
+	} from '$lib/note-text.js';
 
 	/** @typedef {{ id: string, label: string, group?: string, run: (ed: Editor) => void }} SlashItem */
 
@@ -57,6 +62,8 @@
 	}
 
 	/**
+	 * Prefer Markdown when plain text looks like MD.
+	 * Skip only for real rich HTML (Word/Docs) — not Chromium/WebKit wrappers.
 	 * @param {DataTransfer | null} data
 	 */
 	function markdownFromClipboard(data) {
@@ -64,8 +71,22 @@
 		const text = data.getData('text/plain');
 		if (!text || !looksLikeMarkdown(text)) return null;
 		const html = data.getData('text/html') || '';
-		if (html && /<(h[1-6]|ul|ol|li|strong|em|b|i)\b/i.test(html)) return null;
+		if (html && clipboardHtmlIsRich(html)) return null;
 		return markdownToHtml(text);
+	}
+
+	/**
+	 * Insert parsed MD HTML as block nodes (shared by page editor + create modal).
+	 * @param {Editor} ed
+	 * @param {string} html
+	 */
+	function insertMarkdownHtml(ed, html) {
+		ed.chain()
+			.focus()
+			.insertContent(html, {
+				parseOptions: { preserveWhitespace: false }
+			})
+			.run();
 	}
 
 	function closeSlash() {
@@ -241,16 +262,16 @@
 				},
 				handlePaste(_view, event) {
 					const mdHtml = markdownFromClipboard(event.clipboardData);
-					if (!mdHtml || !editor) return false;
+					if (!mdHtml || !editor || editor.isDestroyed) return false;
 					event.preventDefault();
-					editor.chain().focus().insertContent(mdHtml).run();
+					insertMarkdownHtml(editor, mdHtml);
 					return true;
 				},
 				handleDrop(_view, event) {
 					const mdHtml = markdownFromClipboard(event.dataTransfer);
-					if (!mdHtml || !editor) return false;
+					if (!mdHtml || !editor || editor.isDestroyed) return false;
 					event.preventDefault();
-					editor.chain().focus().insertContent(mdHtml).run();
+					insertMarkdownHtml(editor, mdHtml);
 					return true;
 				},
 				handleKeyDown(_view, event) {

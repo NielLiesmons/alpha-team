@@ -75,7 +75,7 @@
 			bind:this={toInput}
 			class="sheet-input"
 			type="text"
-			placeholder="name@bley.farm"
+			placeholder="name@example.com"
 			bind:value={toRaw}
 			autocomplete="off"
 			spellcheck="false"

@@ -23,17 +23,8 @@ export const websiteChildren = [
 	{ href: '/website/content', label: 'Content', icon: 'website' }
 ];
 
-/** Sites shown as cards on /website (expand when multi-site). */
-export const websites = [
-	{
-		id: 'bley',
-		name: 'Bley',
-		tagline: 'bley.farm',
-		siteUrl: 'https://bley.farm',
-		/** Open Graph / cover — matches bley site.js ogImage */
-		ogImage: 'https://bley.farm/media/og.jpg'
-	}
-];
+/** Sites shown as cards on /website — filled from Space brand / site config later. */
+export const websites = [];
 
 /** Shown for every signed-in profile. */
 /** @type {NavItem[]} */
@@ -52,20 +43,12 @@ export const primaryNav = [
 		createKind: 'enterprise'
 	},
 	{ href: '/planning', label: 'Planning', icon: 'planning' },
-	{ href: '/player', label: 'Player', icon: 'player' },
 	{ href: '/website', label: 'Websites', icon: 'website' }
 ];
 
-/** Owner/admin only — Drive member directory + invites. */
-/** @type {NavItem} */
-export const accountsNavItem = {
-	href: '/accounts',
-	label: 'Accounts',
-	icon: 'profile'
-};
-
 /**
  * Horizontal mobile pill — Chat centered; Websites hub owns Content/Shop/Publications.
+ * Profile / invite management lives under Settings (Add Profile), not a separate Accounts tab.
  */
 export const mobileNav = [
 	{ href: '/website', label: 'Websites', icon: 'website' },
@@ -77,35 +60,22 @@ export const mobileNav = [
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
 	{ href: '/drive', label: 'Drive', icon: 'drive', createKind: 'file' },
-	{ href: '/player', label: 'Player', icon: 'player' },
 	{ href: '/settings', label: 'Settings', icon: 'settings' }
 ];
 
-/**
- * @param {boolean} showAccounts
- * @returns {NavItem[]}
- */
-export function navForRole(showAccounts) {
-	if (!showAccounts) return primaryNav;
-	return [...primaryNav, accountsNavItem];
+/** @returns {NavItem[]} */
+export function navForRole() {
+	return primaryNav;
 }
 
-/**
- * @param {boolean} showAccounts
- * @returns {NavItem[]}
- */
-export function mobileNavForRole(showAccounts) {
-	if (!showAccounts) return mobileNav;
-	const out = [...mobileNav];
-	const settingsIdx = out.findIndex((i) => i.href === '/settings');
-	const item = accountsNavItem;
-	if (settingsIdx >= 0) out.splice(settingsIdx, 0, item);
-	else out.push(item);
-	return out;
+/** @returns {NavItem[]} */
+export function mobileNavForRole() {
+	return mobileNav;
 }
 
+/** Display labels for the signed-in Space — override from brand.json later. */
 export const space = {
-	name: 'Bley',
-	description: 'Regenerative family farm in Saint-Nicodème.',
-	siteUrl: 'https://bley.farm'
+	name: 'Space',
+	description: '',
+	siteUrl: ''
 };

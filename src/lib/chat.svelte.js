@@ -69,6 +69,34 @@ export function channelById(id) {
 	return chatChannels.find((c) => c.id === id) || chatChannels[0];
 }
 
+/**
+ * Unread messages in a channel for the signed-in person (others' tips not yet in read_by).
+ * @param {string} channelId
+ * @param {string} [email]
+ */
+export function unreadCountForChannel(channelId, email = activePerson().email || '') {
+	const me = String(email || '')
+		.trim()
+		.toLowerCase();
+	if (!me) return 0;
+	const cid = String(channelId || 'general');
+	let n = 0;
+	for (const m of chatFeed) {
+		if (!m?.id || String(m.id).startsWith('local-')) continue;
+		if (m.kind === 'reaction' || m.kind === 'event') continue;
+		if ((m.channel_id || 'general') !== cid) continue;
+		const author = String(m.author || '')
+			.trim()
+			.toLowerCase();
+		if (!author || author === me) continue;
+		const readBy = Array.isArray(m.read_by)
+			? m.read_by.map((e) => String(e).toLowerCase())
+			: [];
+		if (!readBy.includes(me)) n += 1;
+	}
+	return n;
+}
+
 function commentKey(type, id) {
 	return `${type}:${id}`;
 }

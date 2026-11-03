@@ -1,9 +1,9 @@
 @import url('https://fonts.bunny.net/css?family=inter:400,500,600,700|ovo:400&display=swap');
 
 /*
- * Alpha Admin — shared token model with Bley (DESIGN_SYSTEM).
+ * Alpha Admin — shared token model with the public site (DESIGN_SYSTEM).
  *
- * Canonical: --bg / --fg (+ --fg-66…--fg-4). Same pole-flip as Bley.
+ * Canonical: --bg / --fg (+ --fg-66…--fg-4). Same pole-flip as the public site tokens.
  * Operator UIs stay near-grayscale (low S). Ovo is loaded for letter-mail
  * hero preview only (matches site / MailBranding defaults).
  *

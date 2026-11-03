@@ -8,7 +8,8 @@ import { chatEphemeral } from './chat.svelte.js';
 import { wakeChatFromTip } from './chat-sync.svelte.js';
 import { apiBase } from './mail-api.js';
 
-const SPACE = 'bley';
+import { projectSlug } from './space-host.js';
+
 const PING_MS = 25_000;
 const RECONNECT_MIN_MS = 800;
 const RECONNECT_MAX_MS = 20_000;
@@ -40,9 +41,13 @@ export const realtimeUi = $state({
 	lastError: /** @type {string | null} */ (null)
 });
 
+function spaceId() {
+	return projectSlug();
+}
+
 function wsUrl() {
 	const base = apiBase().replace(/^http/, 'ws');
-	const params = new URLSearchParams({ space: SPACE });
+	const params = new URLSearchParams({ space: spaceId() });
 	const token = realtimeToken();
 	if (token) params.set('token', token);
 	const email = actor.email;
@@ -67,7 +72,7 @@ function clearTimers() {
 export function publishRealtime(envelope) {
 	if (!sock || sock.readyState !== WebSocket.OPEN) return false;
 	try {
-		sock.send(JSON.stringify({ v: 1, space: SPACE, ...envelope }));
+		sock.send(JSON.stringify({ v: 1, space: spaceId(), ...envelope }));
 		return true;
 	} catch {
 		return false;

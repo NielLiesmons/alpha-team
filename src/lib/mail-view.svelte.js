@@ -1,5 +1,5 @@
 /**
- * Mail folder chrome — AppShell top bar (same pattern as Planning zoom).
+ * Mail folder selection — list-column content (Inbox / Sent / …).
  */
 
 /** @typedef {'inbox' | 'sent' | 'drafts' | 'junk' | 'trash'} MailFolder */

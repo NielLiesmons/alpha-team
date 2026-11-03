@@ -168,7 +168,7 @@ export function inviteShareUrl(payload, origin) {
 	const raw = extractInvitePayload(payload);
 	const token = raw.startsWith(PREFIX) ? raw.slice(PREFIX.length) : raw;
 	const base =
-		(origin || (typeof location !== 'undefined' ? location.origin : '') || 'https://admin.bley.farm').replace(
+		(origin || (typeof location !== 'undefined' ? location.origin : '') || '').replace(
 			/\/$/,
 			''
 		);
@@ -184,7 +184,7 @@ export function invitePayloadFromLocation(href) {
 	try {
 		const u =
 			typeof href === 'string'
-				? new URL(href, typeof location !== 'undefined' ? location.origin : 'https://admin.bley.farm')
+				? new URL(href, typeof location !== 'undefined' ? location.origin : '')
 				: href instanceof URL
 					? href
 					: new URL(String(href?.href || location.href));

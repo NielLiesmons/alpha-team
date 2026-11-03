@@ -1,22 +1,29 @@
 <script>
-	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		chatChannels,
 		chatFeed,
-		chatUi,
 		chatEventLabel,
 		setActiveChannel,
+		unreadCountForChannel,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { isMobileNav } from '$lib/nav-stack.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
-	onMount(() => {
-		const id = chatUi.activeChannelId || 'general';
-		setActiveChannel(id);
-		selectEntity('chat', id);
+	/** Desktop: keep General open whenever Chat has no selection. */
+	$effect(() => {
+		const onChat = $page.url.pathname.startsWith('/chat');
+		if (!onChat) return;
+		if (typeof window === 'undefined' || isMobileNav()) return;
+		ui.selection;
+		chatChannels.length;
+		if (ui.selection?.kind === 'chat') return;
+		setActiveChannel('general');
+		selectEntity('chat', 'general');
 	});
 
 	/** @param {string} id */
@@ -44,10 +51,17 @@
 
 	/** @param {string} chatId */
 	function lastMessage(chatId) {
+		chatFeed.length;
 		const msgs = visibleChatMessages(chatFeed).filter(
 			(m) => (m.channel_id || 'general') === chatId
 		);
 		return msgs[0] || null;
+	}
+
+	/** @param {string} chatId */
+	function unreadFor(chatId) {
+		chatFeed.length;
+		return unreadCountForChannel(chatId);
 	}
 
 	/** @param {any} msg */
@@ -87,6 +101,7 @@
 	{#each chatChannels as ch (ch.id)}
 		{@const av = avatarFor(ch)}
 		{@const last = lastMessage(ch.id)}
+		{@const unread = unreadFor(ch.id)}
 		<button
 			type="button"
 			class="row"
@@ -94,7 +109,7 @@
 			onclick={() => openChat(ch.id)}
 		>
 			<span class="avatar" aria-hidden="true">
-				<ProfilePic name={av.name} email={av.email} pictureUrl={av.pictureUrl} size={40} />
+				<ProfilePic name={av.name} email={av.email} pictureUrl={av.pictureUrl} size={48} />
 			</span>
 			<span class="meta">
 				<span class="title-row">
@@ -103,7 +118,14 @@
 						<span class="when">{whenLabel(last.created_at)}</span>
 					{/if}
 				</span>
-				<span class="preview">{previewLine(last)}</span>
+				<span class="preview-row">
+					<span class="preview">{previewLine(last)}</span>
+					<span class="unread-slot" aria-hidden={unread === 0 ? 'true' : undefined}>
+						{#if unread > 0}
+							<span class="new-count" aria-label="{unread} unread">{unread > 99 ? '99+' : unread}</span>
+						{/if}
+					</span>
+				</span>
 			</span>
 		</button>
 	{/each}
@@ -123,9 +145,9 @@
 		align-items: center;
 		gap: 12px;
 		width: 100%;
-		padding: 8px 8px;
+		padding: 10px 8px;
 		border: 0;
-		border-radius: 12px;
+		border-radius: 14px;
 		background: transparent;
 		color: inherit;
 		font: inherit;
@@ -152,7 +174,7 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 6px;
 		margin: 0;
 		padding: 0;
 	}
@@ -190,9 +212,17 @@
 		color: var(--fg-33);
 	}
 
+	.preview-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		min-height: 20px;
+	}
+
 	.preview {
-		display: block;
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		margin: 0;
 		padding: 0;
 		font-size: 13px;
@@ -201,5 +231,32 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.unread-slot {
+		flex-shrink: 0;
+		width: 28px;
+		min-height: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+	}
+
+	.new-count {
+		display: inline-grid;
+		place-items: center;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 6px;
+		box-sizing: border-box;
+		border-radius: 999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 600;
+		font-variant-numeric: lining-nums;
+		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
+		line-height: 1;
 	}
 </style>

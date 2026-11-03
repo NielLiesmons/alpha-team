@@ -23,11 +23,20 @@
 		closed: 'CLOSED',
 		canceled: 'CANCELED'
 	};
+	const DONE = new Set(['closed', 'canceled']);
 
 	const groups = $derived.by(() => {
 		/** @type {Map<string, typeof tasks>} */
 		const map = new Map();
-		const sorted = [...tasks].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+		const f = ui.listFilter;
+		const sorted = [...tasks]
+			.filter((t) => {
+				const st = STATUS_ORDER.includes(t.status) ? t.status : 'open';
+				if (f === 'open') return !DONE.has(st);
+				if (f === 'done') return DONE.has(st);
+				return true;
+			})
+			.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 		for (const task of sorted) {
 			const key = STATUS_ORDER.includes(task.status) ? task.status : 'open';
 			if (!map.has(key)) map.set(key, []);
@@ -51,6 +60,8 @@
 		<FeedSkeleton rows={8} />
 	{:else if tasks.length === 0}
 		<p class="empty">No Tasks yet</p>
+	{:else if groups.length === 0}
+		<p class="empty">No tasks match this filter</p>
 	{:else}
 		{#each groups as group (group.key)}
 			<div class="task-group-header">

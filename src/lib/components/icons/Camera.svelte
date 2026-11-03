@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * Camera — Bley / thick camera path (author geometry).
+	 * Camera — thick camera path (author geometry).
 	 * Do not reshape the `d`; fill via currentColor.
 	 * @type {{ size?: number, className?: string }}
 	 */

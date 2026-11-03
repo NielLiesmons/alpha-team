@@ -16,6 +16,7 @@
 	import { markMemberJoined } from '$lib/members.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
+	import { redirectToReturnToIfAny } from '$lib/return-to.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
 
 	/** @type {'pick' | 'code' | 'password'} */
@@ -69,6 +70,8 @@
 		} else if (typeof history !== 'undefined' && $page.url.searchParams.has('i')) {
 			history.replaceState({}, '', $page.url.pathname || '/');
 		}
+		// Shared cookies are written — send phone browsers back to Player same-tab.
+		redirectToReturnToIfAny();
 	}
 
 	function goPassword() {
@@ -134,10 +137,17 @@
 
 		{#if step === 'pick'}
 			<p class="hint-line">Who’s using this device?</p>
-			<ul class="pick-list">
+					<ul class="pick-list">
 				{#each deviceProfiles as p (p.email)}
 					<li>
-						<button type="button" class="pick" onclick={() => switchDeviceProfile(p.email)}>
+						<button
+							type="button"
+							class="pick"
+							onclick={() => {
+								switchDeviceProfile(p.email);
+								redirectToReturnToIfAny();
+							}}
+						>
 							<ProfilePic
 								name={displayNameFromEmail(p.email)}
 								email={p.email}
@@ -264,9 +274,9 @@
 	.field input {
 		width: 100%;
 		border-radius: 14px;
-		border: 1px solid var(--hairline);
+		border: 1px solid var(--fg-8, var(--hairline));
 		background: var(--bg);
-		color: var(--white);
+		color: var(--fg, var(--white));
 		font: inherit;
 		font-size: 16px;
 		font-weight: 400;
@@ -275,9 +285,16 @@
 		transition: border-color 0.15s ease;
 	}
 
+	.field textarea::placeholder,
+	.field input::placeholder {
+		color: var(--fg-33, var(--white33));
+		font-weight: 500;
+	}
+
 	.field textarea:focus,
 	.field input:focus {
-		border-color: color-mix(in srgb, var(--accent, #3d7ea6) 55%, var(--hairline));
+		outline: none;
+		border-color: var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
 	}
 
 	.field textarea {
@@ -332,7 +349,7 @@
 		margin: 0;
 		text-align: center;
 		font-size: 13px;
-		color: var(--accent);
+		color: var(--fg-66, var(--white66));
 	}
 
 	.pick-list {

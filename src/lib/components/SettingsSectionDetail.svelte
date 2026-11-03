@@ -1,7 +1,11 @@
 <script>
 	import { onMount } from 'svelte';
 	import ProfilePic from './ProfilePic.svelte';
-	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { actor, clearActor, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import {
+		deviceProfiles,
+		removeDeviceProfile
+	} from '$lib/device-profiles.svelte.js';
 	import {
 		clearMemberPicture,
 		pictureUrlFor,
@@ -15,7 +19,13 @@
 		testMailboxLogin
 	} from '$lib/jmap-mail.js';
 	import { getAdminToken, setAdminToken } from '$lib/mail-api.js';
-	import { canManageSpace, memberFor, upsertMember } from '$lib/members.svelte.js';
+	import {
+		canManageMembers,
+		canManageSpace,
+		memberFor,
+		removeMember,
+		upsertMember
+	} from '$lib/members.svelte.js';
 	import { refreshMail } from '$lib/mail.svelte.js';
 	import {
 		promptInstall,
@@ -25,14 +35,44 @@
 	} from '$lib/pwa.svelte.js';
 	import { clearLocalUiCache } from '$lib/ui-cache.js';
 	import { setTheme, themeChoice } from '$lib/theme.svelte.js';
-	import { refreshFromDrive } from '$lib/workspace.svelte.js';
+	import { forceClearSelection, refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { formatBytes, storageEstimate } from '$lib/offline-store.js';
 
-	/** @type {{ sectionId: string }} */
-	let { sectionId } = $props();
+	/** @type {{ sectionId: string, profileEmail?: string }} */
+	let { sectionId, profileEmail = '' } = $props();
 
-	const isOperator = $derived(canManageSpace(actor.email));
-	const me = $derived(memberFor(actor.email));
+	/** Profile sheet target (may differ from signed-in actor when editing another card). */
+	const targetEmail = $derived(
+		String(profileEmail || actor.email || '')
+			.trim()
+			.toLowerCase()
+	);
+	const isSelf = $derived(targetEmail === String(actor.email || '').trim().toLowerCase());
+
+	/** Operator power from the signed-in profile (not the edit target). */
+	const operatorEmail = $derived.by(() => {
+		const active = String(actor.email || '')
+			.trim()
+			.toLowerCase();
+		if (canManageMembers(active)) return active;
+		for (const p of deviceProfiles) {
+			const e = String(p.email || '')
+				.trim()
+				.toLowerCase();
+			if (canManageMembers(e)) return e;
+		}
+		return active;
+	});
+
+	const isOperator = $derived(canManageSpace(actor.email) || canManageSpace(operatorEmail));
+	const canAdminMembers = $derived(
+		canManageMembers(actor.email) || canManageMembers(operatorEmail)
+	);
+	const me = $derived(memberFor(targetEmail));
+	/** @type {'admin' | 'member'} */
+	let roleDraft = $state('member');
+	let memberMsg = $state('');
+	let memberBusy = $state(false);
 
 	const choices = [
 		{ id: 'system', label: 'System' },
@@ -63,17 +103,76 @@
 	let fileInput = $state();
 
 	$effect(() => {
-		const m = memberFor(actor.email);
-		nameDraft = m?.name || displayNameFromEmail(actor.email);
+		const m = memberFor(targetEmail);
+		nameDraft = m?.name || displayNameFromEmail(targetEmail);
+		roleDraft = m?.role === 'member' ? 'member' : 'admin';
 	});
 
 	$effect(() => {
-		actor.email;
-		mailboxPw = getMailboxPassword(actor.email);
+		targetEmail;
+		mailboxPw = getMailboxPassword(isSelf ? actor.email : targetEmail);
 		mailboxMsg = '';
 		picMsg = '';
 		nameMsg = '';
+		memberMsg = '';
 	});
+
+	async function saveRole() {
+		memberMsg = '';
+		const m = memberFor(targetEmail);
+		if (!m || !canAdminMembers) return;
+		memberBusy = true;
+		try {
+			await upsertMember({ ...m, role: roleDraft });
+			memberMsg = 'Role saved.';
+		} catch (err) {
+			memberMsg = err instanceof Error ? err.message : String(err);
+		} finally {
+			memberBusy = false;
+		}
+	}
+
+	async function deleteTargetMember() {
+		const m = memberFor(targetEmail);
+		if (!m || !canAdminMembers) return;
+		const label = m.name || m.email;
+		if (!confirm(`Delete ${label} (${m.email}) from this Space?`)) return;
+		memberMsg = '';
+		memberBusy = true;
+		try {
+			await removeMember(m.email, { actorEmail: operatorEmail || actor.email });
+			memberMsg = 'Removed from Space.';
+		} catch (err) {
+			memberMsg = err instanceof Error ? err.message : String(err);
+		} finally {
+			memberBusy = false;
+		}
+	}
+
+	async function disconnectThisProfile() {
+		const email = targetEmail || activeEmailSafe();
+		const label = displayNameFromEmail(email) || email || 'this profile';
+		if (!confirm(`Disconnect ${label} on this device?`)) return;
+		memberMsg = '';
+		try {
+			if (email) removeDeviceProfile(email);
+			if (deviceProfiles.length === 0) {
+				clearSession();
+				clearActor();
+				forceClearSelection();
+				await refreshFromDrive();
+			}
+			memberMsg = 'Disconnected on this device.';
+		} catch (err) {
+			memberMsg = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	function activeEmailSafe() {
+		return String(actor.email || '')
+			.trim()
+			.toLowerCase();
+	}
 
 	onMount(() => {
 		apiTokenDraft = getAdminToken();
@@ -94,7 +193,7 @@
 
 	async function saveName() {
 		nameMsg = '';
-		const m = memberFor(actor.email);
+		const m = memberFor(targetEmail);
 		if (!m) {
 			nameMsg = 'Unknown profile — ask an admin to add you to members.';
 			return;
@@ -121,7 +220,7 @@
 		picBusy = true;
 		picMsg = '';
 		try {
-			await setMemberPicture(actor.email, file);
+			await setMemberPicture(targetEmail, file);
 			picMsg = 'Profile picture updated.';
 		} catch (err) {
 			picMsg = err instanceof Error ? err.message : String(err);
@@ -134,7 +233,7 @@
 		picBusy = true;
 		picMsg = '';
 		try {
-			await clearMemberPicture(actor.email);
+			await clearMemberPicture(targetEmail);
 			picMsg = 'Profile picture removed.';
 		} catch (err) {
 			picMsg = err instanceof Error ? err.message : String(err);
@@ -197,6 +296,7 @@
 
 	async function disconnectDrive() {
 		clearSession();
+		clearActor();
 		await refreshFromDrive();
 		token = '';
 		rootKey = '';
@@ -219,12 +319,17 @@
 
 {#if sectionId === 'profile'}
 	<section class="block">
-		<p class="field-label">Edit profile</p>
+		<p class="field-label">
+			Edit profile
+			{#if !isSelf && targetEmail}
+				<span class="target-email">{targetEmail}</span>
+			{/if}
+		</p>
 		<div class="pic-row">
 			<ProfilePic
-				name={displayNameFromEmail(actor.email)}
-				email={actor.email}
-				pictureUrl={pictureUrlFor(actor.email)}
+				name={displayNameFromEmail(targetEmail) || me?.name}
+				email={targetEmail}
+				pictureUrl={pictureUrlFor(targetEmail)}
 				size={64}
 			/>
 			<div class="pic-actions">
@@ -253,7 +358,49 @@
 		<div class="actions">
 			<button type="button" class="btn primary" disabled={!me} onclick={saveName}>Save name</button>
 		</div>
-		{#if nameMsg}<p class="status on">{nameMsg}</p>{/if}
+		{#if nameMsg}<p class="status">{nameMsg}</p>{/if}
+
+		{#if canAdminMembers && me && me.role !== 'owner'}
+			<hr class="rule" />
+			<p class="field-label">Space role</p>
+			<div class="seg" role="radiogroup" aria-label="Role">
+				<button
+					type="button"
+					class:on={roleDraft === 'member'}
+					role="radio"
+					aria-checked={roleDraft === 'member'}
+					onclick={() => (roleDraft = 'member')}>Member</button
+				>
+				<button
+					type="button"
+					class:on={roleDraft === 'admin'}
+					role="radio"
+					aria-checked={roleDraft === 'admin'}
+					onclick={() => (roleDraft = 'admin')}>Admin</button
+				>
+			</div>
+			<div class="actions">
+				<button type="button" class="btn primary" disabled={memberBusy} onclick={() => void saveRole()}
+					>{memberBusy ? 'Saving…' : 'Save role'}</button
+				>
+			</div>
+			{#if !isSelf}
+				<button
+					type="button"
+					class="btn danger"
+					disabled={memberBusy}
+					onclick={() => void deleteTargetMember()}
+				>
+					Delete from Space
+				</button>
+			{/if}
+		{/if}
+
+		<hr class="rule" />
+		<button type="button" class="btn danger disconnect" onclick={() => void disconnectThisProfile()}>
+			Disconnect {displayNameFromEmail(targetEmail) || 'profile'}
+		</button>
+		{#if memberMsg}<p class="status">{memberMsg}</p>{/if}
 	</section>
 {:else if sectionId === 'notifications'}
 	<section class="block">
@@ -336,7 +483,7 @@
 	<section class="block">
 		<p class="field-label">Mail</p>
 		<p class="hint">
-			Mailbox password for <code>mail.bley.farm</code> (JMAP). Stored on this device for the active
+			Mailbox password for the Space mail host (JMAP). Stored on this device for the active
 			profile.
 		</p>
 		<label class="row stack">
@@ -470,13 +617,51 @@
 		width: 100%;
 		height: 2.25rem;
 		padding: 0 0.65rem;
-		border-radius: 10px;
-		border: 1px solid var(--white11);
-		background: var(--surface);
-		color: var(--white);
+		border-radius: 999px;
+		border: 1px solid var(--fg-8, var(--white11));
+		background: color-mix(in srgb, var(--fg) 4%, transparent);
+		color: var(--fg, var(--white));
 		font: inherit;
 		font-weight: 400;
 		box-sizing: border-box;
+		outline: none;
+	}
+	.row input::placeholder {
+		color: var(--fg-33, var(--white33));
+	}
+	.row input:focus {
+		outline: none;
+		border-color: var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
+	}
+	.rule {
+		border: 0;
+		border-top: 1px solid var(--fg-8, var(--white11));
+		margin: 1rem 0;
+	}
+	.target-email {
+		display: block;
+		margin-top: 0.2rem;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-66, var(--white66));
+		text-transform: none;
+		letter-spacing: 0;
+	}
+	.btn.danger {
+		width: 100%;
+		margin-top: 0.35rem;
+		background-image: none;
+		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
+		color: var(--fg-66, var(--white66));
+		border-radius: 999px;
+	}
+	.btn.danger:hover {
+		color: var(--fg, var(--white));
+	}
+	.btn.danger.disconnect {
+		margin-top: 0.25rem;
+		min-height: 2.75rem;
+		font-size: 15px;
 	}
 	.actions {
 		display: flex;
@@ -513,7 +698,7 @@
 		color: var(--white66);
 	}
 	.status.on {
-		color: var(--accent, var(--white));
+		color: var(--fg, var(--white));
 	}
 	.seg {
 		display: flex;

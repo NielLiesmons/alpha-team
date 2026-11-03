@@ -62,6 +62,48 @@
 		return base ? `${base}/fr/publications` : '';
 	});
 
+	/** LETTER n — sent campaigns + 1 (matches alpha-api `next_letter_number`). */
+	const letterNumber = $derived.by(() => {
+		const sent = campaigns.filter((c) => c.status === 'sent').length;
+		if (editingCampaign?.status === 'sent') {
+			const older = campaigns.filter(
+				(c) =>
+					c.status === 'sent' &&
+					String(c.sent_at || c.created_at || '') <=
+						String(editingCampaign.sent_at || editingCampaign.created_at || '')
+			).length;
+			return Math.max(1, older);
+		}
+		return sent + 1;
+	});
+
+	/** Day-to-day microblog previews (kind=post), not mass-mailed letters. */
+	const latestPosts = $derived.by(() => {
+		const base = String(space.siteUrl || '').replace(/\/$/, '');
+		return publicPosts
+			.filter((p) => {
+				const k = String(p.kind || '');
+				return k === 'post' || k === 'reel';
+			})
+			.filter((p) => !siteSlug || p.slug !== siteSlug)
+			.slice(0, 3)
+			.map((p) => ({
+				title: String(p.title || ''),
+				href: base ? `${base}/fr/publications/${p.slug}` : '',
+				imageUrl: ''
+			}));
+	});
+
+	const commentHref = $derived.by(() => {
+		const from = String(mailSettings.from || '');
+		const m = from.match(/<([^>]+)>/);
+		const addr = (m ? m[1] : from).trim();
+		if (addr && siteSlug) {
+			return `mailto:${addr}?subject=${encodeURIComponent(`Comment: ${siteSlug}`)}`;
+		}
+		return readUrl ? `${readUrl}#comments` : '';
+	});
+
 	const sheetLabel = $derived(
 		editingPostSlug
 			? 'Edit publication'
@@ -229,9 +271,10 @@
 <CreateSheet {open} label={sheetLabel} onclose={closeComposer}>
 	<div class="pad">
 		<MailHeroEditor
-			brand={mailSettings.brand_name || 'Bley'}
-			logoUrl={branding.logo_url || 'https://bley.farm/icons/bley-logo-ink.svg'}
+			brand={mailSettings.brand_name || 'Space'}
+			logoUrl={branding.logo_url || ''}
 			eyebrow={branding.eyebrow_fr || 'Lettre'}
+			{letterNumber}
 			readCta={branding.read_cta_fr || 'Open Online'}
 			{readUrl}
 			accent={branding.accent || '#dd8f87'}
@@ -256,6 +299,38 @@
 			/>
 		{/if}
 	</div>
+	{#if commentHref}
+		<div class="mail-extra">
+			{#if commentHref.startsWith('mailto:')}
+				<a class="comment-cta" href={commentHref}>Laisser un commentaire</a>
+			{:else}
+				<a class="comment-cta" href={commentHref} target="_blank" rel="noopener noreferrer"
+					>Laisser un commentaire</a
+				>
+			{/if}
+		</div>
+	{/if}
+	{#if latestPosts.length}
+		<div class="form-divider"></div>
+		<div class="latest">
+			<p class="latest-eyebrow">LATEST POSTS</p>
+			<div class="latest-row">
+				{#each latestPosts as post}
+					{#if post.href}
+						<a class="latest-card" href={post.href} target="_blank" rel="noopener noreferrer">
+							<span class="latest-thumb" aria-hidden="true"></span>
+							<span class="latest-title">{post.title}</span>
+						</a>
+					{:else}
+						<div class="latest-card">
+							<span class="latest-thumb" aria-hidden="true"></span>
+							<span class="latest-title">{post.title}</span>
+						</div>
+					{/if}
+				{/each}
+			</div>
+		</div>
+	{/if}
 	{#if err}
 		<p class="err" role="alert">{err}</p>
 	{/if}
@@ -347,5 +422,71 @@
 		font-size: 12px;
 		line-height: 1.35;
 		color: var(--fg-33);
+	}
+
+	.mail-extra {
+		padding: 4px 14px 12px;
+	}
+
+	.comment-cta {
+		display: inline-flex;
+		align-items: center;
+		padding: 8px 14px;
+		border-radius: 999px;
+		border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
+		background: transparent;
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	.latest {
+		padding: 4px 14px 16px;
+	}
+
+	.latest-eyebrow {
+		margin: 0 0 12px;
+		font-family: Inter, Helvetica, Arial, sans-serif;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--fg);
+	}
+
+	.latest-row {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 10px;
+	}
+
+	.latest-card {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 0;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.latest-thumb {
+		display: block;
+		height: 72px;
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
+	}
+
+	.latest-title {
+		font-size: 13px;
+		font-weight: 600;
+		line-height: 1.35;
+	}
+
+	@media (max-width: 520px) {
+		.latest-row {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

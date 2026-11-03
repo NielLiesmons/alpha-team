@@ -1,11 +1,17 @@
 /**
  * Device “signed in as” — mailbox email (not Drive session, not pubkey).
+ * Shared with Player via cookie Domain=.{apex} (see cross-domain-storage.js).
  * See ADR-identity-chat-drive-comments.
  */
 
+import {
+	ACTOR_KEY,
+	ACTOR_LEGACY_KEYS,
+	clearShared,
+	readShared,
+	writeShared
+} from './cross-domain-storage.js';
 import { memberFor, members } from './members.svelte.js';
-
-const KEY = 'alpha-admin-actor.v1';
 
 /** @type {{ email: string }} */
 export const actor = $state({ email: '' });
@@ -14,9 +20,8 @@ export const actor = $state({ email: '' });
 export { members };
 
 export function loadActor() {
-	if (typeof localStorage === 'undefined') return;
 	try {
-		const raw = localStorage.getItem(KEY);
+		const raw = readShared(ACTOR_KEY, ACTOR_LEGACY_KEYS);
 		if (!raw) return;
 		const parsed = JSON.parse(raw);
 		if (typeof parsed.email === 'string') actor.email = parsed.email.trim().toLowerCase();
@@ -30,12 +35,12 @@ export function loadActor() {
  */
 export function setActiveEmail(email) {
 	actor.email = email.trim().toLowerCase();
-	localStorage.setItem(KEY, JSON.stringify({ email: actor.email }));
+	writeShared(ACTOR_KEY, JSON.stringify({ email: actor.email }));
 }
 
 export function clearActor() {
 	actor.email = '';
-	if (typeof localStorage !== 'undefined') localStorage.removeItem(KEY);
+	clearShared(ACTOR_KEY, ACTOR_LEGACY_KEYS);
 }
 
 /**

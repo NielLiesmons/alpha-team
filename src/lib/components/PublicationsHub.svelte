@@ -10,8 +10,12 @@
 		buildPubsFeed,
 		campaigns,
 		mailSettings,
+		moderationComments,
+		persistApproveComment,
+		persistBanComment,
 		persistDeleteCampaign,
 		persistDeletePost,
+		persistRejectComment,
 		pubsUi,
 		refreshPublications
 	} from '$lib/publications.svelte.js';
@@ -22,7 +26,9 @@
 	let { filterKind = null, onViewAll } = $props();
 
 	let settingsOpen = $state(false);
+	let commentsOpen = $state(true);
 	let actionBusy = $state(false);
+	let commentBusy = $state('');
 
 	onMount(() => {
 		void refreshPublications();
@@ -118,6 +124,47 @@
 		if (bucket === 'post') return 'Post';
 		return bucket;
 	}
+
+	/** @param {string} id */
+	async function approve(id) {
+		commentBusy = id;
+		try {
+			await persistApproveComment(id);
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
+		} finally {
+			commentBusy = '';
+		}
+	}
+
+	/** @param {string} id */
+	async function reject(id) {
+		commentBusy = id;
+		try {
+			await persistRejectComment(id);
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
+		} finally {
+			commentBusy = '';
+		}
+	}
+
+	/** @param {string} id */
+	async function ban(id) {
+		if (!confirm('Reject this comment and ban the email from commenting on this project?')) return;
+		commentBusy = id;
+		try {
+			await persistBanComment(id);
+		} catch (e) {
+			alert(e instanceof Error ? e.message : String(e));
+		} finally {
+			commentBusy = '';
+		}
+	}
+
+	const pendingCount = $derived(
+		moderationComments.filter((c) => c.status === 'pending').length
+	);
 </script>
 
 <div class="hub">
@@ -129,9 +176,9 @@
 			<button
 				type="button"
 				class="geek"
-				aria-label="Mail settings"
+				aria-label="Mail & comments settings"
 				aria-expanded={settingsOpen}
-				title="Welcome, footer, branding"
+				title="Welcome, footer, branding, comments"
 				onclick={() => (settingsOpen = !settingsOpen)}
 			>
 				<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -185,7 +232,78 @@
 				<span class="row-title">Footer & branding</span>
 				<span class="row-meta">Shared</span>
 			</button>
+			<button
+				type="button"
+				class="row"
+				onclick={() => {
+					settingsOpen = false;
+					commentsOpen = true;
+				}}
+			>
+				<span class="row-title">Comments moderation</span>
+				<span class="row-meta"
+					>{pendingCount > 0 ? `${pendingCount} pending` : 'Reject / ban'}</span
+				>
+			</button>
 		</div>
+	{/if}
+
+	{#if commentsOpen}
+		<section class="pending" aria-label="Comments moderation">
+			<button type="button" class="pending-label as-btn" onclick={() => (commentsOpen = false)}>
+				Comments · {moderationComments.length}{#if pendingCount > 0}
+					· {pendingCount} pending{/if}
+			</button>
+			<p class="pending-hint">
+				Confirmed subscribers publish live. Reject or ban here for takedown.
+			</p>
+			{#if moderationComments.length === 0}
+				<p class="pending-empty">No comments yet.</p>
+			{:else}
+				{#each moderationComments as c (c.id)}
+					<div class="pending-card" class:is-pending={c.status === 'pending'}>
+						<p class="pending-meta">
+							<span class="status" data-status={c.status}>{c.status}</span>
+							{c.author_email || c.author_display}
+							{#if c.commenter_banned}<span class="trusted">banned</span>
+							{:else if c.commenter_trusted}<span class="trusted">trusted</span>{/if}
+							· {c.post_slug}
+							{#if c.created_at}· {formatWhen(c.created_at)}{/if}
+						</p>
+						<p class="pending-body">{c.body}</p>
+						{#if c.status !== 'rejected'}
+							<div class="pending-actions">
+								{#if c.status === 'pending'}
+									<button
+										type="button"
+										class="act"
+										disabled={commentBusy === c.id}
+										onclick={() => void approve(c.id)}>Approve</button
+									>
+								{/if}
+								<button
+									type="button"
+									class="act danger"
+									disabled={commentBusy === c.id}
+									onclick={() => void reject(c.id)}>Reject</button
+								>
+								<button
+									type="button"
+									class="act danger"
+									disabled={commentBusy === c.id || c.commenter_banned}
+									onclick={() => void ban(c.id)}>Ban email</button
+								>
+							</div>
+						{/if}
+					</div>
+				{/each}
+			{/if}
+		</section>
+	{:else}
+		<button type="button" class="comments-chip" onclick={() => (commentsOpen = true)}>
+			Comments{#if pendingCount > 0}
+				· {pendingCount} pending{/if}
+		</button>
 	{/if}
 
 	{#if !getAdminToken()}
@@ -298,6 +416,145 @@
 		padding: 6px;
 		border-radius: 12px;
 		background: var(--fg-4);
+	}
+
+	.pending {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 10px;
+		border-radius: 12px;
+		background: var(--fg-4);
+	}
+
+	.pending-label {
+		margin: 0;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--fg-66);
+	}
+
+	.pending-label.as-btn {
+		display: block;
+		width: 100%;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		text-align: left;
+		font: inherit;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--fg-66);
+		cursor: pointer;
+	}
+
+	.pending-hint {
+		margin: 0;
+		font-size: 12px;
+		line-height: 1.4;
+		color: var(--fg-33);
+	}
+
+	.pending-empty {
+		margin: 0;
+		font-size: 13px;
+		color: var(--fg-33);
+	}
+
+	.comments-chip {
+		align-self: flex-start;
+		padding: 6px 10px;
+		border: 0;
+		border-radius: 8px;
+		background: var(--fg-4);
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.comments-chip:hover {
+		color: var(--fg);
+	}
+
+	.pending-card {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 8px 10px;
+		border-radius: 10px;
+		background: var(--bg, #fff);
+	}
+
+	.pending-card.is-pending {
+		outline: 1px solid color-mix(in srgb, var(--accent, #b44) 35%, transparent);
+	}
+
+	.pending-meta {
+		margin: 0;
+		font-size: 12px;
+		color: var(--fg-66);
+		word-break: break-word;
+	}
+
+	.status {
+		display: inline-block;
+		margin-right: 4px;
+		padding: 1px 6px;
+		border-radius: 4px;
+		font-size: 10px;
+		font-weight: 650;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: var(--fg-8, rgba(0, 0, 0, 0.06));
+		color: var(--fg-66);
+	}
+
+	.status[data-status='pending'] {
+		color: #a45;
+		background: color-mix(in srgb, #a45 12%, transparent);
+	}
+
+	.status[data-status='approved'] {
+		color: #2a6;
+		background: color-mix(in srgb, #2a6 12%, transparent);
+	}
+
+	.status[data-status='rejected'] {
+		color: var(--fg-33);
+	}
+
+	.trusted {
+		display: inline-block;
+		margin-left: 4px;
+		padding: 1px 6px;
+		border-radius: 4px;
+		font-size: 10px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: var(--fg-8, rgba(0, 0, 0, 0.06));
+		color: var(--fg-66);
+	}
+
+	.pending-body {
+		margin: 0;
+		font-size: 13px;
+		line-height: 1.45;
+		color: var(--fg);
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	.pending-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
 	}
 
 	.feed {

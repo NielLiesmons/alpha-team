@@ -1,5 +1,6 @@
 <script>
 	import CreateSheet from './CreateSheet.svelte';
+	import DropdownMenu from './DropdownMenu.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
@@ -370,7 +371,7 @@
 	</div>
 </CreateSheet>
 
-<FloatPanel
+<DropdownMenu
 	open={statusOpen}
 	anchor={statusBtn}
 	placement="below"
@@ -394,9 +395,9 @@
 			</button>
 		{/each}
 	</div>
-</FloatPanel>
+</DropdownMenu>
 
-<FloatPanel
+<DropdownMenu
 	open={priorityOpen}
 	anchor={priorityBtn}
 	placement="below"
@@ -421,7 +422,7 @@
 			</button>
 		{/each}
 	</div>
-</FloatPanel>
+</DropdownMenu>
 
 <FloatPanel
 	open={bottomMenu === 'schedule'}

@@ -6,7 +6,6 @@
 		enterprises,
 		saveCaptureForm
 	} from '$lib/workspace.svelte.js';
-	import SyncProgressBar from './SyncProgressBar.svelte';
 
 	/** @type {{ form: any }} */
 	let { form } = $props();
@@ -45,7 +44,6 @@
 			</svg>
 		</button>
 		<span class="detail-top-label">Capture form</span>
-		<SyncProgressBar variant="inline" class="detail-sync" />
 	</div>
 	<div class="detail-top-actions">
 		<button type="button" class="linkish" onclick={() => goto(`/capture/${form.id}`)}>Open</button>

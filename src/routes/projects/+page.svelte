@@ -16,9 +16,14 @@
 
 	const NEW_WINDOW_MS = 7 * 86_400_000;
 
-	const sorted = $derived(
-		[...projects].sort((a, b) => String(a.title).localeCompare(String(b.title)))
-	);
+	const sorted = $derived.by(() => {
+		const f = ui.listFilter;
+		let list = [...projects];
+		if (f === 'active' || f === 'archived') {
+			list = list.filter((p) => projectLifecycle(p, tasks) === f);
+		}
+		return list.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+	});
 
 	/** @param {string | undefined | null} iso */
 	function isRecent(iso) {
@@ -60,6 +65,8 @@
 		<button type="button" class="empty-add" onclick={() => openComposer('project')}>
 			Create project
 		</button>
+	{:else if sorted.length === 0}
+		<p class="empty">No projects match this filter</p>
 	{:else}
 		<div class="card-stack">
 			{#each sorted as project (project.id)}

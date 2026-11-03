@@ -1,12 +1,18 @@
 /**
- * Device-only Drive credentials (localStorage). Never ship root key in the build.
+ * Device-only Drive credentials. Shared across Admin + Player on the Space apex
+ * via cookie Domain=.{apex} (see cross-domain-storage.js).
  */
 
-const STORAGE_KEY = 'alpha.drive.session.v1';
+import {
+	DRIVE_SESSION_KEY,
+	clearShared,
+	readShared,
+	writeShared
+} from '../cross-domain-storage.js';
 
 /** @type {{ url: string, token: string, rootKey: string, connected: boolean, error: string | null, loading: boolean, syncing: boolean }} */
 export const driveSession = $state({
-	url: 'https://drive.bley.farm',
+	url: '',
 	token: '',
 	rootKey: '',
 	connected: false,
@@ -17,9 +23,8 @@ export const driveSession = $state({
 });
 
 function readStored() {
-	if (typeof localStorage === 'undefined') return null;
 	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
+		const raw = readShared(DRIVE_SESSION_KEY);
 		return raw ? JSON.parse(raw) : null;
 	} catch {
 		return null;
@@ -44,8 +49,8 @@ export function saveSession(creds) {
 	driveSession.rootKey = creds.rootKey.trim();
 	driveSession.connected = Boolean(driveSession.token && driveSession.rootKey);
 	driveSession.error = null;
-	localStorage.setItem(
-		STORAGE_KEY,
+	writeShared(
+		DRIVE_SESSION_KEY,
 		JSON.stringify({
 			url: driveSession.url,
 			token: driveSession.token,
@@ -59,7 +64,7 @@ export function clearSession() {
 	driveSession.rootKey = '';
 	driveSession.connected = false;
 	driveSession.error = null;
-	localStorage.removeItem(STORAGE_KEY);
+	clearShared(DRIVE_SESSION_KEY);
 }
 
 /** @returns {import('./client.js').DriveSession | null} */

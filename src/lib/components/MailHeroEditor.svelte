@@ -1,8 +1,8 @@
 <script>
 	/**
-	 * Mail hero compose preview — φ landscape frame, glass top bar
-	 * (logo+name · LETTER · outline Open Online), Ovo title.
-	 * Matches alpha-api `render_letter_html` branding defaults (Bley).
+	 * Mail compose preview — matches alpha-api `render_letter_html`:
+	 * top bar outside hero (LETTER n · logo+name · Open Online), plain rounded image,
+	 * title + description under the image.
 	 */
 	import Camera from './icons/Camera.svelte';
 
@@ -10,6 +10,7 @@
 	 *   brand?: string,
 	 *   logoUrl?: string,
 	 *   eyebrow?: string,
+	 *   letterNumber?: number | null,
 	 *   readCta?: string,
 	 *   readUrl?: string,
 	 *   accent?: string,
@@ -23,9 +24,10 @@
 	 *   onImage?: (dataUrl: string) => void
 	 * }} */
 	let {
-		brand = 'Bley',
-		logoUrl = 'https://bley.farm/icons/bley-logo-ink.svg',
-		eyebrow = 'Lettre',
+		brand = 'Space',
+		logoUrl = '',
+		eyebrow = 'Letter',
+		letterNumber = null,
 		readCta = 'Open Online',
 		readUrl = '',
 		accent = '#dd8f87',
@@ -41,6 +43,12 @@
 
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput = $state();
+
+	const letterPill = $derived.by(() => {
+		const n = Number(letterNumber);
+		if (!Number.isFinite(n) || n < 1) return '';
+		return `${String(eyebrow || 'Letter').toUpperCase()} ${Math.floor(n)}`;
+	});
 
 	/**
 	 * Resize/compress before upload — raw phone photos blow Axum's body limit
@@ -102,160 +110,120 @@
 </script>
 
 <section class="mail-hero" style:--mail-accent={accent} style:--mail-page-bg={pageBg} style:--mail-ink={ink}>
-	<div
-		class="frame"
+	<div class="top-bar" role="presentation">
+		<span class="bar-slot start">
+			{#if letterPill}
+				<span class="stroke-pill letter-pill">{letterPill}</span>
+			{/if}
+		</span>
+		<span class="bar-slot brand-slot">
+			{#if logoUrl}
+				<img class="brand-mark" src={logoUrl} alt="" width="16" height="18" />
+			{/if}
+			<span class="brand-name">{brand}</span>
+		</span>
+		<span class="bar-slot end">
+			{#if readUrl}
+				<a class="stroke-pill read-cta" href={readUrl} target="_blank" rel="noopener noreferrer">
+					{readCta}
+					<svg class="cta-arrow" width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
+						<path
+							d="M3.5 2.5h6v6M9.5 2.5 2.5 9.5"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</a>
+			{:else}
+				<span class="stroke-pill read-cta static">
+					{readCta}
+					<svg class="cta-arrow" width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
+						<path
+							d="M3.5 2.5h6v6M9.5 2.5 2.5 9.5"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</span>
+			{/if}
+		</span>
+	</div>
+
+	<button
+		type="button"
+		class="hero-frame"
 		class:has-image={Boolean(imageUrl)}
 		style:--hero-photo={imageUrl ? `url(${imageUrl})` : 'none'}
+		onclick={pickImage}
+		aria-label={imageUrl ? 'Change image' : 'Add image'}
 	>
-		<div class="scrim" aria-hidden="true"></div>
+		<span class="camera-affordance">
+			<Camera size={32} />
+		</span>
+	</button>
 
-		<div class="top-bar" role="presentation">
-			<span class="bar-slot brand-slot">
-				{#if logoUrl}
-					<img class="brand-mark" src={logoUrl} alt="" width="16" height="18" />
-				{/if}
-				<span class="brand-name">{brand}</span>
-			</span>
-			<span class="eyebrow">{eyebrow}</span>
-			<span class="bar-slot end">
-				{#if readUrl}
-					<a class="read-cta" href={readUrl} target="_blank" rel="noopener noreferrer">
-						{readCta}
-						<svg class="cta-arrow" width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
-							<path
-								d="M3.5 2.5h6v6M9.5 2.5 2.5 9.5"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-					</a>
-				{:else}
-					<span class="read-cta static">
-						{readCta}
-						<svg class="cta-arrow" width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
-							<path
-								d="M3.5 2.5h6v6M9.5 2.5 2.5 9.5"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-					</span>
-				{/if}
-			</span>
-		</div>
-
-		<button type="button" class="image-hit" onclick={pickImage} aria-label={imageUrl ? 'Change image' : 'Add image'}>
-			<span class="camera-affordance">
-				<Camera size={32} />
-			</span>
-		</button>
-
-		<div class="copy">
-			<input
-				class="hero-title"
-				placeholder="Title"
-				value={title}
-				oninput={(e) => onTitle?.(e.currentTarget.value)}
-			/>
-			<textarea
-				class="hero-desc"
-				rows="1"
-				placeholder="Short description"
-				value={description}
-				oninput={(e) => onDescription?.(e.currentTarget.value)}
-			></textarea>
-		</div>
-
-		<input bind:this={fileInput} type="file" accept="image/*" hidden onchange={onFile} />
+	<div class="copy">
+		<input
+			class="hero-title"
+			placeholder="Title"
+			value={title}
+			oninput={(e) => onTitle?.(e.currentTarget.value)}
+		/>
+		<textarea
+			class="hero-desc"
+			rows="1"
+			placeholder="Short description"
+			value={description}
+			oninput={(e) => onDescription?.(e.currentTarget.value)}
+		></textarea>
 	</div>
+
+	<input bind:this={fileInput} type="file" accept="image/*" hidden onchange={onFile} />
 </section>
 
 <style>
 	.mail-hero {
 		padding: 0;
-		/* Bley defaults when props omit branding */
 		--mail-accent: #dd8f87;
 		--mail-page-bg: #f7f3f1;
 		--mail-ink: #160b0f;
-		/* Concentric: outer 24 − bar inset 12 → inner 12 */
-		--hero-r: 24px;
-		--bar-inset: 12px;
-		--bar-r: calc(var(--hero-r) - var(--bar-inset));
-	}
-
-	.frame {
-		--hero-photo: none;
-		position: relative;
-		isolation: isolate;
-		/* φ landscape: width / height ≈ 1.618 → aspect-ratio 1.618 / 1 */
-		aspect-ratio: 1.618 / 1;
-		width: 100%;
-		border-radius: var(--hero-r);
-		overflow: hidden;
-		background: color-mix(in srgb, var(--mail-ink) 88%, transparent);
+		--hero-r: 16px;
 		display: flex;
 		flex-direction: column;
-		justify-content: space-between;
-		box-sizing: border-box;
-	}
-
-	.frame::before {
-		content: '';
-		position: absolute;
-		inset: 0;
-		z-index: 0;
-		background-image: var(--hero-photo);
-		background-size: cover;
-		background-position: center;
-		/* Slightly dimmed while editing so the camera reads as an affordance */
-		opacity: 0.78;
-		pointer-events: none;
-	}
-
-	.scrim {
-		position: absolute;
-		inset: 0;
-		z-index: 0;
-		pointer-events: none;
-		background: linear-gradient(
-			to top,
-			rgba(0, 0, 0, 0.72) 0%,
-			rgba(0, 0, 0, 0.28) 45%,
-			rgba(0, 0, 0, 0.18) 100%
-		);
+		gap: 14px;
 	}
 
 	.top-bar {
-		position: relative;
-		z-index: 2;
 		display: grid;
 		grid-template-columns: 1fr auto 1fr;
 		align-items: center;
 		gap: 8px;
-		margin: var(--bar-inset) var(--bar-inset) 0;
-		padding: 5px 8px;
-		border-radius: var(--bar-r);
-		/* Fake glass — email can't use backdrop-filter; match with rgba + border */
-		background: color-mix(in srgb, var(--mail-page-bg) 78%, transparent);
-		border: 1px solid color-mix(in srgb, var(--mail-ink) 12%, transparent);
-		box-sizing: border-box;
 	}
 
 	.bar-slot {
 		min-width: 0;
 	}
 
+	.bar-slot.start {
+		justify-self: start;
+	}
+
 	.brand-slot {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		justify-self: start;
+		justify-self: center;
+	}
+
+	.bar-slot.end {
+		display: flex;
+		justify-content: flex-end;
 	}
 
 	.brand-mark {
@@ -276,23 +244,7 @@
 		white-space: nowrap;
 	}
 
-	.bar-slot.end {
-		display: flex;
-		justify-content: flex-end;
-	}
-
-	.eyebrow {
-		justify-self: center;
-		font-family: Inter, Helvetica, Arial, sans-serif;
-		font-size: 11px;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--mail-ink);
-		white-space: nowrap;
-	}
-
-	.read-cta {
+	.stroke-pill {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
@@ -307,6 +259,13 @@
 		text-decoration: none;
 		white-space: nowrap;
 		border: 1px solid color-mix(in srgb, var(--mail-ink) 22%, transparent);
+		box-sizing: border-box;
+	}
+
+	.letter-pill {
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 	}
 
 	.read-cta.static {
@@ -319,45 +278,54 @@
 		flex-shrink: 0;
 	}
 
-	.image-hit {
-		/* Photo band only — leave glass bar + title/desc interactive above */
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: calc(var(--bar-inset) + 44px);
-		bottom: 68px;
-		z-index: 1;
+	.hero-frame {
+		--hero-photo: none;
+		position: relative;
+		isolation: isolate;
+		aspect-ratio: 1.618 / 1;
+		width: 100%;
 		margin: 0;
 		padding: 0;
 		border: 0;
-		background: transparent;
+		border-radius: var(--hero-r);
+		overflow: hidden;
+		background: color-mix(in srgb, var(--mail-ink) 8%, transparent);
 		cursor: pointer;
 		display: grid;
 		place-items: center;
 		-webkit-tap-highlight-color: transparent;
 	}
 
+	.hero-frame::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		background-image: var(--hero-photo);
+		background-size: cover;
+		background-position: center;
+		pointer-events: none;
+	}
+
 	.camera-affordance {
+		position: relative;
+		z-index: 1;
 		display: grid;
 		place-items: center;
 		color: color-mix(in srgb, var(--mail-ink) 38%, transparent);
 		pointer-events: none;
-		filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.25));
 	}
 
-	.frame.has-image .camera-affordance {
-		color: color-mix(in srgb, #fff 42%, transparent);
+	.hero-frame.has-image .camera-affordance {
+		color: color-mix(in srgb, #fff 55%, transparent);
+		filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.28));
 	}
 
 	.copy {
-		position: relative;
-		z-index: 2;
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		/* Match bar inset — no extra dead space under title+desc */
-		padding: 16px var(--bar-inset) var(--bar-inset);
-		margin-top: auto;
+		padding: 0 2px;
 	}
 
 	.hero-title,
@@ -367,8 +335,7 @@
 		padding: 0;
 		border: 0;
 		background: transparent;
-		color: #fff;
-		text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+		color: var(--mail-ink);
 	}
 
 	.hero-title {
@@ -381,7 +348,7 @@
 
 	.hero-title::placeholder,
 	.hero-desc::placeholder {
-		color: rgba(255, 255, 255, 0.55);
+		color: color-mix(in srgb, var(--mail-ink) 40%, transparent);
 	}
 
 	.hero-desc {
@@ -391,6 +358,6 @@
 		font-family: Inter, Helvetica, Arial, sans-serif;
 		font-size: 14px;
 		line-height: 1.4;
-		color: rgba(255, 255, 255, 0.88);
+		color: color-mix(in srgb, var(--mail-ink) 62%, transparent);
 	}
 </style>

@@ -1,57 +1,12 @@
 <script>
-	import DriveInvite from '$lib/components/DriveInvite.svelte';
-	import { actor } from '$lib/actor.svelte.js';
-	import { canManageMembers } from '$lib/members.svelte.js';
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 
-	const allowed = $derived(canManageMembers(actor.email));
+	onMount(() => {
+		void goto('/settings', { replaceState: true });
+	});
 </script>
 
 <svelte:head>
-	<title>Accounts</title>
+	<title>Settings</title>
 </svelte:head>
-
-<div class="feed accounts">
-	{#if !allowed}
-		<section class="block">
-			<p class="field-label">Accounts</p>
-			<p class="hint">
-				Only owners and admins can manage accounts. Switch to an admin profile on this
-				device, or ask someone with an admin invite.
-			</p>
-		</section>
-	{:else}
-		<p class="intro">
-			Manage Space profiles: edit, delete, or re-share an invite code for someone who already
-			exists — without creating a new account. Use “Invite someone new” only for a brand-new
-			mailbox.
-		</p>
-		<DriveInvite />
-	{/if}
-</div>
-
-<style>
-	.accounts {
-		padding-left: 16px;
-		padding-right: 16px;
-		box-sizing: border-box;
-	}
-
-	.intro {
-		max-width: 520px;
-		margin: 0 0 1.25rem;
-		font-size: 14px;
-		line-height: 1.45;
-		color: var(--white66);
-	}
-
-	.block {
-		max-width: 520px;
-		margin-bottom: 1.75rem;
-	}
-
-	.hint {
-		margin: 0 0 0.85rem;
-		font-size: 13px;
-		color: var(--white66);
-	}
-</style>

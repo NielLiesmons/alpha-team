@@ -1,5 +1,5 @@
 /**
- * Admin brand — Zapstore accent pair is hardcoded in app.css.
+ * Admin brand — Zapstore accent pair is hardcoded in @alpha/ui tokens.
  * This module clears legacy localStorage accent overrides so old Space
  * color picks do not tint poles / accents anymore.
  */

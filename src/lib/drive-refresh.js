@@ -1,6 +1,7 @@
 /**
  * Coordinated Drive refresh with tip short-circuit + shared progress.
- * Chat-first: feed always before workspace / media / mail.
+ * Chat-first: feed always before workspace / mail.
+ * Media library refresh lives in alpha-player.
  */
 import { refreshMembersAndAvatars } from './avatar.svelte.js';
 import { refreshChatFeed } from './chat.svelte.js';
@@ -8,7 +9,6 @@ import { getTip } from './drive/client.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { getLastAppliedTip, setLastAppliedTip } from './drive/tip-gate.js';
 import { refreshMail } from './mail.svelte.js';
-import { refreshTracks } from './player.svelte.js';
 import { beginSync, endSync, setSyncRatio } from './sync-progress.svelte.js';
 import {
 	enterprises,
@@ -37,7 +37,7 @@ export async function refreshChatUrgent() {
 }
 
 /**
- * Heavy domains after chat — counters, notes, player, mail.
+ * Heavy domains after chat — counters, notes, mail.
  * Safe to fire-and-forget once chat has settled.
  */
 export async function refreshBackgroundDrive() {
@@ -71,9 +71,7 @@ export async function refreshBackgroundDrive() {
 		}
 
 		await refreshFromDrive({ skipTipGate: true, outerProgress: true });
-		setSyncRatio(0.72, 1);
-		await refreshTracks();
-		setSyncRatio(0.88, 1);
+		setSyncRatio(0.8, 1);
 		await refreshMail();
 		setSyncRatio(1, 1);
 
@@ -120,9 +118,7 @@ export async function refreshAllDrive() {
 		}
 
 		await refreshFromDrive({ skipTipGate: true, outerProgress: true });
-		setSyncRatio(0.72, 1);
-		await refreshTracks();
-		setSyncRatio(0.84, 1);
+		setSyncRatio(0.8, 1);
 		await refreshMail();
 		setSyncRatio(1, 1);
 

@@ -364,7 +364,7 @@ export async function refreshFromDrive(opts = {}) {
 			}
 		}
 
-		await ensureSpace(session, 'Bley Family');
+		await ensureSpace(session, 'Space');
 		const [{ buckets, tip }, alist] = await Promise.all([
 			loadWorkspaceLeaves(session, undefined, {
 				onProgress: (done, total) => {

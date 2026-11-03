@@ -15,7 +15,6 @@
 	import FloatPanel from './FloatPanel.svelte';
 	import EnterpriseBox from './EnterpriseBox.svelte';
 	import Pen from './icons/Pen.svelte';
-	import SyncProgressBar from './SyncProgressBar.svelte';
 
 	/** @type {{ view: any }} */
 	let { view } = $props();
@@ -115,7 +114,6 @@
 			</svg>
 		</button>
 		<span class="detail-top-label">View</span>
-		<SyncProgressBar variant="inline" class="detail-sync" />
 	</div>
 	<div class="detail-top-actions">
 		<button

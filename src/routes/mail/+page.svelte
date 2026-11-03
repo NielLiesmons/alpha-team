@@ -13,7 +13,12 @@
 		mailUi,
 		refreshMail
 	} from '$lib/mail.svelte.js';
-	import { MAIL_FOLDER_LABELS, mailView } from '$lib/mail-view.svelte.js';
+	import {
+		MAIL_FOLDER_LABELS,
+		MAIL_FOLDERS,
+		mailView,
+		setMailFolder
+	} from '$lib/mail-view.svelte.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	$effect(() => {
@@ -26,13 +31,24 @@
 		mailView.folder;
 		mailMessages.length;
 		mailUi.loading;
-		return mailThreadsForCurrentFolder();
+		ui.listFilter;
+		const all = mailThreadsForCurrentFolder();
+		if (ui.listFilter === 'unread') return all.filter((t) => isUnreadFor(t));
+		return all;
 	});
 </script>
 
 <svelte:head><title>{MAIL_FOLDER_LABELS[mailView.folder]} · Mail</title></svelte:head>
 
 <div class="feed mail">
+	<div class="folder-seg" role="group" aria-label="Mailbox">
+		{#each MAIL_FOLDERS as f (f)}
+			<button type="button" class="seg-btn" class:on={mailView.folder === f} onclick={() => setMailFolder(f)}
+				>{MAIL_FOLDER_LABELS[f]}</button
+			>
+		{/each}
+	</div>
+
 	{#if driveSession.error}
 		<p class="banner"><span class="err">{driveSession.error}</span></p>
 	{/if}
@@ -49,7 +65,7 @@
 		</p>
 	{:else if threadsList.length === 0}
 		<p class="empty">
-			{MAIL_FOLDER_LABELS[mailView.folder]} is empty
+			{ui.listFilter === 'unread' ? 'No unread' : `${MAIL_FOLDER_LABELS[mailView.folder]} is empty`}
 			<span class="hint">For {actor.email}. Use + to compose.</span>
 		</p>
 	{:else}
@@ -89,6 +105,55 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+	}
+
+	/* Bley-style recessed seg track; selected chip lifts to --popover */
+	.folder-seg {
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: 1fr;
+		align-items: center;
+		gap: 2px;
+		margin: 0 10px 10px;
+		padding: 4px;
+		border-radius: 999px;
+		border: 1px solid var(--hairline);
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
+		overflow-x: auto;
+		scrollbar-width: none;
+		box-sizing: border-box;
+	}
+
+	.folder-seg::-webkit-scrollbar {
+		display: none;
+	}
+
+	.seg-btn {
+		appearance: none;
+		border: 0;
+		background: transparent;
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 600;
+		height: 30px;
+		padding: 0 8px;
+		border-radius: 999px;
+		cursor: pointer;
+		white-space: nowrap;
+		transition:
+			background 0.15s ease,
+			color 0.15s ease;
+	}
+
+	.seg-btn:hover {
+		color: var(--fg);
+	}
+
+	.seg-btn.on {
+		background: var(--popover, var(--bg));
+		color: var(--fg);
+		box-shadow: 0 1px 2px var(--shadow, color-mix(in srgb, #000 18%, transparent));
 	}
 
 	.banner {

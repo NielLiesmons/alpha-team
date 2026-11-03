@@ -12,7 +12,6 @@
 		tableRows,
 		ui
 	} from '$lib/workspace.svelte.js';
-	import SyncProgressBar from './SyncProgressBar.svelte';
 
 	/** @type {{ metric: any }} */
 	let { metric } = $props();
@@ -50,7 +49,6 @@
 			</button>
 		{/if}
 		<span class="detail-top-label">Metric</span>
-		<SyncProgressBar variant="inline" class="detail-sync" />
 	</div>
 </header>
 

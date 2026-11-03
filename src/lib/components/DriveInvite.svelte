@@ -14,7 +14,9 @@
 	} from '$lib/members.svelte.js';
 	import { generateMailboxPassword, provisionMailbox } from '$lib/stalwart-provision.js';
 
-	const mailDomain = 'bley.farm';
+	import { mailDomain as spaceMailDomain } from '$lib/space-host.js';
+
+	const mailDomain = $derived(spaceMailDomain());
 	const operator = $derived(canManageMembers(actor.email));
 	const inviter = $derived(canInvite(actor.email));
 
@@ -82,7 +84,7 @@
 			return;
 		}
 		if (!inviteEmail.includes('@')) {
-			shareMsg = `Enter a mailbox local-part (e.g. sarah → sarah@${mailDomain}).`;
+			shareMsg = `Enter a mailbox local-part (e.g. alex → alex@${mailDomain}).`;
 			return;
 		}
 		if (sharePass !== sharePass2) {
@@ -406,7 +408,7 @@
 					bind:value={inviteLocal}
 					autocomplete="off"
 					spellcheck="false"
-					placeholder="sarah"
+					placeholder="alex"
 				/>
 				<span class="domain">@{mailDomain}</span>
 			</div>

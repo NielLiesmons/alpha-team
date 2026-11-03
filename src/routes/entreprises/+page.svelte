@@ -24,11 +24,21 @@
 
 	const NEW_WINDOW_MS = 7 * 86_400_000;
 
-	const sortedEnterprises = $derived(
-		[...enterprises].sort(
+	/** Closed / muted enterprise statuses (match EnterpriseBox). */
+	const CLOSED = new Set(['draft', 'paused', 'closed', 'archived']);
+
+	const sortedEnterprises = $derived.by(() => {
+		const f = ui.listFilter;
+		let list = [...enterprises];
+		if (f === 'active') {
+			list = list.filter((e) => !CLOSED.has(String(e.status ?? 'active').toLowerCase()));
+		} else if (f === 'closed') {
+			list = list.filter((e) => CLOSED.has(String(e.status ?? 'active').toLowerCase()));
+		}
+		return list.sort(
 			(a, b) => (a.sort ?? 100) - (b.sort ?? 100) || String(a.title).localeCompare(String(b.title))
-		)
-	);
+		);
+	});
 
 	/** @param {string} enterpriseId */
 	function projectIdsFor(enterpriseId) {
@@ -94,11 +104,13 @@
 
 	{#if !appBoot.listsReady && enterprises.length === 0 && dataTables.length === 0}
 		<FeedSkeleton rows={6} />
-	{:else if sortedEnterprises.length === 0}
+	{:else if enterprises.length === 0}
 		<p class="empty">No Entreprises yet</p>
 		<button type="button" class="empty-add" onclick={() => openComposer('enterprise')}
 			>Create enterprise</button
 		>
+	{:else if sortedEnterprises.length === 0}
+		<p class="empty">No entreprises match this filter</p>
 	{:else}
 		<div class="card-stack">
 			{#each sortedEnterprises as ent (ent.id)}

@@ -83,15 +83,18 @@ export default defineConfig({
 			}
 		})
 	],
+	ssr: {
+		noExternal: ['@alpha/ui']
+	},
 	server: {
 		port: 5174,
 		strictPort: false,
-		/* Same-origin JMAP — browser cannot call mail.bley.farm (no CORS). */
+		/* Same-origin JMAP — browser cannot call mail.{apex} (no CORS). */
 		proxy: {
 			'/jmap': {
-				target: 'https://mail.bley.farm',
+				target: process.env.ALPHA_JMAP_PROXY || 'http://127.0.0.1:8080',
 				changeOrigin: true,
-				secure: true
+				secure: false
 			}
 		}
 	}
