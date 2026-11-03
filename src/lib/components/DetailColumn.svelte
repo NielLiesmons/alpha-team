@@ -43,13 +43,14 @@
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById } from '$lib/chat.svelte.js';
 	import { fileDisplayTitle, fileTypeColors, splitFileTitle } from '$lib/file-display.js';
-	import { filesView } from '$lib/files-view.svelte.js';
+	import { filesView, isFilesFolderPath } from '$lib/files-view.svelte.js';
 	import { settingsUi } from '$lib/settings-ui.svelte.js';
 	import { space } from '$lib/sections.js';
 	import MetricDetail from './MetricDetail.svelte';
 	import TableDetail from './TableDetail.svelte';
 	import ViewDetail from './ViewDetail.svelte';
 	import PullToRefresh from './PullToRefresh.svelte';
+	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import ChromeMobileBar from '@alpha/ui/ChromeMobileBar.svelte';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
@@ -113,9 +114,7 @@
 	const fileEntry = $derived.by(() => {
 		if (!filePath) return null;
 		const hit = filesView.entries.find((e) => e.path === filePath);
-		const isFolder =
-			hit?.kind === 'folder' ||
-			filesView.entries.some((e) => e.path !== filePath && e.path.startsWith(`${filePath}/`));
+		const isFolder = isFilesFolderPath(filePath);
 		const name = filePath.includes('/') ? filePath.slice(filePath.lastIndexOf('/') + 1) : filePath;
 		return {
 			path: filePath,
@@ -127,7 +126,9 @@
 	});
 	const fileTitle = $derived(fileEntry ? fileDisplayTitle(fileEntry) : '');
 	const fileParts = $derived(splitFileTitle(fileTitle, { isFolder: Boolean(fileEntry?.isFolder) }));
-	const fileColors = $derived(fileTypeColors(fileParts.ext || 'file'));
+	const fileColors = $derived(
+		fileEntry && !fileEntry.isFolder ? fileTypeColors(fileParts.ext || 'file') : null
+	);
 	const chatChannel = $derived(chatChannelId ? channelById(chatChannelId) : null);
 
 	/** @type {HTMLElement | undefined} */
@@ -671,19 +672,12 @@
 		{#if showMoreMenu}
 			<ChromeMobileBar title={mobileTitle || typeLabel} onBack={close}>
 				{#snippet trailing()}
-					<button
-						type="button"
-						class="chrome-btn more-btn"
-						aria-label="More"
-						aria-expanded={menuOpen}
+					<ChromeActionButton
+						variant="more"
+						label="More"
+						expanded={menuOpen}
 						onclick={toggleMoreMenu}
-					>
-						<svg width="26" height="26" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-							<circle cx="9" cy="3.75" r="1.65" fill="currentColor" />
-							<circle cx="9" cy="9" r="1.65" fill="currentColor" />
-							<circle cx="9" cy="14.25" r="1.65" fill="currentColor" />
-						</svg>
-					</button>
+					/>
 				{/snippet}
 			</ChromeMobileBar>
 		{:else}
@@ -1267,8 +1261,8 @@
 			</div>
 			<div class="detail-top-actions"></div>
 		</header>
-		<div class="body">
-			<FilesFolderDetail folderPath={filePath} entries={filesView.entries} title={fileTitle} />
+		<div class="body files-folder-body">
+			<FilesFolderDetail folderPath={filePath} entries={filesView.entries} />
 		</div>
 	{:else if fileEntry}
 		<header class="detail-top desktop-head">
@@ -1292,8 +1286,8 @@
 			<div class="file-hero">
 				<span
 					class="file-type-box"
-					style:color={fileColors.ink}
-					style:background={fileColors.wash}
+					style:color={fileColors?.ink}
+					style:background={fileColors?.wash}
 					aria-hidden="true">{fileParts.label || 'FILE'}</span
 				>
 				<h2 class="file-title">
@@ -2076,8 +2070,16 @@
 		min-height: 0;
 	}
 
+	.body.files-folder-body {
+		overflow: auto;
+		padding: 56px 0 24px;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+	}
+
 	.body.file-detail-body {
-		padding: 16px 18px 24px;
+		padding: 56px 18px 24px;
 		display: flex;
 		flex-direction: column;
 		gap: 12px;

@@ -1,5 +1,5 @@
 <script>
-	import { tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import folderUrl from '@alpha/ui/icons/folder.svg';
 	import { listEntries, uploadFile } from '$lib/drive/entities.js';
@@ -11,7 +11,7 @@
 		fileTypeColors,
 		splitFileTitle
 	} from '$lib/file-display.js';
-	import { filesView } from '$lib/files-view.svelte.js';
+	import { filesView, isFilesFolderPath, setFilesEntries } from '$lib/files-view.svelte.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	const RECENT_KEY = 'alpha.files.recent.v1';
@@ -28,6 +28,9 @@
 	let favoritePaths = $state(readPathList(FAV_KEY));
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput;
+	/** Prevent overlapping Drive list fetches. */
+	let reloadGen = 0;
+	let reloadInFlight = false;
 
 	const entries = $derived(filesView.entries);
 	const loading = $derived(filesView.loading);
@@ -52,9 +55,7 @@
 			if (!entry) continue;
 			seen.add(path);
 			const name = path.includes('/') ? path.slice(path.lastIndexOf('/') + 1) : path;
-			const isFolder =
-				entry.kind === 'folder' ||
-				entries.some((e) => e.path !== path && e.path.startsWith(`${path}/`));
+			const isFolder = entry.kind === 'folder' || isFilesFolderPath(path);
 			out.push({
 				name,
 				path,
@@ -92,10 +93,11 @@
 
 	function hydrateEntriesFromCache() {
 		if (typeof localStorage === 'undefined') return;
+		if (filesView.entries.length > 0) return;
 		try {
 			const raw = JSON.parse(localStorage.getItem(ENTRIES_CACHE_KEY) || 'null');
-			if (Array.isArray(raw?.entries)) {
-				filesView.entries = raw.entries;
+			if (Array.isArray(raw?.entries) && raw.entries.length) {
+				setFilesEntries(raw.entries);
 			}
 		} catch {
 			/* ignore */
@@ -130,7 +132,7 @@
 	async function reload() {
 		const session = activeSession();
 		if (!session) {
-			filesView.entries = [];
+			setFilesEntries([]);
 			return;
 		}
 		const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -138,23 +140,40 @@
 			filesView.loading = false;
 			return;
 		}
+		if (reloadInFlight) return;
+		reloadInFlight = true;
+		const gen = ++reloadGen;
 		filesView.loading = filesView.entries.length === 0;
 		filesView.error = '';
 		try {
 			const list = await listEntries(session);
-			filesView.entries = list;
+			if (gen !== reloadGen) return;
+			setFilesEntries(list);
 			persistEntries(list);
 		} catch (e) {
+			if (gen !== reloadGen) return;
 			filesView.error = e instanceof Error ? e.message : String(e);
 			/* keep cached entries */
 		} finally {
-			filesView.loading = false;
+			if (gen === reloadGen) {
+				filesView.loading = false;
+				reloadInFlight = false;
+			}
 		}
 	}
 
+	/*
+	 * Load once when Drive is available — never track filesView.entries here or
+	 * assigning the list re-fires the effect into an infinite tip/fetch loop.
+	 */
 	$effect(() => {
-		hydrateEntriesFromCache();
-		if (ui.source === 'drive' || driveSession.connected) void reload();
+		const connected = driveSession.connected;
+		const source = ui.source;
+		if (!(source === 'drive' || connected)) return;
+		untrack(() => {
+			hydrateEntriesFromCache();
+			void reload();
+		});
 	});
 
 	$effect(() => {
@@ -166,6 +185,10 @@
 		}
 		driveUploadUi.pending = false;
 		tick().then(() => fileInput?.click());
+	});
+
+	onMount(() => {
+		untrack(() => hydrateEntriesFromCache());
 	});
 
 	/**
@@ -319,8 +342,7 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		gap: 10px;
-		padding-bottom: 12px;
+		gap: 0;
 	}
 
 	.file-section {

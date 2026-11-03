@@ -1,6 +1,7 @@
 <script>
 	/**
 	 * Detail-column browser for a Files folder (3rd column / deeper page).
+	 * Title lives in the detail top bar — no duplicate heading here.
 	 */
 	import folderUrl from '@alpha/ui/icons/folder.svg';
 	import {
@@ -14,14 +15,12 @@
 	/**
 	 * @type {{
 	 *   folderPath: string,
-	 *   entries: { path: string, kind: string, display_name?: string | null }[],
-	 *   title?: string
+	 *   entries: { path: string, kind: string, display_name?: string | null }[]
 	 * }}
 	 */
-	let { folderPath = '', entries = [], title = '' } = $props();
+	let { folderPath = '', entries = [] } = $props();
 
 	const items = $derived(childrenOf(entries, folderPath));
-	const heading = $derived(title || fileDisplayTitle({ path: folderPath, name: folderPath }));
 
 	/** @param {import('$lib/drive/tree.js').TreeItem} item */
 	function openItem(item) {
@@ -30,7 +29,6 @@
 </script>
 
 <div class="files-detail">
-	<h2 class="heading">{heading}</h2>
 	{#if items.length === 0}
 		<p class="empty">Empty folder</p>
 	{:else}
@@ -76,17 +74,8 @@
 	.files-detail {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
-		padding: 8px 4px 24px;
 		min-height: 0;
-	}
-
-	.heading {
-		margin: 0 12px 10px;
-		font-size: 20px;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		color: var(--fg);
+		flex: 1;
 	}
 
 	.empty {
@@ -99,7 +88,8 @@
 	.card-stack {
 		display: flex;
 		flex-direction: column;
-		padding: 0 6px;
+		padding: 4px 6px 24px;
+		box-sizing: border-box;
 	}
 
 	.row {

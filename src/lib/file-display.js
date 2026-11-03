@@ -53,6 +53,9 @@ export function splitFileTitle(title, opts = {}) {
 	};
 }
 
+/** @type {Map<string, { ink: string, wash: string }>} */
+const typeColorCache = new Map();
+
 /**
  * Extension → ink + wash for the type square (same string→color as profile hues).
  * @param {string} ext
@@ -60,9 +63,13 @@ export function splitFileTitle(title, opts = {}) {
  */
 export function fileTypeColors(ext) {
 	const key = String(ext || 'file').toLowerCase();
+	const hit = typeColorCache.get(key);
+	if (hit) return hit;
 	const { r, g, b } = stringToColor(key);
-	return {
+	const colors = {
 		ink: `rgb(${r}, ${g}, ${b})`,
 		wash: `rgba(${r}, ${g}, ${b}, 0.14)`
 	};
+	typeColorCache.set(key, colors);
+	return colors;
 }
