@@ -257,12 +257,10 @@
 				style:background={colors.wash}
 				aria-hidden="true">{parts.label || 'FILE'}</span
 			>
-			<span class="name-line">
-				<span class="stem">{parts.stem}</span>
-				{#if parts.ext}
-					<span class="ext">.{parts.ext}</span>
-				{/if}
-			</span>
+			<span class="name-line"
+				><span class="stem">{parts.stem}</span
+				>{#if parts.ext}<span class="ext">.{parts.ext}</span>{/if}</span
+			>
 		{/if}
 	</button>
 {/snippet}

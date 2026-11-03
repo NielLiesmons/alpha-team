@@ -1,7 +1,7 @@
 <script>
 	/**
 	 * Detail-column browser for a Files folder (3rd column / deeper page).
-	 * Title lives in the detail top bar — no duplicate heading here.
+	 * Top bar shows type "Folder"; hero carries the name + summary.
 	 */
 	import folderUrl from '@alpha/ui/icons/folder.svg';
 	import {
@@ -15,12 +15,24 @@
 	/**
 	 * @type {{
 	 *   folderPath: string,
-	 *   entries: { path: string, kind: string, display_name?: string | null }[]
+	 *   entries: { path: string, kind: string, display_name?: string | null }[],
+	 *   title?: string
 	 * }}
 	 */
-	let { folderPath = '', entries = [] } = $props();
+	let { folderPath = '', entries = [], title = '' } = $props();
 
 	const items = $derived(childrenOf(entries, folderPath));
+	const heading = $derived(title || fileDisplayTitle({ path: folderPath, name: folderPath }));
+	const folderCount = $derived(items.filter((i) => i.isFolder).length);
+	const fileCount = $derived(items.length - folderCount);
+	const summary = $derived.by(() => {
+		const bits = [];
+		if (folderCount) bits.push(`${folderCount} folder${folderCount === 1 ? '' : 's'}`);
+		if (fileCount) bits.push(`${fileCount} file${fileCount === 1 ? '' : 's'}`);
+		if (!bits.length) bits.push('Empty');
+		bits.push('Encrypted');
+		return bits.join(' · ');
+	});
 
 	/** @param {import('$lib/drive/tree.js').TreeItem} item */
 	function openItem(item) {
@@ -29,6 +41,17 @@
 </script>
 
 <div class="files-detail">
+	<section class="hero">
+		<img class="hero-ico" src={folderUrl} alt="" width="72" height="72" />
+		<div class="hero-text">
+			<h2 class="hero-title">{heading}</h2>
+			<p class="hero-meta">{summary}</p>
+			{#if folderPath}
+				<p class="hero-path">{folderPath}</p>
+			{/if}
+		</div>
+	</section>
+
 	{#if items.length === 0}
 		<p class="empty">Empty folder</p>
 	{:else}
@@ -57,12 +80,10 @@
 							style:background={colors.wash}
 							aria-hidden="true">{parts.label || 'FILE'}</span
 						>
-						<span class="name-line">
-							<span class="stem">{parts.stem}</span>
-							{#if parts.ext}
-								<span class="ext">.{parts.ext}</span>
-							{/if}
-						</span>
+						<span class="name-line"
+							><span class="stem">{parts.stem}</span
+							>{#if parts.ext}<span class="ext">.{parts.ext}</span>{/if}</span
+						>
 					{/if}
 				</button>
 			{/each}
@@ -76,11 +97,66 @@
 		flex-direction: column;
 		min-height: 0;
 		flex: 1;
+		gap: 8px;
+	}
+
+	.hero {
+		display: flex;
+		align-items: flex-start;
+		gap: 16px;
+		padding: 4px 0 12px;
+		min-width: 0;
+	}
+
+	.hero-ico {
+		flex-shrink: 0;
+		width: 72px;
+		height: 72px;
+		object-fit: contain;
+		display: block;
+	}
+
+	.hero-text {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding-top: 4px;
+	}
+
+	.hero-title {
+		margin: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 22px;
+		font-weight: 650;
+		letter-spacing: -0.02em;
+		color: var(--fg);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.hero-meta {
+		margin: 0;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-66);
+	}
+
+	.hero-path {
+		margin: 0;
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-size: 11px;
+		color: var(--fg-33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.empty {
 		margin: 0;
-		padding: 16px 12px;
+		padding: 16px 0;
 		color: var(--fg-33);
 		font-size: 13px;
 	}
@@ -88,7 +164,8 @@
 	.card-stack {
 		display: flex;
 		flex-direction: column;
-		padding: 4px 6px 24px;
+		padding: 0 0 16px;
+		margin: 0 -10px;
 		box-sizing: border-box;
 	}
 

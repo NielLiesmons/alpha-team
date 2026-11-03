@@ -310,7 +310,16 @@
 	);
 	const canShare = $derived(
 		Boolean(
-			task || project || note || enterprise || dataTable || metricDoc || viewDoc || newsletter || pubPost
+			task ||
+				project ||
+				note ||
+				enterprise ||
+				dataTable ||
+				metricDoc ||
+				viewDoc ||
+				newsletter ||
+				pubPost ||
+				fileEntry
 		)
 	);
 	const showMoreMenu = $derived(
@@ -560,6 +569,16 @@
 
 	async function shareCurrent() {
 		menuOpen = false;
+		if (fileEntry) {
+			const path = filePath || fileEntry.path;
+			if (!path) return;
+			try {
+				await navigator.clipboard.writeText(path);
+			} catch {
+				window.prompt('Copy path', path);
+			}
+			return;
+		}
 		const base = typeof window !== 'undefined' ? window.location.origin : '';
 		const slug = newsletter?.post_slug || pubPost?.slug;
 		const siteBase = String(space.siteUrl || '').replace(/\/$/, '');
@@ -696,7 +715,7 @@
 			<div class="dropdown-list" role="menu">
 				{#if canShare}
 					<button type="button" class="dropdown-item" role="menuitem" onclick={() => void shareCurrent()}>
-						Share
+						{fileEntry ? 'Copy path' : 'Share'}
 					</button>
 				{/if}
 				{#if canComposerEdit}
@@ -1257,12 +1276,28 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">{fileTitle}</span>
+				<span class="detail-top-label">Folder</span>
 			</div>
-			<div class="detail-top-actions"></div>
+			<div class="detail-top-actions">
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+				{/if}
+			</div>
 		</header>
 		<div class="body files-folder-body">
-			<FilesFolderDetail folderPath={filePath} entries={filesView.entries} />
+			<FilesFolderDetail folderPath={filePath} entries={filesView.entries} title={fileTitle} />
 		</div>
 	{:else if fileEntry}
 		<header class="detail-top desktop-head">
@@ -1278,9 +1313,25 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">{fileTitle}</span>
+				<span class="detail-top-label">File</span>
 			</div>
-			<div class="detail-top-actions"></div>
+			<div class="detail-top-actions">
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label="More"
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
+						</svg>
+					</button>
+				{/if}
+			</div>
 		</header>
 		<div class="body file-detail-body">
 			<div class="file-hero">
@@ -1290,12 +1341,10 @@
 					style:background={fileColors?.wash}
 					aria-hidden="true">{fileParts.label || 'FILE'}</span
 				>
-				<h2 class="file-title">
-					<span class="file-stem">{fileParts.stem}</span>
-					{#if fileParts.ext}
-						<span class="file-ext">.{fileParts.ext}</span>
-					{/if}
-				</h2>
+				<h2 class="file-title"
+					><span class="file-stem">{fileParts.stem}</span
+					>{#if fileParts.ext}<span class="file-ext">.{fileParts.ext}</span>{/if}</h2
+				>
 			</div>
 			<p class="muted">Encrypted on your Space Drive. Preview coming soon.</p>
 			<p class="muted mono">{filePath}</p>
@@ -2072,14 +2121,14 @@
 
 	.body.files-folder-body {
 		overflow: auto;
-		padding: 56px 0 24px;
+		padding: 56px 24px 32px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
 	}
 
 	.body.file-detail-body {
-		padding: 56px 18px 24px;
+		padding: 56px 24px 32px;
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
