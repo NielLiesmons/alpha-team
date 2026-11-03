@@ -9,6 +9,7 @@
 	import {
 		fileDisplayTitle,
 		fileTypeColors,
+		folderDisplayTitle,
 		splitFileTitle
 	} from '$lib/file-display.js';
 	import { filesView, isFilesFolderPath, setFilesEntries } from '$lib/files-view.svelte.js';
@@ -224,7 +225,7 @@
 </script>
 
 {#snippet fileCard(item)}
-	{@const titleText = fileDisplayTitle(item)}
+	{@const titleText = item.isFolder ? folderDisplayTitle(item) : fileDisplayTitle(item)}
 	{@const parts = splitFileTitle(titleText, { isFolder: item.isFolder })}
 	{@const colors = fileTypeColors(parts.ext || 'file')}
 	<button

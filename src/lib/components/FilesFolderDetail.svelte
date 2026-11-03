@@ -7,6 +7,7 @@
 	import {
 		fileDisplayTitle,
 		fileTypeColors,
+		folderDisplayTitle,
 		splitFileTitle
 	} from '$lib/file-display.js';
 	import { childrenOf } from '$lib/drive/tree.js';
@@ -22,16 +23,17 @@
 	let { folderPath = '', entries = [], title = '' } = $props();
 
 	const items = $derived(childrenOf(entries, folderPath));
-	const heading = $derived(title || fileDisplayTitle({ path: folderPath, name: folderPath }));
+	const heading = $derived(
+		folderDisplayTitle(title || fileDisplayTitle({ path: folderPath, name: folderPath }))
+	);
 	const folderCount = $derived(items.filter((i) => i.isFolder).length);
 	const fileCount = $derived(items.length - folderCount);
-	const summary = $derived.by(() => {
+	const countsLabel = $derived.by(() => {
 		const bits = [];
 		if (folderCount) bits.push(`${folderCount} folder${folderCount === 1 ? '' : 's'}`);
 		if (fileCount) bits.push(`${fileCount} file${fileCount === 1 ? '' : 's'}`);
-		if (!bits.length) bits.push('Empty');
-		bits.push('Encrypted');
-		return bits.join(' · ');
+		if (!bits.length) return 'Empty';
+		return bits.join(', ');
 	});
 
 	/** @param {import('$lib/drive/tree.js').TreeItem} item */
@@ -45,10 +47,10 @@
 		<img class="hero-ico" src={folderUrl} alt="" width="72" height="72" />
 		<div class="hero-text">
 			<h2 class="hero-title">{heading}</h2>
-			<p class="hero-meta">{summary}</p>
-			{#if folderPath}
-				<p class="hero-path">{folderPath}</p>
-			{/if}
+			<p class="hero-meta">
+				<span class="hero-counts">{countsLabel}</span>
+				<span class="hero-enc">Encrypted</span>
+			</p>
 		</div>
 	</section>
 
@@ -57,7 +59,9 @@
 	{:else}
 		<div class="card-stack">
 			{#each items as item (item.path)}
-				{@const titleText = fileDisplayTitle(item)}
+				{@const titleText = item.isFolder
+					? folderDisplayTitle(item)
+					: fileDisplayTitle(item)}
 				{@const parts = splitFileTitle(titleText, { isFolder: item.isFolder })}
 				{@const colors = fileTypeColors(parts.ext || 'file')}
 				<button type="button" class="row" onclick={() => openItem(item)}>
@@ -139,19 +143,21 @@
 
 	.hero-meta {
 		margin: 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 8px;
 		font-size: 13px;
 		font-weight: 500;
+	}
+
+	.hero-counts {
 		color: var(--fg-66);
 	}
 
-	.hero-path {
-		margin: 0;
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-		font-size: 11px;
+	.hero-enc {
 		color: var(--fg-33);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		font-weight: 500;
 	}
 
 	.empty {

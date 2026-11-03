@@ -42,7 +42,12 @@
 	import PublicationsHub from './PublicationsHub.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById } from '$lib/chat.svelte.js';
-	import { fileDisplayTitle, fileTypeColors, splitFileTitle } from '$lib/file-display.js';
+	import {
+		fileDisplayTitle,
+		fileTypeColors,
+		folderDisplayTitle,
+		splitFileTitle
+	} from '$lib/file-display.js';
 	import { filesView, isFilesFolderPath } from '$lib/files-view.svelte.js';
 	import { settingsUi } from '$lib/settings-ui.svelte.js';
 	import { space } from '$lib/sections.js';
@@ -124,7 +129,13 @@
 			display_name: hit?.display_name ?? null
 		};
 	});
-	const fileTitle = $derived(fileEntry ? fileDisplayTitle(fileEntry) : '');
+	const fileTitle = $derived(
+		fileEntry
+			? fileEntry.isFolder
+				? folderDisplayTitle(fileEntry)
+				: fileDisplayTitle(fileEntry)
+			: ''
+	);
 	const fileParts = $derived(splitFileTitle(fileTitle, { isFolder: Boolean(fileEntry?.isFolder) }));
 	const fileColors = $derived(
 		fileEntry && !fileEntry.isFolder ? fileTypeColors(fileParts.ext || 'file') : null
@@ -1347,7 +1358,6 @@
 				>
 			</div>
 			<p class="muted">Encrypted on your Space Drive. Preview coming soon.</p>
-			<p class="muted mono">{filePath}</p>
 		</div>
 	{:else if accountingPanel}
 		<AccountingDetail />
@@ -2176,11 +2186,6 @@
 		font-weight: 500;
 	}
 
-	.mono {
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-		font-size: 12px;
-		word-break: break-all;
-	}
 
 	.note-body-wrap {
 		overflow: auto;

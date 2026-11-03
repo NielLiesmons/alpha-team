@@ -33,6 +33,16 @@ export function fileDisplayTitle(entry) {
 	return base;
 }
 
+/** Sentence-case a folder label so root buckets aren't shown as "files". */
+export function folderDisplayTitle(entryOrTitle) {
+	const raw =
+		typeof entryOrTitle === 'string'
+			? entryOrTitle.trim()
+			: fileDisplayTitle(entryOrTitle || {});
+	if (!raw) return 'Untitled';
+	return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
 /**
  * Split "Report.txt" → { stem: "Report", ext: "txt", label: "TXT" }.
  * Folders / no-extension → ext empty.
