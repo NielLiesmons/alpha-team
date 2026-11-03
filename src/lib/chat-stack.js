@@ -1,8 +1,30 @@
 /**
  * Message stacking — same author + direction, within 10 minutes (alpha-chat rules, 10m window).
+ * Publication panels are barriers: plain chat never stacks with a task/note/… comment,
+ * and comments on different entities never stack with each other.
  */
 
 export const CHAT_STACK_GAP_MS = 10 * 60 * 1000;
+
+/**
+ * Same key as chatPublicationRefKey — kept local so this util stays import-light.
+ * @param {any} msg
+ * @returns {string}
+ */
+function stackContextKey(msg) {
+	const ref = msg?.ref;
+	if (!ref?.type || !ref?.id) return '';
+	if (ref.type === 'chat' || ref.type === 'reaction') return '';
+	if (
+		ref.type !== 'task' &&
+		ref.type !== 'note' &&
+		ref.type !== 'project' &&
+		ref.type !== 'enterprise'
+	) {
+		return '';
+	}
+	return `${ref.type}:${ref.id}`;
+}
 
 /**
  * @param {any} a
@@ -13,6 +35,8 @@ export function continuesChatStack(a, b, meEmail) {
 	if (!a || !b) return false;
 	if (a.kind === 'event' || b.kind === 'event') return false;
 	if (a.kind === 'reaction' || b.kind === 'reaction') return false;
+	/* Publication tip / comment panel acts as a hard grouping barrier. */
+	if (stackContextKey(a) !== stackContextKey(b)) return false;
 	const me = String(meEmail || '')
 		.trim()
 		.toLowerCase();

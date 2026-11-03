@@ -1,19 +1,54 @@
 <script>
 	/**
-	 * Feed row: status picker | title | priority picker
+	 * Feed row: status | title | people stack | priority
 	 */
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
+	import ProfilePicStack from './ProfilePicStack.svelte';
 	import TaskFieldPicker from './TaskFieldPicker.svelte';
+	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 
 	let {
 		id = '',
 		title = '',
 		status = 'open',
 		priority = 'none',
+		/** @type {string | null} */
+		author = null,
+		/** @type {Array<{ email?: string, name?: string } | string>} */
+		assignees = [],
+		/** Extra emails from linked moments (Drive) */
+		/** @type {string[]} */
+		momentAssignees = [],
 		selected = false,
 		onclick = () => {}
 	} = $props();
+
+	const people = $derived.by(() => {
+		/** @type {Map<string, { name: string, email: string, pictureUrl: string | null }>} */
+		const map = new Map();
+		/** @param {string} email @param {string} [name] */
+		function add(email, name) {
+			const e = String(email || '')
+				.trim()
+				.toLowerCase();
+			if (!e || map.has(e)) return;
+			const who = asPerson(e);
+			map.set(e, {
+				email: e,
+				name: who?.name || name || displayNameFromEmail(e) || '?',
+				pictureUrl: pictureUrlFor(e)
+			});
+		}
+		for (const a of assignees || []) {
+			if (typeof a === 'string') add(a);
+			else if (a?.email) add(a.email, a.name);
+		}
+		for (const email of momentAssignees || []) add(email);
+		if (author) add(author);
+		return [...map.values()];
+	});
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role a11y_click_events_have_key_events -->
@@ -35,6 +70,11 @@
 			{/if}
 		</div>
 		<span class="task-title" class:task-title-closed={status === 'closed'}>{title}</span>
+		{#if people.length}
+			<span class="people" aria-hidden="true">
+				<ProfilePicStack profiles={people} size="xs" />
+			</span>
+		{/if}
 		{#if status !== 'closed'}
 			<div class="priority-col">
 				{#if id}
@@ -76,7 +116,7 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		height: 24px;
+		min-height: 24px;
 	}
 
 	.taskbox-col {
@@ -101,6 +141,13 @@
 
 	.task-title-closed {
 		color: var(--white66);
+	}
+
+	.people {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		line-height: 0;
 	}
 
 	.priority-col {

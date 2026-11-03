@@ -3,7 +3,27 @@
 	import TaskCard from '$lib/components/TaskCard.svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { openComposer, selectEntity, tasks, ui } from '$lib/workspace.svelte.js';
+	import { moments, openComposer, selectEntity, tasks, ui } from '$lib/workspace.svelte.js';
+
+	/** @param {string} taskId */
+	function momentAssigneeEmails(taskId) {
+		moments.length;
+		/** @type {string[]} */
+		const out = [];
+		const seen = new Set();
+		for (const m of moments) {
+			if (m.task_id !== taskId || m.status === 'canceled') continue;
+			for (const raw of m.assignees || []) {
+				const e = String(raw || '')
+					.trim()
+					.toLowerCase();
+				if (!e || seen.has(e)) continue;
+				seen.add(e);
+				out.push(e);
+			}
+		}
+		return out;
+	}
 
 	const STATUS_ORDER = [
 		'inReview',
@@ -85,6 +105,9 @@
 						title={task.title}
 						status={task.status}
 						priority={task.priority}
+						author={task.author}
+						assignees={task.assignees ?? []}
+						momentAssignees={momentAssigneeEmails(task.id)}
 						onclick={() => selectEntity('task', task.id)}
 						selected={ui.selection?.kind === 'task' && ui.selection.id === task.id}
 					/>

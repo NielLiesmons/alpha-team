@@ -16,8 +16,9 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 ## Feed / list rows (2nd column)
 
 - **Selected** = `var(--fg-4)` only (same as Tasks / Projects / `app.css` `.feed .row.on`). Never `--fg-8` for selected cards.
-- **Title** 14px / 600 / `--fg`; **timestamp** 12px / 500 / `--fg-33` with ≥2px trailing pad; **preview** 13px / `--fg-66` (not `--fg-33`).
-- Avatar + two-line rows: top-align text to the avatar. See ADR §3c.
+- **Title** 14px / 600 / `--fg`; **timestamp** 12px / 500 / `--fg-33` with ≥2px trailing pad (prefer preview-row trail).
+- **Preview:** Chat message line `--fg-66`; Notes body snippet quieter `--fg-33`. People on the right via `ProfilePic` / `ProfilePicStack`.
+- Chat stacking: publication panels are barriers (`chat-stack.js`). See ADR §3c.
 
 ## Icons
 

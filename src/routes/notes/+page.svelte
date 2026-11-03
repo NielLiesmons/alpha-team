@@ -1,5 +1,8 @@
 <script>
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
+	import ProfilePic from '$lib/components/ProfilePic.svelte';
+	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { notePlainText } from '$lib/note-text.js';
 	import { notes, selectEntity, ui } from '$lib/workspace.svelte.js';
@@ -9,6 +12,20 @@
 	/** @param {any} note */
 	function noteEditedAt(note) {
 		return note.updatedAt || note.createdAt || 0;
+	}
+
+	/** @param {any} note */
+	function creatorFor(note) {
+		const email = String(note?.author || '')
+			.trim()
+			.toLowerCase();
+		if (!email) return null;
+		const who = asPerson(email);
+		return {
+			email,
+			name: who?.name || displayNameFromEmail(email) || '?',
+			pictureUrl: pictureUrlFor(email)
+		};
 	}
 
 	const filtered = $derived.by(() => {
@@ -55,6 +72,7 @@
 	{:else}
 		<div class="card-stack">
 			{#each filtered as note (note.id)}
+				{@const creator = creatorFor(note)}
 				<button
 					type="button"
 					class="row"
@@ -63,11 +81,23 @@
 				>
 					<span class="title-row">
 						<span class="title">{note.title}</span>
+						{#if creator}
+							<span class="creator" aria-hidden="true">
+								<ProfilePic
+									name={creator.name}
+									email={creator.email}
+									pictureUrl={creator.pictureUrl}
+									size={22}
+								/>
+							</span>
+						{/if}
+					</span>
+					<span class="preview-row">
+						<span class="preview">{notePlainText(note.body).slice(0, 140)}</span>
 						{#if noteEditedAt(note)}
 							<span class="time">{formatNoteTime(noteEditedAt(note))}</span>
 						{/if}
 					</span>
-					<span class="preview">{notePlainText(note.body).slice(0, 140)}</span>
 				</button>
 			{/each}
 		</div>
@@ -80,7 +110,7 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
-		}
+	}
 
 	.empty {
 		padding: 48px 16px;
@@ -119,7 +149,8 @@
 		background: var(--fg-4);
 	}
 
-	.title-row {
+	.title-row,
+	.preview-row {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
@@ -138,7 +169,6 @@
 		text-align: left;
 	}
 
-	/* Feed title / preview — match Chat list type scale */
 	.title {
 		flex: 1;
 		min-width: 0;
@@ -152,6 +182,25 @@
 		white-space: nowrap;
 	}
 
+	.creator {
+		flex-shrink: 0;
+		line-height: 0;
+		padding-right: 2px;
+	}
+
+	.preview {
+		flex: 1;
+		min-width: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 13px;
+		line-height: 1.25;
+		/* Quieter than Chat preview — body snippet, not a message line */
+		color: var(--fg-33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	.time {
 		flex-shrink: 0;
 		padding-right: 2px;
@@ -160,17 +209,6 @@
 		font-weight: 500;
 		line-height: 1.25;
 		color: var(--fg-33);
-		white-space: nowrap;
-	}
-
-	.preview {
-		width: 100%;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
-		line-height: 1.25;
-		color: var(--fg-66);
-		overflow: hidden;
-		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 </style>
