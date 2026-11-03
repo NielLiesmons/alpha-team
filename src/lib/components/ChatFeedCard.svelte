@@ -870,7 +870,7 @@
 		border-radius: 999px;
 		/* Same surface as dropdown / FloatPanel popovers */
 		background: var(--popover);
-		color: var(--fg-66);
+		color: var(--fg);
 		font: inherit;
 		cursor: pointer;
 		line-height: 1;
@@ -882,12 +882,14 @@
 		/* Own reaction: accent wash on top of popover */
 		background: color-mix(in srgb, var(--accent-1) 28%, var(--popover));
 		border-color: color-mix(in srgb, var(--accent-1) 35%, transparent);
-		color: var(--fg);
 	}
 
 	.reaction-pill .emoji {
 		font-size: 17px;
 		line-height: 1;
+		/* Never inherit a translucent --fg-* — WebKit paints emoji with the text color’s alpha */
+		color: var(--fg);
+		opacity: 1;
 	}
 
 	.reaction-pill .reactors {

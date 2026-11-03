@@ -123,7 +123,8 @@
 		return blocks;
 	});
 
-	const TIP_PFP = 22;
+	const TIP_ICON = 22;
+	const TIP_PFP = 20;
 	const TIP_PFP_MAX = 4;
 
 	/** Unique authors for tip-row pfps (events + comments). */
@@ -532,14 +533,14 @@
 							>
 								{#if refMeta?.box === 'task'}
 									<span class="pub-box" aria-hidden="true">
-										<TaskBox state={refMeta.status || 'open'} size={TIP_PFP} />
+										<TaskBox state={refMeta.status || 'open'} size={TIP_ICON} />
 									</span>
 								{:else if refMeta?.box === 'project'}
 									<span class="pub-box" aria-hidden="true">
 										<ProjectBox
 											state={projectBox?.state || 'active'}
 											icon={projectBox?.icon}
-											size={TIP_PFP}
+											size={TIP_ICON}
 										/>
 									</span>
 								{:else if refMeta?.box === 'enterprise'}
@@ -547,7 +548,7 @@
 										<EnterpriseBox
 											state={refMeta.enterprise?.status ?? 'active'}
 											icon={refMeta.enterprise?.icon}
-											size={TIP_PFP}
+											size={TIP_ICON}
 										/>
 									</span>
 								{:else}

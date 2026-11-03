@@ -45,19 +45,6 @@
 		return list.sort((a, b) => noteEditedAt(b) - noteEditedAt(a));
 	});
 
-	/** @param {number | undefined} ts */
-	function formatNoteTime(ts) {
-		if (!ts) return '';
-		const d = new Date(ts);
-		if (Number.isNaN(d.getTime())) return '';
-		const now = new Date();
-		const sameYear = d.getFullYear() === now.getFullYear();
-		return d.toLocaleDateString(undefined, {
-			month: 'short',
-			day: 'numeric',
-			...(sameYear ? {} : { year: 'numeric' })
-		});
-	}
 </script>
 
 <svelte:head><title>Notes</title></svelte:head>
@@ -87,17 +74,14 @@
 									name={creator.name}
 									email={creator.email}
 									pictureUrl={creator.pictureUrl}
-									size={22}
+									size={20}
 								/>
 							</span>
 						{/if}
 					</span>
-					<span class="preview-row">
+					{#if notePlainText(note.body)}
 						<span class="preview">{notePlainText(note.body).slice(0, 140)}</span>
-						{#if noteEditedAt(note)}
-							<span class="time">{formatNoteTime(noteEditedAt(note))}</span>
-						{/if}
-					</span>
+					{/if}
 				</button>
 			{/each}
 		</div>
@@ -149,8 +133,7 @@
 		background: var(--fg-4);
 	}
 
-	.title-row,
-	.preview-row {
+	.title-row {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
@@ -189,8 +172,7 @@
 	}
 
 	.preview {
-		flex: 1;
-		min-width: 0;
+		width: 100%;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		line-height: 1.25;
@@ -198,17 +180,6 @@
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.time {
-		flex-shrink: 0;
-		padding-right: 2px;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 12px;
-		font-weight: 500;
-		line-height: 1.25;
-		color: var(--fg-33);
 		white-space: nowrap;
 	}
 </style>

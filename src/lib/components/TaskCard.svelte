@@ -70,11 +70,6 @@
 			{/if}
 		</div>
 		<span class="task-title" class:task-title-closed={status === 'closed'}>{title}</span>
-		{#if people.length}
-			<span class="people" aria-hidden="true">
-				<ProfilePicStack profiles={people} size="xs" />
-			</span>
-		{/if}
 		{#if status !== 'closed'}
 			<div class="priority-col">
 				{#if id}
@@ -83,6 +78,11 @@
 					<PriorityBox {priority} size={22} />
 				{/if}
 			</div>
+		{/if}
+		{#if people.length}
+			<span class="people" aria-hidden="true">
+				<ProfilePicStack profiles={people} size="xxs" />
+			</span>
 		{/if}
 	</div>
 </article>

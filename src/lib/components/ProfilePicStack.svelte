@@ -6,13 +6,14 @@
 	 * @type {{
 	 *   profiles?: Array<{ name?: string, email?: string, pictureUrl?: string | null }>,
 	 *   text?: string,
-	 *   size?: 'xs' | 'sm' | 'md',
+	 *   size?: 'xxs' | 'xs' | 'sm' | 'md',
 	 *   onclick?: ((e: MouseEvent) => void) | null
 	 * }}
 	 */
 	let { profiles = [], text = '', size = 'xs', onclick = null } = $props();
 
 	const sizeMap = {
+		xxs: { overlap: 6, height: 20, pic: 20 },
 		xs: { overlap: 7, height: 24, pic: 24 },
 		sm: { overlap: 8, height: 28, pic: 28 },
 		md: { overlap: 12, height: 36, pic: 36 }
