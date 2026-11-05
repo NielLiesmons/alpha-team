@@ -454,34 +454,34 @@
 					{/if}
 					<div class="composer-fade" aria-hidden="true"></div>
 					<div class="composer-dock">
-						<div class="composer-pill" class:expanded={pillExpanded}>
-							{#if replyPreview}
-								<div class="reply-bar">
-									<div class="reply-meta">
-										<span class="reply-label">Reply to {replyPreview.name}</span>
-										<span class="reply-text">{replyPreview.text}</span>
+						<div class="composer-stack">
+							<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+							<div class="composer-pill" class:expanded={pillExpanded}>
+								{#if replyPreview}
+									<div class="reply-bar">
+										<div class="reply-meta">
+											<span class="reply-label">Reply to {replyPreview.name}</span>
+											<span class="reply-text">{replyPreview.text}</span>
+										</div>
+										<button
+											type="button"
+											class="reply-clear"
+											aria-label="Cancel reply"
+											onclick={clearReply}>×</button
+										>
 									</div>
-									<button
-										type="button"
-										class="reply-clear"
-										aria-label="Cancel reply"
-										onclick={clearReply}>×</button
-									>
-								</div>
-							{/if}
-							<div class="composer-row">
-								<button type="button" class="side-btn plus" aria-label="Attach" disabled>
-									<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-										<path
-											d="M9 3.5v11M3.5 9h11"
-											stroke="currentColor"
-											stroke-width="1.7"
-											stroke-linecap="round"
-										/>
-									</svg>
-								</button>
-								<div class="composer-suggest-host">
-									<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+								{/if}
+								<div class="composer-row">
+									<button type="button" class="side-btn plus" aria-label="Attach" disabled>
+										<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+											<path
+												d="M9 3.5v11M3.5 9h11"
+												stroke="currentColor"
+												stroke-width="1.7"
+												stroke-linecap="round"
+											/>
+										</svg>
+									</button>
 									<div
 										class="composer-field"
 										class:fade-top={fadeTop}
@@ -498,28 +498,28 @@
 											aria-label="Comment"
 										></textarea>
 									</div>
+									{#if canSend}
+										<button
+											type="button"
+											class="side-btn send"
+											aria-label="Send"
+											disabled={chatUi.posting}
+											onclick={() => void send()}
+										>
+											<AlphaLogo size={15} />
+										</button>
+									{:else}
+										<button
+											type="button"
+											class="side-btn mic"
+											aria-label="Voice message"
+											disabled
+											title="Voice coming soon"
+										>
+											<Voice size={22} />
+										</button>
+									{/if}
 								</div>
-								{#if canSend}
-									<button
-										type="button"
-										class="side-btn send"
-										aria-label="Send"
-										disabled={chatUi.posting}
-										onclick={() => void send()}
-									>
-										<AlphaLogo size={15} />
-									</button>
-								{:else}
-									<button
-										type="button"
-										class="side-btn mic"
-										aria-label="Voice message"
-										disabled
-										title="Voice coming soon"
-									>
-										<Voice size={22} />
-									</button>
-								{/if}
 							</div>
 						</div>
 					</div>
@@ -1001,12 +1001,10 @@
 		cursor: default;
 	}
 
-	.composer-suggest-host {
+	.composer-stack {
 		position: relative;
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: flex-end;
+		width: 100%;
+		z-index: 5;
 	}
 
 	.composer-field {

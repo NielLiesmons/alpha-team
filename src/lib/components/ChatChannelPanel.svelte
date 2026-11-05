@@ -700,85 +700,86 @@
 
 	<div class="composer-fade" aria-hidden="true"></div>
 	<div class="composer-dock">
-		<div class="composer-pill" class:chrome-expanded={chromeExpanded}>
-			{#if replyPreview}
-				<div class="composer-quote-wrap">
-					<div class="composer-quote" role="group" aria-label={`Replying to ${replyPreview.name}`}>
-						<div
-							class="composer-quote-bar"
-							style:background={replyPreview.accent}
-							aria-hidden="true"
-						></div>
-						<div class="composer-quote-body">
-							<span class="composer-quote-name" style:color={replyPreview.nameColor}
-								>{replyPreview.name}</span
-							>
-							<span class="composer-quote-text">{replyPreview.text}</span>
-						</div>
-						<button
-							type="button"
-							class="composer-quote-clear"
-							aria-label="Cancel reply"
-							onclick={clearReply}>×</button
-						>
-					</div>
-				</div>
-			{/if}
-			{#if pendingFiles.length}
-				<div class="attach-bar">
-					{#each pendingFiles as f, i (f.file.name + i)}
-						<span class="attach-chip">
-							{f.kind === 'image' ? 'Image' : f.kind === 'video' ? 'Video' : f.file.name}
+		<!-- Suggest sits outside the pill so overflow:hidden / shine mask cannot clip it -->
+		<div class="composer-stack">
+			<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+			<div class="composer-pill" class:chrome-expanded={chromeExpanded}>
+				{#if replyPreview}
+					<div class="composer-quote-wrap">
+						<div class="composer-quote" role="group" aria-label={`Replying to ${replyPreview.name}`}>
+							<div
+								class="composer-quote-bar"
+								style:background={replyPreview.accent}
+								aria-hidden="true"
+							></div>
+							<div class="composer-quote-body">
+								<span class="composer-quote-name" style:color={replyPreview.nameColor}
+									>{replyPreview.name}</span
+								>
+								<span class="composer-quote-text">{replyPreview.text}</span>
+							</div>
 							<button
 								type="button"
-								class="attach-x"
-								aria-label="Remove"
-								onclick={() => {
-									if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-									pendingFiles = pendingFiles.filter((_, j) => j !== i);
-								}}>×</button
+								class="composer-quote-clear"
+								aria-label="Cancel reply"
+								onclick={clearReply}>×</button
 							>
-						</span>
-					{/each}
-					<button type="button" class="attach-clear" onclick={clearPendingFiles}>Clear</button>
-				</div>
-			{/if}
-			{#if voiceOpen}
-				<div class="voice-shell">
-					<span class="voice-pulse" aria-hidden="true"></span>
-					<span class="voice-label">Recording… {voiceSecs}s</span>
-					<button type="button" class="voice-cancel" onclick={cancelVoiceShell}>Cancel</button>
-					<button
-						type="button"
-						class="voice-send"
-						onclick={() => {
-							cancelVoiceShell();
-							chatUi.error = 'Voice capture ships next — attach an audio file via + for now.';
-						}}>Send</button
-					>
-				</div>
-			{/if}
-			<div class="composer-row">
-				<input
-					bind:this={fileInputEl}
-					type="file"
-					class="file-input"
-					multiple
-					accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip"
-					onchange={onFilesPicked}
-				/>
-				<button type="button" class="side-btn plus" aria-label="Attach" onclick={openAttach}>
-					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-						<path
-							d="M9 3.5v11M3.5 9h11"
-							stroke="currentColor"
-							stroke-width="1.7"
-							stroke-linecap="round"
-						/>
-					</svg>
-				</button>
-				<div class="composer-suggest-host">
-					<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+						</div>
+					</div>
+				{/if}
+				{#if pendingFiles.length}
+					<div class="attach-bar">
+						{#each pendingFiles as f, i (f.file.name + i)}
+							<span class="attach-chip">
+								{f.kind === 'image' ? 'Image' : f.kind === 'video' ? 'Video' : f.file.name}
+								<button
+									type="button"
+									class="attach-x"
+									aria-label="Remove"
+									onclick={() => {
+										if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+										pendingFiles = pendingFiles.filter((_, j) => j !== i);
+									}}>×</button
+								>
+							</span>
+						{/each}
+						<button type="button" class="attach-clear" onclick={clearPendingFiles}>Clear</button>
+					</div>
+				{/if}
+				{#if voiceOpen}
+					<div class="voice-shell">
+						<span class="voice-pulse" aria-hidden="true"></span>
+						<span class="voice-label">Recording… {voiceSecs}s</span>
+						<button type="button" class="voice-cancel" onclick={cancelVoiceShell}>Cancel</button>
+						<button
+							type="button"
+							class="voice-send"
+							onclick={() => {
+								cancelVoiceShell();
+								chatUi.error = 'Voice capture ships next — attach an audio file via + for now.';
+							}}>Send</button
+						>
+					</div>
+				{/if}
+				<div class="composer-row">
+					<input
+						bind:this={fileInputEl}
+						type="file"
+						class="file-input"
+						multiple
+						accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip"
+						onchange={onFilesPicked}
+					/>
+					<button type="button" class="side-btn plus" aria-label="Attach" onclick={openAttach}>
+						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+							<path
+								d="M9 3.5v11M3.5 9h11"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
 					<div
 						class="composer-field"
 						class:fade-top={fadeTop}
@@ -796,22 +797,22 @@
 							aria-label="Message"
 						></textarea>
 					</div>
+					{#if canSend}
+						<button type="button" class="side-btn send" aria-label="Send" onclick={() => void send()}>
+							<AlphaLogo size={15} />
+						</button>
+					{:else}
+						<button
+							type="button"
+							class="side-btn mic"
+							aria-label="Voice message"
+							title="Voice message"
+							onclick={openVoiceShell}
+						>
+							<Voice size={22} />
+						</button>
+					{/if}
 				</div>
-				{#if canSend}
-					<button type="button" class="side-btn send" aria-label="Send" onclick={() => void send()}>
-						<AlphaLogo size={15} />
-					</button>
-				{:else}
-					<button
-						type="button"
-						class="side-btn mic"
-						aria-label="Voice message"
-						title="Voice message"
-						onclick={openVoiceShell}
-					>
-						<Voice size={22} />
-					</button>
-				{/if}
 			</div>
 		</div>
 	</div>
@@ -1397,12 +1398,10 @@
 		color: #fff;
 	}
 
-	.composer-suggest-host {
+	.composer-stack {
 		position: relative;
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: flex-end;
+		width: 100%;
+		z-index: 5;
 	}
 
 	.composer-field {

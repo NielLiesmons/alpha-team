@@ -7,26 +7,23 @@
 		chatChannels,
 		chatFeed,
 		chatEventLabel,
+		ensureChatFeedOpen,
 		setActiveChannel,
 		unreadCountForChannel,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
-	import { isMobileNav } from '$lib/nav-stack.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	/**
-	 * Desktop: open General only when Chat has *no* selection.
+	 * Keep a chat channel open when nothing is selected.
 	 * Do not steal mail/task tip selections opened from the feed.
 	 */
 	$effect(() => {
 		const onChat = $page.url.pathname.startsWith('/chat');
 		if (!onChat) return;
-		if (typeof window === 'undefined' || isMobileNav()) return;
 		ui.selection;
 		chatChannels.length;
-		if (ui.selection) return;
-		setActiveChannel('general');
-		selectEntity('chat', 'general');
+		ensureChatFeedOpen();
 	});
 
 	/** @param {string} id */

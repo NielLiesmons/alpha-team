@@ -351,8 +351,8 @@
 		position: absolute;
 		left: 0;
 		right: 0;
-		bottom: calc(100% + 8px);
-		z-index: 8;
+		bottom: calc(100% + 10px);
+		z-index: 20;
 		min-width: 220px;
 		max-width: 100%;
 		border: 1px solid var(--glass-border);
@@ -362,6 +362,7 @@
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		overflow: hidden;
+		pointer-events: auto;
 	}
 
 	.tabs {

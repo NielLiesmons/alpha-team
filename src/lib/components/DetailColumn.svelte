@@ -44,7 +44,7 @@
 	import FormDetail from './FormDetail.svelte';
 	import PublicationsHub from './PublicationsHub.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
-	import { channelById } from '$lib/chat.svelte.js';
+	import { channelById, chatUi, ensureChatFeedOpen, setActiveChannel } from '$lib/chat.svelte.js';
 	import {
 		fileDisplayTitle,
 		fileTypeColors,
@@ -663,7 +663,22 @@
 			clearTimeout(draftSaveTimer);
 			void persistDraft();
 		}
+		const onChat = $page.url.pathname.startsWith('/chat');
+		const restoreChat =
+			onChat && selection?.kind && selection.kind !== 'chat'
+				? String(chatUi.activeChannelId || 'general')
+				: null;
 		clearSelection();
+		if (restoreChat) {
+			const reopen = () => {
+				if (ui.selection) return;
+				if (!$page.url.pathname.startsWith('/chat')) return;
+				setActiveChannel(restoreChat);
+				ensureChatFeedOpen();
+			};
+			queueMicrotask(reopen);
+			setTimeout(reopen, 50);
+		}
 	}
 
 	/** Keep body mounted through the mobile slide-out so the panel doesn’t blank mid-transition. */

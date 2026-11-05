@@ -71,6 +71,17 @@ export function channelById(id) {
 }
 
 /**
+ * Open the active chat channel in the detail pane when nothing is selected.
+ * Used after section nav / closing a tip so the feed isn't blank.
+ */
+export function ensureChatFeedOpen() {
+	if (ui.selection) return;
+	const id = String(chatUi.activeChannelId || 'general');
+	setActiveChannel(id);
+	selectEntity('chat', id);
+}
+
+/**
  * Unread messages in a channel for the signed-in person (others' tips not yet in read_by).
  * @param {string} channelId
  * @param {string} [email]

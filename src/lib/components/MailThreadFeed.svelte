@@ -18,6 +18,7 @@
 		postChatMessage,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import {
 		formatMailWhen,
 		mailAuthorLabel,
@@ -25,6 +26,7 @@
 		threadMessages
 	} from '$lib/mail.svelte.js';
 	import { mailView } from '$lib/mail-view.svelte.js';
+	import { themeChoice } from '$lib/theme.svelte.js';
 	import { openComposer } from '$lib/workspace.svelte.js';
 
 	/**
@@ -54,20 +56,38 @@
 	let fadeTop = $state(false);
 	let fadeBottom = $state(false);
 	let fieldTall = $state(false);
+	const COMPOSER_FADE_THRESHOLD = 4;
+	const COMPOSER_MAX_H = 140;
+	const COMPOSER_TALL_PX = 28;
 
 	const canSend = $derived(Boolean(draft.trim()));
-	const pillExpanded = $derived(Boolean(replyMsg) || fieldTall);
+
+	const isDark = $derived.by(() => {
+		const choice = themeChoice.value;
+		if (choice === 'light') return false;
+		if (choice === 'gray' || choice === 'dark') return true;
+		if (typeof document === 'undefined') return true;
+		return document.documentElement.dataset.theme !== 'light';
+	});
 
 	const replyPreview = $derived.by(() => {
 		if (!replyMsg) return null;
-		const person = asPerson(replyMsg.author);
-		const name = person?.name || displayNameFromEmail(replyMsg.author);
+		const email = String(replyMsg.author || '');
+		const person = asPerson(email);
+		const name = person?.name || displayNameFromEmail(email);
 		const plain = String(replyMsg.body || '')
 			.replace(/\s+/g, ' ')
 			.trim();
 		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain || 'Message';
-		return { name, text };
+		return {
+			name,
+			text,
+			accent: profileAccentCss(email, name),
+			nameColor: profileNameCss(email, name, isDark)
+		};
 	});
+
+	const chromeExpanded = $derived(Boolean(replyPreview));
 
 	$effect(() => {
 		const id = threadId;
@@ -137,22 +157,27 @@
 		replyMsg = null;
 	}
 
+	function updateInputFade() {
+		const el = inputEl;
+		if (!el) {
+			fadeTop = false;
+			fadeBottom = false;
+			return;
+		}
+		fadeTop = el.scrollTop > COMPOSER_FADE_THRESHOLD;
+		fadeBottom =
+			el.scrollHeight - el.clientHeight > COMPOSER_FADE_THRESHOLD &&
+			el.scrollHeight - el.scrollTop - el.clientHeight > COMPOSER_FADE_THRESHOLD;
+	}
+
 	function onInput() {
 		const el = inputEl;
 		if (!el) return;
 		el.style.height = 'auto';
-		const h = Math.min(el.scrollHeight, 140);
+		const h = Math.min(el.scrollHeight, COMPOSER_MAX_H);
 		el.style.height = `${h}px`;
-		fieldTall = h > 28;
-		fadeTop = el.scrollTop > 2;
-		fadeBottom = el.scrollHeight - el.scrollTop - el.clientHeight > 2;
-	}
-
-	function updateInputFade() {
-		const el = inputEl;
-		if (!el) return;
-		fadeTop = el.scrollTop > 2;
-		fadeBottom = el.scrollHeight - el.scrollTop - el.clientHeight > 2;
+		fieldTall = h > COMPOSER_TALL_PX || draft.includes('\n');
+		updateInputFade();
 	}
 
 	/** @param {string} next @param {number} cursor */
@@ -310,66 +335,78 @@
 
 	<div class="composer-fade" aria-hidden="true"></div>
 	<div class="composer-dock">
-		<div class="composer-pill" class:expanded={pillExpanded}>
-			{#if replyPreview}
-				<div class="reply-bar">
-					<div class="reply-meta">
-						<span class="reply-label">Reply to {replyPreview.name}</span>
-						<span class="reply-text">{replyPreview.text}</span>
+		<div class="composer-stack">
+			<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+			<div class="composer-pill" class:chrome-expanded={chromeExpanded}>
+				{#if replyPreview}
+					<div class="composer-quote-wrap">
+						<div class="composer-quote" role="group" aria-label={`Replying to ${replyPreview.name}`}>
+							<div
+								class="composer-quote-bar"
+								style:background={replyPreview.accent}
+								aria-hidden="true"
+							></div>
+							<div class="composer-quote-body">
+								<span class="composer-quote-name" style:color={replyPreview.nameColor}
+									>{replyPreview.name}</span
+								>
+								<span class="composer-quote-text">{replyPreview.text}</span>
+							</div>
+							<button
+								type="button"
+								class="composer-quote-clear"
+								aria-label="Cancel reply"
+								onclick={clearReply}>×</button
+							>
+						</div>
 					</div>
-					<button type="button" class="reply-clear" aria-label="Cancel reply" onclick={clearReply}
-						>×</button
-					>
-				</div>
-			{/if}
-			<div class="composer-row">
-				<button type="button" class="side-btn plus" aria-label="Attach" disabled>
-					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-						<path
-							d="M9 3.5v11M3.5 9h11"
-							stroke="currentColor"
-							stroke-width="1.7"
-							stroke-linecap="round"
-						/>
-					</svg>
-				</button>
-				<div class="composer-suggest-host">
-					<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+				{/if}
+				<div class="composer-row">
+					<button type="button" class="side-btn plus" aria-label="Attach" disabled>
+						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+							<path
+								d="M9 3.5v11M3.5 9h11"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
 					<div class="composer-field" class:fade-top={fadeTop} class:fade-bottom={fadeBottom}>
 						<textarea
 							bind:this={inputEl}
 							class="composer-input"
 							rows="1"
-							placeholder={replyMsg ? 'Reply' : 'Message the team'}
+							placeholder={replyMsg ? 'Reply' : 'Message'}
 							bind:value={draft}
 							oninput={onInput}
 							onscroll={updateInputFade}
 							onkeydown={onKey}
-							aria-label="Team chat"
+							aria-label="Message"
 						></textarea>
 					</div>
+					{#if canSend}
+						<button
+							type="button"
+							class="side-btn send"
+							aria-label="Send"
+							disabled={chatUi.posting}
+							onclick={() => void send()}
+						>
+							<AlphaLogo size={15} />
+						</button>
+					{:else}
+						<button
+							type="button"
+							class="side-btn mic"
+							aria-label="Voice message"
+							disabled
+							title="Voice coming soon"
+						>
+							<Voice size={22} />
+						</button>
+					{/if}
 				</div>
-				{#if canSend}
-					<button
-						type="button"
-						class="side-btn send"
-						aria-label="Send"
-						disabled={chatUi.posting}
-						onclick={() => void send()}
-					>
-						<AlphaLogo size={15} />
-					</button>
-				{:else}
-					<button
-						type="button"
-						class="side-btn mic"
-						aria-label="Voice message"
-						disabled
-						title="Voice coming soon"
-					>
-						<Voice size={22} />
-					</button>
-				{/if}
 			</div>
 		</div>
 	</div>
@@ -532,14 +569,22 @@
 		right: 0;
 		bottom: 0;
 		z-index: 4;
+		/* Body already insets 24/14px — match ChatChannelPanel optical pad */
 		padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 		pointer-events: none;
 		background: transparent;
+		overflow: visible;
 	}
 
 	.composer-dock > * {
 		pointer-events: auto;
+	}
+
+	.composer-stack {
+		position: relative;
+		width: 100%;
+		z-index: 5;
 	}
 
 	.composer-pill {
@@ -560,43 +605,92 @@
 		overflow: hidden;
 	}
 
-	.composer-pill.expanded {
-		border-radius: 22px;
+	.composer-pill::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		padding: 1px;
+		pointer-events: none;
+		z-index: 1;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
+			color-mix(in srgb, var(--fg) 9%, transparent) 100%
+		);
+		-webkit-mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
 	}
 
-	.reply-bar {
+	.composer-pill.chrome-expanded {
+		border-radius: 16px 16px 23.5px 23.5px;
+	}
+
+	.composer-quote-wrap {
+		padding: 8px 8px 0;
+		box-sizing: border-box;
+	}
+
+	.composer-quote {
 		display: flex;
-		align-items: flex-start;
-		gap: 8px;
-		padding: 10px 12px 0;
+		align-items: stretch;
+		min-width: 0;
+		width: 100%;
+		border-radius: 8px;
+		overflow: hidden;
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
 	}
 
-	.reply-meta {
+	.composer-quote-bar {
+		width: 2.8px;
+		flex-shrink: 0;
+		align-self: stretch;
+	}
+
+	.composer-quote-body {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
+		padding: 4px 8px 5px;
 	}
 
-	.reply-label {
-		font-size: 11px;
-		font-weight: 650;
-		color: var(--fg-66);
-	}
-
-	.reply-text {
-		font-size: 12px;
-		color: var(--fg-33);
+	.composer-quote-name {
+		font-size: 13px;
+		font-weight: 700;
+		line-height: 1.35;
+		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
-	.reply-clear {
+	.composer-quote-text {
+		font-size: 13px;
+		line-height: 1.35;
+		color: var(--fg-66);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.composer-quote-clear {
 		flex-shrink: 0;
+		align-self: flex-start;
 		width: 28px;
 		height: 28px;
+		display: grid;
+		place-items: center;
+		margin: 2px 2px 0 0;
+		padding: 0;
 		border: 0;
 		border-radius: 999px;
 		background: transparent;
@@ -609,70 +703,118 @@
 	.composer-row {
 		display: flex;
 		align-items: flex-end;
-		gap: 2px;
-		padding: 4px;
-		min-height: 47px;
+		gap: 7px;
+		min-height: calc(47px - 14px);
+		padding: 7px;
 		box-sizing: border-box;
 	}
 
-	.composer-suggest-host {
-		position: relative;
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
+	.composer-pill.chrome-expanded .composer-row {
+		padding-top: 4px;
+	}
+
+	.side-btn {
+		width: 33px;
+		height: 33px;
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 9999px;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.side-btn.plus {
+		background: color-mix(in srgb, var(--fg) 12%, transparent);
+		color: var(--fg-66);
+	}
+
+	.side-btn.plus:disabled {
+		opacity: 0.55;
+		cursor: default;
+	}
+
+	.side-btn.mic {
+		background: transparent;
+		color: var(--fg-33);
+	}
+
+	.side-btn.mic:disabled {
+		opacity: 0.55;
+		cursor: default;
+	}
+
+	.side-btn.send {
+		background: var(--gradient-accent-1);
+		color: #fff;
+	}
+
+	.side-btn.send:disabled {
+		opacity: 0.7;
+		cursor: default;
 	}
 
 	.composer-field {
 		flex: 1;
 		min-width: 0;
+		max-height: 140px;
 		display: flex;
-		align-items: center;
-		padding: 0 4px;
+		align-items: flex-end;
+		-webkit-mask-image: linear-gradient(#000, #000);
+		mask-image: linear-gradient(#000, #000);
+	}
+
+	.composer-field.fade-top {
+		-webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
+		mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
+	}
+
+	.composer-field.fade-bottom {
+		-webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 8px), transparent 100%);
+		mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 8px), transparent 100%);
+	}
+
+	.composer-field.fade-top.fade-bottom {
+		-webkit-mask-image: linear-gradient(
+			to bottom,
+			transparent 0,
+			#000 8px,
+			#000 calc(100% - 8px),
+			transparent 100%
+		);
+		mask-image: linear-gradient(
+			to bottom,
+			transparent 0,
+			#000 8px,
+			#000 calc(100% - 8px),
+			transparent 100%
+		);
 	}
 
 	.composer-input {
+		flex: 1;
+		min-width: 0;
 		width: 100%;
+		min-height: 20px;
+		max-height: 140px;
 		margin: 0;
-		padding: 10px 4px;
+		padding: 6px 4px 7px;
 		border: 0;
+		outline: none;
 		resize: none;
+		overflow-y: auto;
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
 		font-size: 15px;
-		line-height: 1.35;
-		max-height: 140px;
-		outline: none;
+		line-height: 20px;
+		field-sizing: content;
 	}
 
 	.composer-input::placeholder {
 		color: var(--fg-33);
-	}
-
-	.side-btn {
-		flex-shrink: 0;
-		width: 39px;
-		height: 39px;
-		display: grid;
-		place-items: center;
-		margin: 0;
-		padding: 0;
-		border: 0;
-		border-radius: 999px;
-		background: transparent;
-		color: var(--fg-66);
-		cursor: pointer;
-	}
-
-	.side-btn:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.side-btn.send {
-		background: var(--button-primary-bg, var(--fg-8));
-		color: var(--button-primary-fg, var(--fg));
 	}
 
 	@media (max-width: 767px) {
