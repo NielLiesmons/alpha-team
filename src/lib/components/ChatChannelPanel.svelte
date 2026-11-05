@@ -4,6 +4,7 @@
 	import ArrowDown from '$lib/components/icons/ArrowDown.svelte';
 	import Voice from '$lib/components/icons/Voice.svelte';
 	import ChatFeedCard from '$lib/components/ChatFeedCard.svelte';
+	import ChatStatusLine from '$lib/components/ChatStatusLine.svelte';
 	import EnterpriseBox from '$lib/components/EnterpriseBox.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import NavIcon from '$lib/components/NavIcon.svelte';
@@ -19,8 +20,10 @@
 		chatPublicationRefKey,
 		chatRefMeta,
 		chatProjectBoxProps,
+		chatStatusText,
 		findChatParent,
 		hydrateChatFeedFromCache,
+		isChatStatusEvent,
 		openChatRef,
 		postChatMessage,
 		refreshChatFeed,
@@ -87,7 +90,7 @@
 
 	/**
 	 * @type {{
-	 *   type: 'panel' | 'plain',
+	 *   type: 'panel' | 'plain' | 'status',
 	 *   key: string,
 	 *   refKey?: string | null,
 	 *   refMeta?: any,
@@ -95,9 +98,17 @@
 	 * }[]}
 	 */
 	const feedBlocks = $derived.by(() => {
-		/** @type {{ type: 'panel' | 'plain', key: string, refKey?: string | null, refMeta?: any, messages: any[] }[]} */
+		/** @type {{ type: 'panel' | 'plain' | 'status', key: string, refKey?: string | null, refMeta?: any, messages: any[] }[]} */
 		const blocks = [];
 		for (const msg of chronological) {
+			if (isChatStatusEvent(msg)) {
+				blocks.push({
+					type: 'status',
+					key: `status-${msg.id}`,
+					messages: [msg]
+				});
+				continue;
+			}
 			const refKey = chatPublicationRefKey(msg);
 			const last = blocks[blocks.length - 1];
 			if (refKey && last?.type === 'panel' && last.refKey === refKey) {
@@ -516,7 +527,17 @@
 		{:else}
 			<div class="stack">
 				{#each feedBlocks as block (block.key)}
-					{#if block.type === 'panel'}
+					{#if block.type === 'status'}
+						{@const msg = block.messages[0]}
+						{@const subject = String(msg?.ref?.id || msg?.author || '')
+							.trim()
+							.toLowerCase()}
+						<ChatStatusLine
+							text={chatStatusText(msg)}
+							email={subject}
+							name={displayNameFromEmail(subject)}
+						/>
+					{:else if block.type === 'panel'}
 						{@const refMeta = block.refMeta}
 						{@const projectBox =
 							refMeta?.box === 'project' && refMeta.project

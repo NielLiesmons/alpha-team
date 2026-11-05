@@ -315,7 +315,46 @@ export function chatEventLabel(msg) {
 	if (t === 'note') return 'added a Note';
 	if (t === 'project') return 'added a Project';
 	if (t === 'enterprise') return 'added an Enterprise';
+	if (t === 'mail') return 'commented on Mail';
 	return 'shared something';
+}
+
+/**
+ * Centered status-line copy for system events (member joins, etc.).
+ * @param {any} msg
+ */
+export function chatStatusText(msg) {
+	const body = String(msg?.body || '').trim();
+	if (body) return body;
+	const t = String(msg?.ref?.type || '').toLowerCase();
+	const subjectEmail = String(msg?.ref?.id || '').trim();
+	const subject = subjectEmail ? displayNameFromEmail(subjectEmail) : '';
+	const actor = displayNameFromEmail(msg?.author);
+	if (t === 'member') {
+		const action = String(msg?.ref?.action || 'added').toLowerCase();
+		const who = subject || actor || 'Someone';
+		if (action === 'removed') return `${who} was removed from the Space`;
+		if (action === 'joined') return `${who} joined the Space`;
+		if (action === 'left') return `${who} left the Space`;
+		return `${who} was added to the Space`;
+	}
+	if (t === 'status' || t === 'system') {
+		return actor ? `${actor} updated the conversation` : 'Conversation updated';
+	}
+	return actor ? `${actor} ${chatEventLabel(msg)}` : chatEventLabel(msg);
+}
+
+/**
+ * True for centered status lines (not entity-create tip panels).
+ * @param {any} msg
+ */
+export function isChatStatusEvent(msg) {
+	if (msg?.kind !== 'event') return false;
+	const t = String(msg?.ref?.type || '').toLowerCase();
+	if (t === 'task' || t === 'note' || t === 'project' || t === 'enterprise' || t === 'mail') {
+		return false;
+	}
+	return true;
 }
 
 /**
@@ -333,6 +372,34 @@ export function announceEntityCreated(type, id) {
 		ref: { type, id: entityId },
 		channel_id: 'general'
 	}).catch((e) => console.warn('chat event', e));
+}
+
+/**
+ * Announce a membership change as a centered status line in General.
+ * @param {string} email
+ * @param {'added' | 'removed' | 'joined' | 'left'} [action]
+ * @param {string} [name]
+ */
+export function announceMemberStatus(email, action = 'added', name = '') {
+	const e = String(email || '')
+		.trim()
+		.toLowerCase();
+	if (!e) return;
+	const who = String(name || '').trim() || displayNameFromEmail(e);
+	const verb =
+		action === 'removed'
+			? 'was removed from the Space'
+			: action === 'joined'
+				? 'joined the Space'
+				: action === 'left'
+					? 'left the Space'
+					: 'was added to the Space';
+	void postChatMessage({
+		body: `${who} ${verb}`,
+		kind: 'event',
+		ref: { type: 'member', id: e, action },
+		channel_id: 'general'
+	}).catch((err) => console.warn('chat member status', err));
 }
 
 /**

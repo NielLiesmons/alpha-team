@@ -218,11 +218,16 @@ export async function upsertMember(input) {
 	} else if (prev?.picture) {
 		next.picture = prev.picture;
 	}
+	const isNew = idx < 0;
 	if (idx >= 0) members[idx] = next;
 	else members.push(next);
 
 	const session = activeSession();
 	if (session) await saveMembers(session, [...members]);
+	if (isNew) {
+		const { announceMemberStatus } = await import('./chat.svelte.js');
+		announceMemberStatus(email, next.status === 'invited' ? 'added' : 'joined', next.name);
+	}
 	return memberFor(email);
 }
 
@@ -255,6 +260,8 @@ export async function markMemberJoined(email) {
 			/* claimer may not have write yet — owner list still has invited row */
 		}
 	}
+	const { announceMemberStatus } = await import('./chat.svelte.js');
+	announceMemberStatus(m.email, 'joined', m.name);
 }
 
 /**
@@ -278,5 +285,7 @@ export async function removeMember(email, opts = {}) {
 	const session = activeSession();
 	if (session) await saveMembers(session, next);
 	else replaceMembers(next);
+	const { announceMemberStatus } = await import('./chat.svelte.js');
+	announceMemberStatus(e, 'removed', m.name);
 	return true;
 }

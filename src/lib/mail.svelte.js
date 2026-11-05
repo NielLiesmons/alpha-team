@@ -116,17 +116,23 @@ const AUTO_FROM =
 	/^(no[-_.]?reply|noreply|donotreply|do[-_.]?not[-_.]?reply|notifications?|mailer[-_.]?daemon|bounce|newsletter|news|digest|updates?|marketing|promo)([+._-]|$)/i;
 
 /**
- * Newsletter / digest heuristic.
+ * Newsletter / blog / digest heuristic → Updates category.
  * @param {any} thread
  */
-export function isNewsMail(thread) {
+export function isUpdatesMail(thread) {
 	if (!thread) return false;
 	const from = normEmail(thread.from || thread._latestFrom);
 	const local = from.split('@')[0] || '';
-	if (/newsletter|digest|news@|weekly|daily/i.test(from)) return true;
-	if (/^(newsletter|news|digest|updates?|marketing|promo)/i.test(local)) return true;
+	if (/newsletter|digest|news@|weekly|daily|blog|substack|medium/i.test(from)) return true;
+	if (/^(newsletter|news|digest|updates?|marketing|promo|blog)/i.test(local)) return true;
 	const blob = `${thread.subject || ''} ${thread.body || ''}`.toLowerCase();
-	if (blob.includes('unsubscribe') || blob.includes('view in browser')) return true;
+	if (
+		blob.includes('unsubscribe') ||
+		blob.includes('view in browser') ||
+		blob.includes('read on the web')
+	) {
+		return true;
+	}
 	const msgs = Array.isArray(thread.messages) ? thread.messages : [];
 	for (const m of msgs) {
 		const b = `${m.subject || ''} ${m.body || ''}`.toLowerCase();
@@ -139,12 +145,15 @@ export function isNewsMail(thread) {
 	return false;
 }
 
+/** @deprecated use isUpdatesMail */
+export const isNewsMail = isUpdatesMail;
+
 /**
- * Transactional / automated (not a person, not a digest).
+ * Transactional / automated (not a person, not Updates).
  * @param {any} thread
  */
 export function isOtherMail(thread) {
-	if (!thread || isNewsMail(thread)) return false;
+	if (!thread || isUpdatesMail(thread)) return false;
 	const from = normEmail(thread.from || thread._latestFrom);
 	const local = from.split('@')[0] || '';
 	return AUTO_FROM.test(local);
@@ -157,7 +166,7 @@ export function isOtherMail(thread) {
  * @returns {import('./mail-view.svelte.js').MailCategory}
  */
 export function mailCategoryFor(thread) {
-	if (isNewsMail(thread)) return 'news';
+	if (isUpdatesMail(thread)) return 'updates';
 	if (isOtherMail(thread)) return 'other';
 	const contact = normEmail(thread?.from);
 	if (contact && isApprovedContact(contact)) return 'primary';
