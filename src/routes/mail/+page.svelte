@@ -1,5 +1,6 @@
 <script>
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
+	import Reply from '$lib/components/icons/Reply.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
 	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
@@ -213,29 +214,37 @@
 					<span class="col-main">
 						<span class="meta">
 							<span class="author">{author}</span>
-							<span class="time">{formatMailWhen(t.created_at)}</span>
+							<span class="meta-trail">
+								{#if t.count > 1}
+									<span class="count">{t.count}</span>
+								{/if}
+								{#if unread}
+									<span class="unread-dot" aria-label="Unread"></span>
+								{/if}
+							</span>
 						</span>
 						<span class="subject">
-							{t.subject || '(no subject)'}
-							{#if t.count > 1}
-								<span class="count">{t.count}</span>
+							<span class="subject-text">{t.subject || '(no subject)'}</span>
+							<span class="time">{formatMailWhen(t.created_at)}</span>
+						</span>
+						<span class="snippet-row">
+							{#if preview.showPfp}
+								<span class="reply-ico" aria-hidden="true">
+									<Reply size={12} />
+								</span>
+							{/if}
+							<span class="snippet">{preview.text || ''}</span>
+							{#if preview.showPfp}
+								<span class="snippet-pfp">
+									<ProfilePic
+										name={preview.fromName}
+										email={preview.from}
+										pictureUrl={pictureUrlFor(preview.from)}
+										size={20}
+									/>
+								</span>
 							{/if}
 						</span>
-						{#if preview.text}
-							<span class="snippet-row">
-								{#if preview.showPfp}
-									<span class="snippet-pfp">
-										<ProfilePic
-											name={preview.fromName}
-											email={preview.from}
-											pictureUrl={pictureUrlFor(preview.from)}
-											size={16}
-										/>
-									</span>
-								{/if}
-								<span class="snippet">{preview.text}</span>
-							</span>
-						{/if}
 						{#if hasComments}
 							<span class="team-row">
 								<span class="team-stack">
@@ -436,7 +445,7 @@
 
 	.meta {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 8px;
 		min-width: 0;
 	}
@@ -456,29 +465,15 @@
 		font-weight: 750;
 	}
 
-	.time {
-		flex-shrink: 0;
-		padding-right: 2px;
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--fg-33);
-	}
-
-	.subject {
-		display: flex;
+	.meta-trail {
+		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		min-width: 0;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--fg-66);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		flex-shrink: 0;
+		padding-right: 2px;
 	}
 
 	.count {
-		flex-shrink: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 600;
@@ -490,17 +485,61 @@
 			'onum' 0;
 	}
 
+	.unread-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 999px;
+		background: var(--accent);
+		flex-shrink: 0;
+	}
+
+	.subject {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		margin-top: 1px; /* +1px between author row and subject */
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-66);
+	}
+
+	.subject-text {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.time {
+		flex-shrink: 0;
+		padding-right: 2px;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	/* Fixed to stack xxs (20px) so height matches with/without reply pfp */
 	.snippet-row {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		min-width: 0;
+		height: 20px;
+	}
+
+	.reply-ico {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		color: var(--fg-33);
 	}
 
 	.snippet-pfp {
 		flex-shrink: 0;
-		width: 16px;
-		height: 16px;
+		width: 20px;
+		height: 20px;
 		border-radius: 999px;
 		overflow: hidden;
 	}
@@ -508,12 +547,13 @@
 	/* Do not use class "preview" — app.css .preview adds 16px padding for editors */
 	.snippet {
 		display: block;
+		flex: 1;
 		margin: 0;
 		padding: 0;
 		min-width: 0;
 		font-size: 12px;
 		font-weight: 400;
-		line-height: 1.3;
+		line-height: 20px;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -550,7 +590,7 @@
 		font-size: 12px;
 		font-weight: 400;
 		line-height: 1.3;
-		color: var(--fg-33);
+		color: var(--fg-66);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
