@@ -106,6 +106,7 @@
 >
 	<EmojiPicker
 		value={icon}
+		allowCustom={false}
 		onselect={(emoji) => {
 			icon = emoji;
 			iconOpen = false;

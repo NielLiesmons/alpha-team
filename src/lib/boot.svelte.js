@@ -55,6 +55,12 @@ export async function bootApp() {
 	} catch {
 		/* ignore */
 	}
+	try {
+		const { refreshCustomEmojis } = await import('./custom-emoji.svelte.js');
+		void refreshCustomEmojis().catch(() => {});
+	} catch {
+		/* ignore */
+	}
 
 	if (!activeSessionSafe()) {
 		appBoot.listsReady = true;

@@ -10,8 +10,11 @@
 	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { REACTION_EMOJI, reactionsForMessage, toggleReaction } from '$lib/chat.svelte.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
+	import { customEmojis, customEmojiUrl } from '$lib/custom-emoji.svelte.js';
+	import { customEmojiShortcode, emojiOnlyInfo, tokenizeChatBody } from '$lib/message-emoji.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+	import ChatEmoji from './ChatEmoji.svelte';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { getPath } from '$lib/drive/client.js';
 	import { getMediaBlob } from '$lib/drive/media.js';
@@ -87,6 +90,18 @@
 	});
 	const showReceipt = $derived(
 		isMine && stackLast && (delivery === 'sent' || delivery === 'read')
+	);
+
+	const hasAttachments = $derived(
+		Array.isArray(msg.attachments) && msg.attachments.length > 0
+	);
+	const emojiOnly = $derived.by(() => {
+		if (isReply || hasAttachments) return null;
+		return emojiOnlyInfo(msg.body);
+	});
+	const bodyTokens = $derived(tokenizeChatBody(msg.body));
+	const emojiOnlyPx = $derived(
+		emojiOnly?.count === 1 ? 56 : emojiOnly?.count === 2 ? 48 : 40
 	);
 
 	function nameColor(email, label) {
@@ -254,6 +269,7 @@
 				class="bubble"
 				class:quoted={isReply}
 				class:mine={isMine}
+				class:emoji-only={Boolean(emojiOnly)}
 				class:stack-first={stackFirst}
 				class:stack-last={stackLast}
 				class:stack-mid={!stackFirst && !stackLast}
@@ -265,7 +281,7 @@
 			role="group"
 			aria-label={isMine ? 'Your message' : `Message from ${name}`}
 		>
-			{#if !isMine && showAuthor && stackFirst}
+			{#if !isMine && showAuthor && stackFirst && !emojiOnly}
 				<div class="bubble-head">
 					<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
 					{#if when}<span class="when">{when}</span>{/if}
@@ -294,8 +310,22 @@
 					</div>
 				</button>
 			{/if}
-			{#if msg.body}
-				<p class="text">{msg.body}</p>
+			{#if emojiOnly}
+				<p class="text emoji-only-text" style:--emoji-size="{emojiOnlyPx}px">
+					{#each emojiOnly.tokens as tok, i (tok + i)}
+						<ChatEmoji token={tok} size={emojiOnlyPx} />
+					{/each}
+				</p>
+			{:else if msg.body}
+				<p class="text">
+					{#each bodyTokens as tok, i (`${tok.type}-${i}`)}
+						{#if tok.type === 'text'}
+							{tok.value}
+						{:else}
+							<ChatEmoji token={tok.value} size={18} />
+						{/if}
+					{/each}
+				</p>
 			{/if}
 			{#if Array.isArray(msg.attachments) && msg.attachments.length}
 				<div class="attachments">
@@ -359,6 +389,26 @@
 
 			{#if pickerOpen}
 				<div class="react-picker" role="listbox" aria-label="Reactions">
+					{#each customEmojis.slice(0, 6) as em (em.id)}
+						{@const code = customEmojiShortcode(em.name)}
+						{@const src = customEmojiUrl(em.name)}
+						<button
+							type="button"
+							class="react-pick custom"
+							role="option"
+							title={code}
+							onclick={(e) => {
+								e.stopPropagation();
+								void onReact(code);
+							}}
+						>
+							{#if src}
+								<img src={src} alt={code} width="22" height="22" draggable="false" />
+							{:else}
+								{code}
+							{/if}
+						</button>
+					{/each}
 					{#each REACTION_EMOJI as emoji (emoji)}
 						<button
 							type="button"
@@ -389,7 +439,7 @@
 								: `${r.emoji} ${r.count}`}
 							onclick={() => void onReact(r.emoji)}
 						>
-							<span class="emoji">{r.emoji}</span>
+							<span class="emoji"><ChatEmoji token={r.emoji} size={16} /></span>
 							{#if r.count <= REACTION_PFP_MAX}
 								<span class="reactors" aria-hidden="true">
 									{#each r.authors.slice(0, REACTION_PFP_MAX) as email, i (email)}
@@ -539,6 +589,19 @@
 		background: var(--gradient-accent-1);
 		color: #fff;
 		padding-bottom: 4px;
+	}
+
+	/* 1–3 emoji stickers: no chrome, just the glyphs */
+	.bubble.emoji-only {
+		padding: 0;
+		background: transparent;
+		border-radius: 0;
+	}
+
+	.bubble.emoji-only.mine {
+		background: transparent;
+		padding: 0;
+		color: inherit;
 	}
 
 	/* Mid-stack: all corners full. Tail only on last. */
@@ -722,8 +785,23 @@
 		word-break: break-word;
 	}
 
+	.text.emoji-only-text {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 0;
+		font-size: var(--emoji-size, 56px);
+		line-height: 1.05;
+		color: inherit;
+		white-space: nowrap;
+	}
+
 	.bubble.mine .text {
 		color: #fff;
+	}
+
+	.bubble.emoji-only.mine .text {
+		color: inherit;
 	}
 
 	/* Mid-stack outgoing: +1px under text only (not image-only bubbles). */
@@ -831,6 +909,13 @@
 
 	.react-pick:hover {
 		background: var(--fg-8);
+	}
+
+	.react-pick.custom img {
+		display: block;
+		width: 22px;
+		height: 22px;
+		object-fit: contain;
 	}
 
 	.reaction-pills {
