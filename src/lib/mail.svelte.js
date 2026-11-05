@@ -15,6 +15,7 @@ import {
 	listJmapFolder,
 	mailPersonName
 } from './jmap-mail.js';
+import { approvedContacts, isApprovedContact } from './mail-contacts.svelte.js';
 import { mailView } from './mail-view.svelte.js';
 import { displayNameFromEmail } from './actor.svelte.js';
 
@@ -110,6 +111,104 @@ export function mailThreadsForCurrentFolder() {
 	return groupMailThreads(asMsgs, me);
 }
 
+/** Automated / bulk From local-parts. */
+const AUTO_FROM =
+	/^(no[-_.]?reply|noreply|donotreply|do[-_.]?not[-_.]?reply|notifications?|mailer[-_.]?daemon|bounce|newsletter|news|digest|updates?|marketing|promo)([+._-]|$)/i;
+
+/**
+ * Newsletter / digest heuristic.
+ * @param {any} thread
+ */
+export function isNewsMail(thread) {
+	if (!thread) return false;
+	const from = normEmail(thread.from || thread._latestFrom);
+	const local = from.split('@')[0] || '';
+	if (/newsletter|digest|news@|weekly|daily/i.test(from)) return true;
+	if (/^(newsletter|news|digest|updates?|marketing|promo)/i.test(local)) return true;
+	const blob = `${thread.subject || ''} ${thread.body || ''}`.toLowerCase();
+	if (blob.includes('unsubscribe') || blob.includes('view in browser')) return true;
+	const msgs = Array.isArray(thread.messages) ? thread.messages : [];
+	for (const m of msgs) {
+		const b = `${m.subject || ''} ${m.body || ''}`.toLowerCase();
+		if (b.includes('unsubscribe')) return true;
+		const headers = m._jmap?.headers || m._jmap?.header || null;
+		if (headers && (headers['list-id'] || headers['List-Id'] || headers['list-unsubscribe'])) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Transactional / automated (not a person, not a digest).
+ * @param {any} thread
+ */
+export function isOtherMail(thread) {
+	if (!thread || isNewsMail(thread)) return false;
+	const from = normEmail(thread.from || thread._latestFrom);
+	const local = from.split('@')[0] || '';
+	return AUTO_FROM.test(local);
+}
+
+/**
+ * Triage category for a thread.
+ * Primary = approved first-contact only.
+ * @param {any} thread
+ * @returns {import('./mail-view.svelte.js').MailCategory}
+ */
+export function mailCategoryFor(thread) {
+	if (isNewsMail(thread)) return 'news';
+	if (isOtherMail(thread)) return 'other';
+	const contact = normEmail(thread?.from);
+	if (contact && isApprovedContact(contact)) return 'primary';
+	return 'new';
+}
+
+/**
+ * Folder threads filtered by active triage category.
+ */
+export function mailThreadsForCurrentView() {
+	mailView.category;
+	approvedContacts().size; /* subscribe to approved + members */
+	const all = mailThreadsForCurrentFolder();
+	const cat = mailView.category;
+	return all.filter((t) => mailCategoryFor(t) === cat);
+}
+
+/**
+ * Messages in a thread, oldest → newest.
+ * @param {any} thread
+ */
+export function threadMessages(thread) {
+	if (!thread) return [];
+	if (Array.isArray(thread.messages) && thread.messages.length) {
+		return [...thread.messages].sort((a, b) =>
+			String(a.created_at || '').localeCompare(String(b.created_at || ''))
+		);
+	}
+	return [thread];
+}
+
+/**
+ * Last message in the thread (for feed preview).
+ * @param {any} thread
+ */
+export function mailLatestMessage(thread) {
+	const msgs = threadMessages(thread);
+	return msgs[msgs.length - 1] || thread;
+}
+
+/**
+ * First human party on the thread (card avatar / name).
+ * @param {any} thread
+ */
+export function mailThreadContact(thread) {
+	return {
+		email: normEmail(thread?.from),
+		name: mailAuthorLabel(thread)
+	};
+}
+
 /**
  * @param {string} id thread id or message id
  */
@@ -123,20 +222,6 @@ export function findMail(id) {
 		}
 	}
 	return null;
-}
-
-/**
- * Messages in a thread for the detail pane (oldest → newest).
- * @param {any} thread
- */
-export function threadMessages(thread) {
-	if (!thread) return [];
-	if (Array.isArray(thread.messages) && thread.messages.length) {
-		return [...thread.messages].sort((a, b) =>
-			String(a.created_at || '').localeCompare(String(b.created_at || ''))
-		);
-	}
-	return [thread];
 }
 
 export async function refreshMail() {

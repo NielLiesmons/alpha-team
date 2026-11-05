@@ -11,6 +11,7 @@
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		chatUi,
 		commentsByKey,
@@ -19,7 +20,7 @@
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
 
-	/** @type {{ type: 'task' | 'note' | 'project', entityId: string }} */
+	/** @type {{ type: 'task' | 'note' | 'project' | 'mail', entityId: string }} */
 	let { type, entityId } = $props();
 
 	let open = $state(false);

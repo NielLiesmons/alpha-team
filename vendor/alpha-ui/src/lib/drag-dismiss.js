@@ -2,6 +2,11 @@
  * Pointer drag-down to dismiss mobile sheets / fullscreen overlays.
  * Ignores the gesture while an inner scrollport still has scrollTop > 0.
  *
+ * Phone note: `touch-action: pan-y` alone lets the browser steal the gesture
+ * after a few pixels → `pointercancel` → snap-back. We claim on small
+ * downward intent and `preventDefault` on non-passive touchmove so scroll
+ * cannot cancel the dismiss drag.
+ *
  * @param {HTMLElement} node
  * @param {{
  *   onclose?: () => void,
@@ -15,15 +20,19 @@
 export function dragDismiss(node, params = {}) {
 	let onclose = params.onclose || params.onDismiss || (() => {});
 	let enabled = params.enabled !== false;
-	let threshold = params.threshold ?? 110;
+	let threshold = params.threshold ?? 90;
 	let scrollSelector = params.scrollSelector || '';
 	let wholeSurface = Boolean(params.wholeSurface);
 
 	/** @type {number} */
 	let startY = 0;
 	/** @type {number} */
+	let startX = 0;
+	/** @type {number} */
 	let dy = 0;
 	let dragging = false;
+	/** Gesture claimed — browser scroll must not win. */
+	let claimed = false;
 	/** @type {number | null} */
 	let pointerId = null;
 
@@ -43,13 +52,61 @@ export function dragDismiss(node, params = {}) {
 		const t = Math.max(0, y);
 		node.style.transform = t > 0 ? `translate3d(0, ${t}px, 0)` : '';
 		node.style.opacity = t > 0 ? String(Math.max(0.35, 1 - t / 320)) : '';
-		node.style.transition = dragging ? 'none' : '';
+		node.style.transition = dragging && claimed ? 'none' : '';
 	}
 
 	function resetVisual() {
 		node.style.transform = '';
 		node.style.opacity = '';
 		node.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+	}
+
+	/**
+	 * @param {EventTarget | null} t
+	 */
+	function shouldIgnoreTarget(t) {
+		if (!(t instanceof Element)) return false;
+		return Boolean(
+			t.closest(
+				'[data-no-drag-dismiss], button, a, input, textarea, select, [role="button"], [role="slider"], [contenteditable="true"]'
+			)
+		);
+	}
+
+	function releaseCapture() {
+		if (pointerId == null) return;
+		try {
+			node.releasePointerCapture(pointerId);
+		} catch {
+			/* ignore */
+		}
+	}
+
+	/**
+	 * @param {boolean} commit
+	 */
+	function endDrag(commit) {
+		const shouldClose = commit && claimed && dy > threshold;
+		dragging = false;
+		claimed = false;
+		releaseCapture();
+		pointerId = null;
+		if (shouldClose) onclose();
+		dy = 0;
+		resetVisual();
+	}
+
+	/**
+	 * @param {PointerEvent} e
+	 */
+	function claim(e) {
+		if (claimed) return;
+		claimed = true;
+		try {
+			node.setPointerCapture(e.pointerId);
+		} catch {
+			/* ignore */
+		}
 	}
 
 	/** @param {PointerEvent} e */
@@ -61,22 +118,15 @@ export function dragDismiss(node, params = {}) {
 		}
 		const root = scrollRoot();
 		if (root.scrollTop > 2) return;
-		const t = e.target;
-		if (t instanceof Element) {
-			/* Don't steal horizontal scrubbers / explicit no-dismiss zones. */
-			if (t.closest('[data-no-drag-dismiss], input, textarea, select, [contenteditable="true"]')) {
-				return;
-			}
-		}
+		if (shouldIgnoreTarget(e.target)) return;
+
 		dragging = true;
+		claimed = false;
 		pointerId = e.pointerId;
 		startY = e.clientY;
+		startX = e.clientX;
 		dy = 0;
-		try {
-			node.setPointerCapture(e.pointerId);
-		} catch {
-			/* ignore */
-		}
+		/* Capture only after claim — early capture fights taps and iOS scroll arbitration. */
 	}
 
 	/** @param {PointerEvent} e */
@@ -84,38 +134,62 @@ export function dragDismiss(node, params = {}) {
 		if (!dragging || e.pointerId !== pointerId) return;
 		const root = scrollRoot();
 		if (root.scrollTop > 2) {
-			dy = 0;
-			applyTransform(0);
+			endDrag(false);
 			return;
 		}
-		dy = Math.max(0, e.clientY - startY);
-		/* Require a bit of downward intent before claiming the gesture. */
-		if (dy < 8 && !wholeSurface) return;
+
+		const rawDy = e.clientY - startY;
+		const dx = Math.abs(e.clientX - startX);
+
+		if (!claimed) {
+			/* Upward or mostly-horizontal → abandon so native scroll/scrub can win. */
+			if (rawDy < -8) {
+				dragging = false;
+				pointerId = null;
+				return;
+			}
+			if (dx > 12 && dx > rawDy) {
+				dragging = false;
+				pointerId = null;
+				return;
+			}
+			const need = wholeSurface ? 4 : 8;
+			if (rawDy < need) return;
+			claim(e);
+		}
+
+		dy = Math.max(0, rawDy);
 		applyTransform(dy);
+		if (e.cancelable) e.preventDefault();
 	}
 
 	/** @param {PointerEvent} e */
 	function onUp(e) {
 		if (!dragging || (pointerId != null && e.pointerId !== pointerId)) return;
-		dragging = false;
-		pointerId = null;
-		try {
-			node.releasePointerCapture(e.pointerId);
-		} catch {
-			/* ignore */
+		endDrag(true);
+	}
+
+	/**
+	 * Critical on iOS/Android: without preventDefault, the UA converts the
+	 * touch into a scroll and fires pointercancel after ~5px.
+	 * @param {TouchEvent} e
+	 */
+	function onTouchMove(e) {
+		if (!dragging || !e.touches?.length) return;
+		const touch = e.touches[0];
+		const rawDy = touch.clientY - startY;
+		if (claimed || rawDy >= (wholeSurface ? 4 : 8)) {
+			if (e.cancelable) e.preventDefault();
 		}
-		if (dy > threshold) {
-			onclose();
-		}
-		dy = 0;
-		resetVisual();
 	}
 
 	node.addEventListener('pointerdown', onDown);
-	node.addEventListener('pointermove', onMove);
+	node.addEventListener('pointermove', onMove, { passive: false });
 	node.addEventListener('pointerup', onUp);
 	node.addEventListener('pointercancel', onUp);
-	node.style.touchAction = node.style.touchAction || 'pan-y';
+	node.addEventListener('touchmove', onTouchMove, { passive: false });
+	/* pan-y keeps nested scrollports usable; preventDefault after claim blocks UA steal. */
+	if (!node.style.touchAction) node.style.touchAction = 'pan-y';
 
 	return {
 		/**
@@ -140,7 +214,8 @@ export function dragDismiss(node, params = {}) {
 			node.removeEventListener('pointermove', onMove);
 			node.removeEventListener('pointerup', onUp);
 			node.removeEventListener('pointercancel', onUp);
-			resetVisual();
+			node.removeEventListener('touchmove', onTouchMove);
+			endDrag(false);
 		}
 	};
 }

@@ -133,7 +133,8 @@
 	.detail-top-start {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		/* Match ListTitleChrome / Admin detail-top back ↔ title */
+		gap: 12px;
 		min-width: 0;
 	}
 

@@ -75,7 +75,8 @@
 	.list-title-row {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		/* Match Admin DetailColumn detail-top-start (back ↔ title) */
+		gap: 12px;
 		min-width: 0;
 	}
 

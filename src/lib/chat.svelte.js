@@ -12,6 +12,7 @@ import {
 } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
+import { findMail } from './mail.svelte.js';
 import {
 	enterprises,
 	notes,
@@ -247,7 +248,7 @@ export async function refreshChatFeed() {
 }
 
 /**
- * @param {'task' | 'note' | 'project'} type
+ * @param {'task' | 'note' | 'project' | 'mail'} type
  * @param {string} entityId
  */
 export async function loadComments(type, entityId) {
@@ -516,7 +517,10 @@ export async function postChatMessage(input) {
 	if (
 		!isEvent &&
 		input.ref &&
-		(input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')
+		(input.ref.type === 'task' ||
+			input.ref.type === 'note' ||
+			input.ref.type === 'project' ||
+			input.ref.type === 'mail')
 	) {
 		const key = commentKey(/** @type {any} */ (input.ref.type), input.ref.id);
 		const prev = commentsByKey[key] ?? [];
@@ -551,7 +555,10 @@ export async function postChatMessage(input) {
 			const knownComments =
 				!isEvent &&
 				input.ref &&
-				(input.ref.type === 'task' || input.ref.type === 'note' || input.ref.type === 'project')
+				(input.ref.type === 'task' ||
+					input.ref.type === 'note' ||
+					input.ref.type === 'project' ||
+					input.ref.type === 'mail')
 					? (commentsByKey[commentKey(/** @type {any} */ (input.ref.type), input.ref.id)] ?? [])
 							.map((m) => String(m.id))
 							.filter((id) => id && !id.startsWith('local-'))
@@ -594,7 +601,8 @@ export async function postChatMessage(input) {
 					input.ref &&
 					(input.ref.type === 'task' ||
 						input.ref.type === 'note' ||
-						input.ref.type === 'project')
+						input.ref.type === 'project' ||
+						input.ref.type === 'mail')
 				) {
 					const key = commentKey(/** @type {any} */ (input.ref.type), input.ref.id);
 					const prev = commentsByKey[key] ?? [];
@@ -670,12 +678,13 @@ export function openChatRef(msg) {
 	const ref = msg?.ref;
 	if (!ref?.type || !ref?.id) return;
 
-	/** @type {'task' | 'note' | 'project' | 'enterprise' | null} */
+	/** @type {'task' | 'note' | 'project' | 'enterprise' | 'mail' | null} */
 	let kind = null;
 	if (ref.type === 'task') kind = 'task';
 	else if (ref.type === 'note') kind = 'note';
 	else if (ref.type === 'project') kind = 'project';
 	else if (ref.type === 'enterprise') kind = 'enterprise';
+	else if (ref.type === 'mail') kind = 'mail';
 	if (!kind) return;
 
 	selectEntity(kind, ref.id);
@@ -703,7 +712,8 @@ export function chatPublicationRefKey(msg) {
 		ref.type !== 'task' &&
 		ref.type !== 'note' &&
 		ref.type !== 'project' &&
-		ref.type !== 'enterprise'
+		ref.type !== 'enterprise' &&
+		ref.type !== 'mail'
 	) {
 		return null;
 	}
@@ -759,6 +769,14 @@ export function chatRefMeta(msg) {
 			icon: 'entreprises',
 			box: 'enterprise',
 			enterprise: e ?? null
+		};
+	}
+	if (ref.type === 'mail') {
+		const m = findMail(ref.id);
+		return {
+			kind: 'Mail',
+			title: m?.subject || '(no subject)',
+			icon: 'mail'
 		};
 	}
 	return { kind: String(ref.type), title: String(ref.type), icon: 'chat' };

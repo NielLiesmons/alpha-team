@@ -33,6 +33,7 @@
 	import EnterpriseCreate from './EnterpriseCreate.svelte';
 	import FormCreate from './FormCreate.svelte';
 	import LedgerCreate from './LedgerCreate.svelte';
+	import MailFolderTitle from './MailFolderTitle.svelte';
 	import MetricCreate from './MetricCreate.svelte';
 	import TableCreate from './TableCreate.svelte';
 	import ViewCreate from './ViewCreate.svelte';
@@ -142,7 +143,8 @@
 	/** Planning fills list+detail columns (no third-column pane). */
 	const wideList = $derived(planningList);
 	const driveList = $derived(path.startsWith('/drive'));
-	/** Planning / Drive own list actions; Mail uses default title + filter + plus. */
+	const mailList = $derived(path.startsWith('/mail'));
+	/** Planning / Drive own list actions; Mail keeps filter + plus with custom title. */
 	const customChrome = $derived(planningList || driveList);
 
 	const createMenuItems = [
@@ -259,11 +261,15 @@
 	{/snippet}
 
 	{#snippet listTitleSlot()}
-		<ListTitleChrome
-			title={activeItem.label}
-			syncing={syncUi.active}
-			titleClass={planningList ? 'planning-title' : ''}
-		/>
+		{#if mailList}
+			<MailFolderTitle />
+		{:else}
+			<ListTitleChrome
+				title={activeItem.label}
+				syncing={syncUi.active}
+				titleClass={planningList ? 'planning-title' : ''}
+			/>
+		{/if}
 	{/snippet}
 
 	{#snippet listActionsSlot()}

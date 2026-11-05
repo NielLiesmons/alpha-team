@@ -20,13 +20,17 @@
 		persistSendCampaign,
 		publicPosts
 	} from '$lib/publications.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		findMail,
 		formatMailWhen,
 		mailAuthorLabel,
+		mailCategoryFor,
 		markMailRead,
 		threadMessages
 	} from '$lib/mail.svelte.js';
+	import { approveContact, isApprovedContact } from '$lib/mail-contacts.svelte.js';
+	import ProfilePic from './ProfilePic.svelte';
 	import {
 		projectLifecycle,
 		primaryEnterpriseId,
@@ -385,7 +389,10 @@
 		if (pubPost?.title) return pubPost.title;
 		if (welcomeSelected) return 'Welcome';
 		if (pubsHub) return 'Publications';
-		if (mailMsg?.subject) return mailMsg.subject;
+		if (mailMsg) {
+			const msgs = threadMessages(mailMsg);
+			return msgs[0]?.subject || mailMsg.subject || '(no subject)';
+		}
 		if (chatChannel) return chatChannel.title || 'General';
 		if (fileEntry) return fileTitle;
 		if (settingsSectionId) return SETTINGS_TITLES[settingsSectionId] || 'Settings';
@@ -1178,12 +1185,19 @@
 		</div>
 	{:else if mailMsg}
 		{@const thread = threadMessages(mailMsg)}
+		{@const first = thread[0] || mailMsg}
+		{@const threadTitle = first.subject || mailMsg.subject || '(no subject)'}
 		{@const me = (activePerson().email || '').trim().toLowerCase()}
 		{@const last = thread[thread.length - 1] || mailMsg}
 		{@const replyTo =
 			(last.from || '').toLowerCase() === me
 				? last.to?.[0] || mailMsg.from || ''
 				: last.from || mailMsg.from || ''}
+		{@const contactEmail = String(mailMsg.from || '').toLowerCase()}
+		{@const needsApprove =
+			contactEmail &&
+			mailCategoryFor(mailMsg) === 'new' &&
+			!isApprovedContact(contactEmail)}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
 				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
@@ -1197,37 +1211,94 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label"
-					>{thread.length > 1 ? `Thread · ${thread.length}` : 'Mail'}</span
-				>
+				<span class="detail-top-label">{threadTitle}</span>
 			</div>
 			<div class="detail-top-actions">
-				<button
-					type="button"
-					class="send-chip"
-					onclick={() =>
-						openComposer('mail', undefined, undefined, {
-							to: replyTo
-						})
-					}
-				>
-					Reply
-				</button>
+				{#if needsApprove}
+					<button
+						type="button"
+						class="send-chip"
+						onclick={() => approveContact(contactEmail)}
+					>
+						Accept
+					</button>
+				{/if}
 			</div>
 		</header>
 		<div class="body mail-thread">
-			<h2 class="pub-title">{mailMsg.subject || '(no subject)'}</h2>
 			{#each thread as m (m.id)}
-				<article class="thread-msg">
-					<p class="pub-kicker">
-						{mailAuthorLabel(m) || displayNameFromEmail(m.from)}
-						→ {(m.to || []).map(displayNameFromEmail).join(', ')}
-						· {formatMailWhen(m.created_at)}
-					</p>
-					<pre class="pub-body">{m.body || ''}</pre>
+				{@const fromEmail = String(m.from || '').toLowerCase()}
+				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
+				{@const toLine = (m.to || []).map(displayNameFromEmail).filter(Boolean).join(', ')}
+				<article class="mail-panel">
+					<header class="mail-panel-head">
+						<span class="mail-panel-who">
+							<ProfilePic
+								name={fromName}
+								email={fromEmail}
+								pictureUrl={pictureUrlFor(fromEmail)}
+								size={36}
+							/>
+							<span class="mail-panel-id">
+								<span class="mail-panel-name">{fromName}</span>
+								<span class="mail-panel-email">{fromEmail}</span>
+							</span>
+						</span>
+						<span class="mail-panel-actions">
+							<button
+								type="button"
+								class="icon-hit"
+								aria-label="Reply"
+								onclick={() =>
+									openComposer('mail', undefined, undefined, {
+										to:
+											fromEmail === me
+												? m.to?.[0] || replyTo
+												: fromEmail || replyTo
+									})
+								}
+							>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<path
+										d="M6.5 3.5 2.5 7.5l4 4"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+									<path
+										d="M2.5 7.5h7.2c2.1 0 3.8 1.5 3.8 3.4V13"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="icon-hit"
+								aria-label="More"
+								aria-expanded={menuOpen}
+								onclick={toggleMoreMenu}
+							>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<circle cx="3.2" cy="8" r="1.35" fill="currentColor" />
+									<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+									<circle cx="12.8" cy="8" r="1.35" fill="currentColor" />
+								</svg>
+							</button>
+						</span>
+					</header>
+					{#if toLine}
+						<p class="mail-panel-to">To: {toLine}</p>
+					{/if}
+					<p class="mail-panel-when">{formatMailWhen(m.created_at)}</p>
+					<pre class="mail-panel-body">{m.body || ''}</pre>
 				</article>
 			{/each}
 		</div>
+		<CommentThread type="mail" entityId={mailMsg.id} />
 	{:else if settingsSectionId}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1774,21 +1845,105 @@
 	.mail-thread {
 		display: flex;
 		flex-direction: column;
-		gap: 0;
+		gap: 10px;
+		padding-bottom: 72px;
 	}
 
-	.thread-msg {
-		padding: 14px 0 18px;
-		border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+	.mail-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 14px 14px 16px;
+		border-radius: 14px;
+		background: color-mix(in srgb, var(--fg) 4.5%, transparent);
+		border: 0;
 	}
 
-	.thread-msg:last-child {
-		border-bottom: 0;
-		padding-bottom: 0;
+	.mail-panel-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 10px;
+		min-width: 0;
 	}
 
-	.thread-msg .pub-kicker {
-		margin-bottom: 10px;
+	.mail-panel-who {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.mail-panel-id {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+
+	.mail-panel-name {
+		font-size: 14px;
+		font-weight: 650;
+		color: var(--fg);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.mail-panel-email {
+		font-size: 12px;
+		font-weight: 450;
+		color: var(--fg-33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.mail-panel-actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		flex-shrink: 0;
+		margin-top: -2px;
+	}
+
+	.mail-panel-to {
+		margin: 0;
+		padding-left: 46px;
+		font-size: 12px;
+		font-weight: 450;
+		color: var(--fg-33);
+		line-height: 1.35;
+	}
+
+	.mail-panel-when {
+		margin: 0;
+		padding-left: 46px;
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	.mail-panel-body {
+		margin: 4px 0 0;
+		padding: 0 0 0 46px;
+		border: 0;
+		background: transparent;
+		font: inherit;
+		font-size: 14px;
+		line-height: 1.55;
+		color: var(--fg-66);
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	@media (max-width: 767px) {
+		.mail-panel-to,
+		.mail-panel-when,
+		.mail-panel-body {
+			padding-left: 0;
+		}
 	}
 
 	.send-chip {

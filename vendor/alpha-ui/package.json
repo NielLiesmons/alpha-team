@@ -33,7 +33,8 @@
 		"./icons/Heart.svelte": "./src/lib/icons/Heart.svelte",
 		"./icons/Playlist.svelte": "./src/lib/icons/Playlist.svelte",
 		"./icons/Play.svelte": "./src/lib/icons/Play.svelte",
-		"./icons/Pause.svelte": "./src/lib/icons/Pause.svelte"
+		"./icons/Pause.svelte": "./src/lib/icons/Pause.svelte",
+		"./icons/Download.svelte": "./src/lib/icons/Download.svelte"
 	},
 	"files": [
 		"icons",

@@ -1,23 +1,30 @@
 <script>
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
-	import { actor } from '$lib/actor.svelte.js';
+	import ProfilePic from '$lib/components/ProfilePic.svelte';
+	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
+	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { appBoot } from '$lib/boot.svelte.js';
+	import { chatFeed, commentsByKey } from '$lib/chat.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
 		formatMailWhen,
 		isUnreadFor,
 		mailAuthorLabel,
+		mailLatestMessage,
 		mailMessages,
 		mailPreview,
-		mailThreadsForCurrentFolder,
+		mailThreadsForCurrentView,
 		mailUi,
-		refreshMail
+		refreshMail,
+		threadMessages
 	} from '$lib/mail.svelte.js';
 	import {
+		MAIL_CATEGORIES,
+		MAIL_CATEGORY_LABELS,
 		MAIL_FOLDER_LABELS,
-		MAIL_FOLDERS,
 		mailView,
-		setMailFolder
+		setMailCategory
 	} from '$lib/mail-view.svelte.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
@@ -29,22 +36,97 @@
 	const threadsList = $derived.by(() => {
 		actor.email;
 		mailView.folder;
+		mailView.category;
 		mailMessages.length;
 		mailUi.loading;
 		ui.listFilter;
-		const all = mailThreadsForCurrentFolder();
+		chatFeed.length;
+		Object.keys(commentsByKey).length;
+		const all = mailThreadsForCurrentView();
 		if (ui.listFilter === 'unread') return all.filter((t) => isUnreadFor(t));
 		return all;
 	});
+
+	/**
+	 * Private team comments on a mail thread (chat feed + loaded comment index).
+	 * @param {string} threadId
+	 */
+	function commentsForThread(threadId) {
+		const id = String(threadId || '');
+		if (!id) return [];
+		/** @type {Map<string, any>} */
+		const byId = new Map();
+		for (const m of chatFeed) {
+			if (
+				m?.kind === 'comment' &&
+				m?.ref?.type === 'mail' &&
+				String(m.ref.id) === id &&
+				!m._failed
+			) {
+				byId.set(String(m.id), m);
+			}
+		}
+		for (const m of commentsByKey[`mail:${id}`] ?? []) {
+			if (!m?._failed) byId.set(String(m.id), m);
+		}
+		return [...byId.values()].sort((a, b) =>
+			String(b.created_at || '').localeCompare(String(a.created_at || ''))
+		);
+	}
+
+	/**
+	 * @param {any[]} comments
+	 */
+	function commentProfiles(comments) {
+		const seen = new Set();
+		/** @type {{ name: string, email: string, pictureUrl: string | null }[]} */
+		const profiles = [];
+		for (const m of comments) {
+			const email = String(m.author || '')
+				.trim()
+				.toLowerCase();
+			if (!email || seen.has(email)) continue;
+			seen.add(email);
+			const person = asPerson(m.author);
+			profiles.push({
+				name: person?.name || displayNameFromEmail(m.author),
+				email,
+				pictureUrl: pictureUrlFor(m.author)
+			});
+		}
+		return profiles;
+	}
+
+	/**
+	 * @param {any} t
+	 */
+	function latestPreview(t) {
+		const last = mailLatestMessage(t);
+		const msgs = threadMessages(t);
+		const isFollowUp = msgs.length > 1;
+		return {
+			text: mailPreview(last),
+			from: String(last?.from || '').toLowerCase(),
+			fromName: mailAuthorLabel(last) || displayNameFromEmail(last?.from),
+			showPfp: isFollowUp
+		};
+	}
 </script>
 
-<svelte:head><title>{MAIL_FOLDER_LABELS[mailView.folder]} · Mail</title></svelte:head>
+<svelte:head
+	><title
+		>{MAIL_CATEGORY_LABELS[mailView.category]} · {MAIL_FOLDER_LABELS[mailView.folder]} · Mail</title
+	></svelte:head
+>
 
 <div class="feed mail">
-	<div class="folder-seg" role="group" aria-label="Mailbox">
-		{#each MAIL_FOLDERS as f (f)}
-			<button type="button" class="seg-btn" class:on={mailView.folder === f} onclick={() => setMailFolder(f)}
-				>{MAIL_FOLDER_LABELS[f]}</button
+	<div class="category-seg" role="group" aria-label="Mail category">
+		{#each MAIL_CATEGORIES as c (c)}
+			<button
+				type="button"
+				class="seg-btn"
+				class:on={mailView.category === c}
+				onclick={() => setMailCategory(c)}>{MAIL_CATEGORY_LABELS[c]}</button
 			>
 		{/each}
 	</div>
@@ -65,35 +147,108 @@
 		</p>
 	{:else if threadsList.length === 0}
 		<p class="empty">
-			{ui.listFilter === 'unread' ? 'No unread' : `${MAIL_FOLDER_LABELS[mailView.folder]} is empty`}
-			<span class="hint">For {actor.email}. Use + to compose.</span>
+			{ui.listFilter === 'unread'
+				? 'No unread'
+				: `No ${MAIL_CATEGORY_LABELS[mailView.category].toLowerCase()} in ${MAIL_FOLDER_LABELS[mailView.folder]}`}
+			<span class="hint">
+				{#if mailView.category === 'primary'}
+					Primary only shows mail from people you've accepted. New contacts land in New.
+				{:else}
+					For {actor.email}. Use + to compose.
+				{/if}
+			</span>
 		</p>
 	{:else}
 		<div class="card-stack">
 			{#each threadsList as t (t.id)}
 				{@const unread = isUnreadFor(t)}
 				{@const author = mailAuthorLabel(t)}
-				{@const snippet = mailPreview(t)}
+				{@const authorEmail = String(t.from || '').toLowerCase()}
+				{@const preview = latestPreview(t)}
+				{@const comments = commentsForThread(t.id)}
+				{@const latestComment = comments[0] || null}
+				{@const commentPreview = latestComment
+					? String(latestComment.body || '')
+							.replace(/\s+/g, ' ')
+							.trim()
+							.slice(0, 100)
+					: ''}
+				{@const commenters = commentProfiles(comments)}
+				{@const hasComments = comments.length > 0}
 				<button
 					type="button"
 					class="row"
 					class:on={ui.selection?.kind === 'mail' && ui.selection.id === t.id}
 					class:unread
+					class:has-comments={hasComments}
 					onclick={() => selectEntity('mail', t.id)}
 				>
-					<span class="meta">
-						<span class="author">{author}</span>
-						<span class="time">{formatMailWhen(t.created_at)}</span>
-					</span>
-					<span class="subject">
-						{t.subject || '(no subject)'}
-						{#if t.count > 1}
-							<span class="count">{t.count}</span>
+					<span class="col-pfp" aria-hidden="true">
+						<span class="pfp-slot">
+							<ProfilePic
+								name={author}
+								email={authorEmail}
+								pictureUrl={pictureUrlFor(authorEmail)}
+								size={36}
+							/>
+						</span>
+						{#if hasComments}
+							<span class="l-rail">
+								<span class="l-vert"></span>
+								<span class="l-elbow">
+									<svg viewBox="0 0 27 16" fill="none" aria-hidden="true">
+										<path
+											d="M1 0 A 15 15 0 0 0 16 15 L27 15"
+											stroke="currentColor"
+											stroke-width="1.5"
+											fill="none"
+											stroke-linecap="round"
+										/>
+									</svg>
+								</span>
+							</span>
 						{/if}
 					</span>
-					{#if snippet}
-						<span class="snippet">{snippet}</span>
-					{/if}
+
+					<span class="col-main">
+						<span class="meta">
+							<span class="author">{author}</span>
+							<span class="time">{formatMailWhen(t.created_at)}</span>
+						</span>
+						<span class="subject">
+							{t.subject || '(no subject)'}
+							{#if t.count > 1}
+								<span class="count">{t.count}</span>
+							{/if}
+						</span>
+						{#if preview.text}
+							<span class="snippet-row">
+								{#if preview.showPfp}
+									<span class="snippet-pfp">
+										<ProfilePic
+											name={preview.fromName}
+											email={preview.from}
+											pictureUrl={pictureUrlFor(preview.from)}
+											size={16}
+										/>
+									</span>
+								{/if}
+								<span class="snippet">{preview.text}</span>
+							</span>
+						{/if}
+						{#if hasComments}
+							<span class="team-row">
+								<span class="team-stack">
+									<ProfilePicStack profiles={commenters} size="xxs" />
+								</span>
+								{#if commentPreview}
+									<span class="team-snippet">{commentPreview}</span>
+								{/if}
+							</span>
+						{:else}
+							<span class="team-row team-row-empty" aria-hidden="true"></span>
+						{/if}
+					</span>
 				</button>
 			{/each}
 		</div>
@@ -107,8 +262,8 @@
 		min-height: 0;
 	}
 
-	/* Bley-style recessed seg track; selected chip lifts to --popover */
-	.folder-seg {
+	/* Recessed category track — no outer stroke; selected chip has a clear fill */
+	.category-seg {
 		display: grid;
 		grid-auto-flow: column;
 		grid-auto-columns: 1fr;
@@ -117,14 +272,14 @@
 		margin: 0 10px 10px;
 		padding: 4px;
 		border-radius: 999px;
-		border: 1px solid var(--hairline);
+		border: 0;
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
 		overflow-x: auto;
 		scrollbar-width: none;
 		box-sizing: border-box;
 	}
 
-	.folder-seg::-webkit-scrollbar {
+	.category-seg::-webkit-scrollbar {
 		display: none;
 	}
 
@@ -151,9 +306,9 @@
 	}
 
 	.seg-btn.on {
-		background: var(--popover, var(--bg));
+		background: color-mix(in srgb, var(--fg) 14%, var(--bg, transparent));
 		color: var(--fg);
-		box-shadow: 0 1px 2px var(--shadow, color-mix(in srgb, #000 18%, transparent));
+		box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
 	}
 
 	.banner {
@@ -195,12 +350,12 @@
 	}
 
 	.row {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-columns: 36px minmax(0, 1fr);
+		column-gap: 12px;
 		align-items: stretch;
-		gap: 1px;
 		width: 100%;
-		padding: 10px 14px;
+		padding: 10px 12px 10px 10px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -217,6 +372,66 @@
 
 	.row.on {
 		background: var(--fg-4);
+	}
+
+	.col-pfp {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		width: 36px;
+		min-height: 100%;
+		--rail-line: 1.5px;
+		--rail-inset: calc(18px - var(--rail-line) / 2);
+		color: color-mix(in srgb, var(--fg) 16%, transparent);
+	}
+
+	.pfp-slot {
+		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
+		border-radius: 999px;
+		overflow: hidden;
+	}
+
+	.l-rail {
+		position: absolute;
+		top: 36px;
+		bottom: 10px;
+		left: 0;
+		width: 36px;
+		pointer-events: none;
+	}
+
+	.l-vert {
+		position: absolute;
+		left: var(--rail-inset);
+		top: 0;
+		bottom: 16px;
+		width: var(--rail-line);
+		background: currentColor;
+	}
+
+	.l-elbow {
+		position: absolute;
+		left: calc(var(--rail-inset) - 0.25px);
+		bottom: 0;
+		width: 27px;
+		height: 16px;
+	}
+
+	.l-elbow svg {
+		display: block;
+		width: 27px;
+		height: 16px;
+	}
+
+	.col-main {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+		min-width: 0;
 	}
 
 	.meta {
@@ -269,7 +484,25 @@
 		font-weight: 600;
 		color: var(--fg-33);
 		font-variant-numeric: lining-nums;
-		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
+		font-feature-settings:
+			'lnum' 1,
+			'tnum' 0,
+			'onum' 0;
+	}
+
+	.snippet-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.snippet-pfp {
+		flex-shrink: 0;
+		width: 16px;
+		height: 16px;
+		border-radius: 999px;
+		overflow: hidden;
 	}
 
 	/* Do not use class "preview" — app.css .preview adds 16px padding for editors */
@@ -277,6 +510,43 @@
 		display: block;
 		margin: 0;
 		padding: 0;
+		min-width: 0;
+		font-size: 12px;
+		font-weight: 400;
+		line-height: 1.3;
+		color: var(--fg-33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.team-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		min-height: 20px;
+		margin-top: 2px;
+	}
+
+	.team-row-empty {
+		display: none;
+	}
+
+	.row.has-comments .team-row {
+		/* Align stack center with L-elbow tip (~bottom of pfp column rail) */
+		padding-left: 0;
+	}
+
+	.team-stack {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		height: 20px;
+	}
+
+	.team-snippet {
+		min-width: 0;
 		font-size: 12px;
 		font-weight: 400;
 		line-height: 1.3;
