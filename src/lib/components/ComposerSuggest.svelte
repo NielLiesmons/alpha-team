@@ -134,8 +134,11 @@
 		}
 	});
 
+	let prevItemsLen = -1;
 	$effect(() => {
-		items.length;
+		const len = items.length;
+		if (len === prevItemsLen) return;
+		prevItemsLen = len;
 		selected = 0;
 	});
 

@@ -233,6 +233,16 @@ export function rememberMailTip(thread) {
 	const subject = String(thread.subject || '').trim() || '(no subject)';
 	const from = normEmail(thread.from);
 	const from_name = String(thread.from_name || mailAuthorLabel(thread) || '').trim();
+	const prev = mailTipCache[id];
+	/* Skip no-op writes — chat feed derived tracks mailTipCache; rewriting loops forever. */
+	if (
+		prev &&
+		prev.subject === subject &&
+		prev.from === from &&
+		prev.from_name === from_name
+	) {
+		return;
+	}
 	mailTipCache[id] = { subject, from, from_name };
 	if (typeof localStorage !== 'undefined') {
 		try {
@@ -277,6 +287,9 @@ export function findMail(id) {
 	return null;
 }
 
+/** @type {Record<string, any>} */
+const mailTipStubs = {};
+
 /**
  * Live thread, or a tip-cache stub so Chat mail tips open after hard refresh
  * before JMAP/Drive list finishes loading.
@@ -286,32 +299,39 @@ export function findMailOrTip(id) {
 	const key = String(id || '');
 	if (!key) return null;
 	const live = findMail(key);
-	if (live) return live;
-	const tip = mailTipCache[key];
-	if (!tip) {
-		return {
-			id: key,
-			subject: '(no subject)',
-			from: '',
-			from_name: '',
-			body: '',
-			created_at: '',
-			_stub: true
-		};
+	if (live) {
+		delete mailTipStubs[key];
+		return live;
 	}
-	return {
+	const tip = mailTipCache[key];
+	const subject = String(tip?.subject || '(no subject)');
+	const from = String(tip?.from || '');
+	const from_name = String(tip?.from_name || '');
+	const prev = mailTipStubs[key];
+	if (
+		prev &&
+		prev.subject === subject &&
+		prev.from === from &&
+		prev.from_name === from_name
+	) {
+		return prev;
+	}
+	const stub = {
 		id: key,
-		subject: String(tip.subject || '(no subject)'),
-		from: String(tip.from || ''),
-		from_name: String(tip.from_name || ''),
+		subject,
+		from,
+		from_name,
 		body: '',
 		created_at: '',
 		_stub: true
 	};
+	mailTipStubs[key] = stub;
+	return stub;
 }
 
 /**
  * Resolve subject/from for chat tips (live list → tip cache → null).
+ * Read-only — never write tip cache from derived/render paths.
  * @param {string} id
  */
 export function mailTipFor(id) {
@@ -319,7 +339,6 @@ export function mailTipFor(id) {
 	if (!key) return null;
 	const live = findMail(key);
 	if (live) {
-		rememberMailTip(live);
 		return {
 			subject: String(live.subject || '').trim() || '(no subject)',
 			from: normEmail(live.from),
@@ -327,6 +346,20 @@ export function mailTipFor(id) {
 		};
 	}
 	return mailTipCache[key] || null;
+}
+
+/** @type {Set<string>} */
+const stubMailRefreshAttempted = new Set();
+
+/**
+ * One-shot background refresh when opening a tip stub (avoids refresh↔stub loops).
+ * @param {string} id
+ */
+export function refreshMailForStubOnce(id) {
+	const key = String(id || '');
+	if (!key || stubMailRefreshAttempted.has(key)) return;
+	stubMailRefreshAttempted.add(key);
+	void refreshMail().catch(() => {});
 }
 
 export async function refreshMail() {
@@ -346,16 +379,15 @@ export async function refreshMail() {
 			const list = await listJmapFolder(me, pw, folder, 80);
 			mailMessages.length = 0;
 			mailMessages.push(...list);
+			for (const m of list) rememberMailTip(m);
 			return;
 		}
 
 		const session = activeSession();
 		if (!session) {
-			mailMessages.splice(
-				0,
-				mailMessages.length,
-				...mailMessages.filter((m) => m._local)
-			);
+			const locals = mailMessages.filter((m) => m._local);
+			mailMessages.splice(0, mailMessages.length, ...locals);
+			for (const m of locals) rememberMailTip(m);
 			if (me && !pw) {
 				mailUi.error =
 					'Add your mailbox password in Settings → Mail (Stalwart) to load the real inbox.';
@@ -365,6 +397,7 @@ export async function refreshMail() {
 		const list = await listMailMessages(session, 200);
 		mailMessages.length = 0;
 		mailMessages.push(...list);
+		for (const m of list) rememberMailTip(m);
 		if (me && !pw) {
 			mailUi.error =
 				'Showing Drive drafts only — add mailbox password in Settings to sync Stalwart.';

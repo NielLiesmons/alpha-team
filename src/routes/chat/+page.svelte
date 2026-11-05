@@ -21,8 +21,9 @@
 	$effect(() => {
 		const onChat = $page.url.pathname.startsWith('/chat');
 		if (!onChat) return;
-		ui.selection;
+		const sel = ui.selection;
 		chatChannels.length;
+		if (sel) return;
 		ensureChatFeedOpen();
 	});
 

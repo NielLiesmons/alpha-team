@@ -24,7 +24,7 @@
 		findMailOrTip,
 		mailCategoryFor,
 		markMailRead,
-		refreshMail,
+		refreshMailForStubOnce,
 		rememberMailTip,
 		threadMessages
 	} from '$lib/mail.svelte.js';
@@ -240,7 +240,7 @@
 		const id = mailMsg?.id;
 		if (!id) return;
 		if (mailMsg?._stub) {
-			void refreshMail().catch(() => {});
+			refreshMailForStubOnce(id);
 			return;
 		}
 		rememberMailTip(mailMsg);
