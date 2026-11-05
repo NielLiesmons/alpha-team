@@ -1222,7 +1222,7 @@
 				{/if}
 			</div>
 		</header>
-		<div class="body mail-thread">
+		<div class="body mail-thread-body">
 			<MailThreadFeed
 				{mailMsg}
 				{replyTo}
@@ -1773,10 +1773,18 @@
 		word-break: break-word;
 	}
 
-	.mail-thread {
+	.body.mail-thread-body {
+		overflow: hidden;
+		padding: 56px 24px 0;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+	}
+
+	@media (max-width: 767px) {
+		.body.mail-thread-body {
+			padding: 56px 14px 0;
+		}
 	}
 
 	.send-chip {

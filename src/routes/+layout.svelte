@@ -44,13 +44,10 @@
 					immediate: true,
 					onRegisteredSW(_swUrl, registration) {
 						if (!registration) return;
-						let lastCheck = 0;
-						const CHECK_MS = 6 * 60 * 60 * 1000;
+						/* Check for deploys on load + whenever the tab becomes visible. */
+						void registration.update();
 						document.addEventListener('visibilitychange', () => {
 							if (document.visibilityState !== 'visible') return;
-							const now = Date.now();
-							if (now - lastCheck < CHECK_MS) return;
-							lastCheck = now;
 							void registration.update();
 						});
 					}

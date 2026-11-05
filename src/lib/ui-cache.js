@@ -55,7 +55,8 @@ export async function clearLocalUiCache() {
 				'alpha-admin-drive.v1',
 				'alpha-admin-theme.v1',
 				'alpha-admin-mailbox.v1',
-				'alpha-admin-api-token.v1'
+				'alpha-admin-api-token.v1',
+				'alpha.mail.approved.v1'
 			]);
 			for (let i = localStorage.length - 1; i >= 0; i--) {
 				const k = localStorage.key(i);

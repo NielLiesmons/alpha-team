@@ -43,6 +43,12 @@ export async function bootApp() {
 	loadActor();
 	loadDeviceProfiles();
 	loadSessionFromStorage();
+	try {
+		const { refreshApprovedContacts } = await import('./mail-contacts.svelte.js');
+		refreshApprovedContacts();
+	} catch {
+		/* ignore */
+	}
 
 	if (!activeSessionSafe()) {
 		appBoot.listsReady = true;
