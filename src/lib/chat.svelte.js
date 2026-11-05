@@ -755,6 +755,12 @@ export function openChatRef(msg) {
 	if (!kind) return;
 
 	selectEntity(kind, ref.id);
+	if (kind === 'mail') {
+		/* Hard refresh: tip opens from cache; pull live thread in background. */
+		void import('./mail.svelte.js')
+			.then((m) => m.refreshMail())
+			.catch(() => {});
+	}
 }
 
 /** @param {any} msg */

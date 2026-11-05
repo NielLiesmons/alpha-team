@@ -313,7 +313,7 @@
 			{#if emojiOnly}
 				<p class="text emoji-only-text" style:--emoji-size="{emojiOnlyPx}px">
 					{#each emojiOnly.tokens as tok, i (tok + i)}
-						<ChatEmoji token={tok} size={emojiOnlyPx} />
+						<ChatEmoji token={tok} size={emojiOnlyPx} className="sticker" />
 					{/each}
 				</p>
 			{:else if msg.body}
@@ -348,7 +348,7 @@
 					{/each}
 				</div>
 			{/if}
-			{#if isMine && stackLast && (showReceipt || when)}
+			{#if isMine && stackLast && !emojiOnly && (showReceipt || when)}
 				<div class="meta-out">
 					{#if when}<span class="when">{when}</span>{/if}
 					{#if showReceipt}
@@ -383,7 +383,7 @@
 					{/if}
 				</div>
 			{/if}
-			{#if msg._failed}
+			{#if msg._failed && !emojiOnly}
 				<p class="fail-hint">Couldn’t send — pull to refresh and try again.</p>
 			{/if}
 
@@ -425,6 +425,45 @@
 				</div>
 			{/if}
 			</div>
+
+			{#if isMine && stackLast && emojiOnly && (showReceipt || when)}
+				<div class="meta-out meta-out-sticker">
+					{#if when}<span class="when">{when}</span>{/if}
+					{#if showReceipt}
+						<span
+							class="receipt"
+							class:read={delivery === 'read'}
+							title={delivery === 'read' ? 'Read' : 'Sent'}
+							aria-label={delivery}
+						>
+							{#if delivery === 'read'}
+								<svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
+									<path
+										d="M1.2 5.2 3.6 7.6 8.8 1.6M6.2 5.2 8.6 7.6 14.2 1.6"
+										stroke="currentColor"
+										stroke-width="1.4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							{:else}
+								<svg width="12" height="10" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+									<path
+										d="M1.2 5.2 4.1 8.1 10.6 1.5"
+										stroke="currentColor"
+										stroke-width="1.4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							{/if}
+						</span>
+					{/if}
+				</div>
+			{/if}
+			{#if msg._failed && emojiOnly}
+				<p class="fail-hint fail-hint-sticker">Couldn’t send — pull to refresh and try again.</p>
+			{/if}
 
 			{#if reactions.length}
 				<div class="reaction-pills" role="list">
@@ -592,15 +631,11 @@
 	}
 
 	/* 1–3 emoji stickers: no chrome, just the glyphs */
-	.bubble.emoji-only {
-		padding: 0;
-		background: transparent;
-		border-radius: 0;
-	}
-
+	.bubble.emoji-only,
 	.bubble.emoji-only.mine {
-		background: transparent;
-		padding: 0;
+		padding: 0 !important;
+		background: transparent !important;
+		border-radius: 0;
 		color: inherit;
 	}
 
@@ -701,6 +736,16 @@
 		padding: 0 11px 1px;
 	}
 
+	/* Outside sticker bubble — no bubble inset, quiet grayscale receipt */
+	.meta-out-sticker {
+		margin-top: 2px;
+		padding: 0;
+	}
+
+	.meta-out-sticker .when {
+		color: var(--fg-33);
+	}
+
 	.receipt {
 		display: inline-flex;
 		color: rgba(255, 255, 255, 0.5);
@@ -709,6 +754,14 @@
 
 	.receipt.read {
 		color: color-mix(in srgb, #fff 70%, var(--accent-1));
+	}
+
+	.meta-out-sticker .receipt {
+		color: var(--fg-33);
+	}
+
+	.meta-out-sticker .receipt.read {
+		color: var(--fg-66);
 	}
 
 	.quote {
@@ -789,9 +842,10 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 0;
+		padding: 0 !important;
+		margin: 0;
 		font-size: var(--emoji-size, 56px);
-		line-height: 1.05;
+		line-height: 1;
 		color: inherit;
 		white-space: nowrap;
 	}
@@ -804,8 +858,8 @@
 		color: inherit;
 	}
 
-	/* Mid-stack outgoing: +1px under text only (not image-only bubbles). */
-	.bubble.mine:not(.stack-last) .text {
+	/* Mid-stack outgoing: +1px under text only (not image-only / sticker bubbles). */
+	.bubble.mine:not(.stack-last):not(.emoji-only) .text {
 		padding-bottom: 1px;
 	}
 
@@ -815,6 +869,11 @@
 		font-size: 11px;
 		font-weight: 500;
 		color: #c45;
+	}
+
+	.fail-hint-sticker {
+		padding: 0;
+		text-align: right;
 	}
 
 	.bubble.mine .fail-hint {

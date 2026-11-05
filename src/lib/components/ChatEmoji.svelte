@@ -57,4 +57,9 @@
 	.chat-emoji.glyph {
 		font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 	}
+
+	.chat-emoji.sticker {
+		display: block;
+		vertical-align: 0;
+	}
 </style>

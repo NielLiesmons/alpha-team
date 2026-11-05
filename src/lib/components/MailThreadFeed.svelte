@@ -7,6 +7,7 @@
 	import Voice from './icons/Voice.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ChatStatusLine from './ChatStatusLine.svelte';
+	import ComposerSuggest from './ComposerSuggest.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import { activePerson, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
@@ -152,6 +153,17 @@
 		if (!el) return;
 		fadeTop = el.scrollTop > 2;
 		fadeBottom = el.scrollHeight - el.scrollTop - el.clientHeight > 2;
+	}
+
+	/** @param {string} next @param {number} cursor */
+	function onSuggestInsert(next, cursor) {
+		draft = next;
+		queueMicrotask(() => {
+			if (!inputEl) return;
+			inputEl.focus();
+			inputEl.setSelectionRange(cursor, cursor);
+			onInput();
+		});
 	}
 
 	async function send() {
@@ -321,18 +333,21 @@
 						/>
 					</svg>
 				</button>
-				<div class="composer-field" class:fade-top={fadeTop} class:fade-bottom={fadeBottom}>
-					<textarea
-						bind:this={inputEl}
-						class="composer-input"
-						rows="1"
-						placeholder={replyMsg ? 'Reply' : 'Message the team'}
-						bind:value={draft}
-						oninput={onInput}
-						onscroll={updateInputFade}
-						onkeydown={onKey}
-						aria-label="Team chat"
-					></textarea>
+				<div class="composer-suggest-host">
+					<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+					<div class="composer-field" class:fade-top={fadeTop} class:fade-bottom={fadeBottom}>
+						<textarea
+							bind:this={inputEl}
+							class="composer-input"
+							rows="1"
+							placeholder={replyMsg ? 'Reply' : 'Message the team'}
+							bind:value={draft}
+							oninput={onInput}
+							onscroll={updateInputFade}
+							onkeydown={onKey}
+							aria-label="Team chat"
+						></textarea>
+					</div>
 				</div>
 				{#if canSend}
 					<button
@@ -598,6 +613,14 @@
 		padding: 4px;
 		min-height: 47px;
 		box-sizing: border-box;
+	}
+
+	.composer-suggest-host {
+		position: relative;
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
 	}
 
 	.composer-field {

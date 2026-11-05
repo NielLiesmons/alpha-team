@@ -278,6 +278,39 @@ export function findMail(id) {
 }
 
 /**
+ * Live thread, or a tip-cache stub so Chat mail tips open after hard refresh
+ * before JMAP/Drive list finishes loading.
+ * @param {string} id
+ */
+export function findMailOrTip(id) {
+	const key = String(id || '');
+	if (!key) return null;
+	const live = findMail(key);
+	if (live) return live;
+	const tip = mailTipCache[key];
+	if (!tip) {
+		return {
+			id: key,
+			subject: '(no subject)',
+			from: '',
+			from_name: '',
+			body: '',
+			created_at: '',
+			_stub: true
+		};
+	}
+	return {
+		id: key,
+		subject: String(tip.subject || '(no subject)'),
+		from: String(tip.from || ''),
+		from_name: String(tip.from_name || ''),
+		body: '',
+		created_at: '',
+		_stub: true
+	};
+}
+
+/**
  * Resolve subject/from for chat tips (live list → tip cache → null).
  * @param {string} id
  */

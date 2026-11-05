@@ -5,6 +5,7 @@
 	import Voice from '$lib/components/icons/Voice.svelte';
 	import ChatFeedCard from '$lib/components/ChatFeedCard.svelte';
 	import ChatStatusLine from '$lib/components/ChatStatusLine.svelte';
+	import ComposerSuggest from '$lib/components/ComposerSuggest.svelte';
 	import EnterpriseBox from '$lib/components/EnterpriseBox.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import NavIcon from '$lib/components/NavIcon.svelte';
@@ -459,6 +460,17 @@
 			el.scrollHeight - el.scrollTop - el.clientHeight > COMPOSER_FADE_THRESHOLD;
 	}
 
+	/** @param {string} next @param {number} cursor */
+	function onSuggestInsert(next, cursor) {
+		draft = next;
+		queueMicrotask(() => {
+			if (!inputEl) return;
+			inputEl.focus();
+			inputEl.setSelectionRange(cursor, cursor);
+			onInput();
+		});
+	}
+
 	function onInput() {
 		const el = inputEl;
 		if (!el) return;
@@ -765,22 +777,25 @@
 						/>
 					</svg>
 				</button>
-				<div
-					class="composer-field"
-					class:fade-top={fadeTop}
-					class:fade-bottom={fadeBottom}
-				>
-					<textarea
-						bind:this={inputEl}
-						class="composer-input"
-						rows="1"
-						placeholder={replyTo ? 'Reply' : 'Message'}
-						bind:value={draft}
-						onkeydown={onKey}
-						oninput={onInput}
-						onscroll={updateInputFade}
-						aria-label="Message"
-					></textarea>
+				<div class="composer-suggest-host">
+					<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+					<div
+						class="composer-field"
+						class:fade-top={fadeTop}
+						class:fade-bottom={fadeBottom}
+					>
+						<textarea
+							bind:this={inputEl}
+							class="composer-input"
+							rows="1"
+							placeholder={replyTo ? 'Reply' : 'Message'}
+							bind:value={draft}
+							onkeydown={onKey}
+							oninput={onInput}
+							onscroll={updateInputFade}
+							aria-label="Message"
+						></textarea>
+					</div>
 				</div>
 				{#if canSend}
 					<button type="button" class="side-btn send" aria-label="Send" onclick={() => void send()}>
@@ -1380,6 +1395,14 @@
 	.side-btn.send {
 		background: var(--gradient-accent-1);
 		color: #fff;
+	}
+
+	.composer-suggest-host {
+		position: relative;
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: flex-end;
 	}
 
 	.composer-field {

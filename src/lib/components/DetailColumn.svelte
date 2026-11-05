@@ -21,9 +21,10 @@
 		publicPosts
 	} from '$lib/publications.svelte.js';
 	import {
-		findMail,
+		findMailOrTip,
 		mailCategoryFor,
 		markMailRead,
+		refreshMail,
 		rememberMailTip,
 		threadMessages
 	} from '$lib/mail.svelte.js';
@@ -220,7 +221,7 @@
 	);
 	const welcomeSelected = $derived(selection?.kind === 'welcome');
 	const pubsHub = $derived(selection?.kind === 'pubs');
-	const mailMsg = $derived(selection?.kind === 'mail' ? findMail(selection.id) : null);
+	const mailMsg = $derived(selection?.kind === 'mail' ? findMailOrTip(selection.id) : null);
 	const settingsSectionId = $derived(
 		selection?.kind === 'settings' ? String(selection.id || '') : ''
 	);
@@ -238,6 +239,10 @@
 	$effect(() => {
 		const id = mailMsg?.id;
 		if (!id) return;
+		if (mailMsg?._stub) {
+			void refreshMail().catch(() => {});
+			return;
+		}
 		rememberMailTip(mailMsg);
 		void markMailRead(id);
 	});

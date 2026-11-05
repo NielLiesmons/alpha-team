@@ -9,6 +9,7 @@
 	import AlphaLogo from './icons/AlphaLogo.svelte';
 	import Voice from './icons/Voice.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
+	import ComposerSuggest from './ComposerSuggest.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
@@ -240,6 +241,17 @@
 			el.scrollHeight - el.scrollTop - el.clientHeight > COMPOSER_FADE_THRESHOLD;
 	}
 
+	/** @param {string} next @param {number} cursor */
+	function onSuggestInsert(next, cursor) {
+		draft = next;
+		queueMicrotask(() => {
+			if (!inputEl) return;
+			inputEl.focus();
+			inputEl.setSelectionRange(cursor, cursor);
+			onInput();
+		});
+	}
+
 	function onInput() {
 		const el = inputEl;
 		if (!el) return;
@@ -468,21 +480,24 @@
 										/>
 									</svg>
 								</button>
-								<div
-									class="composer-field"
-									class:fade-top={fadeTop}
-									class:fade-bottom={fadeBottom}
-								>
-									<textarea
-										bind:this={inputEl}
-										class="composer-input"
-										rows="1"
-										placeholder={replyTo ? 'Reply' : 'Comment'}
-										bind:value={draft}
-										oninput={onInput}
-										onscroll={updateInputFade}
-										aria-label="Comment"
-									></textarea>
+								<div class="composer-suggest-host">
+									<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+									<div
+										class="composer-field"
+										class:fade-top={fadeTop}
+										class:fade-bottom={fadeBottom}
+									>
+										<textarea
+											bind:this={inputEl}
+											class="composer-input"
+											rows="1"
+											placeholder={replyTo ? 'Reply' : 'Comment'}
+											bind:value={draft}
+											oninput={onInput}
+											onscroll={updateInputFade}
+											aria-label="Comment"
+										></textarea>
+									</div>
 								</div>
 								{#if canSend}
 									<button
@@ -984,6 +999,14 @@
 	.side-btn.send:disabled {
 		opacity: 0.45;
 		cursor: default;
+	}
+
+	.composer-suggest-host {
+		position: relative;
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: flex-end;
 	}
 
 	.composer-field {

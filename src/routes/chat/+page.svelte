@@ -14,14 +14,17 @@
 	import { isMobileNav } from '$lib/nav-stack.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
-	/** Desktop: keep General open whenever Chat has no selection. */
+	/**
+	 * Desktop: open General only when Chat has *no* selection.
+	 * Do not steal mail/task tip selections opened from the feed.
+	 */
 	$effect(() => {
 		const onChat = $page.url.pathname.startsWith('/chat');
 		if (!onChat) return;
 		if (typeof window === 'undefined' || isMobileNav()) return;
 		ui.selection;
 		chatChannels.length;
-		if (ui.selection?.kind === 'chat') return;
+		if (ui.selection) return;
 		setActiveChannel('general');
 		selectEntity('chat', 'general');
 	});
