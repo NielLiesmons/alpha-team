@@ -12,7 +12,7 @@ import {
 } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
-import { findMail } from './mail.svelte.js';
+import { mailTipFor } from './mail.svelte.js';
 import {
 	enterprises,
 	notes,
@@ -798,7 +798,9 @@ export function chatPublicationRefKey(msg) {
  *   box?: 'task' | 'project' | 'enterprise' | 'note',
  *   status?: string,
  *   project?: any,
- *   enterprise?: any
+ *   enterprise?: any,
+ *   tipEmails?: string[],
+ *   tipNames?: Record<string, string>
  * } | null}
  */
 export function chatRefMeta(msg) {
@@ -839,14 +841,44 @@ export function chatRefMeta(msg) {
 		};
 	}
 	if (ref.type === 'mail') {
-		const m = findMail(ref.id);
+		const tip = mailTipFor(ref.id);
+		/* Prefer snapshot on this leaf, then siblings in the feed, then tip cache. */
+		let subject = String(ref.title || ref.subject || '').trim();
+		let from = normEmail(ref.from || '');
+		let fromName = String(ref.from_name || '').trim();
+		if (!subject || !from) {
+			const sib = chatFeed.find(
+				(m) =>
+					m?.ref?.type === 'mail' &&
+					String(m.ref.id) === String(ref.id) &&
+					(m.ref.title || m.ref.subject || m.ref.from)
+			);
+			if (sib?.ref) {
+				if (!subject) subject = String(sib.ref.title || sib.ref.subject || '').trim();
+				if (!from) from = normEmail(sib.ref.from);
+				if (!fromName) fromName = String(sib.ref.from_name || '').trim();
+			}
+		}
+		if (!subject) subject = String(tip?.subject || '').trim();
+		if (!from) from = normEmail(tip?.from || '');
+		if (!fromName) fromName = String(tip?.from_name || '').trim();
+		if (!subject) subject = '(no subject)';
 		return {
 			kind: 'Mail',
-			title: m?.subject || '(no subject)',
-			icon: 'mail'
+			title: subject,
+			icon: 'mail',
+			/* Tip row pfps = mail contact (not team comment authors). */
+			tipEmails: from ? [from] : [],
+			tipNames: from ? { [from]: fromName || displayNameFromEmail(from) } : {}
 		};
 	}
 	return { kind: String(ref.type), title: String(ref.type), icon: 'chat' };
+}
+
+function normEmail(value) {
+	return String(value || '')
+		.trim()
+		.toLowerCase();
 }
 
 /**

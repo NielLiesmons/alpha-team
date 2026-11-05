@@ -17,7 +17,12 @@
 		postChatMessage,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
-	import { formatMailWhen, mailAuthorLabel, threadMessages } from '$lib/mail.svelte.js';
+	import {
+		formatMailWhen,
+		mailAuthorLabel,
+		rememberMailTip,
+		threadMessages
+	} from '$lib/mail.svelte.js';
 	import { mailView } from '$lib/mail-view.svelte.js';
 	import { openComposer } from '$lib/workspace.svelte.js';
 
@@ -66,6 +71,7 @@
 	$effect(() => {
 		const id = threadId;
 		if (!id) return;
+		rememberMailTip(mailMsg);
 		void loadComments('mail', id).catch(() => {});
 	});
 
@@ -160,10 +166,22 @@
 		if (inputEl) inputEl.style.height = 'auto';
 		replyMsg = null;
 		try {
+			rememberMailTip(mailMsg);
+			const subject = String(mailMsg?.subject || '').trim() || '(no subject)';
+			const from = String(mailMsg?.from || '')
+				.trim()
+				.toLowerCase();
 			await postChatMessage({
 				body,
 				kind: 'comment',
-				ref: { type: 'mail', id: threadId },
+				ref: {
+					type: 'mail',
+					id: threadId,
+					title: subject,
+					subject,
+					from,
+					from_name: mailAuthorLabel(mailMsg) || ''
+				},
 				reply_to: parent?.id ?? null
 			});
 			queueMicrotask(() => {

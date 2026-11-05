@@ -2239,7 +2239,11 @@ export async function createChatMessage(session, input, opts = {}) {
 					ref: {
 						type: input.ref.type,
 						id: input.ref.id,
-						...(input.ref.action ? { action: String(input.ref.action) } : {})
+						...(input.ref.action ? { action: String(input.ref.action) } : {}),
+						...(input.ref.title ? { title: String(input.ref.title) } : {}),
+						...(input.ref.subject ? { subject: String(input.ref.subject) } : {}),
+						...(input.ref.from ? { from: String(input.ref.from) } : {}),
+						...(input.ref.from_name ? { from_name: String(input.ref.from_name) } : {})
 					}
 				}
 			: {}),

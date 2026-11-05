@@ -49,6 +49,12 @@ export async function bootApp() {
 	} catch {
 		/* ignore */
 	}
+	try {
+		const { hydrateMailTipCache } = await import('./mail.svelte.js');
+		hydrateMailTipCache();
+	} catch {
+		/* ignore */
+	}
 
 	if (!activeSessionSafe()) {
 		appBoot.listsReady = true;

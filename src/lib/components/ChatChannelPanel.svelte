@@ -29,6 +29,7 @@
 		refreshChatFeed,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { mailTipCache } from '$lib/mail.svelte.js';
 	import { startChatTipPoll, stopChatTipPoll } from '$lib/chat-sync.svelte.js';
 	import { chatStackFlags } from '$lib/chat-stack.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
@@ -98,6 +99,7 @@
 	 * }[]}
 	 */
 	const feedBlocks = $derived.by(() => {
+		mailTipCache; /* re-tip Mail panels when subjects hydrate */
 		/** @type {{ type: 'panel' | 'plain' | 'status', key: string, refKey?: string | null, refMeta?: any, messages: any[] }[]} */
 		const blocks = [];
 		for (const msg of chronological) {
@@ -543,7 +545,10 @@
 							refMeta?.box === 'project' && refMeta.project
 								? chatProjectBoxProps(refMeta.project)
 								: null}
-						{@const authors = tipAuthors(block.messages)}
+						{@const authors =
+							Array.isArray(refMeta?.tipEmails) && refMeta.tipEmails.length
+								? refMeta.tipEmails
+								: tipAuthors(block.messages)}
 						{@const bubbles = panelBubbles(block.messages)}
 						<section class="pub-panel" class:tip-only={bubbles.length === 0}>
 							<button
@@ -584,8 +589,9 @@
 								{#if authors.length}
 									<span class="tip-pfps" aria-hidden="true">
 										{#each authors as email, i (email)}
+											{@const tipName = refMeta?.tipNames?.[email]}
 											{@const rp = asPerson(email)}
-											{@const rn = rp?.name || displayNameFromEmail(email)}
+											{@const rn = tipName || rp?.name || displayNameFromEmail(email)}
 											<span class="tip-pfp" style:z-index={authors.length - i}>
 												<ProfilePic
 													name={rn}

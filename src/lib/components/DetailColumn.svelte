@@ -24,6 +24,7 @@
 		findMail,
 		mailCategoryFor,
 		markMailRead,
+		rememberMailTip,
 		threadMessages
 	} from '$lib/mail.svelte.js';
 	import { approveContact, isApprovedContact } from '$lib/mail-contacts.svelte.js';
@@ -237,6 +238,7 @@
 	$effect(() => {
 		const id = mailMsg?.id;
 		if (!id) return;
+		rememberMailTip(mailMsg);
 		void markMailRead(id);
 	});
 

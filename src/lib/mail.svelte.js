@@ -219,6 +219,50 @@ export function mailThreadContact(thread) {
 }
 
 /**
+ * Tip/cache snapshot so Chat can show Mail · subject without the Mail list loaded.
+ * @type {Record<string, { subject: string, from: string, from_name: string }>}
+ */
+export const mailTipCache = $state({});
+
+/**
+ * @param {any} thread
+ */
+export function rememberMailTip(thread) {
+	if (!thread?.id) return;
+	const id = String(thread.id);
+	const subject = String(thread.subject || '').trim() || '(no subject)';
+	const from = normEmail(thread.from);
+	const from_name = String(thread.from_name || mailAuthorLabel(thread) || '').trim();
+	mailTipCache[id] = { subject, from, from_name };
+	if (typeof localStorage !== 'undefined') {
+		try {
+			localStorage.setItem('alpha.mail.tips.v1', JSON.stringify(mailTipCache));
+		} catch {
+			/* ignore */
+		}
+	}
+}
+
+export function hydrateMailTipCache() {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		const raw = localStorage.getItem('alpha.mail.tips.v1');
+		const doc = raw ? JSON.parse(raw) : null;
+		if (!doc || typeof doc !== 'object') return;
+		for (const [id, row] of Object.entries(doc)) {
+			if (!id || !row || typeof row !== 'object') continue;
+			mailTipCache[id] = {
+				subject: String(row.subject || '(no subject)'),
+				from: normEmail(row.from),
+				from_name: String(row.from_name || '').trim()
+			};
+		}
+	} catch {
+		/* ignore */
+	}
+}
+
+/**
  * @param {string} id thread id or message id
  */
 export function findMail(id) {
@@ -231,6 +275,25 @@ export function findMail(id) {
 		}
 	}
 	return null;
+}
+
+/**
+ * Resolve subject/from for chat tips (live list → tip cache → null).
+ * @param {string} id
+ */
+export function mailTipFor(id) {
+	const key = String(id || '');
+	if (!key) return null;
+	const live = findMail(key);
+	if (live) {
+		rememberMailTip(live);
+		return {
+			subject: String(live.subject || '').trim() || '(no subject)',
+			from: normEmail(live.from),
+			from_name: String(live.from_name || mailAuthorLabel(live) || '').trim()
+		};
+	}
+	return mailTipCache[key] || null;
 }
 
 export async function refreshMail() {
