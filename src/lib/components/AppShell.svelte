@@ -16,7 +16,7 @@
 	} from '$lib/workspace.svelte.js';
 	import { onMount } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
-	import { ensureChatFeedOpen } from '$lib/chat.svelte.js';
+	import { openChatChannel } from '$lib/chat.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
@@ -138,10 +138,9 @@
 			ui.listFilter = 'all';
 			resetAccountingBrowse();
 		}
-		/* After section clear, reopen chat feed so returning from Mail/etc isn’t blank. */
+		/* Desktop+mobile: landing on Chat opens General immediately (pre-tip behavior). */
 		if (p.startsWith('/chat')) {
-			queueMicrotask(() => ensureChatFeedOpen());
-			setTimeout(() => ensureChatFeedOpen(), 40);
+			openChatChannel('general');
 		}
 	});
 

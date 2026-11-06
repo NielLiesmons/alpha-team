@@ -1795,9 +1795,10 @@
 		word-break: break-word;
 	}
 
+	/* Match chat-channel-body: no top pad here — feed scrolls under detail-top */
 	.body.mail-thread-body {
 		overflow: hidden;
-		padding: 56px 24px 0;
+		padding: 0 24px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
@@ -1805,7 +1806,7 @@
 
 	@media (max-width: 767px) {
 		.body.mail-thread-body {
-			padding: 56px 14px 0;
+			padding: 0 14px;
 		}
 	}
 

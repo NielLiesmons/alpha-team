@@ -13,12 +13,14 @@ import {
 import { activeSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
 import { mailTipFor } from './mail.svelte.js';
+import { pushDetailLayer } from './nav-stack.js';
 import {
 	enterprises,
 	notes,
 	projects,
 	selectEntity,
-	tasks
+	tasks,
+	ui
 } from './workspace.svelte.js';
 import { projectDisplayIcon, projectLifecycle } from './project-status.js';
 
@@ -72,13 +74,24 @@ export function channelById(id) {
 
 /**
  * Open the active chat channel in the detail pane when nothing is selected.
- * Used after section nav / closing a tip so the feed isn't blank.
+ * Used after closing a tip so the feed isn't blank.
  */
 export function ensureChatFeedOpen() {
 	if (ui.selection) return;
-	const id = String(chatUi.activeChannelId || 'general');
-	setActiveChannel(id);
-	selectEntity('chat', id);
+	openChatChannel(chatUi.activeChannelId || 'general');
+}
+
+/**
+ * Force-open a chat channel (section enter → General). Overwrites non-chat selection.
+ * @param {string} [id]
+ */
+export function openChatChannel(id = 'general') {
+	const sid = String(id || 'general');
+	setActiveChannel(sid);
+	if (ui.selection?.kind === 'chat' && String(ui.selection.id) === sid) return;
+	const opening = !ui.selection;
+	ui.selection = { kind: 'chat', id: sid };
+	if (opening) pushDetailLayer('selection');
 }
 
 /**

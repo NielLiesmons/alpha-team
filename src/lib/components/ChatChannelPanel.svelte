@@ -62,12 +62,16 @@
 
 	/** Near bottom → follow new messages; else show FABs / bump unread. */
 	let nearBottom = $state(true);
+	/** Sticky pin — cleared as soon as the user scrolls away; gates auto-follow. */
+	let pinBottom = $state(true);
 	let showScrollFab = $state(false);
 	let pendingNewCount = $state(0);
 	/** @type {string} */
 	let lastTailId = $state('');
 	/** @type {string} */
 	let mountedChannel = $state('');
+	/** Cancels in-flight scrollToBottom if the user scrolls away mid-await. */
+	let scrollGen = 0;
 	/** Briefly highlight a jumped-to quoted message. */
 	let highlightId = $state(/** @type {string | null} */ (null));
 	/** @type {ReturnType<typeof setTimeout> | null} */
@@ -169,13 +173,16 @@
 			chatUi.loading = false;
 			chatUi.settled = true;
 			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
-			void scrollToBottom(true);
+			void scrollToBottom(true, { force: true });
 		} else if (chatFeed.length === 0) {
 			chatUi.loading = true;
 		}
 		void refreshChatFeed().then(() => {
-			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
-			if (nearBottom) void scrollToBottom(true);
+			const nextTail = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
+			const grew = Boolean(nextTail && nextTail !== lastTailId);
+			lastTailId = nextTail;
+			/* Only re-pin after network if user is still at bottom — never yank them back. */
+			if (pinBottom && grew) void scrollToBottom(true);
 		});
 		return () => {
 			stopChatTipPoll();
@@ -190,9 +197,10 @@
 			lastTailId = '';
 			pendingNewCount = 0;
 			nearBottom = true;
+			pinBottom = true;
 			showScrollFab = false;
 			mountedChannel = id;
-			void scrollToBottom(true);
+			void scrollToBottom(true, { force: true });
 		} else if (!mountedChannel) {
 			mountedChannel = id;
 		}
@@ -217,7 +225,7 @@
 		const added = prevIdx >= 0 ? msgs.length - 1 - prevIdx : 1;
 		lastTailId = tailId;
 
-		if (nearBottom) {
+		if (pinBottom) {
 			pendingNewCount = 0;
 			void scrollToBottom(false);
 		} else {
@@ -231,16 +239,29 @@
 		const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
 		const near = dist < NEAR_BOTTOM_PX;
 		nearBottom = near;
+		pinBottom = near;
 		showScrollFab = !near && el.scrollHeight > el.clientHeight + 40;
 		if (near) pendingNewCount = 0;
+		/* Invalidate in-flight programmatic scrolls so they can't yank back. */
+		if (!near) scrollGen += 1;
 	}
 
-	async function scrollToBottom(instant) {
+	/**
+	 * @param {boolean} instant
+	 * @param {{ force?: boolean }} [opts]
+	 */
+	async function scrollToBottom(instant, opts = {}) {
+		const force = Boolean(opts.force);
+		const gen = ++scrollGen;
 		await tick();
+		if (gen !== scrollGen) return;
+		if (!force && !pinBottom) return;
 		const el = messagesEl;
 		if (!el) return;
 		el.scrollTo({ top: el.scrollHeight, behavior: instant ? 'auto' : 'smooth' });
+		if (gen !== scrollGen) return;
 		nearBottom = true;
+		pinBottom = true;
 		showScrollFab = false;
 		pendingNewCount = 0;
 	}
@@ -388,6 +409,7 @@
 		}));
 
 		try {
+			pinBottom = true;
 			nearBottom = true;
 			const uploadId = crypto.randomUUID().slice(0, 16);
 			await postChatMessage({
@@ -410,7 +432,7 @@
 					: {})
 			});
 			inputEl?.focus();
-			void scrollToBottom(true);
+			void scrollToBottom(true, { force: true });
 		} catch (e) {
 			chatUi.error = e instanceof Error ? e.message : String(e);
 		}
@@ -838,8 +860,8 @@
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		/* Clear detail-top; bottom clears floating composer (no phantom bottom-nav pad) */
-		padding: 56px 24px calc(72px + env(safe-area-inset-bottom, 0px));
+		/* Clear detail-top; bottom clears floating composer (~dock 67 − 12px tighter gap) */
+		padding: 56px 24px calc(58px + env(safe-area-inset-bottom, 0px));
 	}
 
 	.banner {
@@ -1214,7 +1236,7 @@
 	@media (max-width: 767px) {
 		.messages {
 			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
-				calc(72px + env(safe-area-inset-bottom, 0px));
+				calc(58px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.composer-fade {

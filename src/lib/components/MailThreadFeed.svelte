@@ -3,7 +3,9 @@
 	 * Missive-style mail thread: mail panels + private chat bubbles + status lines
 	 * in one chronological feed, with a full bottom chat composer (no FAB).
 	 */
+	import { tick } from 'svelte';
 	import AlphaLogo from './icons/AlphaLogo.svelte';
+	import Reply from './icons/Reply.svelte';
 	import Voice from './icons/Voice.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ChatStatusLine from './ChatStatusLine.svelte';
@@ -56,9 +58,14 @@
 	let fadeTop = $state(false);
 	let fadeBottom = $state(false);
 	let fieldTall = $state(false);
+	let pinBottom = $state(true);
+	let lastCommentLen = $state(-1);
+	let scrollGen = 0;
+	let didInitialScroll = $state(false);
 	const COMPOSER_FADE_THRESHOLD = 4;
 	const COMPOSER_MAX_H = 140;
 	const COMPOSER_TALL_PX = 28;
+	const NEAR_BOTTOM_PX = 96;
 
 	const canSend = $derived(Boolean(draft.trim()));
 
@@ -93,16 +100,66 @@
 		const id = threadId;
 		if (!id) return;
 		rememberMailTip(mailMsg);
-		void loadComments('mail', id).catch(() => {});
+		didInitialScroll = false;
+		lastCommentLen = -1;
+		pinBottom = true;
+		void (async () => {
+			try {
+				await loadComments('mail', id);
+			} catch {
+				/* ignore */
+			}
+			await scrollFeedToBottom(true, { force: true });
+			didInitialScroll = true;
+			lastCommentLen = (commentsByKey[`mail:${id}`] ?? []).length;
+		})();
 	});
 
 	$effect(() => {
-		comments.length;
-		queueMicrotask(() => {
-			if (!feedEl) return;
-			feedEl.scrollTop = feedEl.scrollHeight;
-		});
+		const len = comments.length;
+		if (!didInitialScroll) return;
+		if (lastCommentLen < 0) {
+			lastCommentLen = len;
+			return;
+		}
+		if (len === lastCommentLen) return;
+		const grew = len > lastCommentLen;
+		lastCommentLen = len;
+		if (grew && pinBottom) void scrollFeedToBottom(false);
 	});
+
+	/** @param {string} email */
+	function emailDomain(email) {
+		const at = String(email || '').indexOf('@');
+		if (at < 0) return '';
+		return String(email).slice(at);
+	}
+
+	function measureFeedScroll() {
+		const el = feedEl;
+		if (!el) return;
+		const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+		const near = dist < NEAR_BOTTOM_PX;
+		pinBottom = near;
+		if (!near) scrollGen += 1;
+	}
+
+	/**
+	 * @param {boolean} instant
+	 * @param {{ force?: boolean }} [opts]
+	 */
+	async function scrollFeedToBottom(instant, opts = {}) {
+		const force = Boolean(opts.force);
+		const gen = ++scrollGen;
+		await tick();
+		if (gen !== scrollGen) return;
+		if (!force && !pinBottom) return;
+		const el = feedEl;
+		if (!el) return;
+		el.scrollTo({ top: el.scrollHeight, behavior: instant ? 'auto' : 'smooth' });
+		if (gen !== scrollGen) return;
+		pinBottom = true;
+	}
 
 	/**
 	 * Unified timeline: mail panels, chat bubbles, status lines.
@@ -221,8 +278,9 @@
 				},
 				reply_to: parent?.id ?? null
 			});
+			pinBottom = true;
 			queueMicrotask(() => {
-				if (feedEl) feedEl.scrollTop = feedEl.scrollHeight;
+				void scrollFeedToBottom(true, { force: true });
 				inputEl?.focus();
 			});
 		} catch (e) {
@@ -245,7 +303,7 @@
 </script>
 
 <div class="mail-thread-shell">
-	<div class="mail-feed" bind:this={feedEl}>
+	<div class="mail-feed" bind:this={feedEl} onscroll={measureFeedScroll}>
 		{#each timeline as item (item.id)}
 			{#if item.type === 'status'}
 				<ChatStatusLine text={item.text || ''} email={item.email || ''} name={item.name || ''} />
@@ -261,68 +319,62 @@
 				{@const m = item.mail}
 				{@const fromEmail = String(m.from || '').toLowerCase()}
 				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
+				{@const domain = emailDomain(fromEmail)}
 				{@const toLine = (m.to || []).map(displayNameFromEmail).filter(Boolean).join(', ')}
 				<article class="mail-panel" class:draft={isDraft(m)}>
 					<header class="mail-panel-head">
-						<span class="mail-panel-who">
-							<ProfilePic
-								name={fromName}
-								email={fromEmail}
-								pictureUrl={pictureUrlFor(fromEmail)}
-								size={36}
-							/>
-							<span class="mail-panel-id">
-								<span class="mail-panel-name">{fromName}</span>
-								<span class="mail-panel-email">{fromEmail}</span>
-							</span>
-						</span>
-						<span class="mail-panel-actions">
-							<button
-								type="button"
-								class="icon-hit"
-								aria-label="Reply"
-								onclick={() =>
-									openComposer('mail', undefined, undefined, {
-										to: fromEmail === me ? m.to?.[0] || replyTo : fromEmail || replyTo
-									})
-								}
-							>
-								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-									<path
-										d="M6.5 3.5 2.5 7.5l4 4"
-										stroke="currentColor"
-										stroke-width="1.5"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-									<path
-										d="M2.5 7.5h7.2c2.1 0 3.8 1.5 3.8 3.4V13"
-										stroke="currentColor"
-										stroke-width="1.5"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
-							</button>
-							<button
-								type="button"
-								class="icon-hit"
-								aria-label="More"
-								aria-expanded={menuOpen}
-								onclick={onMore}
-							>
-								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-									<circle cx="3.2" cy="8" r="1.35" fill="currentColor" />
-									<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-									<circle cx="12.8" cy="8" r="1.35" fill="currentColor" />
-								</svg>
-							</button>
-						</span>
+						<ProfilePic
+							name={fromName}
+							email={fromEmail}
+							pictureUrl={pictureUrlFor(fromEmail)}
+							size={36}
+						/>
+						<div class="mail-panel-meta">
+							<div class="mail-panel-row1">
+								<span class="mail-panel-who-line">
+									<span class="mail-panel-name">{fromName}</span>
+									{#if domain}
+										<span class="mail-panel-domain">{domain}</span>
+									{/if}
+								</span>
+								<span class="mail-panel-actions">
+									<button
+										type="button"
+										class="ghost-ico"
+										aria-label="Reply"
+										onclick={() =>
+											openComposer('mail', undefined, undefined, {
+												to: fromEmail === me ? m.to?.[0] || replyTo : fromEmail || replyTo
+											})
+										}
+									>
+										<Reply size={15} />
+									</button>
+									<button
+										type="button"
+										class="ghost-ico"
+										aria-label="More"
+										aria-expanded={menuOpen}
+										onclick={onMore}
+									>
+										<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+											<circle cx="3.2" cy="8" r="1.35" fill="currentColor" />
+											<circle cx="8" cy="8" r="1.35" fill="currentColor" />
+											<circle cx="12.8" cy="8" r="1.35" fill="currentColor" />
+										</svg>
+									</button>
+								</span>
+							</div>
+							<div class="mail-panel-row2">
+								<p class="mail-panel-to">
+									<span class="to-label">To:</span>
+									{toLine || '—'}
+								</p>
+								<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
+							</div>
+						</div>
 					</header>
-					{#if toLine}
-						<p class="mail-panel-to">To: {toLine}</p>
-					{/if}
-					<p class="mail-panel-when">{formatMailWhen(m.created_at)}</p>
+					<div class="mail-panel-rule" aria-hidden="true"></div>
 					<pre class="mail-panel-body">{m.body || ''}</pre>
 				</article>
 			{/if}
@@ -429,7 +481,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
-		padding: 0 0 calc(88px + env(safe-area-inset-bottom, 0px));
+		/* Scroll under detail-top like Chat; tighter composer clearance */
+		padding: 56px 0 calc(58px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 	}
 
@@ -442,8 +495,8 @@
 	.mail-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
-		padding: 14px 14px 16px;
+		gap: 0;
+		padding: 12px 14px 14px;
 		border-radius: 14px;
 		background: color-mix(in srgb, var(--fg) 4.5%, transparent);
 		border: 0;
@@ -458,24 +511,34 @@
 	.mail-panel-head {
 		display: flex;
 		align-items: flex-start;
-		justify-content: space-between;
 		gap: 10px;
 		min-width: 0;
 	}
 
-	.mail-panel-who {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		min-width: 0;
+	.mail-panel-meta {
 		flex: 1;
-	}
-
-	.mail-panel-id {
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
+		gap: 3px;
+		padding-top: 1px;
+	}
+
+	.mail-panel-row1,
+	.mail-panel-row2 {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		min-width: 0;
+	}
+
+	.mail-panel-who-line {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		overflow: hidden;
 	}
 
 	.mail-panel-name {
@@ -487,7 +550,9 @@
 		white-space: nowrap;
 	}
 
-	.mail-panel-email {
+	.mail-panel-domain {
+		flex-shrink: 1;
+		min-width: 0;
 		font-size: 12px;
 		font-weight: 450;
 		color: var(--fg-33);
@@ -501,29 +566,64 @@
 		align-items: center;
 		gap: 2px;
 		flex-shrink: 0;
-		margin-top: -2px;
+	}
+
+	.ghost-ico {
+		width: 28px;
+		height: 28px;
+		display: grid;
+		place-items: center;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: var(--fg-66);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.ghost-ico:hover {
+		color: var(--fg);
 	}
 
 	.mail-panel-to {
+		flex: 1;
+		min-width: 0;
 		margin: 0;
-		padding-left: 46px;
 		font-size: 12px;
 		font-weight: 450;
 		color: var(--fg-33);
 		line-height: 1.35;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.mail-panel-when {
-		margin: 0;
-		padding-left: 46px;
-		font-size: 11px;
-		font-weight: 500;
+	.to-label {
+		font-weight: 550;
 		color: var(--fg-33);
 	}
 
+	.mail-panel-when {
+		flex-shrink: 0;
+		margin: 0;
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--fg-33);
+		white-space: nowrap;
+		padding-right: 2px;
+	}
+
+	.mail-panel-rule {
+		height: 1px;
+		margin: 10px 0;
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
+	}
+
 	.mail-panel-body {
-		margin: 4px 0 0;
-		padding: 0 0 0 46px;
+		margin: 0;
+		padding: 0;
 		border: 0;
 		background: transparent;
 		font: inherit;
@@ -818,10 +918,9 @@
 	}
 
 	@media (max-width: 767px) {
-		.mail-panel-to,
-		.mail-panel-when,
-		.mail-panel-body {
-			padding-left: 0;
+		.mail-feed {
+			padding: calc(88px + env(safe-area-inset-top, 0px)) 0
+				calc(58px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.composer-fade {
