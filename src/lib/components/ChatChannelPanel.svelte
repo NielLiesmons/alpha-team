@@ -186,7 +186,7 @@
 			const nextTail = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
 			const grew = Boolean(nextTail && nextTail !== lastTailId);
 			lastTailId = nextTail;
-			if (pinBottom && grew) void goBottom(false);
+			if (pinBottom && grew) void goBottom(false, true);
 		});
 		return () => {
 			stopChatTipPoll();
@@ -199,7 +199,7 @@
 		const scroller = messagesEl;
 		const body = feedBodyEl;
 		if (!scroller || !body) return;
-		return attachFeedPinResize(scroller, body, () => pinBottom);
+		return attachFeedPinResize(scroller, body, () => pinBottom, () => snapLock > 0);
 	});
 
 	$effect(() => {
@@ -237,7 +237,7 @@
 
 		if (pinBottom) {
 			pendingNewCount = 0;
-			void goBottom(false);
+			void goBottom(false, true);
 		} else {
 			pendingNewCount += Math.max(1, added);
 		}
@@ -253,8 +253,11 @@
 		if (near) pendingNewCount = 0;
 	}
 
-	/** @param {boolean} [force] */
-	async function goBottom(force = false) {
+	/**
+	 * @param {boolean} [force]
+	 * @param {boolean} [smooth] animated (FAB / follow); instant for open/send
+	 */
+	async function goBottom(force = false, smooth = false) {
 		if (force) pinBottom = true;
 		if (!force && !pinBottom) return;
 		snapLock++;
@@ -262,7 +265,7 @@
 		showScrollFab = false;
 		pendingNewCount = 0;
 		try {
-			await snapFeedToBottomSoon(() => messagesEl);
+			await snapFeedToBottomSoon(() => messagesEl, { smooth });
 		} finally {
 			snapLock = Math.max(0, snapLock - 1);
 			measureScroll();
@@ -270,7 +273,7 @@
 	}
 
 	function onJumpToLatest() {
-		void goBottom(true);
+		void goBottom(true, true);
 	}
 
 	/** Jump to a quoted parent bubble and flash it. */

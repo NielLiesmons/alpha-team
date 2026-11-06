@@ -108,7 +108,7 @@
 		const scroller = feedEl;
 		const body = feedBodyEl;
 		if (!scroller || !body) return;
-		return attachFeedPinResize(scroller, body, () => pinBottom);
+		return attachFeedPinResize(scroller, body, () => pinBottom, () => snapLock > 0);
 	});
 
 	$effect(() => {
@@ -139,7 +139,7 @@
 		if (len === lastCommentLen) return;
 		const grew = len > lastCommentLen;
 		lastCommentLen = len;
-		if (grew && pinBottom) void goBottom(false);
+		if (grew && pinBottom) void goBottom(false, true);
 	});
 
 	/** @param {string} email */
@@ -221,14 +221,17 @@
 		pinBottom = isFeedNearBottom(el);
 	}
 
-	/** @param {boolean} [force] */
-	async function goBottom(force = false) {
+	/**
+	 * @param {boolean} [force]
+	 * @param {boolean} [smooth] animated follow; instant for open/send
+	 */
+	async function goBottom(force = false, smooth = false) {
 		if (force) pinBottom = true;
 		if (!force && !pinBottom) return;
 		snapLock++;
 		pinBottom = true;
 		try {
-			await snapFeedToBottomSoon(() => feedEl);
+			await snapFeedToBottomSoon(() => feedEl, { smooth });
 		} finally {
 			snapLock = Math.max(0, snapLock - 1);
 			measureFeedScroll();

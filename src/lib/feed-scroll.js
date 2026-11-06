@@ -1,6 +1,7 @@
 /**
- * Shared feed bottom-pin — one rule for chat, mail, comments:
- * snap to true max scrollTop (padding included). No smooth, no partial bottoms.
+ * Shared feed bottom-pin for chat, mail, comments.
+ * Always targets true max scrollTop (padding included).
+ * Instant for open/settle; smooth for FAB / follow-tail.
  */
 
 import { tick } from 'svelte';
@@ -25,33 +26,67 @@ export function isFeedNearBottom(el, px = FEED_NEAR_BOTTOM_PX) {
 	return feedMaxScrollTop(el) - el.scrollTop <= px;
 }
 
-/** Instant snap to the absolute bottom. */
-/** @param {HTMLElement | null | undefined} el */
-export function snapFeedToBottom(el) {
+/**
+ * @param {HTMLElement | null | undefined} el
+ * @param {ScrollBehavior} [behavior]
+ */
+export function scrollFeedToBottom(el, behavior = 'auto') {
 	if (!el) return;
-	el.scrollTop = feedMaxScrollTop(el);
+	el.scrollTo({ top: feedMaxScrollTop(el), behavior });
+}
+
+/** Instant snap (alias). @param {HTMLElement | null | undefined} el */
+export function snapFeedToBottom(el) {
+	scrollFeedToBottom(el, 'auto');
+}
+
+/** @param {HTMLElement} el */
+function waitForScrollEnd(el) {
+	return new Promise((resolve) => {
+		let done = false;
+		const finish = () => {
+			if (done) return;
+			done = true;
+			el.removeEventListener('scrollend', finish);
+			resolve();
+		};
+		el.addEventListener('scrollend', finish);
+		setTimeout(finish, 700);
+	});
 }
 
 /**
- * After paint + one layout frame, snap again (images/fonts/padding settle).
+ * After paint (+ layout frame when instant), scroll to true bottom.
  * @param {() => HTMLElement | null | undefined} getEl
+ * @param {{ smooth?: boolean }} [opts]
  */
-export async function snapFeedToBottomSoon(getEl) {
+export async function snapFeedToBottomSoon(getEl, opts = {}) {
 	await tick();
-	snapFeedToBottom(getEl());
+	const el = getEl();
+	if (!el) return;
+	if (opts.smooth) {
+		scrollFeedToBottom(el, 'smooth');
+		await waitForScrollEnd(el);
+		/* Ensure exact bottom after animation / late layout. */
+		snapFeedToBottom(getEl());
+		return;
+	}
+	snapFeedToBottom(el);
 	await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 	snapFeedToBottom(getEl());
 }
 
 /**
- * While pinned, keep the scroller at true bottom whenever the body box resizes
- * (new messages, quote expand, images). Returns destroy().
+ * While pinned, keep the scroller at true bottom whenever the body box resizes.
+ * Skips while `isLocked` (smooth jump in flight).
  * @param {HTMLElement} scroller
  * @param {HTMLElement} body
  * @param {() => boolean} isPinned
+ * @param {() => boolean} [isLocked]
  */
-export function attachFeedPinResize(scroller, body, isPinned) {
+export function attachFeedPinResize(scroller, body, isPinned, isLocked) {
 	const ro = new ResizeObserver(() => {
+		if (isLocked?.()) return;
 		if (isPinned()) snapFeedToBottom(scroller);
 	});
 	ro.observe(body);
