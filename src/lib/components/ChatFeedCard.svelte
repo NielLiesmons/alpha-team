@@ -12,6 +12,7 @@
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { customEmojis, customEmojiUrl } from '$lib/custom-emoji.svelte.js';
 	import { customEmojiShortcode, emojiOnlyInfo, tokenizeChatBody } from '$lib/message-emoji.js';
+	import { members } from '$lib/members.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import ChatEmoji from './ChatEmoji.svelte';
@@ -99,7 +100,14 @@
 		if (isReply || hasAttachments) return null;
 		return emojiOnlyInfo(msg.body);
 	});
-	const bodyTokens = $derived(tokenizeChatBody(msg.body));
+	const bodyTokens = $derived.by(() => {
+		members.length;
+		const people = members.map((m) => ({
+			email: String(m.email || ''),
+			name: String(m.name || displayNameFromEmail(m.email) || '')
+		}));
+		return tokenizeChatBody(msg.body, { people });
+	});
 	const emojiOnlyPx = $derived(
 		emojiOnly?.count === 1 ? 56 : emojiOnly?.count === 2 ? 48 : 40
 	);
@@ -321,6 +329,12 @@
 					{#each bodyTokens as tok, i (`${tok.type}-${i}`)}
 						{#if tok.type === 'text'}
 							{tok.value}
+						{:else if tok.type === 'mention'}
+							<span
+								class="mention"
+								style:color={nameColor(tok.email || '', tok.label || tok.value)}
+								>{tok.value}</span
+							>
 						{:else}
 							<ChatEmoji token={tok.value} size={18} />
 						{/if}
@@ -836,6 +850,11 @@
 		color: var(--fg-83);
 		white-space: pre-wrap;
 		word-break: break-word;
+	}
+
+	.mention {
+		font-weight: 600;
+		/* Keep account color even inside outgoing white text */
 	}
 
 	.text.emoji-only-text {

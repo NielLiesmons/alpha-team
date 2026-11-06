@@ -7,6 +7,7 @@
 	import ChatEmoji from './ChatEmoji.svelte';
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+	import { profileNameCss } from '$lib/color.js';
 	import { customEmojis, customEmojiUrl, refreshCustomEmojis } from '$lib/custom-emoji.svelte.js';
 	import { applyComposerInsert, detectComposerTrigger } from '$lib/composer-suggest.js';
 	import { searchEmojis } from '$lib/emoji.js';
@@ -14,6 +15,7 @@
 	import { members } from '$lib/members.svelte.js';
 	import { customEmojiShortcode } from '$lib/message-emoji.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
+	import { themeChoice } from '$lib/theme.svelte.js';
 
 	/**
 	 * @type {{
@@ -36,6 +38,14 @@
 	let emojiTab = $state('emoji');
 
 	const open = $derived(Boolean(trigger));
+
+	const isDark = $derived.by(() => {
+		const choice = themeChoice.value;
+		if (choice === 'light') return false;
+		if (choice === 'gray' || choice === 'dark') return true;
+		if (typeof document === 'undefined') return true;
+		return document.documentElement.dataset.theme !== 'light';
+	});
 
 	/** @typedef {{ id: string, label: string, sub?: string, insert: string, kind: string, email?: string, path?: string, emoji?: string }} SuggestItem */
 
@@ -301,7 +311,11 @@
 							size={28}
 						/>
 						<span class="meta">
-							<span class="label">{item.label}</span>
+							<span
+								class="label person"
+								style:color={profileNameCss(item.email || '', item.label, isDark)}
+								>{item.label}</span
+							>
 							{#if item.sub}<span class="sub">{item.sub}</span>{/if}
 						</span>
 					{:else if item.kind === 'file'}
@@ -350,103 +364,132 @@
 {/if}
 
 <style>
+	/*
+	 * Zapstore ShortTextInput suggestion menu → Alpha DS tokens.
+	 * Popover bg, dark shadow, capped width, tab chips, selected wash + hairline rows.
+	 */
 	.suggest {
 		position: absolute;
 		left: 0;
-		right: 0;
 		bottom: calc(100% + 10px);
 		z-index: 20;
-		min-width: 220px;
-		max-width: 100%;
-		border: 1px solid var(--glass-border);
-		border-radius: 14px;
-		background: var(--glass, var(--popover, var(--bg)));
-		box-shadow: 0 10px 28px color-mix(in srgb, var(--fg) 16%, transparent);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+		width: min(320px, calc(100vw - 32px));
+		min-width: 240px;
+		max-width: 320px;
+		border: 0.33px solid color-mix(in srgb, var(--fg) 33%, transparent);
+		border-radius: 12px;
+		background: var(--popover, var(--bg));
+		backdrop-filter: blur(var(--glass-blur, 14px));
+		-webkit-backdrop-filter: blur(var(--glass-blur, 14px));
+		box-shadow: 0 8px 24px color-mix(in srgb, #000 40%, transparent);
 		overflow: hidden;
 		pointer-events: auto;
 	}
 
 	.tabs {
+		padding: 8px;
 		display: flex;
-		gap: 0;
-		border-bottom: 0.33px solid var(--fg-8);
+		gap: 4px;
 	}
 
 	.tab {
 		flex: 1;
-		height: 34px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 26px;
+		padding: 0 10px;
 		border: 0;
+		border-radius: 6px;
 		background: transparent;
-		color: var(--fg-33);
+		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
-		font-weight: 650;
+		font-size: 13px;
+		font-weight: 500;
 		cursor: pointer;
+		transition:
+			background-color 0.15s ease,
+			color 0.15s ease;
+	}
+
+	.tab:hover {
+		color: var(--fg);
 	}
 
 	.tab.on {
+		background: var(--fg-16);
 		color: var(--fg);
-		box-shadow: inset 0 -2px 0 var(--fg);
 	}
 
 	.list {
 		max-height: 220px;
 		overflow: auto;
-		padding: 4px;
+		background: transparent;
 	}
 
 	.list.emoji-grid {
 		display: grid;
 		grid-template-columns: repeat(8, minmax(0, 1fr));
-		gap: 2px;
+		gap: 0;
+		padding: 0 4px 4px;
 	}
 
 	.item {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 12px;
 		width: 100%;
-		padding: 8px 10px;
+		padding: 8px 12px;
 		border: 0;
-		border-radius: 10px;
+		border-radius: 0;
 		background: transparent;
 		color: inherit;
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
+		transition: background-color 0.1s ease;
+	}
+
+	.item:not(:last-child) {
+		border-bottom: 0.33px solid var(--fg-8);
 	}
 
 	.list.emoji-grid .item {
 		aspect-ratio: 1;
 		justify-content: center;
 		padding: 0;
+		border-bottom: 0;
+		border-radius: 8px;
 	}
 
 	.item:hover,
 	.item.on {
-		background: var(--fg-4);
+		background: var(--fg-8);
 	}
 
 	.meta {
 		min-width: 0;
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
+		gap: 2px;
 	}
 
 	.label {
-		font-size: 13px;
-		font-weight: 600;
+		font-size: 14px;
+		font-weight: 500;
 		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
+	.label.person {
+		font-weight: 500;
+	}
+
 	.sub {
-		font-size: 11px;
+		font-size: 12px;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -455,17 +498,28 @@
 
 	.file-glyph,
 	.emoji-glyph {
-		font-size: 22px;
+		font-size: 20px;
 		line-height: 1;
+		width: 24px;
+		text-align: center;
+		flex-shrink: 0;
 	}
 
 	.custom-img {
 		display: block;
+		width: 24px;
+		height: 24px;
 		object-fit: contain;
+		flex-shrink: 0;
 	}
 
 	.empty {
-		margin: 16px 8px;
+		margin: 0;
+		padding: 12px 16px;
+		min-height: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		text-align: center;
 		font-size: 13px;
 		color: var(--fg-33);

@@ -62,10 +62,14 @@
 	let lastCommentLen = $state(-1);
 	let scrollGen = 0;
 	let didInitialScroll = $state(false);
+	/** Prevents remount/tip refresh from re-forcing scroll on the same thread. */
+	let loadedThreadId = '';
+	/** @type {Record<string, boolean>} */
+	let quoteOpen = $state({});
 	const COMPOSER_FADE_THRESHOLD = 4;
 	const COMPOSER_MAX_H = 140;
 	const COMPOSER_TALL_PX = 28;
-	const NEAR_BOTTOM_PX = 96;
+	const NEAR_BOTTOM_PX = 72;
 
 	const canSend = $derived(Boolean(draft.trim()));
 
@@ -100,6 +104,10 @@
 		const id = threadId;
 		if (!id) return;
 		rememberMailTip(mailMsg);
+		/* Same thread: tip/hydrate updates must NOT reset pin or force-scroll. */
+		if (id === loadedThreadId) return;
+		loadedThreadId = id;
+		quoteOpen = {};
 		didInitialScroll = false;
 		lastCommentLen = -1;
 		pinBottom = true;
@@ -109,7 +117,9 @@
 			} catch {
 				/* ignore */
 			}
+			if (loadedThreadId !== id) return;
 			await scrollFeedToBottom(true, { force: true });
+			if (loadedThreadId !== id) return;
 			didInitialScroll = true;
 			lastCommentLen = (commentsByKey[`mail:${id}`] ?? []).length;
 		})();
@@ -125,7 +135,7 @@
 		if (len === lastCommentLen) return;
 		const grew = len > lastCommentLen;
 		lastCommentLen = len;
-		if (grew && pinBottom) void scrollFeedToBottom(false);
+		if (grew && pinBottom) void scrollFeedToBottom(true);
 	});
 
 	/** @param {string} email */
@@ -133,6 +143,41 @@
 		const at = String(email || '').indexOf('@');
 		if (at < 0) return '';
 		return String(email).slice(at);
+	}
+
+	/**
+	 * Split plain-text body into main + quoted reply tail ("On … wrote:").
+	 * @param {string} body
+	 * @returns {{ main: string, quoted: string }}
+	 */
+	function splitMailQuote(body) {
+		const text = String(body ?? '').replace(/\r\n/g, '\n');
+		if (!text) return { main: '', quoted: '' };
+		const markers = [
+			/\nOn .{8,240}? wrote:\s*\n/,
+			/\n-+\s*Original Message\s*-+/i,
+			/\n_{5,}\s*\n/
+		];
+		let idx = -1;
+		for (const re of markers) {
+			const m = text.match(re);
+			if (m?.index != null && (idx < 0 || m.index < idx)) idx = m.index;
+		}
+		if (idx < 0 && /^On .{8,240}? wrote:\s*\n/.test(text)) {
+			return { main: '', quoted: text };
+		}
+		if (idx < 0) return { main: text, quoted: '' };
+		return {
+			main: text.slice(0, idx).trimEnd(),
+			quoted: text.slice(idx).replace(/^\n/, '')
+		};
+	}
+
+	/** User started scrolling — cancel any pending pin-to-bottom. */
+	function onUserScrollIntent() {
+		if (!pinBottom && didInitialScroll) return;
+		pinBottom = false;
+		scrollGen += 1;
 	}
 
 	function measureFeedScroll() {
@@ -156,9 +201,14 @@
 		if (!force && !pinBottom) return;
 		const el = feedEl;
 		if (!el) return;
-		el.scrollTo({ top: el.scrollHeight, behavior: instant ? 'auto' : 'smooth' });
+		el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
 		if (gen !== scrollGen) return;
 		pinBottom = true;
+	}
+
+	/** @param {string} id */
+	function toggleQuote(id) {
+		quoteOpen = { ...quoteOpen, [id]: !quoteOpen[id] };
 	}
 
 	/**
@@ -303,7 +353,14 @@
 </script>
 
 <div class="mail-thread-shell">
-	<div class="mail-feed" bind:this={feedEl} onscroll={measureFeedScroll}>
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<div
+		class="mail-feed"
+		bind:this={feedEl}
+		onscroll={measureFeedScroll}
+		onwheel={onUserScrollIntent}
+		ontouchstart={onUserScrollIntent}
+	>
 		{#each timeline as item (item.id)}
 			{#if item.type === 'status'}
 				<ChatStatusLine text={item.text || ''} email={item.email || ''} name={item.name || ''} />
@@ -321,6 +378,8 @@
 				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
 				{@const domain = emailDomain(fromEmail)}
 				{@const toLine = (m.to || []).map(displayNameFromEmail).filter(Boolean).join(', ')}
+				{@const parts = splitMailQuote(m.body || '')}
+				{@const quoteId = String(m.id || item.id)}
 				<article class="mail-panel" class:draft={isDraft(m)}>
 					<header class="mail-panel-head">
 						<ProfilePic
@@ -348,7 +407,7 @@
 											})
 										}
 									>
-										<Reply size={15} />
+										<Reply size={13} />
 									</button>
 									<button
 										type="button"
@@ -357,10 +416,10 @@
 										aria-expanded={menuOpen}
 										onclick={onMore}
 									>
-										<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-											<circle cx="3.2" cy="8" r="1.35" fill="currentColor" />
+										<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+											<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
 											<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-											<circle cx="12.8" cy="8" r="1.35" fill="currentColor" />
+											<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
 										</svg>
 									</button>
 								</span>
@@ -375,7 +434,37 @@
 						</div>
 					</header>
 					<div class="mail-panel-rule" aria-hidden="true"></div>
-					<pre class="mail-panel-body">{m.body || ''}</pre>
+					<div class="mail-panel-content">
+						{#if parts.main}
+							<pre class="mail-panel-body">{parts.main}</pre>
+						{/if}
+						{#if parts.quoted}
+							{#if quoteOpen[quoteId]}
+								<pre class="mail-panel-body mail-panel-quoted">{parts.quoted}</pre>
+								<button
+									type="button"
+									class="quote-toggle"
+									aria-label="Hide quoted text"
+									onclick={() => toggleQuote(quoteId)}
+								>
+									<span class="quote-dots" aria-hidden="true">
+										<span></span><span></span><span></span>
+									</span>
+								</button>
+							{:else}
+								<button
+									type="button"
+									class="quote-toggle"
+									aria-label="Show quoted text"
+									onclick={() => toggleQuote(quoteId)}
+								>
+									<span class="quote-dots" aria-hidden="true">
+										<span></span><span></span><span></span>
+									</span>
+								</button>
+							{/if}
+						{/if}
+					</div>
 				</article>
 			{/if}
 		{/each}
@@ -496,10 +585,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 12px 14px 14px;
+		padding: 0;
 		border-radius: 14px;
 		background: color-mix(in srgb, var(--fg) 4.5%, transparent);
 		border: 0;
+		overflow: hidden;
 	}
 
 	.mail-panel.draft {
@@ -510,9 +600,11 @@
 
 	.mail-panel-head {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		gap: 10px;
 		min-width: 0;
+		padding: 12px 14px 10px;
+		box-sizing: border-box;
 	}
 
 	.mail-panel-meta {
@@ -520,16 +612,17 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
-		padding-top: 1px;
+		gap: 2px;
+		justify-content: center;
 	}
 
 	.mail-panel-row1,
 	.mail-panel-row2 {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 		min-width: 0;
+		min-height: 0;
 	}
 
 	.mail-panel-who-line {
@@ -544,6 +637,7 @@
 	.mail-panel-name {
 		font-size: 14px;
 		font-weight: 650;
+		line-height: 1.25;
 		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -555,6 +649,7 @@
 		min-width: 0;
 		font-size: 12px;
 		font-weight: 450;
+		line-height: 1.25;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -564,23 +659,31 @@
 	.mail-panel-actions {
 		display: flex;
 		align-items: center;
-		gap: 2px;
+		gap: 0;
 		flex-shrink: 0;
+		margin: 0;
+		padding: 0;
+		line-height: 0;
 	}
 
 	.ghost-ico {
-		width: 28px;
-		height: 28px;
+		width: 18px;
+		height: 18px;
 		display: grid;
 		place-items: center;
 		margin: 0;
 		padding: 0;
 		border: 0;
-		border-radius: 999px;
+		border-radius: 0;
 		background: transparent;
 		color: var(--fg-66);
 		cursor: pointer;
+		line-height: 0;
 		-webkit-tap-highlight-color: transparent;
+	}
+
+	.ghost-ico + .ghost-ico {
+		margin-left: 6px;
 	}
 
 	.ghost-ico:hover {
@@ -594,7 +697,7 @@
 		font-size: 12px;
 		font-weight: 450;
 		color: var(--fg-33);
-		line-height: 1.35;
+		line-height: 1.25;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -610,28 +713,79 @@
 		margin: 0;
 		font-size: 11px;
 		font-weight: 500;
+		line-height: 1.25;
 		color: var(--fg-33);
 		white-space: nowrap;
-		padding-right: 2px;
 	}
 
+	/* Full panel width — padding lives in head/content, not around the rule */
 	.mail-panel-rule {
 		height: 1px;
-		margin: 10px 0;
+		margin: 0;
+		width: 100%;
 		background: color-mix(in srgb, var(--fg) 8%, transparent);
+	}
+
+	.mail-panel-content {
+		padding: 12px 14px 14px;
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		align-items: flex-start;
 	}
 
 	.mail-panel-body {
 		margin: 0;
 		padding: 0;
 		border: 0;
+		width: 100%;
 		background: transparent;
 		font: inherit;
-		font-size: 14px;
+		font-size: 15px;
 		line-height: 1.55;
-		color: var(--fg-66);
+		color: var(--fg-83);
 		white-space: pre-wrap;
 		word-break: break-word;
+	}
+
+	.mail-panel-quoted {
+		color: var(--fg-66);
+		font-size: 14px;
+	}
+
+	.quote-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 22px;
+		padding: 0 10px;
+		margin: 0;
+		border: 0;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
+		color: var(--fg-33);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.quote-toggle:hover {
+		background: color-mix(in srgb, var(--fg) 12%, transparent);
+		color: var(--fg-66);
+	}
+
+	.quote-dots {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		line-height: 0;
+	}
+
+	.quote-dots span {
+		width: 3px;
+		height: 3px;
+		border-radius: 999px;
+		background: currentColor;
 	}
 
 	.err {

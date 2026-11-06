@@ -67,15 +67,49 @@ export function emojiOnlyInfo(body) {
 }
 
 /**
- * Split body into text / unicode-emoji / custom-shortcode tokens for rendering.
- * @param {string | null | undefined} body
- * @returns {{ type: 'text' | 'emoji' | 'custom', value: string }[]}
+ * @typedef {{ email: string, name?: string }} MentionPerson
+ * @typedef {{
+ *   type: 'text' | 'emoji' | 'custom' | 'mention',
+ *   value: string,
+ *   email?: string,
+ *   label?: string
+ * }} ChatBodyToken
  */
-export function tokenizeChatBody(body) {
+
+/**
+ * Build compact-name → person lookup for `@Mentions` (spaces stripped on insert).
+ * @param {MentionPerson[]} people
+ */
+export function mentionLookup(people) {
+	/** @type {Map<string, MentionPerson>} */
+	const map = new Map();
+	for (const p of people || []) {
+		const email = String(p.email || '')
+			.trim()
+			.toLowerCase();
+		const name = String(p.name || '').trim();
+		if (name) map.set(name.replace(/\s+/g, '').toLowerCase(), { email, name });
+		if (email) {
+			const local = email.split('@')[0];
+			if (local && !map.has(local)) map.set(local, { email, name: name || local });
+		}
+	}
+	return map;
+}
+
+/**
+ * Split body into text / unicode-emoji / custom-shortcode / @mention tokens.
+ * @param {string | null | undefined} body
+ * @param {{ people?: MentionPerson[] }} [opts]
+ * @returns {ChatBodyToken[]}
+ */
+export function tokenizeChatBody(body, opts = {}) {
 	const raw = String(body ?? '');
 	if (!raw) return [];
 
-	/** @type {{ type: 'text' | 'emoji' | 'custom', value: string }[]} */
+	const peopleMap = mentionLookup(opts.people || []);
+
+	/** @type {ChatBodyToken[]} */
 	const out = [];
 	let i = 0;
 	while (i < raw.length) {
@@ -85,6 +119,25 @@ export function tokenizeChatBody(body) {
 			i += short[0].length;
 			continue;
 		}
+
+		/* @mention — only when it resolves to a known person */
+		if (raw[i] === '@') {
+			const m = raw.slice(i).match(/^@([A-Za-z0-9._\-]+)/);
+			if (m) {
+				const person = peopleMap.get(m[1].toLowerCase());
+				if (person) {
+					out.push({
+						type: 'mention',
+						value: m[0],
+						email: person.email,
+						label: person.name || m[1]
+					});
+					i += m[0].length;
+					continue;
+				}
+			}
+		}
+
 		const g = graphemes(raw.slice(i))[0];
 		if (!g) break;
 		if (isEmojiGrapheme(g)) {
