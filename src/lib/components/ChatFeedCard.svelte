@@ -17,12 +17,14 @@
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import ChatEmoji from './ChatEmoji.svelte';
 	import { activeSession } from '$lib/drive/session.svelte.js';
-	import { getPath } from '$lib/drive/client.js';
-	import { getMediaBlob } from '$lib/drive/media.js';
+	import { getAttachmentObjectUrl } from '$lib/drive/media-cache.js';
+	import { inferMediaKind } from '$lib/drive/media-kind.js';
 
 	const REACTION_PFP_MAX = 3;
 	/** @type {Record<string, string>} path → object URL for remote attachments */
 	let attUrls = $state(/** @type {Record<string, string>} */ ({}));
+	/** @type {Record<string, boolean>} path → load failed */
+	let attFailed = $state(/** @type {Record<string, boolean>} */ ({}));
 
 	/**
 	 * @type {{
@@ -209,46 +211,28 @@
 	$effect(() => {
 		const atts = Array.isArray(msg.attachments) ? msg.attachments : [];
 		const session = activeSession();
-		const need = atts.filter(
-			(a) =>
-				a?.path &&
-				!String(a.path).startsWith('local:') &&
-				!a.previewUrl &&
-				!a.url &&
-				!attUrls[a.path] &&
-				(a.kind === 'image' || a.kind === 'video' || a.kind === 'voice')
-		);
+		const need = atts.filter((a) => {
+			const path = String(a?.path || '');
+			if (!path || path.startsWith('local:')) return false;
+			if (a.previewUrl || a.url || attUrls[path] || attFailed[path]) return false;
+			return inferMediaKind(a) !== 'file';
+		});
 		if (!session || !need.length) return;
-		let cancelled = false;
-		/** @type {string[]} */
-		const created = [];
-		void (async () => {
-			for (const a of need) {
-				try {
-					const path = String(a.path);
-					/** @type {Uint8Array} */
-					let bytes;
-					/** @type {string} */
-					let type = a.content_type || 'application/octet-stream';
-					if (path.endsWith('media.json') || a.kind === 'voice' || a.kind === 'video') {
-						const loaded = await getMediaBlob(session, path);
-						bytes = loaded.bytes;
-						type = loaded.manifest?.content_type || type;
-					} else {
-						bytes = await getPath(session, path);
-					}
-					if (cancelled) return;
-					const url = URL.createObjectURL(new Blob([bytes], { type }));
-					created.push(url);
-					attUrls = { ...attUrls, [path]: url };
-				} catch {
-					/* leave placeholder */
+		const ac = new AbortController();
+		for (const a of need) {
+			const path = String(a.path);
+			void getAttachmentObjectUrl(session, a, { signal: ac.signal }).then((res) => {
+				if (ac.signal.aborted) return;
+				if (res?.url) {
+					attUrls = { ...attUrls, [path]: res.url };
+				} else {
+					attFailed = { ...attFailed, [path]: true };
 				}
-			}
-		})();
+			});
+		}
 		return () => {
-			cancelled = true;
-			for (const u of created) URL.revokeObjectURL(u);
+			ac.abort();
+			/* object URLs are owned by media-cache — do not revoke here */
 		};
 	});
 </script>
@@ -344,13 +328,23 @@
 			{#if Array.isArray(msg.attachments) && msg.attachments.length}
 				<div class="attachments">
 					{#each msg.attachments as att, ai (att.path || att.name || ai)}
+						{@const mediaKind = inferMediaKind(att)}
 						{@const src = att.previewUrl || att.url || (att.path ? attUrls[att.path] : '')}
-						{#if att.kind === 'image' && src}
-							<img class="att-image" src={src} alt={att.name || 'Image'} />
-						{:else if att.kind === 'video' && src}
+						{@const failed = Boolean(att.path && attFailed[att.path])}
+						{#if mediaKind === 'image' && src}
+							<img class="att-image" src={src} alt={att.name || 'Image'} loading="lazy" />
+						{:else if mediaKind === 'video' && src}
 							<video class="att-video" src={src} controls playsinline></video>
-						{:else if att.kind === 'voice' && src}
+						{:else if mediaKind === 'voice' && src}
 							<audio class="att-voice" src={src} controls preload="metadata"></audio>
+						{:else if mediaKind !== 'file' && !failed}
+							<div
+								class="att-media-loading"
+								class:image={mediaKind === 'image'}
+								class:video={mediaKind === 'video'}
+								aria-busy="true"
+								aria-label="Loading media"
+							></div>
 						{:else}
 							<div class="att-file">
 								<span class="att-name">{att.name || att.kind || 'File'}</span>
@@ -685,6 +679,32 @@
 		max-height: 220px;
 		border-radius: 10px;
 		object-fit: cover;
+	}
+
+	.att-media-loading {
+		width: min(180px, 52vw);
+		height: 120px;
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
+		animation: att-pulse 1.1s ease-in-out infinite;
+	}
+
+	.att-media-loading.video {
+		height: 140px;
+	}
+
+	.bubble.mine .att-media-loading {
+		background: rgba(0, 0, 0, 0.18);
+	}
+
+	@keyframes att-pulse {
+		0%,
+		100% {
+			opacity: 0.55;
+		}
+		50% {
+			opacity: 1;
+		}
 	}
 
 	.att-voice {

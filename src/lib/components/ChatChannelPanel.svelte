@@ -38,6 +38,7 @@
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { putPath } from '$lib/drive/client.js';
 	import { putMediaBlob } from '$lib/drive/media.js';
+	import { inferMediaKind, mimeFromNameAndType } from '$lib/drive/media-kind.js';
 	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 
@@ -322,17 +323,18 @@
 		if (!files.length) return;
 		pendingFiles = [
 			...pendingFiles,
-			...files.map((file) => ({
-				file,
-				previewUrl: file.type.startsWith('image/') || file.type.startsWith('video/')
-					? URL.createObjectURL(file)
-					: null,
-				kind: file.type.startsWith('image/')
-					? 'image'
-					: file.type.startsWith('video/')
-						? 'video'
-						: 'file'
-			}))
+			...files.map((file) => {
+				const kind = inferMediaKind({
+					content_type: file.type,
+					name: file.name
+				});
+				return {
+					file,
+					previewUrl:
+						kind === 'image' || kind === 'video' ? URL.createObjectURL(file) : null,
+					kind
+				};
+			})
 		];
 	}
 
@@ -352,20 +354,15 @@
 		if (!session) throw new Error('Connect Drive first');
 		const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'file';
 		const path = `chat/media/${msgId}/${safe}`;
-		const kind = file.type.startsWith('image/')
-			? 'image'
-			: file.type.startsWith('video/')
-				? 'video'
-				: file.type.startsWith('audio/')
-					? 'voice'
-					: 'file';
+		const kind = inferMediaKind({ content_type: file.type, name: file.name });
+		const contentType = mimeFromNameAndType(file.name, file.type);
 		const bytes = new Uint8Array(await file.arrayBuffer());
 		if (file.size > 512 * 1024 || kind === 'video' || kind === 'voice') {
 			const mediaPath = `chat/media/${msgId}/media.json`;
-			await putMediaBlob(session, mediaPath, file.type || 'application/octet-stream', bytes);
+			await putMediaBlob(session, mediaPath, contentType, bytes);
 			return {
 				path: mediaPath,
-				content_type: file.type || 'application/octet-stream',
+				content_type: contentType,
 				kind,
 				name: file.name,
 				bytes: file.size
@@ -374,7 +371,7 @@
 		await putPath(session, path, 'blob', bytes);
 		return {
 			path,
-			content_type: file.type || 'application/octet-stream',
+			content_type: contentType,
 			kind,
 			name: file.name,
 			bytes: file.size
