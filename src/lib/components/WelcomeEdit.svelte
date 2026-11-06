@@ -1,6 +1,7 @@
 <script>
 	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import MailHeroEditor from './MailHeroEditor.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import EditorToolbar from './EditorToolbar.svelte';
@@ -135,9 +136,9 @@
 	{/if}
 	<div class="sheet-bottom row">
 		<EditorToolbar editor={tipTap} />
-		<button type="button" class="publish-btn" disabled={busy} onclick={save}>
+		<PrimaryButton size="sheet" disabled={busy} onclick={save}>
 			{busy ? 'Saving…' : 'Save welcome'}
-		</button>
+		</PrimaryButton>
 	</div>
 </CreateSheet>
 
@@ -194,19 +195,6 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
-	}
-
-	.publish-btn {
-		margin-left: auto;
-		height: 40px;
-		padding: 0 16px;
-		border: 1px solid transparent;
-		border-radius: 12px;
-		background: var(--button-primary-bg) padding-box, var(--glass-shine) border-box;
-		color: var(--button-primary-fg);
-		font: inherit;
-		font-weight: 650;
-		cursor: pointer;
 	}
 
 	.err {

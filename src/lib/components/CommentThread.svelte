@@ -20,6 +20,7 @@
 		postChatMessage,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { snapFeedToBottom } from '$lib/feed-scroll.js';
 
 	/** @type {{ type: 'task' | 'note' | 'project' | 'mail', entityId: string }} */
 	let { type, entityId } = $props();
@@ -116,9 +117,7 @@
 
 	$effect(() => {
 		if (!open) return;
-		queueMicrotask(() => {
-			if (listEl) listEl.scrollTop = listEl.scrollHeight;
-		});
+		queueMicrotask(() => snapFeedToBottom(listEl));
 	});
 
 	function formatWhen(iso) {
@@ -196,7 +195,7 @@
 				reply_to: parent?.id ?? activeRootId ?? null
 			});
 			queueMicrotask(() => {
-				if (listEl) listEl.scrollTop = listEl.scrollHeight;
+				snapFeedToBottom(listEl);
 				inputEl?.focus();
 			});
 		} catch (e) {

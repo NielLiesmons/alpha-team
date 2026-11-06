@@ -1,6 +1,7 @@
 <script>
 	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import MailHeroEditor from './MailHeroEditor.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import EditorToolbar from './EditorToolbar.svelte';
@@ -350,14 +351,13 @@
 					{busy ? '…' : 'Save draft'}
 				</button>
 			{/if}
-			<button
-				type="button"
-				class="publish-btn"
+			<PrimaryButton
+				size="sheet"
 				disabled={busy || !subject.trim() || !body.trim()}
 				onclick={saveAndSend}
 			>
 				{primaryLabel}
-			</button>
+			</PrimaryButton>
 		</div>
 	</div>
 </CreateSheet>
@@ -395,19 +395,6 @@
 		color: var(--fg-66);
 		font: inherit;
 		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.publish-btn {
-		height: 40px;
-		padding: 0 16px;
-		border: 0;
-		border-radius: 12px;
-		background: var(--button-primary-bg) padding-box, var(--glass-shine) border-box;
-		border: 1px solid transparent;
-		color: var(--button-primary-fg);
-		font: inherit;
-		font-weight: 650;
 		cursor: pointer;
 	}
 

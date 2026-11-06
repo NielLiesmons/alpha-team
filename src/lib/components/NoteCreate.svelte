@@ -4,6 +4,7 @@
 	import NoteEditor from './NoteEditor.svelte';
 	import EditorToolbar from './EditorToolbar.svelte';
 	import Spinner from './Spinner.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
 	import { projectLifecycle } from '$lib/project-status.js';
@@ -146,17 +147,12 @@
 			</div>
 		</div>
 
-		<button
-			type="button"
-			class="publish-btn"
-			disabled={!title.trim() || saving}
-			onclick={save}
-		>
+		<PrimaryButton size="sheet" disabled={!title.trim() || saving} onclick={save}>
 			{#if saving}
 				<Spinner size={14} label="Saving" />
 			{/if}
 			{editing ? 'Save' : 'Create'}
-		</button>
+		</PrimaryButton>
 	</div>
 </CreateSheet>
 
@@ -351,42 +347,4 @@
 		color: var(--fg-66);
 	}
 
-	.publish-btn {
-		height: var(--ctrl-h);
-		min-height: var(--ctrl-h);
-		padding: 0 18px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		border: 1px solid transparent;
-		border-radius: 9999px;
-		background:
-			var(--button-primary-bg) padding-box,
-			var(--glass-shine) border-box;
-		background-color: transparent;
-		color: var(--button-primary-fg);
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-		flex-shrink: 0;
-		margin-left: auto;
-		box-sizing: border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		transition: transform 0.2s var(--ease);
-	}
-
-	.publish-btn:hover:not(:disabled) {
-		transform: scale(1.015);
-	}
-
-	.publish-btn:active:not(:disabled) {
-		transform: scale(0.98);
-	}
-
-	.publish-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
 </style>

@@ -1,5 +1,6 @@
 <script>
 	import CreateSheet from './CreateSheet.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import EnterpriseBox from './EnterpriseBox.svelte';
 	import FloatPanel from './FloatPanel.svelte';
@@ -90,9 +91,9 @@
 	<textarea class="sheet-body" placeholder="Description" bind:value={description}></textarea>
 	<div class="form-divider"></div>
 	<div class="sheet-bottom">
-		<button type="button" class="publish-btn" disabled={!title.trim()} onclick={save}>
+		<PrimaryButton size="sheet" disabled={!title.trim()} onclick={save}>
 			{editing ? 'Save' : 'Publish'}
-		</button>
+		</PrimaryButton>
 	</div>
 </CreateSheet>
 
@@ -141,20 +142,4 @@
 		padding: 12px 16px 0;
 	}
 
-	.publish-btn {
-		height: 36px;
-		padding: 0 18px;
-		border: 1px solid transparent;
-		border-radius: 9999px;
-		background: var(--button-primary-bg) padding-box, var(--glass-shine) border-box;
-		background-color: transparent;
-		color: var(--button-primary-fg);
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	.publish-btn:disabled {
-		opacity: 0.5;
-	}
 </style>

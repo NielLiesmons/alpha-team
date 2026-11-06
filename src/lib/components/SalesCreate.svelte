@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
 	import Spinner from './Spinner.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import { closeComposer, saveSalesLine, ui } from '$lib/workspace.svelte.js';
 
 	let title = $state('');
@@ -113,15 +114,14 @@
 				</div>
 			{/if}
 		</div>
-		<button
-			type="button"
-			class="publish-btn"
+		<PrimaryButton
+			size="sheet"
 			disabled={!title.trim() || !eurosToCents(price) || saving}
 			onclick={save}
 		>
 			{#if saving}<Spinner size={14} label="Saving" />{/if}
 			Add
-		</button>
+		</PrimaryButton>
 	</div>
 </CreateSheet>
 
@@ -211,24 +211,5 @@
 	.option:hover {
 		background: var(--fg-8);
 		color: var(--fg);
-	}
-	.publish-btn {
-		height: var(--ctrl-h);
-		padding: 0 18px;
-		margin-left: auto;
-		border: 1px solid transparent;
-		border-radius: 9999px;
-		background: var(--button-primary-bg) padding-box, var(--glass-shine) border-box;
-		background-color: transparent;
-		color: var(--button-primary-fg);
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.publish-btn:disabled {
-		opacity: 0.5;
 	}
 </style>

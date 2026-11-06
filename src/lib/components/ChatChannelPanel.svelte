@@ -39,6 +39,11 @@
 	import { putPath } from '$lib/drive/client.js';
 	import { putMediaBlob } from '$lib/drive/media.js';
 	import { inferMediaKind, mimeFromNameAndType } from '$lib/drive/media-kind.js';
+	import {
+		attachFeedPinResize,
+		isFeedNearBottom,
+		snapFeedToBottomSoon
+	} from '$lib/feed-scroll.js';
 	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 
@@ -50,6 +55,8 @@
 	let replyTo = $state(null);
 	/** @type {HTMLDivElement | undefined} */
 	let messagesEl = $state();
+	/** @type {HTMLDivElement | undefined} */
+	let feedBodyEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
 	/** @type {HTMLInputElement | undefined} */
@@ -61,9 +68,7 @@
 	/** @type {ReturnType<typeof setInterval> | null} */
 	let voiceTimer = null;
 
-	/** Near bottom → follow new messages; else show FABs / bump unread. */
-	let nearBottom = $state(true);
-	/** Sticky pin — cleared as soon as the user scrolls away; gates auto-follow. */
+	/** Sticky pin — cleared when user scrolls away; gates auto-follow + resize snap. */
 	let pinBottom = $state(true);
 	let showScrollFab = $state(false);
 	let pendingNewCount = $state(0);
@@ -71,10 +76,8 @@
 	let lastTailId = $state('');
 	/** @type {string} */
 	let mountedChannel = $state('');
-	/** Cancels in-flight scrollToBottom if the user scrolls away mid-await. */
-	let scrollGen = 0;
-	/** True while a forced jump-to-bottom is in flight (FAB / send). */
-	let jumpLock = false;
+	/** Skip measure while we are programmatically snapping. */
+	let snapLock = 0;
 	/** Briefly highlight a jumped-to quoted message. */
 	let highlightId = $state(/** @type {string | null} */ (null));
 	/** @type {ReturnType<typeof setTimeout> | null} */
@@ -83,7 +86,6 @@
 	let fadeTop = $state(false);
 	let fadeBottom = $state(false);
 	let fieldTall = $state(false);
-	const NEAR_BOTTOM_PX = 96;
 	const COMPOSER_FADE_THRESHOLD = 4;
 	const COMPOSER_MAX_H = 140;
 	const COMPOSER_TALL_PX = 28;
@@ -176,7 +178,7 @@
 			chatUi.loading = false;
 			chatUi.settled = true;
 			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
-			void scrollToBottom(true, { force: true });
+			void goBottom(true);
 		} else if (chatFeed.length === 0) {
 			chatUi.loading = true;
 		}
@@ -184,8 +186,7 @@
 			const nextTail = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
 			const grew = Boolean(nextTail && nextTail !== lastTailId);
 			lastTailId = nextTail;
-			/* Only re-pin after network if user is still at bottom — never yank them back. */
-			if (pinBottom && grew) void scrollToBottom(true);
+			if (pinBottom && grew) void goBottom(false);
 		});
 		return () => {
 			stopChatTipPoll();
@@ -195,21 +196,27 @@
 	});
 
 	$effect(() => {
+		const scroller = messagesEl;
+		const body = feedBodyEl;
+		if (!scroller || !body) return;
+		return attachFeedPinResize(scroller, body, () => pinBottom);
+	});
+
+	$effect(() => {
 		const id = channelId;
 		if (mountedChannel && mountedChannel !== id) {
 			lastTailId = '';
 			pendingNewCount = 0;
-			nearBottom = true;
 			pinBottom = true;
 			showScrollFab = false;
 			mountedChannel = id;
-			void scrollToBottom(true, { force: true });
+			void goBottom(true);
 		} else if (!mountedChannel) {
 			mountedChannel = id;
 		}
 	});
 
-	/** Only follow the tail when pinned near bottom — never on reactions / mid-feed edits. */
+	/** Only follow the tail when pinned — never on reactions / mid-feed edits. */
 	$effect(() => {
 		const msgs = chronological;
 		const tail = msgs.at(-1);
@@ -230,62 +237,40 @@
 
 		if (pinBottom) {
 			pendingNewCount = 0;
-			void scrollToBottom(false);
+			void goBottom(false);
 		} else {
 			pendingNewCount += Math.max(1, added);
 		}
 	});
 
 	function measureScroll() {
-		if (jumpLock) return;
+		if (snapLock > 0) return;
 		const el = messagesEl;
 		if (!el) return;
-		const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-		const near = dist < NEAR_BOTTOM_PX;
-		nearBottom = near;
+		const near = isFeedNearBottom(el);
 		pinBottom = near;
 		showScrollFab = !near && el.scrollHeight > el.clientHeight + 40;
 		if (near) pendingNewCount = 0;
-		/* Invalidate in-flight auto-follows so they can't yank back. */
-		if (!near) scrollGen += 1;
 	}
 
-	/**
-	 * @param {boolean} instant
-	 * @param {{ force?: boolean }} [opts]
-	 */
-	async function scrollToBottom(instant, opts = {}) {
-		const force = Boolean(opts.force);
-		if (force) {
-			jumpLock = true;
-			pinBottom = true;
-			nearBottom = true;
-		}
-		const gen = ++scrollGen;
-		await tick();
-		if (!force && gen !== scrollGen) return;
+	/** @param {boolean} [force] */
+	async function goBottom(force = false) {
+		if (force) pinBottom = true;
 		if (!force && !pinBottom) return;
-		const el = messagesEl;
-		if (!el) {
-			jumpLock = false;
-			return;
-		}
-		el.scrollTo({ top: el.scrollHeight, behavior: instant ? 'auto' : 'smooth' });
-		if (!force && gen !== scrollGen) return;
-		nearBottom = true;
+		snapLock++;
 		pinBottom = true;
 		showScrollFab = false;
 		pendingNewCount = 0;
-		if (force) {
-			requestAnimationFrame(() => {
-				jumpLock = false;
-				measureScroll();
-			});
+		try {
+			await snapFeedToBottomSoon(() => messagesEl);
+		} finally {
+			snapLock = Math.max(0, snapLock - 1);
+			measureScroll();
 		}
 	}
 
 	function onJumpToLatest() {
-		void scrollToBottom(true, { force: true });
+		void goBottom(true);
 	}
 
 	/** Jump to a quoted parent bubble and flash it. */
@@ -424,7 +409,6 @@
 
 		try {
 			pinBottom = true;
-			nearBottom = true;
 			const uploadId = crypto.randomUUID().slice(0, 16);
 			await postChatMessage({
 				body,
@@ -446,7 +430,7 @@
 					: {})
 			});
 			inputEl?.focus();
-			void scrollToBottom(true, { force: true });
+			void goBottom(true);
 		} catch (e) {
 			chatUi.error = e instanceof Error ? e.message : String(e);
 		}
@@ -560,154 +544,156 @@
 
 <div class="chat">
 	<div class="feed messages" bind:this={messagesEl} onscroll={measureScroll}>
-		{#if driveSession.error}
-			<p class="banner"><span class="err">{driveSession.error}</span></p>
-		{/if}
-		{#if chatUi.error}
-			<p class="banner"><span class="err">{chatUi.error}</span></p>
-		{/if}
+		<div class="feed-body" bind:this={feedBodyEl}>
+			{#if driveSession.error}
+				<p class="banner"><span class="err">{driveSession.error}</span></p>
+			{/if}
+			{#if chatUi.error}
+				<p class="banner"><span class="err">{chatUi.error}</span></p>
+			{/if}
 
-		{#if chronological.length === 0 && (!chatUi.settled || chatUi.loading)}
-			<FeedSkeleton rows={6} />
-		{:else if chronological.length === 0}
-			<div class="empty">
-				<p class="empty-title">No messages yet</p>
-				<p class="empty-body">Write below to start the conversation.</p>
-			</div>
-		{:else}
-			<div class="stack">
-				{#each feedBlocks as block (block.key)}
-					{#if block.type === 'status'}
-						{@const msg = block.messages[0]}
-						{@const subject = String(msg?.ref?.id || msg?.author || '')
-							.trim()
-							.toLowerCase()}
-						<ChatStatusLine
-							text={chatStatusText(msg)}
-							email={subject}
-							name={displayNameFromEmail(subject)}
-						/>
-					{:else if block.type === 'panel'}
-						{@const refMeta = block.refMeta}
-						{@const projectBox =
-							refMeta?.box === 'project' && refMeta.project
-								? chatProjectBoxProps(refMeta.project)
-								: null}
-						{@const authors =
-							Array.isArray(refMeta?.tipEmails) && refMeta.tipEmails.length
-								? refMeta.tipEmails
-								: tipAuthors(block.messages)}
-						{@const bubbles = panelBubbles(block.messages)}
-						<section class="pub-panel" class:tip-only={bubbles.length === 0}>
-							<button
-								type="button"
-								class="pub-tip"
-								aria-label={refMeta ? `${refMeta.kind}: ${refMeta.title}` : 'Open'}
-								onclick={() => openChatRef(block.messages[0])}
-							>
-								{#if refMeta?.box === 'task'}
-									<span class="pub-box" aria-hidden="true">
-										<TaskBox state={refMeta.status || 'open'} size={TIP_ICON} />
-									</span>
-								{:else if refMeta?.box === 'project'}
-									<span class="pub-box" aria-hidden="true">
-										<ProjectBox
-											state={projectBox?.state || 'active'}
-											icon={projectBox?.icon}
-											size={TIP_ICON}
-										/>
-									</span>
-								{:else if refMeta?.box === 'enterprise'}
-									<span class="pub-box" aria-hidden="true">
-										<EnterpriseBox
-											state={refMeta.enterprise?.status ?? 'active'}
-											icon={refMeta.enterprise?.icon}
-											size={TIP_ICON}
-										/>
-									</span>
-								{:else}
-									<span class="pub-glyph" aria-hidden="true">
-										<NavIcon name={refMeta?.icon || 'chat'} size={19} />
-									</span>
-								{/if}
-								{#if refMeta}
-									<span class="pub-kind">{refMeta.kind}</span>
-									<span class="pub-title">{refMeta.title}</span>
-								{/if}
-								{#if authors.length}
-									<span class="tip-pfps" aria-hidden="true">
-										{#each authors as email, i (email)}
-											{@const tipName = refMeta?.tipNames?.[email]}
-											{@const rp = asPerson(email)}
-											{@const rn = tipName || rp?.name || displayNameFromEmail(email)}
-											<span class="tip-pfp" style:z-index={authors.length - i}>
-												<ProfilePic
-													name={rn}
-													email={email}
-													pictureUrl={pictureUrlFor(email)}
-													size={TIP_PFP}
-													bare
-												/>
-											</span>
-										{/each}
-									</span>
-								{/if}
-							</button>
-							{#if bubbles.length}
-								<div class="pub-body">
-									{#each bubbles as msg (msg.id)}
-										{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
-										<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
-											<ChatFeedCard
-												{msg}
-												parent={findChatParent(msg.reply_to)}
-												when={formatWhen(msg.created_at)}
-												onReply={() => startReply(msg)}
-												onQuoteClick={scrollToQuoted}
-												stackFirst={st.isFirst}
-												stackLast={st.isLast}
+			{#if chronological.length === 0 && (!chatUi.settled || chatUi.loading)}
+				<FeedSkeleton rows={6} />
+			{:else if chronological.length === 0}
+				<div class="empty">
+					<p class="empty-title">No messages yet</p>
+					<p class="empty-body">Write below to start the conversation.</p>
+				</div>
+			{:else}
+				<div class="stack">
+					{#each feedBlocks as block (block.key)}
+						{#if block.type === 'status'}
+							{@const msg = block.messages[0]}
+							{@const subject = String(msg?.ref?.id || msg?.author || '')
+								.trim()
+								.toLowerCase()}
+							<ChatStatusLine
+								text={chatStatusText(msg)}
+								email={subject}
+								name={displayNameFromEmail(subject)}
+							/>
+						{:else if block.type === 'panel'}
+							{@const refMeta = block.refMeta}
+							{@const projectBox =
+								refMeta?.box === 'project' && refMeta.project
+									? chatProjectBoxProps(refMeta.project)
+									: null}
+							{@const authors =
+								Array.isArray(refMeta?.tipEmails) && refMeta.tipEmails.length
+									? refMeta.tipEmails
+									: tipAuthors(block.messages)}
+							{@const bubbles = panelBubbles(block.messages)}
+							<section class="pub-panel" class:tip-only={bubbles.length === 0}>
+								<button
+									type="button"
+									class="pub-tip"
+									aria-label={refMeta ? `${refMeta.kind}: ${refMeta.title}` : 'Open'}
+									onclick={() => openChatRef(block.messages[0])}
+								>
+									{#if refMeta?.box === 'task'}
+										<span class="pub-box" aria-hidden="true">
+											<TaskBox state={refMeta.status || 'open'} size={TIP_ICON} />
+										</span>
+									{:else if refMeta?.box === 'project'}
+										<span class="pub-box" aria-hidden="true">
+											<ProjectBox
+												state={projectBox?.state || 'active'}
+												icon={projectBox?.icon}
+												size={TIP_ICON}
 											/>
-										</div>
-									{/each}
+										</span>
+									{:else if refMeta?.box === 'enterprise'}
+										<span class="pub-box" aria-hidden="true">
+											<EnterpriseBox
+												state={refMeta.enterprise?.status ?? 'active'}
+												icon={refMeta.enterprise?.icon}
+												size={TIP_ICON}
+											/>
+										</span>
+									{:else}
+										<span class="pub-glyph" aria-hidden="true">
+											<NavIcon name={refMeta?.icon || 'chat'} size={19} />
+										</span>
+									{/if}
+									{#if refMeta}
+										<span class="pub-kind">{refMeta.kind}</span>
+										<span class="pub-title">{refMeta.title}</span>
+									{/if}
+									{#if authors.length}
+										<span class="tip-pfps" aria-hidden="true">
+											{#each authors as email, i (email)}
+												{@const tipName = refMeta?.tipNames?.[email]}
+												{@const rp = asPerson(email)}
+												{@const rn = tipName || rp?.name || displayNameFromEmail(email)}
+												<span class="tip-pfp" style:z-index={authors.length - i}>
+													<ProfilePic
+														name={rn}
+														email={email}
+														pictureUrl={pictureUrlFor(email)}
+														size={TIP_PFP}
+														bare
+													/>
+												</span>
+											{/each}
+										</span>
+									{/if}
+								</button>
+								{#if bubbles.length}
+									<div class="pub-body">
+										{#each bubbles as msg (msg.id)}
+											{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
+											<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
+												<ChatFeedCard
+													{msg}
+													parent={findChatParent(msg.reply_to)}
+													when={formatWhen(msg.created_at)}
+													onReply={() => startReply(msg)}
+													onQuoteClick={scrollToQuoted}
+													stackFirst={st.isFirst}
+													stackLast={st.isLast}
+												/>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							</section>
+						{:else}
+							{#each block.messages as msg (msg.id)}
+								{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
+								<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
+									<ChatFeedCard
+										{msg}
+										parent={findChatParent(msg.reply_to)}
+										when={formatWhen(msg.created_at)}
+										onReply={() => startReply(msg)}
+										onQuoteClick={scrollToQuoted}
+										stackFirst={st.isFirst}
+										stackLast={st.isLast}
+									/>
 								</div>
-							{/if}
-						</section>
-					{:else}
-						{#each block.messages as msg (msg.id)}
-							{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
-							<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
-								<ChatFeedCard
-									{msg}
-									parent={findChatParent(msg.reply_to)}
-									when={formatWhen(msg.created_at)}
-									onReply={() => startReply(msg)}
-									onQuoteClick={scrollToQuoted}
-									stackFirst={st.isFirst}
-									stackLast={st.isLast}
-								/>
-							</div>
-						{/each}
-					{/if}
-				{/each}
-			</div>
-		{/if}
+							{/each}
+						{/if}
+					{/each}
+				</div>
+			{/if}
 
-		{#if presence.length}
-			<div class="presence-row" aria-live="polite">
-				{#each presence as e (e.actor + e.state)}
-					<div class="presence-item">
-						<ProfilePic
-							name={displayNameFromEmail(e.actor)}
-							email={e.actor}
-							pictureUrl={pictureUrlFor(e.actor)}
-							size={28}
-						/>
-						<span class="presence-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-						<span class="presence-label">{presenceLabel(e)}</span>
-					</div>
-				{/each}
-			</div>
-		{/if}
+			{#if presence.length}
+				<div class="presence-row" aria-live="polite">
+					{#each presence as e (e.actor + e.state)}
+						<div class="presence-item">
+							<ProfilePic
+								name={displayNameFromEmail(e.actor)}
+								email={e.actor}
+								pictureUrl={pictureUrlFor(e.actor)}
+								size={28}
+							/>
+							<span class="presence-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+							<span class="presence-label">{presenceLabel(e)}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
 	</div>
 
 	{#if showScrollFab || pendingNewCount > 0}
@@ -874,8 +860,15 @@
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		/* Clear detail-top; bottom clears floating composer (dock ~67 + small air) */
+		/* Clear detail-top; bottom pad matches mail — see feed-scroll.js */
 		padding: 56px 24px calc(72px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.feed-body {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		min-height: min-content;
 	}
 
 	.banner {

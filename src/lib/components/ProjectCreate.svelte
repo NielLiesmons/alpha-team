@@ -1,5 +1,6 @@
 <script>
 	import CreateSheet from './CreateSheet.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
@@ -156,14 +157,13 @@
 		>
 			{lifecycle === 'archived' ? 'Archived' : 'Active'}
 		</button>
-		<button
-			type="button"
-			class="publish-btn"
+		<PrimaryButton
+			size="sheet"
 			disabled={!title.trim() || (sortedEnterprises.length > 0 && !primaryId)}
 			onclick={save}
 		>
 			{editing ? 'Save' : 'Publish'}
-		</button>
+		</PrimaryButton>
 	</div>
 </CreateSheet>
 
@@ -296,21 +296,4 @@
 		color: var(--fg-33);
 	}
 
-	.publish-btn {
-		height: 36px;
-		padding: 0 18px;
-		margin-left: auto;
-		border: 1px solid transparent;
-		border-radius: 9999px;
-		background: var(--button-primary-bg) padding-box, var(--glass-shine) border-box;
-		background-color: transparent;
-		color: var(--button-primary-fg);
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	.publish-btn:disabled {
-		opacity: 0.5;
-	}
 </style>

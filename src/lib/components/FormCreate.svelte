@@ -1,5 +1,6 @@
 <script>
 	import CreateSheet from './CreateSheet.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import { closeComposer, dataTables, saveCaptureForm, ui } from '$lib/workspace.svelte.js';
 
 	let title = $state('');
@@ -44,11 +45,8 @@
 		{/each}
 	</select>
 	<div class="sheet-bottom">
-		<button
-			type="button"
-			class="publish-btn"
-			disabled={!tableId || !title.trim()}
-			onclick={() => void save()}>Create</button
+		<PrimaryButton size="sheet" disabled={!tableId || !title.trim()} onclick={() => void save()}
+			>Create</PrimaryButton
 		>
 	</div>
 </CreateSheet>

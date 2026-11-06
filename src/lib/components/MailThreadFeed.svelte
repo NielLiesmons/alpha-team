@@ -3,7 +3,6 @@
 	 * Missive-style mail thread: mail panels + private chat bubbles + status lines
 	 * in one chronological feed, with a full bottom chat composer (no FAB).
 	 */
-	import { tick } from 'svelte';
 	import AlphaLogo from './icons/AlphaLogo.svelte';
 	import Reply from './icons/Reply.svelte';
 	import Voice from './icons/Voice.svelte';
@@ -21,6 +20,11 @@
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
+	import {
+		attachFeedPinResize,
+		isFeedNearBottom,
+		snapFeedToBottomSoon
+	} from '$lib/feed-scroll.js';
 	import {
 		formatMailWhen,
 		mailAuthorLabel,
@@ -55,13 +59,14 @@
 	let inputEl = $state();
 	/** @type {HTMLDivElement | undefined} */
 	let feedEl = $state();
+	/** @type {HTMLDivElement | undefined} */
+	let feedBodyEl = $state();
 	let fadeTop = $state(false);
 	let fadeBottom = $state(false);
 	let fieldTall = $state(false);
 	let pinBottom = $state(true);
 	let lastCommentLen = $state(-1);
-	let scrollGen = 0;
-	let didInitialScroll = $state(false);
+	let snapLock = 0;
 	/** Prevents remount/tip refresh from re-forcing scroll on the same thread. */
 	let loadedThreadId = '';
 	/** @type {Record<string, boolean>} */
@@ -69,7 +74,6 @@
 	const COMPOSER_FADE_THRESHOLD = 4;
 	const COMPOSER_MAX_H = 140;
 	const COMPOSER_TALL_PX = 28;
-	const NEAR_BOTTOM_PX = 72;
 
 	const canSend = $derived(Boolean(draft.trim()));
 
@@ -101,6 +105,13 @@
 	const chromeExpanded = $derived(Boolean(replyPreview));
 
 	$effect(() => {
+		const scroller = feedEl;
+		const body = feedBodyEl;
+		if (!scroller || !body) return;
+		return attachFeedPinResize(scroller, body, () => pinBottom);
+	});
+
+	$effect(() => {
 		const id = threadId;
 		if (!id) return;
 		rememberMailTip(mailMsg);
@@ -108,7 +119,6 @@
 		if (id === loadedThreadId) return;
 		loadedThreadId = id;
 		quoteOpen = {};
-		didInitialScroll = false;
 		lastCommentLen = -1;
 		pinBottom = true;
 		void (async () => {
@@ -118,24 +128,18 @@
 				/* ignore */
 			}
 			if (loadedThreadId !== id) return;
-			await scrollFeedToBottom(true, { force: true });
-			if (loadedThreadId !== id) return;
-			didInitialScroll = true;
 			lastCommentLen = (commentsByKey[`mail:${id}`] ?? []).length;
+			await goBottom(true);
 		})();
 	});
 
 	$effect(() => {
 		const len = comments.length;
-		if (!didInitialScroll) return;
-		if (lastCommentLen < 0) {
-			lastCommentLen = len;
-			return;
-		}
+		if (lastCommentLen < 0) return;
 		if (len === lastCommentLen) return;
 		const grew = len > lastCommentLen;
 		lastCommentLen = len;
-		if (grew && pinBottom) void scrollFeedToBottom(true);
+		if (grew && pinBottom) void goBottom(false);
 	});
 
 	/** @param {string} email */
@@ -210,37 +214,25 @@
 		return { main: text, quoted: '' };
 	}
 
-	/** User started scrolling — cancel any pending pin-to-bottom. */
-	function onUserScrollIntent() {
-		if (!pinBottom && didInitialScroll) return;
-		pinBottom = false;
-		scrollGen += 1;
-	}
-
 	function measureFeedScroll() {
+		if (snapLock > 0) return;
 		const el = feedEl;
 		if (!el) return;
-		const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-		const near = dist < NEAR_BOTTOM_PX;
-		pinBottom = near;
-		if (!near) scrollGen += 1;
+		pinBottom = isFeedNearBottom(el);
 	}
 
-	/**
-	 * @param {boolean} instant
-	 * @param {{ force?: boolean }} [opts]
-	 */
-	async function scrollFeedToBottom(instant, opts = {}) {
-		const force = Boolean(opts.force);
-		const gen = ++scrollGen;
-		await tick();
-		if (gen !== scrollGen) return;
+	/** @param {boolean} [force] */
+	async function goBottom(force = false) {
+		if (force) pinBottom = true;
 		if (!force && !pinBottom) return;
-		const el = feedEl;
-		if (!el) return;
-		el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
-		if (gen !== scrollGen) return;
+		snapLock++;
 		pinBottom = true;
+		try {
+			await snapFeedToBottomSoon(() => feedEl);
+		} finally {
+			snapLock = Math.max(0, snapLock - 1);
+			measureFeedScroll();
+		}
 	}
 
 	/** @param {string} id */
@@ -367,7 +359,7 @@
 			});
 			pinBottom = true;
 			queueMicrotask(() => {
-				void scrollFeedToBottom(true, { force: true });
+				void goBottom(true);
 				inputEl?.focus();
 			});
 		} catch (e) {
@@ -391,13 +383,8 @@
 
 <div class="mail-thread-shell">
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<div
-		class="feed mail-feed"
-		bind:this={feedEl}
-		onscroll={measureFeedScroll}
-		onwheel={onUserScrollIntent}
-		ontouchstart={onUserScrollIntent}
-	>
+	<div class="feed mail-feed" bind:this={feedEl} onscroll={measureFeedScroll}>
+		<div class="feed-body" bind:this={feedBodyEl}>
 		{#each timeline as item (item.id)}
 			{#if item.type === 'status'}
 				<div class="status-row">
@@ -507,6 +494,7 @@
 				</article>
 			{/if}
 		{/each}
+		</div>
 	</div>
 
 	{#if error}
@@ -610,9 +598,14 @@
 		-webkit-overflow-scrolling: touch;
 		/* Block layout — flex children were stretching to fill and killing scroll */
 		display: block;
-		/* Same top/bottom clearance as ChatChannelPanel .messages */
+		/* Same top/bottom clearance as ChatChannelPanel .messages — see feed-scroll.js */
 		padding: 56px 0 calc(72px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
+	}
+
+	.feed-body {
+		display: block;
+		width: 100%;
 	}
 
 	.status-row,

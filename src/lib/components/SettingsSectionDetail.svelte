@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import ProfilePic from './ProfilePic.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import { actor, clearActor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
 		deviceProfiles,
@@ -333,9 +334,9 @@
 				size={64}
 			/>
 			<div class="pic-actions">
-				<button type="button" class="btn primary" disabled={picBusy || !me} onclick={pickPicture}>
+				<PrimaryButton size="sm" disabled={picBusy || !me} onclick={pickPicture}>
 					{picBusy ? 'Uploading…' : me?.picture ? 'Change photo' : 'Set photo'}
-				</button>
+				</PrimaryButton>
 				{#if me?.picture}
 					<button type="button" class="btn ghost" disabled={picBusy} onclick={removePicture}
 						>Remove</button
@@ -356,7 +357,7 @@
 			<input type="text" bind:value={nameDraft} autocomplete="nickname" disabled={!me} />
 		</label>
 		<div class="actions">
-			<button type="button" class="btn primary" disabled={!me} onclick={saveName}>Save name</button>
+			<PrimaryButton size="sm" disabled={!me} onclick={saveName}>Save name</PrimaryButton>
 		</div>
 		{#if nameMsg}<p class="status">{nameMsg}</p>{/if}
 
@@ -380,8 +381,8 @@
 				>
 			</div>
 			<div class="actions">
-				<button type="button" class="btn primary" disabled={memberBusy} onclick={() => void saveRole()}
-					>{memberBusy ? 'Saving…' : 'Save role'}</button
+				<PrimaryButton size="sm" disabled={memberBusy} onclick={() => void saveRole()}
+					>{memberBusy ? 'Saving…' : 'Save role'}</PrimaryButton
 				>
 			</div>
 			{#if !isSelf}
@@ -416,16 +417,11 @@
 		{/if}
 		<div class="actions">
 			{#if !pwaUi.standalone && (pwaUi.canInstall || !pwaUi.ios)}
-				<button type="button" class="btn primary" onclick={() => promptInstall()}>
+				<PrimaryButton size="sm" onclick={() => promptInstall()}>
 					{pwaUi.canInstall ? 'Install app' : 'How to install'}
-				</button>
+				</PrimaryButton>
 			{/if}
-			<button
-				type="button"
-				class="btn primary"
-				disabled={pwaUi.busy || !actor.email}
-				onclick={onTogglePush}
-			>
+			<PrimaryButton size="sm" disabled={pwaUi.busy || !actor.email} onclick={onTogglePush}>
 				{#if pwaUi.busy}
 					Working…
 				{:else if pwaUi.pushSubscribed}
@@ -433,7 +429,7 @@
 				{:else}
 					Enable notifications
 				{/if}
-			</button>
+			</PrimaryButton>
 		</div>
 		<p class="hint tight">
 			Permission: {pwaUi.pushPermission}
@@ -470,9 +466,9 @@
 			{pwaUi.storagePersisted ? ' Kept on device.' : ''}
 		</p>
 		<div class="actions">
-			<button type="button" class="btn primary" disabled={cacheBusy} onclick={clearCache}>
+			<PrimaryButton size="sm" disabled={cacheBusy} onclick={clearCache}>
 				{cacheBusy ? 'Clearing…' : 'Clear local UI cache'}
-			</button>
+			</PrimaryButton>
 		</div>
 		<p class="hint tight">
 			Drops chat feed snapshot + Drive leaf cache. Does not sign you out or remove profiles.
@@ -497,14 +493,9 @@
 			/>
 		</label>
 		<div class="actions">
-			<button
-				type="button"
-				class="btn primary"
-				disabled={mailboxBusy || !actor.email}
-				onclick={saveMailboxPw}
-			>
+			<PrimaryButton size="sm" disabled={mailboxBusy || !actor.email} onclick={saveMailboxPw}>
 				{mailboxBusy ? 'Checking…' : 'Save & test'}
-			</button>
+			</PrimaryButton>
 		</div>
 		{#if mailboxMsg}<p class="status on">{mailboxMsg}</p>{/if}
 	</section>
@@ -517,7 +508,7 @@
 			<input type="password" bind:value={apiTokenDraft} autocomplete="off" spellcheck="false" />
 		</label>
 		<div class="actions">
-			<button type="button" class="btn primary" onclick={saveApiToken}>Save token</button>
+			<PrimaryButton size="sm" onclick={saveApiToken}>Save token</PrimaryButton>
 		</div>
 		{#if apiTokenMsg}<p class="status on">{apiTokenMsg}</p>{/if}
 	</section>
@@ -548,14 +539,13 @@
 				<input type="password" bind:value={rootKey} autocomplete="off" spellcheck="false" />
 			</label>
 			<div class="actions">
-				<button
-					type="button"
-					class="btn primary"
+				<PrimaryButton
+					size="sm"
 					disabled={busy || !token.trim() || !rootKey.trim()}
 					onclick={connect}
 				>
 					{busy ? 'Connecting…' : driveSession.connected ? 'Reconnect' : 'Connect'}
-				</button>
+				</PrimaryButton>
 				{#if driveSession.connected}
 					<button type="button" class="btn ghost" disabled={busy} onclick={disconnectDrive}
 						>Disconnect</button
@@ -647,9 +637,20 @@
 		text-transform: none;
 		letter-spacing: 0;
 	}
+	.btn.ghost,
+	.btn.danger {
+		height: 2.25rem;
+		padding: 0 1rem;
+		font: inherit;
+		font-weight: 600;
+		font-size: 14px;
+		cursor: pointer;
+		box-sizing: border-box;
+	}
 	.btn.danger {
 		width: 100%;
 		margin-top: 0.35rem;
+		border: 0;
 		background-image: none;
 		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
 		color: var(--fg-66, var(--white66));
@@ -669,20 +670,7 @@
 		margin: 0.5rem 0 0.75rem;
 		flex-wrap: wrap;
 	}
-	.btn {
-		height: 2.25rem;
-		padding: 0 1rem;
-		border-radius: 10px;
-		border: none;
-		background-image: var(--button-primary-bg);
-		background-color: transparent;
-		color: var(--whiteEnforced);
-		font: inherit;
-		font-weight: 600;
-		font-size: 14px;
-		cursor: pointer;
-	}
-	.btn:disabled {
+	.btn.ghost:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
 	}

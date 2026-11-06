@@ -1,6 +1,7 @@
 <script>
 	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
+	import PrimaryButton from './PrimaryButton.svelte';
 	import { members } from '$lib/actor.svelte.js';
 	import { sendMail } from '$lib/mail.svelte.js';
 	import { closeComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
@@ -102,14 +103,13 @@
 		yet.
 	</p>
 	<div class="sheet-bottom">
-		<button
-			type="button"
-			class="publish-btn"
+		<PrimaryButton
+			size="sheet"
 			disabled={busy || parseRecipients(toRaw).length === 0 || (!subject.trim() && !body.trim())}
 			onclick={() => void send()}
 		>
 			{busy ? 'Sending…' : 'Send'}
-		</button>
+		</PrimaryButton>
 	</div>
 </CreateSheet>
 
