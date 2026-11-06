@@ -12,15 +12,17 @@
 		unreadCountForChannel,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { isMobileNav } from '$lib/nav-stack.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	/**
-	 * Keep a chat channel open when nothing is selected.
-	 * Do not steal mail/task tip selections opened from the feed.
+	 * Desktop only: keep a chat channel open when nothing is selected.
+	 * Mobile is list-first — never auto-push the detail layer.
 	 */
 	$effect(() => {
 		const onChat = $page.url.pathname.startsWith('/chat');
 		if (!onChat) return;
+		if (typeof window !== 'undefined' && isMobileNav()) return;
 		const sel = ui.selection;
 		chatChannels.length;
 		if (sel) return;

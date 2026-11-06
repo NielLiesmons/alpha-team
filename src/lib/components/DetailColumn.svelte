@@ -669,7 +669,8 @@
 				? String(chatUi.activeChannelId || 'general')
 				: null;
 		clearSelection();
-		if (restoreChat) {
+		/* Desktop only — mobile must stay list-first after back. */
+		if (restoreChat && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
 			const reopen = () => {
 				if (ui.selection) return;
 				if (!$page.url.pathname.startsWith('/chat')) return;

@@ -16,10 +16,10 @@
 	} from '$lib/workspace.svelte.js';
 	import { onMount } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
-	import { openChatChannel } from '$lib/chat.svelte.js';
+	import { chatUi, openChatChannel } from '$lib/chat.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
-	import { bindDetailPopstate } from '$lib/nav-stack.js';
+	import { bindDetailPopstate, isMobileNav } from '$lib/nav-stack.js';
 	import {
 		PLANNING_ZOOM_LABELS,
 		PLANNING_ZOOMS,
@@ -138,9 +138,9 @@
 			ui.listFilter = 'all';
 			resetAccountingBrowse();
 		}
-		/* Desktop+mobile: landing on Chat opens General immediately (pre-tip behavior). */
-		if (p.startsWith('/chat')) {
-			openChatChannel('general');
+		/* Desktop only: third column opens last/General. Mobile stays list-first. */
+		if (p.startsWith('/chat') && !isMobileNav()) {
+			openChatChannel(chatUi.activeChannelId || 'general');
 		}
 	});
 

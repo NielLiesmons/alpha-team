@@ -73,6 +73,8 @@
 	let mountedChannel = $state('');
 	/** Cancels in-flight scrollToBottom if the user scrolls away mid-await. */
 	let scrollGen = 0;
+	/** True while a forced jump-to-bottom is in flight (FAB / send). */
+	let jumpLock = false;
 	/** Briefly highlight a jumped-to quoted message. */
 	let highlightId = $state(/** @type {string | null} */ (null));
 	/** @type {ReturnType<typeof setTimeout> | null} */
@@ -235,6 +237,7 @@
 	});
 
 	function measureScroll() {
+		if (jumpLock) return;
 		const el = messagesEl;
 		if (!el) return;
 		const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -243,7 +246,7 @@
 		pinBottom = near;
 		showScrollFab = !near && el.scrollHeight > el.clientHeight + 40;
 		if (near) pendingNewCount = 0;
-		/* Invalidate in-flight programmatic scrolls so they can't yank back. */
+		/* Invalidate in-flight auto-follows so they can't yank back. */
 		if (!near) scrollGen += 1;
 	}
 
@@ -253,22 +256,36 @@
 	 */
 	async function scrollToBottom(instant, opts = {}) {
 		const force = Boolean(opts.force);
+		if (force) {
+			jumpLock = true;
+			pinBottom = true;
+			nearBottom = true;
+		}
 		const gen = ++scrollGen;
 		await tick();
-		if (gen !== scrollGen) return;
+		if (!force && gen !== scrollGen) return;
 		if (!force && !pinBottom) return;
 		const el = messagesEl;
-		if (!el) return;
+		if (!el) {
+			jumpLock = false;
+			return;
+		}
 		el.scrollTo({ top: el.scrollHeight, behavior: instant ? 'auto' : 'smooth' });
-		if (gen !== scrollGen) return;
+		if (!force && gen !== scrollGen) return;
 		nearBottom = true;
 		pinBottom = true;
 		showScrollFab = false;
 		pendingNewCount = 0;
+		if (force) {
+			requestAnimationFrame(() => {
+				jumpLock = false;
+				measureScroll();
+			});
+		}
 	}
 
 	function onJumpToLatest() {
-		void scrollToBottom(false);
+		void scrollToBottom(true, { force: true });
 	}
 
 	/** Jump to a quoted parent bubble and flash it. */
@@ -857,8 +874,8 @@
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		/* Clear detail-top; bottom clears floating composer (~dock 67 − 12px tighter gap) */
-		padding: 56px 24px calc(58px + env(safe-area-inset-bottom, 0px));
+		/* Clear detail-top; bottom clears floating composer (dock ~67 + small air) */
+		padding: 56px 24px calc(72px + env(safe-area-inset-bottom, 0px));
 	}
 
 	.banner {
@@ -1233,7 +1250,7 @@
 	@media (max-width: 767px) {
 		.messages {
 			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
-				calc(58px + env(safe-area-inset-bottom, 0px));
+				calc(72px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.composer-fade {

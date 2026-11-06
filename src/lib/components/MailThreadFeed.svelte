@@ -392,7 +392,7 @@
 <div class="mail-thread-shell">
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
-		class="mail-feed"
+		class="feed mail-feed"
 		bind:this={feedEl}
 		onscroll={measureFeedScroll}
 		onwheel={onUserScrollIntent}
@@ -450,12 +450,12 @@
 									</button>
 									<button
 										type="button"
-										class="ghost-ico"
+										class="ghost-ico ghost-ico-more"
 										aria-label="More"
 										aria-expanded={menuOpen}
 										onclick={onMore}
 									>
-										<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+										<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 											<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
 											<circle cx="8" cy="8" r="1.35" fill="currentColor" />
 											<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
@@ -610,8 +610,8 @@
 		-webkit-overflow-scrolling: touch;
 		/* Block layout — flex children were stretching to fill and killing scroll */
 		display: block;
-		/* Scroll under detail-top like Chat; tighter composer clearance */
-		padding: 56px 0 calc(58px + env(safe-area-inset-bottom, 0px));
+		/* Same top/bottom clearance as ChatChannelPanel .messages */
+		padding: 56px 0 calc(72px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 	}
 
@@ -646,7 +646,8 @@
 		align-items: center;
 		gap: 10px;
 		min-width: 0;
-		padding: 12px 14px 10px;
+		/* Less right pad so ⋮ sits further right; To: row compensates */
+		padding: 12px 8px 10px 14px;
 		box-sizing: border-box;
 	}
 
@@ -655,7 +656,7 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 3px;
 		justify-content: center;
 	}
 
@@ -697,6 +698,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		padding-top: 1px;
 	}
 
 	.mail-panel-actions {
@@ -736,6 +738,11 @@
 		height: 13px;
 	}
 
+	.ghost-ico-more :global(svg) {
+		width: 15px;
+		height: 15px;
+	}
+
 	.ghost-ico:hover {
 		color: var(--fg);
 	}
@@ -744,6 +751,7 @@
 		flex: 1;
 		min-width: 0;
 		margin: 0;
+		padding-right: 6px;
 		font-size: 12px;
 		font-weight: 450;
 		color: var(--fg-33);
@@ -751,6 +759,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		box-sizing: border-box;
 	}
 
 	.to-label {
@@ -761,11 +770,13 @@
 	.mail-panel-when {
 		flex-shrink: 0;
 		margin: 0;
+		padding-right: 6px;
 		font-size: 11px;
 		font-weight: 500;
 		line-height: 1.25;
 		color: var(--fg-33);
 		white-space: nowrap;
+		box-sizing: border-box;
 	}
 
 	/* Full panel width — padding lives in head/content, not around the rule */
@@ -1124,7 +1135,7 @@
 	@media (max-width: 767px) {
 		.mail-feed {
 			padding: calc(56px + env(safe-area-inset-top, 0px)) 0
-				calc(58px + env(safe-area-inset-bottom, 0px));
+				calc(72px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.composer-fade {
