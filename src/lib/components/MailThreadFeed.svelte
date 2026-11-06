@@ -146,31 +146,68 @@
 	}
 
 	/**
-	 * Split plain-text body into main + quoted reply tail ("On … wrote:").
+	 * Split body into main + quoted reply tail ("On … wrote:" / `>` / Original Message).
 	 * @param {string} body
 	 * @returns {{ main: string, quoted: string }}
 	 */
 	function splitMailQuote(body) {
-		const text = String(body ?? '').replace(/\r\n/g, '\n');
-		if (!text) return { main: '', quoted: '' };
-		const markers = [
-			/\nOn .{8,240}? wrote:\s*\n/,
-			/\n-+\s*Original Message\s*-+/i,
-			/\n_{5,}\s*\n/
+		let text = String(body ?? '').replace(/\r\n/g, '\n');
+		if (!text.trim()) return { main: '', quoted: '' };
+
+		/* HTML mails: cut at first blockquote */
+		if (/<[a-z][\s\S]*>/i.test(text)) {
+			const bq = text.search(/<blockquote\b/i);
+			if (bq > 0) {
+				const strip = (/** @type {string} */ html) =>
+					html
+						.replace(/<br\s*\/?>/gi, '\n')
+						.replace(/<\/p>/gi, '\n\n')
+						.replace(/<[^>]+>/g, '')
+						.replace(/&nbsp;/g, ' ')
+						.replace(/&lt;/g, '<')
+						.replace(/&gt;/g, '>')
+						.replace(/&amp;/g, '&')
+						.trim();
+				return { main: strip(text.slice(0, bq)), quoted: strip(text.slice(bq)) };
+			}
+		}
+
+		const patterns = [
+			/\n(On .+wrote:[\s\S]*)$/i,
+			/\n(-{2,}\s*Original Message\s*-{2,}[\s\S]*)$/i,
+			/\n(_{5,}[\s\S]*)$/,
+			/\n(From:\s[^\n]+\n(?:Sent|Date):\s[\s\S]*)$/i
 		];
-		let idx = -1;
-		for (const re of markers) {
+		for (const re of patterns) {
 			const m = text.match(re);
-			if (m?.index != null && (idx < 0 || m.index < idx)) idx = m.index;
+			if (m?.[1] && m.index != null) {
+				return { main: text.slice(0, m.index).trimEnd(), quoted: m[1] };
+			}
 		}
-		if (idx < 0 && /^On .{8,240}? wrote:\s*\n/.test(text)) {
-			return { main: '', quoted: text };
+		if (/^On .+wrote:/i.test(text.trim())) {
+			return { main: '', quoted: text.trim() };
 		}
-		if (idx < 0) return { main: text, quoted: '' };
-		return {
-			main: text.slice(0, idx).trimEnd(),
-			quoted: text.slice(idx).replace(/^\n/, '')
-		};
+
+		/* Fallback: first `>`-quoted run (optionally preceded by On … wrote:) */
+		const lines = text.split('\n');
+		for (let i = 0; i < lines.length; i++) {
+			if (!/^\s*>/.test(lines[i])) continue;
+			let start = i;
+			if (i > 0 && /^On .+wrote:\s*$/i.test(lines[i - 1].trim())) start = i - 1;
+			else if (
+				i > 1 &&
+				lines[i - 1].trim() === '' &&
+				/^On .+wrote:\s*$/i.test(lines[i - 2].trim())
+			) {
+				start = i - 2;
+			}
+			if (start === 0) return { main: '', quoted: text };
+			return {
+				main: lines.slice(0, start).join('\n').trimEnd(),
+				quoted: lines.slice(start).join('\n')
+			};
+		}
+		return { main: text, quoted: '' };
 	}
 
 	/** User started scrolling — cancel any pending pin-to-bottom. */
@@ -363,7 +400,9 @@
 	>
 		{#each timeline as item (item.id)}
 			{#if item.type === 'status'}
-				<ChatStatusLine text={item.text || ''} email={item.email || ''} name={item.name || ''} />
+				<div class="status-row">
+					<ChatStatusLine text={item.text || ''} email={item.email || ''} name={item.name || ''} />
+				</div>
 			{:else if item.type === 'chat' && item.msg}
 				<div class="chat-row">
 					<ChatFeedCard
@@ -566,30 +605,34 @@
 	.mail-feed {
 		flex: 1;
 		min-height: 0;
-		overflow: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
+		overflow-x: hidden;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		/* Block layout — flex children were stretching to fill and killing scroll */
+		display: block;
 		/* Scroll under detail-top like Chat; tighter composer clearance */
 		padding: 56px 0 calc(58px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 	}
 
+	.status-row,
 	.chat-row {
-		display: flex;
-		flex-direction: column;
+		display: block;
 		padding: 0 4px;
+		margin: 0 0 10px;
 	}
 
 	.mail-panel {
-		display: flex;
-		flex-direction: column;
-		gap: 0;
+		display: block;
 		padding: 0;
+		margin: 0 0 10px;
 		border-radius: 14px;
 		background: color-mix(in srgb, var(--fg) 4.5%, transparent);
 		border: 0;
 		overflow: hidden;
+		/* Never flex-grow to fill the feed */
+		flex: none;
+		height: auto;
 	}
 
 	.mail-panel.draft {
@@ -629,7 +672,7 @@
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 6px;
 		overflow: hidden;
 	}
@@ -637,7 +680,7 @@
 	.mail-panel-name {
 		font-size: 14px;
 		font-weight: 650;
-		line-height: 1.25;
+		line-height: 1.2;
 		color: var(--fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -649,7 +692,7 @@
 		min-width: 0;
 		font-size: 12px;
 		font-weight: 450;
-		line-height: 1.25;
+		line-height: 1.2;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -657,20 +700,23 @@
 	}
 
 	.mail-panel-actions {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: 0;
+		justify-content: flex-end;
+		gap: 8px;
 		flex-shrink: 0;
 		margin: 0;
 		padding: 0;
+		height: 18px;
 		line-height: 0;
 	}
 
 	.ghost-ico {
 		width: 18px;
 		height: 18px;
-		display: grid;
-		place-items: center;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		margin: 0;
 		padding: 0;
 		border: 0;
@@ -679,11 +725,15 @@
 		color: var(--fg-66);
 		cursor: pointer;
 		line-height: 0;
+		flex-shrink: 0;
 		-webkit-tap-highlight-color: transparent;
 	}
 
-	.ghost-ico + .ghost-ico {
-		margin-left: 6px;
+	.ghost-ico :global(.icon),
+	.ghost-ico :global(svg) {
+		display: block;
+		width: 13px;
+		height: 13px;
 	}
 
 	.ghost-ico:hover {
@@ -1073,7 +1123,7 @@
 
 	@media (max-width: 767px) {
 		.mail-feed {
-			padding: calc(88px + env(safe-area-inset-top, 0px)) 0
+			padding: calc(56px + env(safe-area-inset-top, 0px)) 0
 				calc(58px + env(safe-area-inset-bottom, 0px));
 		}
 
