@@ -96,6 +96,13 @@ export async function bootApp() {
 
 	void (async () => {
 		try {
+			/* Session is up — pull Primary approvals from Drive so phone/desktop match. */
+			try {
+				const { syncApprovedContactsFromDrive } = await import('./mail-contacts.svelte.js');
+				await syncApprovedContactsFromDrive();
+			} catch (e) {
+				console.warn('mail approved sync', e);
+			}
 			await refreshChatFeed();
 			void refreshMembersAndAvatars().catch((e) => console.warn('members/avatars', e));
 			void refreshBackgroundDrive().then(() => {

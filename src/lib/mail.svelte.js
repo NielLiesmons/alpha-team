@@ -507,42 +507,31 @@ export function markMailUnread(id) {
 }
 
 /**
- * Conversation participants for inbox card stacks (from + to across the thread).
+ * Inbox convo stack: only when the thread grew past the first message.
+ * Last message author first, then other unique authors (max 3 — ProfilePicStack also caps).
  * @param {any} thread
  * @returns {{ name: string, email: string, pictureUrl: string | null }[]}
  */
 export function threadParticipantProfiles(thread) {
 	const msgs = threadMessages(thread);
-	const me = mailActorEmail();
-	/** @type {Map<string, { name: string, email: string }>} */
-	const by = new Map();
-	for (const m of msgs) {
-		const from = normEmail(m?.from);
-		if (from && from !== me && !by.has(from)) {
-			by.set(from, {
-				email: from,
-				name: mailAuthorLabel(m) || displayNameFromEmail(m.from)
-			});
-		}
-		for (const p of m?.to_people || []) {
-			const e = normEmail(p?.email);
-			if (!e || e === me || by.has(e)) continue;
-			by.set(e, { email: e, name: p?.name || displayNameFromEmail(e) });
-		}
-		for (const eRaw of m?.to || []) {
-			const e = normEmail(eRaw);
-			if (!e || e === me || by.has(e)) continue;
-			by.set(e, { email: e, name: displayNameFromEmail(e) });
-		}
+	if (msgs.length <= 1) return [];
+
+	/** @type {{ name: string, email: string, pictureUrl: string | null }[]} */
+	const ordered = [];
+	const seen = new Set();
+	for (let i = msgs.length - 1; i >= 0; i--) {
+		const m = msgs[i];
+		const email = normEmail(m?.from);
+		if (!email || seen.has(email)) continue;
+		seen.add(email);
+		ordered.push({
+			email,
+			name: mailAuthorLabel(m) || displayNameFromEmail(m.from),
+			pictureUrl: null
+		});
+		if (ordered.length >= 3) break;
 	}
-	if (!by.size) {
-		const c = mailThreadContact(thread);
-		if (c.email) by.set(c.email, { email: c.email, name: c.name || displayNameFromEmail(c.email) });
-	}
-	return [...by.values()].map((p) => ({
-		...p,
-		pictureUrl: null
-	}));
+	return ordered;
 }
 
 /**

@@ -244,13 +244,15 @@
 								</span>
 							{/if}
 							<span class="snippet">{preview.text || ''}</span>
-							<span class="convo-stack">
-								<ProfilePicStack
-									profiles={convo}
-									size="xxs"
-									text={thread.count > 1 ? String(thread.count) : ''}
-								/>
-							</span>
+							{#if convo.length}
+								<span class="convo-stack">
+									<ProfilePicStack
+										profiles={convo}
+										size="xxs"
+										text={thread.count > 1 ? String(thread.count) : ''}
+									/>
+								</span>
+							{/if}
 						</span>
 						{#if hasComments}
 							<span class="team-row">

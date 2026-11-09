@@ -1,6 +1,6 @@
 /**
  * Approved mail contacts — Primary only shows senders you've accepted.
- * localStorage survives hard refresh; Drive mirror when session is up.
+ * localStorage for instant paint; Space Drive mirror so every device shares the same Primary.
  * Space members count as approved.
  */
 
@@ -22,7 +22,12 @@ let loadedFor = '';
 /** @type {Set<string>} */
 let pending = new Set();
 
+/** Mailbox email we last successfully synced from Drive (empty = not yet). */
 let driveSyncedFor = '';
+
+/** In-flight Drive hydrate so we don't stampede. */
+/** @type {Promise<void> | null} */
+let driveHydratePromise = null;
 
 function norm(email) {
 	return String(email || '')
@@ -46,7 +51,6 @@ function readAllLocal() {
 			}
 			return out;
 		}
-		/* Legacy: flat array under old per-mailbox keys — migrate below */
 		return {};
 	} catch {
 		return {};
@@ -91,7 +95,10 @@ function writeAllLocal(map) {
 function ensureLoaded() {
 	const me = norm(actor.email);
 	const key = me || '__pending__';
-	if (loadedFor === key) return;
+	if (loadedFor === key) {
+		scheduleDriveHydrate(me);
+		return;
+	}
 
 	const map = migrateLegacy(readAllLocal(), me);
 	/** @type {Set<string>} */
@@ -107,16 +114,29 @@ function ensureLoaded() {
 		persistLocal();
 	}
 
-	if (me && driveSyncedFor !== me) {
-		driveSyncedFor = me;
-		void hydrateFromDrive(me);
-	}
+	scheduleDriveHydrate(me);
+}
+
+/**
+ * Only mark Drive synced after a real session hydrate attempt.
+ * @param {string} me
+ */
+function scheduleDriveHydrate(me) {
+	if (!me) return;
+	if (driveSyncedFor === me) return;
+	const session = activeSession();
+	if (!session) return;
+	if (driveHydratePromise) return;
+	driveHydratePromise = hydrateFromDrive(me)
+		.catch(() => {})
+		.finally(() => {
+			driveHydratePromise = null;
+		});
 }
 
 function persistLocal() {
 	const me = norm(actor.email);
 	if (!me) {
-		/* Keep in pending until actor is known */
 		pending = new Set([...approved]);
 		return;
 	}
@@ -124,6 +144,22 @@ function persistLocal() {
 	map[me] = [...approved];
 	writeAllLocal(map);
 	void persistDrive(me);
+}
+
+/**
+ * @param {any} doc
+ * @param {string} me
+ * @returns {string[]}
+ */
+function emailsFromDriveDoc(doc, me) {
+	if (!doc || typeof doc !== 'object') return [];
+	const byMailbox = doc.mailboxes;
+	if (byMailbox && typeof byMailbox === 'object' && Array.isArray(byMailbox[me])) {
+		return byMailbox[me].map(norm).filter(Boolean);
+	}
+	if (Array.isArray(doc.emails)) return doc.emails.map(norm).filter(Boolean);
+	if (Array.isArray(doc)) return doc.map(norm).filter(Boolean);
+	return [];
 }
 
 /**
@@ -135,16 +171,39 @@ async function hydrateFromDrive(me) {
 	try {
 		const bytes = await getPath(session, DRIVE_PATH);
 		const doc = JSON.parse(new TextDecoder().decode(bytes));
-		const list = Array.isArray(doc?.emails) ? doc.emails : Array.isArray(doc) ? doc : [];
-		if (!list.length) return;
-		ensureLoaded();
-		const merged = new Set([...approved, ...list.map(norm).filter(Boolean)]);
-		if (merged.size === approved.size && [...merged].every((e) => approved.has(e))) return;
+		const list = emailsFromDriveDoc(doc, me);
+		ensureLoadedLocalOnly(me);
+		const merged = new Set([...approved, ...list]);
+		driveSyncedFor = me;
+		if (merged.size === approved.size && [...merged].every((e) => approved.has(e))) {
+			/* Still rewrite Drive in mailbox shape if we only had a flat legacy file. */
+			if (!doc?.mailboxes?.[me] && list.length) void persistDrive(me);
+			return;
+		}
 		approved = merged;
-		persistLocal();
+		const map = readAllLocal();
+		map[me] = [...approved];
+		writeAllLocal(map);
+		/* Push merge back so other devices see local-only approvals too. */
+		void persistDrive(me);
 	} catch {
-		/* missing leaf — fine */
+		/* missing leaf — still mark synced so we can create on first approve */
+		driveSyncedFor = me;
 	}
+}
+
+/** Load local without re-entering Drive scheduling. */
+function ensureLoadedLocalOnly(me) {
+	const key = me || '__pending__';
+	if (loadedFor === key) return;
+	const map = migrateLegacy(readAllLocal(), me);
+	/** @type {Set<string>} */
+	const next = new Set(pending);
+	if (me && Array.isArray(map[me])) {
+		for (const e of map[me]) next.add(e);
+	}
+	approved = next;
+	loadedFor = key;
 }
 
 /**
@@ -154,12 +213,29 @@ async function persistDrive(me) {
 	const session = activeSession();
 	if (!session || !me) return;
 	try {
+		/** @type {Record<string, string[]>} */
+		let mailboxes = {};
+		try {
+			const bytes = await getPath(session, DRIVE_PATH);
+			const doc = JSON.parse(new TextDecoder().decode(bytes));
+			if (doc?.mailboxes && typeof doc.mailboxes === 'object') {
+				mailboxes = { ...doc.mailboxes };
+			} else if (Array.isArray(doc?.emails) && doc.emails.length) {
+				/* Legacy flat list — keep under this mailbox */
+				mailboxes[me] = doc.emails.map(norm).filter(Boolean);
+			}
+		} catch {
+			/* create fresh */
+		}
+		mailboxes[me] = [...approved];
 		await putPath(
 			session,
 			DRIVE_PATH,
 			'blob',
 			JSON.stringify({
 				schema: 'alpha.mail_approved/1',
+				mailboxes,
+				/* Legacy flat field for older clients — same as this mailbox */
 				emails: [...approved],
 				updated_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 			})
@@ -222,5 +298,18 @@ export function revokeContact(email) {
 export function refreshApprovedContacts() {
 	loadedFor = '';
 	driveSyncedFor = '';
+	driveHydratePromise = null;
 	ensureLoaded();
+}
+
+/**
+ * Call once the Drive session is alive so Primary approvals hydrate across devices.
+ */
+export async function syncApprovedContactsFromDrive() {
+	const me = norm(actor.email);
+	if (!me) return;
+	driveSyncedFor = '';
+	driveHydratePromise = null;
+	ensureLoaded();
+	if (driveHydratePromise) await driveHydratePromise;
 }

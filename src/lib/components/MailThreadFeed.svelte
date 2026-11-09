@@ -706,7 +706,7 @@
 	.mail-panel-actions {
 		display: inline-flex;
 		align-items: center;
-		gap: 1px;
+		gap: 5px;
 	}
 
 	.ghost-ico {
