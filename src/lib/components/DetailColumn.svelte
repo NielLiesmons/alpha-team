@@ -60,6 +60,7 @@
 	import PullToRefresh from './PullToRefresh.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import ChromeMobileBar from '@alpha/ui/ChromeMobileBar.svelte';
+	import MoreDots from './icons/MoreDots.svelte';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
 	import { attachChromeScrollFade } from '$lib/chrome-scroll-fade.js';
@@ -798,11 +799,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
@@ -862,11 +859,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
@@ -1004,11 +997,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
@@ -1076,11 +1065,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
@@ -1133,11 +1118,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
@@ -1183,11 +1164,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
@@ -1323,11 +1300,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
@@ -1360,11 +1333,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
@@ -1509,11 +1478,7 @@
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-							<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-						</svg>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>

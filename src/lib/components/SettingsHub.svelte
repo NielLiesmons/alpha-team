@@ -7,6 +7,7 @@
 	import ProfileInviteModal from './ProfileInviteModal.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import Crown from './icons/Crown.svelte';
+	import MoreDots from './icons/MoreDots.svelte';
 	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
@@ -252,7 +253,7 @@
 							menuEmail = menuEmail === activeProfile.email ? null : activeProfile.email;
 						}}
 					>
-						⋮
+						<MoreDots size={16} />
 					</button>
 					{#if menuEmail === activeProfile.email}
 						<div class="menu" role="menu">
@@ -311,7 +312,7 @@
 									menuEmail = menuEmail === p.email ? null : p.email;
 								}}
 							>
-								⋮
+								<MoreDots size={16} />
 							</button>
 							{#if menuEmail === p.email}
 								<div class="menu" role="menu">

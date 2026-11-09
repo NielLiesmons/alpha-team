@@ -4,11 +4,13 @@
 	 * in one chronological feed, with a full bottom chat composer (no FAB).
 	 */
 	import AlphaLogo from './icons/AlphaLogo.svelte';
+	import MoreDots from './icons/MoreDots.svelte';
 	import Reply from './icons/Reply.svelte';
 	import Voice from './icons/Voice.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ChatStatusLine from './ChatStatusLine.svelte';
 	import ComposerSuggest from './ComposerSuggest.svelte';
+	import MailRichBody from './MailRichBody.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import { activePerson, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
@@ -25,6 +27,7 @@
 		isFeedNearBottom,
 		snapFeedToBottomSoon
 	} from '$lib/feed-scroll.js';
+	import { splitMailQuote } from '$lib/mail-body.js';
 	import {
 		formatMailWhen,
 		mailAuthorLabel,
@@ -147,71 +150,6 @@
 		const at = String(email || '').indexOf('@');
 		if (at < 0) return '';
 		return String(email).slice(at);
-	}
-
-	/**
-	 * Split body into main + quoted reply tail ("On … wrote:" / `>` / Original Message).
-	 * @param {string} body
-	 * @returns {{ main: string, quoted: string }}
-	 */
-	function splitMailQuote(body) {
-		let text = String(body ?? '').replace(/\r\n/g, '\n');
-		if (!text.trim()) return { main: '', quoted: '' };
-
-		/* HTML mails: cut at first blockquote */
-		if (/<[a-z][\s\S]*>/i.test(text)) {
-			const bq = text.search(/<blockquote\b/i);
-			if (bq > 0) {
-				const strip = (/** @type {string} */ html) =>
-					html
-						.replace(/<br\s*\/?>/gi, '\n')
-						.replace(/<\/p>/gi, '\n\n')
-						.replace(/<[^>]+>/g, '')
-						.replace(/&nbsp;/g, ' ')
-						.replace(/&lt;/g, '<')
-						.replace(/&gt;/g, '>')
-						.replace(/&amp;/g, '&')
-						.trim();
-				return { main: strip(text.slice(0, bq)), quoted: strip(text.slice(bq)) };
-			}
-		}
-
-		const patterns = [
-			/\n(On .+wrote:[\s\S]*)$/i,
-			/\n(-{2,}\s*Original Message\s*-{2,}[\s\S]*)$/i,
-			/\n(_{5,}[\s\S]*)$/,
-			/\n(From:\s[^\n]+\n(?:Sent|Date):\s[\s\S]*)$/i
-		];
-		for (const re of patterns) {
-			const m = text.match(re);
-			if (m?.[1] && m.index != null) {
-				return { main: text.slice(0, m.index).trimEnd(), quoted: m[1] };
-			}
-		}
-		if (/^On .+wrote:/i.test(text.trim())) {
-			return { main: '', quoted: text.trim() };
-		}
-
-		/* Fallback: first `>`-quoted run (optionally preceded by On … wrote:) */
-		const lines = text.split('\n');
-		for (let i = 0; i < lines.length; i++) {
-			if (!/^\s*>/.test(lines[i])) continue;
-			let start = i;
-			if (i > 0 && /^On .+wrote:\s*$/i.test(lines[i - 1].trim())) start = i - 1;
-			else if (
-				i > 1 &&
-				lines[i - 1].trim() === '' &&
-				/^On .+wrote:\s*$/i.test(lines[i - 2].trim())
-			) {
-				start = i - 2;
-			}
-			if (start === 0) return { main: '', quoted: text };
-			return {
-				main: lines.slice(0, start).join('\n').trimEnd(),
-				quoted: lines.slice(start).join('\n')
-			};
-		}
-		return { main: text, quoted: '' };
 	}
 
 	function measureFeedScroll() {
@@ -445,11 +383,7 @@
 										aria-expanded={menuOpen}
 										onclick={onMore}
 									>
-										<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-											<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
-											<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-											<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
-										</svg>
+										<MoreDots size={15} />
 									</button>
 								</span>
 							</div>
@@ -464,34 +398,38 @@
 					</header>
 					<div class="mail-panel-rule" aria-hidden="true"></div>
 					<div class="mail-panel-content">
-						{#if parts.main}
-							<pre class="mail-panel-body">{parts.main}</pre>
-						{/if}
-						{#if parts.quoted}
-							{#if quoteOpen[quoteId]}
-								<pre class="mail-panel-body mail-panel-quoted">{parts.quoted}</pre>
-								<button
-									type="button"
-									class="quote-toggle"
-									aria-label="Hide quoted text"
-									onclick={() => toggleQuote(quoteId)}
-								>
-									<span class="quote-dots" aria-hidden="true">
-										<span></span><span></span><span></span>
-									</span>
-								</button>
-							{:else}
-								<button
-									type="button"
-									class="quote-toggle"
-									aria-label="Show quoted text"
-									onclick={() => toggleQuote(quoteId)}
-								>
-									<span class="quote-dots" aria-hidden="true">
-										<span></span><span></span><span></span>
-									</span>
-								</button>
+						{#if parts.collapsible}
+							{#if parts.main}
+								<MailRichBody text={parts.main} />
 							{/if}
+							{#if parts.quoted}
+								{#if quoteOpen[quoteId]}
+									<MailRichBody text={parts.quoted} minDepth={1} />
+									<button
+										type="button"
+										class="quote-toggle"
+										aria-label="Hide quoted text"
+										onclick={() => toggleQuote(quoteId)}
+									>
+										<span class="quote-dots" aria-hidden="true">
+											<span></span><span></span><span></span>
+										</span>
+									</button>
+								{:else}
+									<button
+										type="button"
+										class="quote-toggle"
+										aria-label="Show quoted text"
+										onclick={() => toggleQuote(quoteId)}
+									>
+										<span class="quote-dots" aria-hidden="true">
+											<span></span><span></span><span></span>
+										</span>
+									</button>
+								{/if}
+							{/if}
+						{:else if parts.main}
+							<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 						{/if}
 					</div>
 				</article>
@@ -642,7 +580,7 @@
 		align-items: center;
 		gap: 10px;
 		min-width: 0;
-		/* Less right pad so ⋮ sits further right; To: row compensates */
+		/* Less right pad so ⋯ sits further right; To: row compensates */
 		padding: 12px 8px 10px 14px;
 		box-sizing: border-box;
 	}
@@ -790,25 +728,6 @@
 		flex-direction: column;
 		gap: 10px;
 		align-items: flex-start;
-	}
-
-	.mail-panel-body {
-		margin: 0;
-		padding: 0;
-		border: 0;
-		width: 100%;
-		background: transparent;
-		font: inherit;
-		font-size: 15px;
-		line-height: 1.55;
-		color: var(--fg-83);
-		white-space: pre-wrap;
-		word-break: break-word;
-	}
-
-	.mail-panel-quoted {
-		color: var(--fg-66);
-		font-size: 14px;
 	}
 
 	.quote-toggle {
