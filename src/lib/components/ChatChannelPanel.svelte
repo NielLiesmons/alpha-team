@@ -674,6 +674,7 @@
 										onQuoteClick={scrollToQuoted}
 										stackFirst={st.isFirst}
 										stackLast={st.isLast}
+										threaded
 									/>
 								</div>
 							{/each}
