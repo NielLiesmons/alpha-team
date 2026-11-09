@@ -47,6 +47,7 @@
 	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
 
 	/** @type {{ channelId?: string }} */
 	let { channelId = 'general' } = $props();
@@ -729,7 +730,7 @@
 		<!-- Suggest sits outside the pill so overflow:hidden / shine mask cannot clip it -->
 		<div class="composer-stack">
 			<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
-			<div class="composer-pill" class:chrome-expanded={chromeExpanded}>
+			<ChatComposer expanded={chromeExpanded}>
 				{#if replyPreview}
 					<div class="composer-quote-wrap">
 						<div class="composer-quote" role="group" aria-label={t('chat.replyingTo', { name: replyPreview.name })}>
@@ -787,7 +788,7 @@
 						>
 					</div>
 				{/if}
-				<div class="composer-row">
+				<div class="composer-row" class:chrome-expanded={chromeExpanded}>
 					<input
 						bind:this={fileInputEl}
 						type="file"
@@ -839,7 +840,7 @@
 						</button>
 					{/if}
 				</div>
-			</div>
+			</ChatComposer>
 		</div>
 	</div>
 </div>
@@ -1266,62 +1267,11 @@
 		}
 	}
 
-	.composer-pill {
-		display: flex;
-		flex-direction: column;
-		align-items: stretch;
-		gap: 0;
-		min-height: 47px;
-		padding: 0;
-		/* Full capsule — all corners match. Tall text alone must not change this. */
-		border-radius: 9999px;
-		box-sizing: border-box;
-		/*
-		 * Flat translucent fill only. Shine lives on ::after as a 1px masked ring
-		 * so the diagonal never shows through the fill (padding-box+border-box leaked).
-		 */
-		position: relative;
-		isolation: isolate;
-		border: 0;
-		background: color-mix(in srgb, var(--glass) 72%, transparent);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		overflow: hidden;
-	}
-
-	.composer-pill::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		padding: 1px;
-		pointer-events: none;
-		z-index: 1;
-		background: linear-gradient(
-			135deg,
-			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
-			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
-			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
-			color-mix(in srgb, var(--fg) 9%, transparent) 100%
-		);
-		-webkit-mask:
-			linear-gradient(#fff 0 0) content-box,
-			linear-gradient(#fff 0 0);
-		mask:
-			linear-gradient(#fff 0 0) content-box,
-			linear-gradient(#fff 0 0);
-		-webkit-mask-composite: xor;
-		mask-composite: exclude;
-	}
-
-	/* Quote / attach / voice: soften top corners only; bottom stays pill. */
-	.composer-pill.chrome-expanded {
-		border-radius: 16px 16px 23.5px 23.5px;
-	}
-
 	.composer-quote-wrap {
 		padding: 8px 8px 0;
 		box-sizing: border-box;
+		position: relative;
+		z-index: 2;
 	}
 
 	.composer-quote {
@@ -1392,9 +1342,11 @@
 		min-height: calc(47px - 14px);
 		padding: 7px;
 		box-sizing: border-box;
+		position: relative;
+		z-index: 2;
 	}
 
-	.composer-pill.chrome-expanded .composer-row {
+	.composer-row.chrome-expanded {
 		padding-top: 4px;
 	}
 

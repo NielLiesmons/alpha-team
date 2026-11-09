@@ -19,6 +19,7 @@
 	} from '$lib/chat.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { snapFeedToBottom } from '$lib/feed-scroll.js';
+	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
 
 	/** @type {{ type: 'task' | 'note' | 'project' | 'mail', entityId: string }} */
 	let { type, entityId } = $props();
@@ -268,7 +269,7 @@
 			<div class="composer-dock">
 				<div class="composer-stack">
 					<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
-					<div class="composer-pill" class:expanded={pillExpanded}>
+					<ChatComposer expanded={pillExpanded}>
 						{#if replyPreview}
 							<div class="reply-bar">
 								<div class="reply-meta">
@@ -285,7 +286,7 @@
 								>
 							</div>
 						{/if}
-						<div class="composer-row">
+						<div class="composer-row" class:chrome-expanded={pillExpanded}>
 							<button type="button" class="side-btn plus" aria-label={t('chat.attach')} disabled>
 								<span class="plus-glyph" aria-hidden="true">+</span>
 							</button>
@@ -313,15 +314,15 @@
 									disabled={chatUi.posting}
 									onclick={() => void send()}
 								>
-									<AlphaLogo size={22} />
+									<AlphaLogo size={15} />
 								</button>
 							{:else}
-								<button type="button" class="side-btn voice" aria-label={t('chat.voiceMessage')} disabled>
-									<Voice size={18} />
+								<button type="button" class="side-btn mic" aria-label={t('chat.voiceMessage')} disabled>
+									<Voice size={22} />
 								</button>
 							{/if}
 						</div>
-					</div>
+					</ChatComposer>
 				</div>
 			</div>
 		</div>
@@ -483,24 +484,13 @@
 		position: relative;
 	}
 
-	.composer-pill {
-		display: flex;
-		flex-direction: column;
-		border-radius: 22px;
-		background: color-mix(in srgb, var(--fg) 6%, transparent);
-		border: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
-		overflow: hidden;
-	}
-
-	.composer-pill.expanded {
-		border-radius: 18px;
-	}
-
 	.reply-bar {
 		display: flex;
 		align-items: flex-start;
 		gap: 8px;
 		padding: 8px 10px 0;
+		position: relative;
+		z-index: 2;
 	}
 
 	.reply-meta {
@@ -541,21 +531,29 @@
 	.composer-row {
 		display: flex;
 		align-items: flex-end;
-		gap: 4px;
-		padding: 4px 4px 4px 6px;
+		gap: 7px;
+		min-height: calc(47px - 14px);
+		padding: 7px;
+		box-sizing: border-box;
+		position: relative;
+		z-index: 2;
+	}
+
+	.composer-row.chrome-expanded {
+		padding-top: 4px;
 	}
 
 	.side-btn {
 		flex-shrink: 0;
-		width: 36px;
-		height: 36px;
+		width: 33px;
+		height: 33px;
 		display: grid;
 		place-items: center;
+		padding: 0;
 		border: 0;
-		border-radius: 999px;
-		background: transparent;
-		color: var(--fg-66);
+		border-radius: 9999px;
 		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.side-btn:disabled {
@@ -563,8 +561,19 @@
 		cursor: default;
 	}
 
+	.side-btn.plus {
+		background: color-mix(in srgb, var(--fg) 12%, transparent);
+		color: var(--fg-66);
+	}
+
+	.side-btn.mic {
+		background: transparent;
+		color: var(--fg-33);
+	}
+
 	.side-btn.send {
-		color: var(--fg);
+		background: var(--gradient-accent-1);
+		color: #fff;
 	}
 
 	.plus-glyph {
