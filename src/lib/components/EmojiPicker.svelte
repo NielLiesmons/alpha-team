@@ -11,6 +11,7 @@
 	import { customEmojiShortcode } from '$lib/message-emoji.js';
 	import { defaultEmojiPanel, rememberEmoji, searchEmojis } from '$lib/emoji.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	/**
 	 * @type {{
@@ -87,12 +88,12 @@
 		<input
 			class="search"
 			type="search"
-			placeholder="Search emoji…"
+			placeholder={t('chat.searchEmoji')}
 			bind:value={query}
-			aria-label="Search emoji"
+			aria-label={t('chat.searchEmoji')}
 		/>
 		{#if value && onclear}
-			<button type="button" class="clear" onclick={onclear}>Remove</button>
+			<button type="button" class="clear" onclick={onclear}>{t('chat.remove')}</button>
 		{/if}
 	</div>
 
@@ -101,13 +102,13 @@
 			<input
 				class="name"
 				type="text"
-				placeholder="name (for :name:)"
+				placeholder={t('chat.emojiNameHint')}
 				bind:value={uploadName}
-				aria-label="Custom emoji name"
+				aria-label={t('chat.customEmoji')}
 				maxlength="32"
 			/>
 			<button type="button" class="upload" disabled={uploading} onclick={openUpload}>
-				{uploading ? '…' : 'Upload'}
+				{uploading ? '…' : t('common.upload')}
 			</button>
 			<input
 				bind:this={fileInput}
@@ -123,8 +124,8 @@
 	{/if}
 
 	{#if allowCustom && customs.length}
-		<p class="hint">Space</p>
-		<div class="grid custom-grid" role="listbox" aria-label="Custom emoji">
+		<p class="hint">{t('suggest.space')}</p>
+		<div class="grid custom-grid" role="listbox" aria-label={t('chat.customEmoji')}>
 			{#each customs as em (em.id)}
 				{@const src = customEmojiUrl(em.name)}
 				<button
@@ -146,7 +147,9 @@
 		</div>
 	{/if}
 
-	<p class="hint">{searching ? `${stock.length} result${stock.length === 1 ? '' : 's'}` : 'Recently used'}</p>
+	<p class="hint">{searching
+			? t(stock.length === 1 ? 'chat.emojiResult' : 'chat.emojiResults', { n: stock.length })
+			: t('chat.recentlyUsed')}</p>
 	<div class="grid" role="listbox">
 		{#each stock as item (item.g + (item.n ?? ''))}
 			<button
@@ -162,7 +165,7 @@
 			</button>
 		{/each}
 		{#if stock.length === 0 && customs.length === 0}
-			<p class="empty">No matches</p>
+			<p class="empty">{t('chat.noMatches')}</p>
 		{/if}
 	</div>
 </div>

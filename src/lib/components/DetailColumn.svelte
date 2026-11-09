@@ -12,6 +12,7 @@
 	import Pen from './icons/Pen.svelte';
 	import Trash from './icons/Trash.svelte';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 	import {
 		campaigns,
 		mailSettings,
@@ -226,16 +227,19 @@
 	const settingsSectionId = $derived(
 		selection?.kind === 'settings' ? String(selection.id || '') : ''
 	);
-	const SETTINGS_TITLES = {
-		profile: 'Profile',
-		notifications: 'Notifications',
-		appearance: 'Appearance',
-		storage: 'Storage',
-		mail: 'Mail',
-		publications: 'Publications',
-		drive: 'Files',
-		file: 'Files'
-	};
+	const settingsTitles = $derived.by(() => {
+		locale.value;
+		return /** @type {Record<string, string>} */ ({
+			profile: t('settings.profile'),
+			notifications: t('settings.notifications'),
+			appearance: t('settings.appearance'),
+			storage: t('settings.storage'),
+			mail: t('settings.mail'),
+			publications: t('settings.publications'),
+			drive: t('settings.files'),
+			file: t('settings.files')
+		});
+	});
 
 	$effect(() => {
 		const id = mailMsg?.id;
@@ -347,41 +351,43 @@
 	);
 
 	const typeLabel = $derived.by(() => {
-		if (task) return 'Task';
-		if (project) return 'Project';
-		if (note) return 'Note';
-		if (ledger) return 'Ledger';
-		if (costItem) return 'Cost';
-		if (salesLine) return 'Sales';
-		if (viewDoc) return 'View';
-		if (dataTable) return 'Table';
-		if (metricDoc) return 'Metric';
-		if (formDoc) return 'Form';
-		if (enterprise) return 'Enterprise';
-		if (accountingPanel) return 'Entreprises';
-		if (newsletter) return 'Letter';
+		locale.value;
+		if (task) return t('tasks.task');
+		if (project) return t('projects.project');
+		if (note) return t('notes.note');
+		if (ledger) return t('acc.ledger');
+		if (costItem) return t('detail.cost');
+		if (salesLine) return t('acc.sales');
+		if (viewDoc) return t('detail.view');
+		if (dataTable) return t('detail.table');
+		if (metricDoc) return t('detail.metric');
+		if (formDoc) return t('detail.form');
+		if (enterprise) return t('nav.enterprise');
+		if (accountingPanel) return t('nav.entreprises');
+		if (newsletter) return t('pub.letter');
 		if (pubPost) {
 			const k = String(pubPost.kind || 'blog');
-			if (k === 'event') return 'Event';
-			if (k === 'post') return 'Post';
-			return 'Blog';
+			if (k === 'event') return t('pub.event');
+			if (k === 'post') return t('pub.post');
+			return t('pub.blog');
 		}
-		if (welcomeSelected) return 'Welcome';
-		if (pubsHub) return 'Publications';
-		if (mailMsg) return 'Mail';
-		if (chatChannel) return chatChannel.title || 'Chat';
-		if (fileEntry?.isFolder) return 'Folder';
-		if (fileEntry) return 'File';
-		if (settingsSectionId) return SETTINGS_TITLES[settingsSectionId] || 'Settings';
+		if (welcomeSelected) return t('detail.welcome');
+		if (pubsHub) return t('nav.publications');
+		if (mailMsg) return t('nav.mail');
+		if (chatChannel) return chatChannel.title || t('chat.channel');
+		if (fileEntry?.isFolder) return t('drive.folder');
+		if (fileEntry) return t('drive.file');
+		if (settingsSectionId) return settingsTitles[settingsSectionId] || t('nav.settings');
 		return 'Detail';
 	});
 
 	/** Centered mobile detail title (entity name when available). */
 	const mobileTitle = $derived.by(() => {
+		locale.value;
 		if (task?.title) return task.title;
 		if (project?.title) return project.title;
 		if (note?.title) return note.title;
-		if (ledger) return ledger.memo || ledger.account_title || 'Entry';
+		if (ledger) return ledger.memo || ledger.account_title || t('detail.entry');
 		if (costItem?.title) return costItem.title;
 		if (salesLine?.title) return salesLine.title;
 		if (viewDoc?.title) return viewDoc.title;
@@ -392,15 +398,15 @@
 		if (accountingPanel) return accountingBrowse.mode;
 		if (newsletter?.subject) return newsletter.subject;
 		if (pubPost?.title) return pubPost.title;
-		if (welcomeSelected) return 'Welcome';
-		if (pubsHub) return 'Publications';
+		if (welcomeSelected) return t('detail.welcome');
+		if (pubsHub) return t('nav.publications');
 		if (mailMsg) {
 			const msgs = threadMessages(mailMsg);
-			return msgs[0]?.subject || mailMsg.subject || '(no subject)';
+			return msgs[0]?.subject || mailMsg.subject || t('common.noSubject');
 		}
-		if (chatChannel) return chatChannel.title || 'General';
+		if (chatChannel) return chatChannel.title || t('chat.general');
 		if (fileEntry) return fileTitle;
-		if (settingsSectionId) return SETTINGS_TITLES[settingsSectionId] || 'Settings';
+		if (settingsSectionId) return settingsTitles[settingsSectionId] || t('nav.settings');
 		return typeLabel;
 	});
 
@@ -430,43 +436,44 @@
 	);
 
 	const emptyCopy = $derived.by(() => {
+		locale.value;
 		const path = $page.url.pathname;
-		if (path.startsWith('/tasks')) return { title: 'No task selected', body: 'Pick a task from the list to read it here.' };
-		if (path.startsWith('/projects')) return { title: 'No project selected', body: 'Open a project to see its summary and notes.' };
-		if (path.startsWith('/notes')) return { title: 'No note selected', body: 'Choose a note to read it beside the list.' };
+		if (path.startsWith('/tasks')) return { title: t('tasks.noSelected'), body: t('detail.pickTask') };
+		if (path.startsWith('/projects')) return { title: 'No project selected', body: t('detail.pickProject') };
+		if (path.startsWith('/notes')) return { title: t('notes.noSelected'), body: t('detail.pickNote') };
 		if (path.startsWith('/entreprises') || path.startsWith('/accounting'))
 			return {
-				title: 'No entry selected',
-				body: 'Open an Entreprise — Views, Tables, and Metrics live inside it.'
+				title: t('ent.noEntrySelected'),
+				body: t('detail.pickEnterprise')
 			};
 		if (path.startsWith('/publications') || path.startsWith('/website'))
 			return {
-				title: path.startsWith('/website') ? 'No section open' : 'Publications',
+				title: path.startsWith('/website') ? t('detail.noSection') : t('nav.publications'),
 				body: path.startsWith('/website')
-					? 'Open Publications from a site card — it appears here in the detail column.'
+					? t('detail.pickPublication')
 					: 'Open the hub — Blog letters mail subscribers and appear on the site.'
 			};
 		if (path.startsWith('/mail'))
 			return {
-				title: 'No message selected',
-				body: 'Pick a message from Inbox or Sent — or use + to compose for your mailbox.'
+				title: t('mail.noMessageSelected'),
+				body: t('mail.pickMessage')
 			};
 		if (path.startsWith('/chat'))
 			return {
-				title: 'No chat selected',
-				body: 'Pick a chat from the list to open it here.'
+				title: t('chat.noChatSelected'),
+				body: t('chat.pickChat')
 			};
 		if (path.startsWith('/drive'))
 			return {
-				title: 'No file selected',
-				body: 'Open a folder or file from the list — it appears here in the detail column.'
+				title: t('drive.noSelected'),
+				body: t('detail.pickFile')
 			};
 		if (path.startsWith('/settings'))
 			return {
-				title: 'Settings',
-				body: 'Pick a profile card action or a section to open it here.'
+				title: t('nav.settings'),
+				body: t('detail.pickSettings')
 			};
-		return { title: 'Nothing open', body: 'Select a task, project, note, mail, or chat to view it here.' };
+		return { title: t('detail.nothingOpen'), body: 'Select a task, project, note, mail, or chat to view it here.' };
 	});
 
 	let sendBusy = $state(false);
@@ -474,9 +481,7 @@
 	async function sendSelectedNewsletter() {
 		if (!newsletter || newsletter.status === 'sent') return;
 		if (
-			!confirm(
-				'Publish this letter? It will email every subscriber and appear as a Blog post on the site.'
-			)
+			!confirm(t('pub.publishConfirm'))
 		)
 			return;
 		sendBusy = true;
@@ -541,7 +546,7 @@
 	async function persistDraft() {
 		const kind = inlineKind;
 		if (!kind) return;
-		const title = draftTitle.trim() || 'Untitled';
+		const title = draftTitle.trim() || t('common.untitled');
 		const body = draftBody;
 		draftSaving = true;
 		try {
@@ -598,7 +603,7 @@
 			try {
 				await navigator.clipboard.writeText(path);
 			} catch {
-				window.prompt('Copy path', path);
+				window.prompt(t('drive.copyPath'), path);
 			}
 			return;
 		}
@@ -611,7 +616,7 @@
 		try {
 			await navigator.clipboard.writeText(url);
 		} catch {
-			window.prompt('Copy link', url);
+			window.prompt(t('invite.copyLink'), url);
 		}
 	}
 
@@ -623,7 +628,7 @@
 			const id = String(selection.id || '');
 			if (id.startsWith('post:')) {
 				const slug = id.slice(5);
-				if (!confirm(`Delete this publication from the site? This cannot be undone.`)) return;
+				if (!confirm(t('pub.deletePublication'))) return;
 				try {
 					await persistDeletePost(slug);
 					forceClearSelection();
@@ -632,7 +637,7 @@
 				}
 				return;
 			}
-			if (!confirm(`Delete this letter? Removes it from the public site too.`)) return;
+			if (!confirm(t('pub.deleteLetter'))) return;
 			try {
 				await persistDeleteCampaign(id);
 				forceClearSelection();
@@ -642,15 +647,15 @@
 			return;
 		}
 		if (kind !== 'task' && kind !== 'project' && kind !== 'note' && kind !== 'enterprise') return;
-		const label =
+		const confirmText =
 			kind === 'task'
-				? 'task'
+				? t('common.deleteConfirm', { label: t('tasks.task').toLowerCase() })
 				: kind === 'project'
-					? 'project'
+					? t('common.deleteConfirm', { label: t('projects.project').toLowerCase() })
 					: kind === 'note'
-						? 'note'
-						: 'enterprise';
-		if (!confirm(`Delete this ${label}? This cannot be undone.`)) return;
+						? t('common.deleteConfirm', { label: t('notes.note').toLowerCase() })
+						: t('ent.deleteConfirm');
+		if (!confirm(confirmText)) return;
 		try {
 			await deleteWorkspaceEntity(kind, selection.id);
 		} catch (e) {
@@ -732,7 +737,7 @@
 				{#snippet trailing()}
 					<ChromeActionButton
 						variant="more"
-						label="More"
+						label={t('common.more')}
 						expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					/>
@@ -754,19 +759,19 @@
 			<div class="dropdown-list" role="menu">
 				{#if canShare}
 					<button type="button" class="dropdown-item" role="menuitem" onclick={() => void shareCurrent()}>
-						{fileEntry ? 'Copy path' : 'Share'}
+						{fileEntry ? t('drive.copyPath') : t('common.share')}
 					</button>
 				{/if}
 				{#if canComposerEdit}
 					<button type="button" class="dropdown-item" role="menuitem" onclick={editCurrent}>
 						<Pen size={13} />
-						Edit
+						{t('common.edit')}
 					</button>
 				{/if}
 				{#if canDelete}
 					<button type="button" class="dropdown-item danger" role="menuitem" onclick={deleteCurrent}>
 						<Trash size={15} />
-						Delete
+						{t('common.delete')}
 					</button>
 				{/if}
 			</div>
@@ -776,7 +781,7 @@
 	{#if task}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -787,15 +792,15 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Task</span>
+				<span class="detail-top-label">{t('tasks.task')}</span>
 			</div>
 			<div class="detail-top-actions">
-				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
+				{#if draftSaving}<span class="save-hint">{t('common.saving')}</span>{/if}
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -810,8 +815,8 @@
 				<input
 					class="title-input"
 					bind:value={draftTitle}
-					aria-label="Task title"
-					placeholder="Untitled"
+					aria-label={t('detail.ariaTaskTitle')}
+					placeholder={t('common.untitled')}
 					oninput={scheduleDraftSave}
 				/>
 				<TaskFieldPicker
@@ -826,8 +831,8 @@
 			<textarea
 				class="body-input"
 				bind:value={draftBody}
-				aria-label="Task description"
-				placeholder="Add a description…"
+				aria-label={t('detail.ariaTaskDesc')}
+				placeholder={t('tasks.addDescription')}
 				rows="3"
 				oninput={scheduleDraftSave}
 			></textarea>
@@ -836,7 +841,7 @@
 	{:else if project}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -847,15 +852,15 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Project</span>
+				<span class="detail-top-label">{t('projects.project')}</span>
 			</div>
 			<div class="detail-top-actions">
-				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
+				{#if draftSaving}<span class="save-hint">{t('common.saving')}</span>{/if}
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -874,8 +879,8 @@
 				<input
 					class="title-input"
 					bind:value={draftTitle}
-					aria-label="Project title"
-					placeholder="Untitled"
+					aria-label={t('detail.ariaProjectTitle')}
+					placeholder={t('common.untitled')}
 					oninput={scheduleDraftSave}
 				/>
 			</div>
@@ -883,8 +888,8 @@
 				class="body-input body-input-hug"
 				bind:this={descEl}
 				bind:value={draftBody}
-				aria-label="Project description"
-				placeholder="Add a description…"
+				aria-label={t('detail.ariaProjectDesc')}
+				placeholder={t('tasks.addDescription')}
 				rows="1"
 				oninput={(e) => {
 					hugDescription(/** @type {HTMLTextAreaElement} */ (e.currentTarget));
@@ -895,12 +900,12 @@
 			<div class="bento">
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Tasks</span>
+						<span class="eyebrow-label-xs">{t('tasks.title')}</span>
 						<span class="bento-count">{projectTasks.length}</span>
 						<button
 							type="button"
 							class="proj-add"
-							aria-label="Add task"
+							aria-label={t('projects.addTask')}
 							onclick={() => openComposer('task', undefined, 'open')}
 						>
 							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -909,7 +914,7 @@
 						</button>
 					</div>
 					{#if projectTasks.length === 0}
-						<p class="muted tight">No tasks yet.</p>
+						<p class="muted tight">{t('projects.noTasks')}.</p>
 					{:else}
 						<ul class="linked-list">
 							{#each projectTasks.slice(0, BENTO_PREVIEW) as t (t.id)}
@@ -922,17 +927,17 @@
 							{/each}
 						</ul>
 					{/if}
-					<button type="button" class="view-all-fab" onclick={() => viewAll('/tasks')}>View all</button>
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/tasks')}>{t('common.viewAll')}</button>
 				</section>
 
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Notes</span>
+						<span class="eyebrow-label-xs">{t('notes.title')}</span>
 						<span class="bento-count">{projectNotes.length}</span>
 						<button
 							type="button"
 							class="proj-add"
-							aria-label="Add note"
+							aria-label={t('projects.addNote')}
 							onclick={() => openComposer('note')}
 						>
 							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -941,32 +946,32 @@
 						</button>
 					</div>
 					{#if projectNotes.length === 0}
-						<p class="muted tight">No notes yet.</p>
+						<p class="muted tight">{t('projects.noNotes')}.</p>
 					{:else}
 						<ul class="linked-list">
 							{#each projectNotes.slice(0, BENTO_PREVIEW) as n (n.id)}
 								<li>
 									<button type="button" class="linked-row" onclick={() => selectEntity('note', n.id)}>
-										<span class="linked-title">{n.title || 'Untitled'}</span>
+										<span class="linked-title">{n.title || t('common.untitled')}</span>
 									</button>
 								</li>
 							{/each}
 						</ul>
 					{/if}
-					<button type="button" class="view-all-fab" onclick={() => viewAll('/notes')}>View all</button>
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/notes')}>{t('common.viewAll')}</button>
 				</section>
 
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Files</span>
+						<span class="eyebrow-label-xs">{t('drive.title')}</span>
 						<span class="bento-count">0</span>
-						<button type="button" class="proj-add" aria-label="Add file" disabled>
+						<button type="button" class="proj-add" aria-label={t('projects.addFile')} disabled>
 							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
 							</svg>
 						</button>
 					</div>
-					<p class="muted tight">No files yet.</p>
+					<p class="muted tight">{t('projects.noFiles')}.</p>
 				</section>
 			</div>
 		</div>
@@ -974,7 +979,7 @@
 	{:else if note}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -985,15 +990,15 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Note</span>
+				<span class="detail-top-label">{t('notes.note')}</span>
 			</div>
 			<div class="detail-top-actions">
-				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
+				{#if draftSaving}<span class="save-hint">{t('common.saving')}</span>{/if}
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -1007,8 +1012,8 @@
 				<input
 					class="title-input"
 					bind:value={draftTitle}
-					aria-label="Note title"
-					placeholder="Untitled"
+					aria-label={t('detail.ariaNoteTitle')}
+					placeholder={t('common.untitled')}
 					oninput={scheduleDraftSave}
 				/>
 			</div>
@@ -1023,7 +1028,7 @@
 	{:else if pubsHub}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1034,7 +1039,7 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Publications</span>
+				<span class="detail-top-label">{t('nav.publications')}</span>
 			</div>
 		</header>
 		<div class="body">
@@ -1043,7 +1048,7 @@
 	{:else if welcomeSelected}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1054,14 +1059,14 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Welcome</span>
+				<span class="detail-top-label">{t('detail.welcome')}</span>
 			</div>
 			<div class="detail-top-actions">
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -1071,14 +1076,14 @@
 			</div>
 		</header>
 		<div class="body">
-			<p class="pub-kicker">{mailSettings.welcome.enabled ? 'On for new subscribers' : 'Off'}</p>
+			<p class="pub-kicker">{mailSettings.welcome.enabled ? t('pub.onForSubscribers') : t('pub.off')}</p>
 			<h2 class="pub-title">{mailSettings.welcome.subject_fr || 'Welcome'}</h2>
 			<pre class="pub-body">{mailSettings.welcome.body_fr}</pre>
 		</div>
 	{:else if newsletter}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1089,7 +1094,7 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Newsletter</span>
+				<span class="detail-top-label">{t('detail.newsletter')}</span>
 			</div>
 			<div class="detail-top-actions">
 				{#if newsletter.status === 'draft' || newsletter.status === 'failed'}
@@ -1099,7 +1104,7 @@
 						disabled={sendBusy}
 						onclick={sendSelectedNewsletter}
 					>
-						{sendBusy ? 'Sending…' : 'Send'}
+						{sendBusy ? t('common.sending') : t('common.send')}
 					</button>
 				{:else if newsletter.post_slug}
 					<button
@@ -1107,14 +1112,14 @@
 						class="send-chip"
 						onclick={() => openComposer('newsletter', newsletter.id)}
 					>
-						Edit site
+						{t('detail.editSite')}
 					</button>
 				{/if}
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -1126,8 +1131,8 @@
 		<div class="body">
 			<p class="pub-kicker">
 				{newsletter.status}{#if newsletter.sent_count}
-					· {newsletter.sent_count} sent{/if}{#if newsletter.post_slug}
-					· on site{/if}
+					· {t('pub.sentCount', { n: newsletter.sent_count })}{/if}{#if newsletter.post_slug}
+					· {t('pub.onSite')}{/if}
 			</p>
 			<h2 class="pub-title">{newsletter.subject}</h2>
 			<pre class="pub-body">{newsletter.body}</pre>
@@ -1135,7 +1140,7 @@
 	{:else if pubPost}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1154,13 +1159,13 @@
 					class="send-chip"
 					onclick={() => openComposer('newsletter', `post:${pubPost.slug}`)}
 				>
-					Edit
+					{t('common.edit')}
 				</button>
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -1172,7 +1177,7 @@
 		<div class="body">
 			<p class="pub-kicker">
 				{pubPost.kind || 'blog'}{#if pubPost.updated_at}
-					· edited{/if}{#if pubPost.slug}
+					· {t('pub.edited')}{/if}{#if pubPost.slug}
 					· /{pubPost.slug}{/if}
 			</p>
 			<h2 class="pub-title">{pubPost.title}</h2>
@@ -1183,7 +1188,7 @@
 	{:else if mailMsg}
 		{@const thread = threadMessages(mailMsg)}
 		{@const first = thread[0] || mailMsg}
-		{@const threadTitle = first.subject || mailMsg.subject || '(no subject)'}
+		{@const threadTitle = first.subject || mailMsg.subject || t('common.noSubject')}
 		{@const me = (activePerson().email || '').trim().toLowerCase()}
 		{@const last = thread[thread.length - 1] || mailMsg}
 		{@const replyTo =
@@ -1197,7 +1202,7 @@
 			!isApprovedContact(contactEmail)}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1217,7 +1222,7 @@
 						class="send-chip"
 						onclick={() => approveContact(contactEmail)}
 					>
-						Accept
+						{t('common.accept')}
 					</button>
 				{/if}
 			</div>
@@ -1233,7 +1238,7 @@
 	{:else if settingsSectionId}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1244,7 +1249,7 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">{SETTINGS_TITLES[settingsSectionId] || 'Settings'}</span>
+				<span class="detail-top-label">{settingsTitles[settingsSectionId] || t('nav.settings')}</span>
 			</div>
 			<div class="detail-top-actions"></div>
 		</header>
@@ -1257,7 +1262,7 @@
 	{:else if chatChannel}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1268,7 +1273,7 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">{chatChannel.title || 'General'}</span>
+				<span class="detail-top-label">{chatChannel.title || t('chat.general')}</span>
 			</div>
 			<div class="detail-top-actions"></div>
 		</header>
@@ -1278,7 +1283,7 @@
 	{:else if fileEntry?.isFolder}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1289,14 +1294,14 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Folder</span>
+				<span class="detail-top-label">{t('drive.folder')}</span>
 			</div>
 			<div class="detail-top-actions">
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -1311,7 +1316,7 @@
 	{:else if fileEntry}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1322,14 +1327,14 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">File</span>
+				<span class="detail-top-label">{t('drive.file')}</span>
 			</div>
 			<div class="detail-top-actions">
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -1351,14 +1356,14 @@
 					>{#if fileParts.ext}<span class="file-ext">.{fileParts.ext}</span>{/if}</h2
 				>
 			</div>
-			<p class="muted">Encrypted on your Space Drive. Preview coming soon.</p>
+			<p class="muted">{t('drive.encryptedHint')}</p>
 		</div>
 	{:else if accountingPanel}
 		<AccountingDetail />
 	{:else if ledger}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1369,12 +1374,12 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Ledger</span>
+				<span class="detail-top-label">{t('acc.ledger')}</span>
 			</div>
 		</header>
 		<div class="body">
 			<p class="pub-kicker">
-				{ledger.direction === 'in' ? 'Income' : 'Expense'}
+				{ledger.direction === 'in' ? t('acc.income') : t('acc.expense')}
 				· {ledger.kind}
 				{#if ledger.channel}· {ledger.channel}{/if}
 			</p>
@@ -1390,14 +1395,14 @@
 			</p>
 			{#if ledger.targets?.length}
 				<p class="muted">
-					Projects: {ledger.targets.map((/** @type {{ label: string }} */ t) => t.label).join(', ')}
+					{t('acc.projectsLabel')} {ledger.targets.map((/** @type {{ label: string }} */ t) => t.label).join(', ')}
 				</p>
 			{/if}
 		</div>
 	{:else if costItem}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1408,7 +1413,7 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Cost</span>
+				<span class="detail-top-label">{t('detail.cost')}</span>
 			</div>
 		</header>
 		<div class="body">
@@ -1422,7 +1427,7 @@
 	{:else if salesLine}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1433,7 +1438,7 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Sales</span>
+				<span class="detail-top-label">{t('acc.sales')}</span>
 			</div>
 		</header>
 		<div class="body">
@@ -1455,7 +1460,7 @@
 	{:else if enterprise}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label="Back" onclick={close}>
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3.5 5.5 8 10 12.5"
@@ -1466,15 +1471,15 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">Enterprise</span>
+				<span class="detail-top-label">{t('nav.enterprise')}</span>
 			</div>
 			<div class="detail-top-actions">
-				{#if draftSaving}<span class="save-hint">Saving…</span>{/if}
+				{#if draftSaving}<span class="save-hint">{t('common.saving')}</span>{/if}
 				{#if showMoreMenu}
 					<button
 						type="button"
 						class="icon-hit more-desktop"
-						aria-label="More"
+						aria-label={t('common.more')}
 						aria-expanded={menuOpen}
 						onclick={toggleMoreMenu}
 					>
@@ -1489,8 +1494,8 @@
 				<input
 					class="title-input"
 					bind:value={draftTitle}
-					aria-label="Enterprise title"
-					placeholder="Untitled"
+					aria-label={t('detail.ariaEntTitle')}
+					placeholder={t('common.untitled')}
 					oninput={scheduleDraftSave}
 				/>
 			</div>
@@ -1498,8 +1503,8 @@
 				class="body-input body-input-hug"
 				bind:this={descEl}
 				bind:value={draftBody}
-				aria-label="Enterprise description"
-				placeholder="Add a description…"
+				aria-label={t('detail.ariaEntDesc')}
+				placeholder={t('tasks.addDescription')}
 				rows="1"
 				oninput={(e) => {
 					hugDescription(/** @type {HTMLTextAreaElement} */ (e.currentTarget));
@@ -1510,12 +1515,12 @@
 			<div class="bento">
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Views</span>
+						<span class="eyebrow-label-xs">{t('ent.views')}</span>
 						<span class="bento-count">{enterpriseViews.length}</span>
 						<button
 							type="button"
 							class="proj-add"
-							aria-label="Add view"
+							aria-label={t('ent.addView')}
 							onclick={() =>
 								openComposer('view', undefined, undefined, { enterprise_id: enterprise.id })
 							}
@@ -1526,7 +1531,7 @@
 						</button>
 					</div>
 					{#if enterpriseViews.length === 0}
-						<p class="muted tight">No views yet.</p>
+						<p class="muted tight">{t('detail.noViews')}</p>
 					{:else}
 						<ul class="linked-list">
 							{#each enterpriseViews.slice(0, BENTO_PREVIEW) as v (v.id)}
@@ -1538,17 +1543,17 @@
 							{/each}
 						</ul>
 					{/if}
-					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>View all</button>
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>{t('common.viewAll')}</button>
 				</section>
 
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Tables</span>
+						<span class="eyebrow-label-xs">{t('ent.tables')}</span>
 						<span class="bento-count">{enterpriseTables.length}</span>
 						<button
 							type="button"
 							class="proj-add"
-							aria-label="Add table"
+							aria-label={t('ent.addTable')}
 							onclick={() =>
 								openComposer('table', undefined, undefined, { enterprise_id: enterprise.id })
 							}
@@ -1559,7 +1564,7 @@
 						</button>
 					</div>
 					{#if enterpriseTables.length === 0}
-						<p class="muted tight">No tables yet.</p>
+						<p class="muted tight">{t('detail.noTables')}</p>
 					{:else}
 						<ul class="linked-list">
 							{#each enterpriseTables.slice(0, BENTO_PREVIEW) as t (t.id)}
@@ -1571,17 +1576,17 @@
 							{/each}
 						</ul>
 					{/if}
-					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>View all</button>
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>{t('common.viewAll')}</button>
 				</section>
 
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Metrics</span>
+						<span class="eyebrow-label-xs">{t('ent.metrics')}</span>
 						<span class="bento-count">{enterpriseMetrics.length}</span>
 						<button
 							type="button"
 							class="proj-add"
-							aria-label="Add metric"
+							aria-label={t('ent.addMetric')}
 							onclick={() =>
 								openComposer('metric', undefined, undefined, { enterprise_id: enterprise.id })
 							}
@@ -1592,7 +1597,7 @@
 						</button>
 					</div>
 					{#if enterpriseMetrics.length === 0}
-						<p class="muted tight">No metrics yet.</p>
+						<p class="muted tight">{t('detail.noMetrics')}</p>
 					{:else}
 						<ul class="linked-list">
 							{#each enterpriseMetrics.slice(0, BENTO_PREVIEW) as m (m.id)}
@@ -1604,17 +1609,17 @@
 							{/each}
 						</ul>
 					{/if}
-					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>View all</button>
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>{t('common.viewAll')}</button>
 				</section>
 
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Projects</span>
+						<span class="eyebrow-label-xs">{t('ent.projects')}</span>
 						<span class="bento-count">{enterpriseProjects.length}</span>
 						<button
 							type="button"
 							class="proj-add"
-							aria-label="Add project"
+							aria-label={t('ent.addProject')}
 							onclick={() =>
 								openComposer('project', undefined, undefined, {
 									primary_enterprise_id: enterprise.id,
@@ -1628,7 +1633,7 @@
 						</button>
 					</div>
 					{#if enterpriseProjects.length === 0}
-						<p class="muted tight">No projects yet.</p>
+						<p class="muted tight">{t('meta.noProjects')}.</p>
 					{:else}
 						<ul class="linked-list">
 							{#each enterpriseProjects.slice(0, BENTO_PREVIEW) as p (p.id)}
@@ -1640,17 +1645,17 @@
 							{/each}
 						</ul>
 					{/if}
-					<button type="button" class="view-all-fab" onclick={() => viewAll('/projects')}>View all</button>
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/projects')}>{t('common.viewAll')}</button>
 				</section>
 
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Tasks</span>
+						<span class="eyebrow-label-xs">{t('tasks.title')}</span>
 						<span class="bento-count">{enterpriseTasks.length}</span>
 						<button
 							type="button"
 							class="proj-add"
-							aria-label="Add task"
+							aria-label={t('projects.addTask')}
 							onclick={() => openComposer('task', undefined, 'open')}
 						>
 							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -1659,7 +1664,7 @@
 						</button>
 					</div>
 					{#if enterpriseTasks.length === 0}
-						<p class="muted tight">No tasks yet.</p>
+						<p class="muted tight">{t('projects.noTasks')}.</p>
 					{:else}
 						<ul class="linked-list">
 							{#each enterpriseTasks.slice(0, BENTO_PREVIEW) as t (t.id)}
@@ -1672,17 +1677,17 @@
 							{/each}
 						</ul>
 					{/if}
-					<button type="button" class="view-all-fab" onclick={() => viewAll('/tasks')}>View all</button>
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/tasks')}>{t('common.viewAll')}</button>
 				</section>
 
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Notes</span>
+						<span class="eyebrow-label-xs">{t('notes.title')}</span>
 						<span class="bento-count">{enterpriseNotes.length}</span>
 						<button
 							type="button"
 							class="proj-add"
-							aria-label="Add note"
+							aria-label={t('projects.addNote')}
 							onclick={() => openComposer('note')}
 						>
 							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -1691,32 +1696,32 @@
 						</button>
 					</div>
 					{#if enterpriseNotes.length === 0}
-						<p class="muted tight">No notes yet.</p>
+						<p class="muted tight">{t('projects.noNotes')}.</p>
 					{:else}
 						<ul class="linked-list">
 							{#each enterpriseNotes.slice(0, BENTO_PREVIEW) as n (n.id)}
 								<li>
 									<button type="button" class="linked-row" onclick={() => selectEntity('note', n.id)}>
-										<span class="linked-title">{n.title || 'Untitled'}</span>
+										<span class="linked-title">{n.title || t('common.untitled')}</span>
 									</button>
 								</li>
 							{/each}
 						</ul>
 					{/if}
-					<button type="button" class="view-all-fab" onclick={() => viewAll('/notes')}>View all</button>
+					<button type="button" class="view-all-fab" onclick={() => viewAll('/notes')}>{t('common.viewAll')}</button>
 				</section>
 
 				<section class="bento-panel">
 					<div class="bento-head">
-						<span class="eyebrow-label-xs">Files</span>
+						<span class="eyebrow-label-xs">{t('drive.title')}</span>
 						<span class="bento-count">0</span>
-						<button type="button" class="proj-add" aria-label="Add file" disabled>
+						<button type="button" class="proj-add" aria-label={t('projects.addFile')} disabled>
 							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
 							</svg>
 						</button>
 					</div>
-					<p class="muted tight">No files yet.</p>
+					<p class="muted tight">{t('projects.noFiles')}.</p>
 				</section>
 			</div>
 		</div>

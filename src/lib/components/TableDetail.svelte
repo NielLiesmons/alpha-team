@@ -5,6 +5,7 @@
 	import Pen from './icons/Pen.svelte';
 	import { parentEnterpriseId } from '$lib/entity-routes.js';
 	import { unitSuffix } from '$lib/format-value.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import {
 		appendTableRow,
 		captureForms,
@@ -199,7 +200,7 @@
 <header class="detail-top desktop-head">
 	<div class="detail-top-start">
 		{#if parentId}
-			<button type="button" class="icon-hit" aria-label="Back to enterprise" onclick={backToEnterprise}>
+			<button type="button" class="icon-hit" aria-label={t('detail.backToEnterprise')} onclick={backToEnterprise}>
 				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 					<path
 						d="M10 3.5 5.5 8 10 12.5"
@@ -211,14 +212,14 @@
 				</svg>
 			</button>
 		{/if}
-		<span class="detail-top-label">Table</span>
+		<span class="detail-top-label">{t('detail.table')}</span>
 	</div>
 	<div class="detail-top-actions">
-		{#if saving}<span class="save-hint">Saving…</span>{/if}
+		{#if saving}<span class="save-hint">{t('common.saving')}</span>{/if}
 		{#if err}<span class="save-hint err">{err}</span>{/if}
-		<button type="button" class="linkish" onclick={() => void ensureCaptureForm()}>Capture</button>
-		<button type="button" class="linkish" onclick={() => void addField()}>+ Field</button>
-		<button type="button" class="linkish" onclick={() => void addEntry()}>+ Entry</button>
+		<button type="button" class="linkish" onclick={() => void ensureCaptureForm()}>{t('ent.capture')}</button>
+		<button type="button" class="linkish" onclick={() => void addField()}>{t('ent.addField')}</button>
+		<button type="button" class="linkish" onclick={() => void addEntry()}>{t('ent.addEntry')}</button>
 	</div>
 </header>
 
@@ -226,7 +227,7 @@
 	<input
 		class="title-input"
 		value={table.title ?? ''}
-		placeholder="Untitled"
+		placeholder={t('common.untitled')}
 		oninput={(e) => void persist({ title: e.currentTarget.value })}
 	/>
 
@@ -237,11 +238,11 @@
 				type="button"
 				class="meta-pill"
 				class:empty={!table.key}
-				aria-label="Key"
+				aria-label={t('ent.key')}
 				aria-expanded={menu === 'key'}
 				onclick={openKeyMenu}
 			>
-				<span class="pill-k">Key</span>
+				<span class="pill-k">{t('ent.key')}</span>
 				<span class="pill-v">{table.key || '—'}</span>
 			</button>
 		</div>
@@ -251,7 +252,7 @@
 				type="button"
 				class="meta-pill"
 				class:empty={!enterprise}
-				aria-label="Enterprise"
+				aria-label={t('nav.enterprise')}
 				aria-expanded={menu === 'enterprise'}
 				onclick={() => (menu = menu === 'enterprise' ? null : 'enterprise')}
 			>
@@ -259,20 +260,20 @@
 					<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={18} />
 					<span class="pill-v">{enterprise.title}</span>
 				{:else}
-					<span class="pill-v muted">Enterprise</span>
+					<span class="pill-v muted">{t('nav.enterprise')}</span>
 				{/if}
 			</button>
 		</div>
 	</div>
 
 	{#if !(table.columns || []).length}
-		<p class="hint">Add a field to start logging.</p>
+		<p class="hint">{t('detail.addFieldHint')}</p>
 	{:else}
 		<div class="grid-wrap">
 			<table class="grid">
 				<thead>
 					<tr>
-						<th class="when">When</th>
+						<th class="when">{t('ent.when')}</th>
 						{#each table.columns as c, ci (c.id || c.key || ci)}
 							<th>
 								<button type="button" class="th-btn" onclick={() => openFieldEdit(ci)}>
@@ -287,7 +288,7 @@
 					{#if rows.length === 0}
 						<tr>
 							<td class="empty-cell" colspan={(table.columns || []).length + 1}
-								>Nothing logged yet</td
+								>{t('ent.nothingLogged')}</td
 							>
 						</tr>
 					{:else}
@@ -323,14 +324,14 @@
 >
 	<div class="key-edit">
 		<label>
-			<span>Key</span>
+			<span>{t('ent.key')}</span>
 			<input
 				bind:value={keyDraft}
 				placeholder="egg_actuals"
 				onkeydown={(e) => e.key === 'Enter' && void commitKey()}
 			/>
 		</label>
-		<button type="button" class="done" onclick={() => void commitKey()}>Done</button>
+		<button type="button" class="done" onclick={() => void commitKey()}>{t('common.done')}</button>
 	</div>
 </FloatPanel>
 
@@ -344,7 +345,7 @@
 >
 	<div class="float-list" role="listbox">
 		<button type="button" class="option" onclick={() => void setEnterprise(null)}>
-			<span class="option-text muted">None</span>
+			<span class="option-text muted">{t('common.none')}</span>
 		</button>
 		{#each enterprises as ent (ent.id)}
 			<button
@@ -362,34 +363,34 @@
 
 {#if editIdx !== null}
 	<div class="modal-scrim" role="presentation" onclick={closeFieldEdit}></div>
-	<div class="field-modal" role="dialog" aria-label="Edit field">
-		<h3>Edit field</h3>
+	<div class="field-modal" role="dialog" aria-label={t('ent.editField')}>
+		<h3>{t('ent.editField')}</h3>
 		<label>
-			<span>Label</span>
+			<span>{t('ent.label')}</span>
 			<input bind:value={draftLabel} />
 		</label>
 		<label>
-			<span>Key</span>
+			<span>{t('ent.key')}</span>
 			<input bind:value={draftKey} />
 		</label>
 		<label>
-			<span>Type</span>
+			<span>{t('ent.type')}</span>
 			<select bind:value={draftType}>
-				<option value="number">number</option>
-				<option value="text">text</option>
-				<option value="date">date</option>
-				<option value="bool">bool</option>
-				<option value="select">select</option>
+				<option value="number">{t('ent.typeNumber')}</option>
+				<option value="text">{t('ent.typeText')}</option>
+				<option value="date">{t('ent.typeDate')}</option>
+				<option value="bool">{t('ent.typeBool')}</option>
+				<option value="select">{t('ent.typeSelect')}</option>
 			</select>
 		</label>
 		<label>
-			<span>Unit</span>
+			<span>{t('ent.unit')}</span>
 			<input bind:value={draftUnit} placeholder="EUR, %, g…" />
 		</label>
 		<div class="modal-actions">
-			<button type="button" class="danger" onclick={() => void removeField()}>Remove</button>
-			<button type="button" class="ghost" onclick={closeFieldEdit}>Cancel</button>
-			<button type="button" class="primary" onclick={() => void saveFieldEdit()}>Save</button>
+			<button type="button" class="danger" onclick={() => void removeField()}>{t('common.remove')}</button>
+			<button type="button" class="ghost" onclick={closeFieldEdit}>{t('common.cancel')}</button>
+			<button type="button" class="primary" onclick={() => void saveFieldEdit()}>{t('common.save')}</button>
 		</div>
 	</div>
 {/if}

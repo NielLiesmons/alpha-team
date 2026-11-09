@@ -46,6 +46,7 @@
 	} from '$lib/feed-scroll.js';
 	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	/** @type {{ channelId?: string }} */
 	let { channelId = 'general' } = $props();
@@ -300,7 +301,7 @@
 		if (Number.isNaN(d.getTime())) return '';
 		const now = Date.now();
 		const diff = now - d.getTime();
-		if (diff < 60_000) return 'just now';
+		if (diff < 60_000) return t('chat.justNow');
 		if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
 		if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
 		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -356,7 +357,7 @@
 	 */
 	async function uploadChatAttachment(file, msgId) {
 		const session = activeSession();
-		if (!session) throw new Error('Connect Drive first');
+		if (!session) throw new Error(t('settings.connectDriveFirst'));
 		const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'file';
 		const path = `chat/media/${msgId}/${safe}`;
 		const kind = inferMediaKind({ content_type: file.type, name: file.name });
@@ -521,7 +522,7 @@
 		const plain = String(replyTo.body || '')
 			.replace(/\s+/g, ' ')
 			.trim();
-		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain || 'Message';
+		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain || t('chat.message');
 		return {
 			email,
 			name: n,
@@ -538,10 +539,10 @@
 
 	function presenceLabel(/** @type {any} */ e) {
 		if (e.label) return e.label;
-		if (e.state === 'recording') return 'Recording…';
-		if (e.state === 'thinking') return 'Thinking…';
-		if (e.state === 'tool') return 'Working…';
-		return 'Typing…';
+		if (e.state === 'recording') return t('chat.recording');
+		if (e.state === 'thinking') return t('chat.thinking');
+		if (e.state === 'tool') return t('chat.working');
+		return t('chat.typing');
 	}
 </script>
 
@@ -559,8 +560,8 @@
 				<FeedSkeleton rows={6} />
 			{:else if chronological.length === 0}
 				<div class="empty">
-					<p class="empty-title">No messages yet</p>
-					<p class="empty-body">Write below to start the conversation.</p>
+					<p class="empty-title">{t('chat.noMessages')}</p>
+					<p class="empty-body">{t('chat.writeBelow')}</p>
 				</div>
 			{:else}
 				<div class="stack">
@@ -590,7 +591,7 @@
 								<button
 									type="button"
 									class="pub-tip"
-									aria-label={refMeta ? `${refMeta.kind}: ${refMeta.title}` : 'Open'}
+									aria-label={refMeta ? `${refMeta.kind}: ${refMeta.title}` : t('chat.open')}
 									onclick={() => openChatRef(block.messages[0])}
 								>
 									{#if refMeta?.box === 'task'}
@@ -711,7 +712,7 @@
 				<button
 					type="button"
 					class="scroll-fab"
-					aria-label="Scroll to bottom"
+					aria-label={t('chat.scrollToBottom')}
 					onclick={onJumpToLatest}
 				>
 					<ArrowDown size={18} />
@@ -731,7 +732,7 @@
 			<div class="composer-pill" class:chrome-expanded={chromeExpanded}>
 				{#if replyPreview}
 					<div class="composer-quote-wrap">
-						<div class="composer-quote" role="group" aria-label={`Replying to ${replyPreview.name}`}>
+						<div class="composer-quote" role="group" aria-label={t('chat.replyingTo', { name: replyPreview.name })}>
 							<div
 								class="composer-quote-bar"
 								style:background={replyPreview.accent}
@@ -746,7 +747,7 @@
 							<button
 								type="button"
 								class="composer-quote-clear"
-								aria-label="Cancel reply"
+								aria-label={t('chat.cancelReply')}
 								onclick={clearReply}>×</button
 							>
 						</div>
@@ -756,11 +757,11 @@
 					<div class="attach-bar">
 						{#each pendingFiles as f, i (f.file.name + i)}
 							<span class="attach-chip">
-								{f.kind === 'image' ? 'Image' : f.kind === 'video' ? 'Video' : f.file.name}
+								{f.kind === 'image' ? t('chat.image') : f.kind === 'video' ? t('chat.video') : f.file.name}
 								<button
 									type="button"
 									class="attach-x"
-									aria-label="Remove"
+									aria-label={t('chat.remove')}
 									onclick={() => {
 										if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
 										pendingFiles = pendingFiles.filter((_, j) => j !== i);
@@ -768,21 +769,21 @@
 								>
 							</span>
 						{/each}
-						<button type="button" class="attach-clear" onclick={clearPendingFiles}>Clear</button>
+						<button type="button" class="attach-clear" onclick={clearPendingFiles}>{t('chat.clear')}</button>
 					</div>
 				{/if}
 				{#if voiceOpen}
 					<div class="voice-shell">
 						<span class="voice-pulse" aria-hidden="true"></span>
-						<span class="voice-label">Recording… {voiceSecs}s</span>
-						<button type="button" class="voice-cancel" onclick={cancelVoiceShell}>Cancel</button>
+						<span class="voice-label">{t('chat.recording')} {voiceSecs}s</span>
+						<button type="button" class="voice-cancel" onclick={cancelVoiceShell}>{t('chat.cancel')}</button>
 						<button
 							type="button"
 							class="voice-send"
 							onclick={() => {
 								cancelVoiceShell();
-								chatUi.error = 'Voice capture ships next — attach an audio file via + for now.';
-							}}>Send</button
+								chatUi.error = t('chat.voiceNext');
+							}}>{t('chat.send')}</button
 						>
 					</div>
 				{/if}
@@ -795,7 +796,7 @@
 						accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip"
 						onchange={onFilesPicked}
 					/>
-					<button type="button" class="side-btn plus" aria-label="Attach" onclick={openAttach}>
+					<button type="button" class="side-btn plus" aria-label={t('chat.attach')} onclick={openAttach}>
 						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 							<path
 								d="M9 3.5v11M3.5 9h11"
@@ -814,24 +815,24 @@
 							bind:this={inputEl}
 							class="composer-input"
 							rows="1"
-							placeholder={replyTo ? 'Reply' : 'Message'}
+							placeholder={replyTo ? t('chat.reply') : t('chat.message')}
 							bind:value={draft}
 							onkeydown={onKey}
 							oninput={onInput}
 							onscroll={updateInputFade}
-							aria-label="Message"
+							aria-label={t('chat.message')}
 						></textarea>
 					</div>
 					{#if canSend}
-						<button type="button" class="side-btn send" aria-label="Send" onclick={() => void send()}>
+						<button type="button" class="side-btn send" aria-label={t('chat.send')} onclick={() => void send()}>
 							<AlphaLogo size={15} />
 						</button>
 					{:else}
 						<button
 							type="button"
 							class="side-btn mic"
-							aria-label="Voice message"
-							title="Voice message"
+							aria-label={t('chat.voiceMessage')}
+							title={t('chat.voiceMessage')}
 							onclick={openVoiceShell}
 						>
 							<Voice size={22} />

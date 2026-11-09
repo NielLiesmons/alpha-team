@@ -1,6 +1,7 @@
 <script>
 	import { accountingBrowse, enterpriseGross } from '$lib/accounting.svelte.js';
 	import EnterpriseBox from './EnterpriseBox.svelte';
+	import { locale, t } from '$lib/i18n.svelte.js';
 	import {
 		costItems,
 		enterprises,
@@ -30,17 +31,16 @@
 	}
 
 	const mode = $derived(accountingBrowse.mode);
-	const title = $derived(
-		mode === 'ledger'
-			? 'Ledger'
+	const title = $derived.by(() => {
+		locale.value;
+		return mode === 'ledger'
+			? t('acc.ledger')
 			: mode === 'costs'
-				? 'Costs'
+				? t('acc.costs')
 				: mode === 'sales'
-					? 'Sales'
-					: mode === 'enterprises'
-						? 'Entreprises'
-						: 'Entreprises'
-	);
+					? t('acc.sales')
+					: t('acc.entreprises');
+	});
 
 	const sortedLedger = $derived(
 		[...ledgerEntries].sort((a, b) => (b.occurredAt ?? 0) - (a.occurredAt ?? 0))
@@ -56,14 +56,14 @@
 
 {#if mode === 'home'}
 	<div class="empty desktop-empty">
-		<p class="empty-title">Pick a category</p>
+		<p class="empty-title">{t('acc.pickCategory')}</p>
 		<p class="empty-body">Ledger, Costs, Sales, or Enterprises — pick a category in the list.</p>
 	</div>
 {:else}
 	<header class="detail-top desktop-head">
 		<span class="detail-top-label">{title}</span>
 		<div class="detail-top-actions">
-			<button type="button" class="chrome-add" aria-label="Add" onclick={onCreate}>
+			<button type="button" class="chrome-add" aria-label={t('acc.add')} onclick={onCreate}>
 				<svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 					<path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
 				</svg>
@@ -74,7 +74,7 @@
 	<div class="body-scroll">
 		{#if mode === 'ledger'}
 			{#if sortedLedger.length === 0}
-				<p class="empty-inline">No ledger entries yet</p>
+				<p class="empty-inline">{t('acc.noLedger')}</p>
 			{:else}
 				<div class="card-stack">
 					{#each sortedLedger as entry (entry.id)}
@@ -102,7 +102,7 @@
 			{/if}
 		{:else if mode === 'costs'}
 			{#if costItems.length === 0}
-				<p class="empty-inline">No cost items — add feed, builds, packaging…</p>
+				<p class="empty-inline">{t('acc.noCosts')}</p>
 			{:else}
 				<div class="card-stack">
 					{#each costItems as item (item.id)}
@@ -127,7 +127,7 @@
 			{/if}
 		{:else if mode === 'sales'}
 			{#if salesLines.length === 0}
-				<p class="empty-inline">No sales lines — add price × unit × channel</p>
+				<p class="empty-inline">{t('acc.noSales')}</p>
 			{:else}
 				<div class="card-stack">
 					{#each salesLines as line (line.id)}
@@ -151,7 +151,7 @@
 			{/if}
 		{:else if mode === 'enterprises'}
 			{#if enterprises.length === 0}
-				<p class="empty-inline">No enterprise sheets — link costs + sales for gross profit</p>
+				<p class="empty-inline">{t('acc.noSheets')}</p>
 			{:else}
 				<div class="card-stack">
 					{#each enterprises as ent (ent.id)}

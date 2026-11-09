@@ -2,6 +2,7 @@
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import TaskCard from '$lib/components/TaskCard.svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { moments, openComposer, selectEntity, tasks, ui } from '$lib/workspace.svelte.js';
 
@@ -34,18 +35,20 @@
 		'closed',
 		'canceled'
 	];
-	const STATUS_LABELS = {
-		inReview: 'IN REVIEW',
-		inProgress: 'IN PROGRESS',
-		planned: 'PLANNED',
-		open: 'OPEN',
-		backlog: 'BACKLOG',
-		closed: 'CLOSED',
-		canceled: 'CANCELED'
+	/** @type {Record<string, string>} */
+	const STATUS_LABEL_KEYS = {
+		inReview: 'tasks.groupInReview',
+		inProgress: 'tasks.groupInProgress',
+		planned: 'tasks.groupPlanned',
+		open: 'tasks.groupOpen',
+		backlog: 'tasks.groupBacklog',
+		closed: 'tasks.groupClosed',
+		canceled: 'tasks.groupCanceled'
 	};
 	const DONE = new Set(['closed', 'canceled']);
 
 	const groups = $derived.by(() => {
+		locale.value;
 		/** @type {Map<string, typeof tasks>} */
 		const map = new Map();
 		const f = ui.listFilter;
@@ -64,13 +67,13 @@
 		}
 		return STATUS_ORDER.filter((key) => (map.get(key)?.length ?? 0) > 0).map((key) => ({
 			key,
-			label: STATUS_LABELS[key],
+			label: t(STATUS_LABEL_KEYS[key]),
 			items: map.get(key)
 		}));
 	});
 </script>
 
-<svelte:head><title>Tasks</title></svelte:head>
+<svelte:head><title>{t('tasks.title')}</title></svelte:head>
 
 <div class="feed">
 	{#if driveSession.error}
@@ -79,9 +82,9 @@
 	{#if !appBoot.listsReady && tasks.length === 0}
 		<FeedSkeleton rows={8} />
 	{:else if tasks.length === 0}
-		<p class="empty">No Tasks yet</p>
+		<p class="empty">{t('tasks.empty')}</p>
 	{:else if groups.length === 0}
-		<p class="empty">No tasks match this filter</p>
+		<p class="empty">{t('tasks.emptyFilter')}</p>
 	{:else}
 		{#each groups as group (group.key)}
 			<div class="task-group-header">
@@ -90,7 +93,7 @@
 				<button
 					type="button"
 					class="task-group-add-btn"
-					aria-label="Add task with status {group.label}"
+					aria-label="{t('projects.addTask')}: {group.label}"
 					onclick={() => openComposer('task', undefined, group.key)}
 				>
 					<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">

@@ -5,6 +5,7 @@
 	import EnterpriseBox from './EnterpriseBox.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import { closeComposer, enterprises, saveEnterprise, ui } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let title = $state('');
 	let description = $state('');
@@ -63,7 +64,7 @@
 
 <CreateSheet
 	{open}
-	label={editing ? 'Edit enterprise' : 'New enterprise'}
+	label={editing ? 'Edit enterprise' : t('create.enterprise')}
 	onclose={() => {
 		if (iconOpen) {
 			iconOpen = false;
@@ -78,21 +79,21 @@
 			type="button"
 			class="bare"
 			class:on={iconOpen}
-			aria-label="Enterprise icon"
+			aria-label={t('ent.icon')}
 			aria-expanded={iconOpen}
 			onpointerdown={(e) => e.preventDefault()}
 			onclick={() => (iconOpen = !iconOpen)}
 		>
 			<EnterpriseBox state="active" {icon} size={36} />
 		</button>
-		<input class="sheet-input" placeholder="Enterprise (e.g. Eggs, Sheep, General)" bind:value={title} />
+		<input class="sheet-input" placeholder={t('ent.namePlaceholder')} bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
-	<textarea class="sheet-body" placeholder="Description" bind:value={description}></textarea>
+	<textarea class="sheet-body" placeholder={t('ent.description')} bind:value={description}></textarea>
 	<div class="form-divider"></div>
 	<div class="sheet-bottom">
 		<PrimaryButton size="sheet" disabled={!title.trim()} onclick={save}>
-			{editing ? 'Save' : 'Publish'}
+			{editing ? t('common.save') : t('ent.publish')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>

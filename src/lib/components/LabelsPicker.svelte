@@ -5,6 +5,7 @@
 	import { stringToColor } from '$lib/color.js';
 	import { DEFAULT_LABELS } from '$lib/labels.js';
 	import LabelPill from './LabelPill.svelte';
+	import { t } from '$lib/i18n.svelte.js';
 
 	/**
 	 * @type {{
@@ -61,9 +62,9 @@
 		<input
 			class="label-field-input"
 			type="text"
-			placeholder="Search / Add label"
+			placeholder={t('meta.searchLabel')}
 			bind:value={draft}
-			aria-label="Search or add label"
+			aria-label={t('meta.searchLabel')}
 		/>
 		<svg class="triangle" viewBox="0 0 24 32" fill="none" aria-hidden="true">
 			<path
@@ -73,7 +74,7 @@
 		</svg>
 	</form>
 
-	<div class="chips" role="listbox" aria-label="Labels">
+	<div class="chips" role="listbox" aria-label={t('meta.labels')}>
 		{#each suggestions as label (label)}
 			{@const on = selected.includes(label)}
 			<button

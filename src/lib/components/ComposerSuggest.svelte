@@ -16,6 +16,7 @@
 	import { customEmojiShortcode } from '$lib/message-emoji.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	/**
 	 * @type {{
@@ -259,20 +260,20 @@
 </script>
 
 {#if open}
-	<div class="suggest" role="listbox" aria-label={trigger === '@' ? 'Mentions' : 'Emoji'}>
+	<div class="suggest" role="listbox" aria-label={trigger === '@' ? t('suggest.mentions') : t('suggest.emoji')}>
 		{#if trigger === '@'}
 			<div class="tabs" role="tablist">
 				<button
 					type="button"
 					class="tab"
 					class:on={atTab === 'people'}
-					onclick={() => (atTab = 'people')}>People</button
+					onclick={() => (atTab = 'people')}>{t('suggest.people')}</button
 				>
 				<button
 					type="button"
 					class="tab"
 					class:on={atTab === 'files'}
-					onclick={() => (atTab = 'files')}>Files</button
+					onclick={() => (atTab = 'files')}>{t('suggest.files')}</button
 				>
 			</div>
 		{:else}
@@ -281,13 +282,13 @@
 					type="button"
 					class="tab"
 					class:on={emojiTab === 'emoji'}
-					onclick={() => (emojiTab = 'emoji')}>Emoji</button
+					onclick={() => (emojiTab = 'emoji')}>{t('suggest.emoji')}</button
 				>
 				<button
 					type="button"
 					class="tab"
 					class:on={emojiTab === 'custom'}
-					onclick={() => (emojiTab = 'custom')}>Space</button
+					onclick={() => (emojiTab = 'custom')}>{t('suggest.space')}</button
 				>
 			</div>
 		{/if}
@@ -353,9 +354,9 @@
 			{:else}
 				<p class="empty">
 					{#if trigger === '@'}
-						No {atTab === 'people' ? 'people' : 'files'}
+						{atTab === 'people' ? t('suggest.noPeople') : t('suggest.noFiles')}
 					{:else}
-						No emoji
+						{t('suggest.noEmoji')}
 					{/if}
 				</p>
 			{/each}

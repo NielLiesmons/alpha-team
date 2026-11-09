@@ -1,4 +1,8 @@
-<main class="splash" aria-busy="true" aria-label="Loading">
+<script>
+	import { t } from '$lib/i18n.svelte.js';
+</script>
+
+<main class="splash" aria-busy="true" aria-label={t('common.loading')}>
 	<div class="dot"></div>
 </main>
 

@@ -1,5 +1,6 @@
 <script>
 	import { formatMetricValue } from '$lib/format-value.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import { buildMetricContext, evalMetric } from '$lib/table-metrics.js';
 	import { openEntreprisesEntity, parentEnterpriseId } from '$lib/entity-routes.js';
 	import {
@@ -102,7 +103,7 @@
 
 <header class="detail-top desktop-head">
 	<div class="detail-top-start">
-		<button type="button" class="icon-hit" aria-label="Back" onclick={backToEnterprise}>
+		<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={backToEnterprise}>
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 				<path
 					d="M10 3.5 5.5 8 10 12.5"
@@ -113,13 +114,13 @@
 				/>
 			</svg>
 		</button>
-		<span class="detail-top-label">View</span>
+		<span class="detail-top-label">{t('detail.view')}</span>
 	</div>
 	<div class="detail-top-actions">
 		<button
 			type="button"
 			class="icon-hit"
-			aria-label={editing ? 'Done editing' : 'Edit'}
+			aria-label={editing ? t('common.done') : t('common.edit')}
 			aria-pressed={editing}
 			onclick={() => {
 				editing = !editing;
@@ -136,7 +137,7 @@
 		<input
 			class="title-input"
 			value={view.title ?? ''}
-			placeholder="Untitled view"
+			placeholder={t('ent.untitledView')}
 			oninput={(e) => void persist({ title: e.currentTarget.value })}
 		/>
 
@@ -147,7 +148,7 @@
 					type="button"
 					class="meta-pill"
 					class:empty={!enterprise}
-					aria-label="Enterprise"
+					aria-label={t('nav.enterprise')}
 					aria-expanded={menu === 'enterprise'}
 					onclick={() => (menu = menu === 'enterprise' ? null : 'enterprise')}
 				>
@@ -155,24 +156,24 @@
 						<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={18} />
 						<span class="pill-v">{enterprise.title}</span>
 					{:else}
-						<span class="pill-v muted">Enterprise</span>
+						<span class="pill-v muted">{t('nav.enterprise')}</span>
 					{/if}
 				</button>
 			</div>
 		</div>
 
 		<label class="desc-field">
-			<span class="sr-only">Description</span>
+			<span class="sr-only">{t('ent.description')}</span>
 			<textarea
 				class="desc-input"
 				rows="2"
-				placeholder="Description"
+				placeholder={t('ent.description')}
 				value={view.description ?? ''}
 				oninput={(e) => void persist({ description: e.currentTarget.value || null })}
 			></textarea>
 		</label>
 	{:else}
-		<h2 class="title">{view.title || 'Untitled view'}</h2>
+		<h2 class="title">{view.title || t('ent.untitledView')}</h2>
 		{#if enterprise}
 			<div class="meta-row" role="list">
 				<div class="meta-item" role="listitem">
@@ -190,7 +191,7 @@
 
 	<section class="block">
 		<div class="block-head">
-			<h3>Metrics</h3>
+			<h3>{t('ent.metrics')}</h3>
 			{#if editing}
 				<button
 					bind:this={addMetricBtn}
@@ -199,12 +200,12 @@
 					aria-expanded={menu === 'add-metric'}
 					onclick={() => (menu = menu === 'add-metric' ? null : 'add-metric')}
 				>
-					+ Add
+					+ {t('common.add')}
 				</button>
 			{/if}
 		</div>
 		{#if linkedMetrics.length === 0}
-			<p class="hint">No metrics in this view yet.</p>
+			<p class="hint">{t('detail.noMetricsInView')}</p>
 		{:else}
 			<ul class="ordered-list">
 				{#each linkedMetrics as m, i (m.id)}
@@ -214,7 +215,7 @@
 								<button
 									type="button"
 									class="order"
-									aria-label="Move up"
+									aria-label={t('ent.moveUp')}
 									disabled={i === 0}
 									onclick={() => void move('metric_ids', i, -1)}
 								>
@@ -223,7 +224,7 @@
 								<button
 									type="button"
 									class="order"
-									aria-label="Move down"
+									aria-label={t('ent.moveDown')}
 									disabled={i === linkedMetrics.length - 1}
 									onclick={() => void move('metric_ids', i, 1)}
 								>
@@ -243,7 +244,7 @@
 							<button
 								type="button"
 								class="rm"
-								aria-label="Remove from view"
+								aria-label={t('ent.removeFromView')}
 								onclick={() => void removeId('metric_ids', m.id)}>×</button
 							>
 						{/if}
@@ -255,7 +256,7 @@
 
 	<section class="block">
 		<div class="block-head">
-			<h3>Tables</h3>
+			<h3>{t('ent.tables')}</h3>
 			{#if editing}
 				<button
 					bind:this={addTableBtn}
@@ -264,23 +265,23 @@
 					aria-expanded={menu === 'add-table'}
 					onclick={() => (menu = menu === 'add-table' ? null : 'add-table')}
 				>
-					+ Add
+					+ {t('common.add')}
 				</button>
 			{/if}
 		</div>
 		{#if linkedTables.length === 0}
-			<p class="hint">No tables in this view yet.</p>
+			<p class="hint">{t('detail.noTablesInView')}</p>
 		{:else}
 			<ul class="ordered-list">
-				{#each linkedTables as t, i (t.id)}
-					{@const n = tableRows.filter((r) => r.table_id === t.id).length}
+				{#each linkedTables as tbl, i (tbl.id)}
+					{@const n = tableRows.filter((r) => r.table_id === tbl.id).length}
 					<li class="ordered-row">
 						{#if editing}
 							<div class="order-btns">
 								<button
 									type="button"
 									class="order"
-									aria-label="Move up"
+									aria-label={t('ent.moveUp')}
 									disabled={i === 0}
 									onclick={() => void move('table_ids', i, -1)}
 								>
@@ -289,7 +290,7 @@
 								<button
 									type="button"
 									class="order"
-									aria-label="Move down"
+									aria-label={t('ent.moveDown')}
 									disabled={i === linkedTables.length - 1}
 									onclick={() => void move('table_ids', i, 1)}
 								>
@@ -300,17 +301,17 @@
 						<button
 							type="button"
 							class="table-row"
-							onclick={() => openEntreprisesEntity('table', t.id)}
+							onclick={() => openEntreprisesEntity('table', tbl.id)}
 						>
-							<span class="t-title">{t.title}</span>
-							<span class="t-meta">{n} entries</span>
+							<span class="t-title">{tbl.title}</span>
+							<span class="t-meta">{t('common.entries', { n })}</span>
 						</button>
 						{#if editing}
 							<button
 								type="button"
 								class="rm"
-								aria-label="Remove from view"
-								onclick={() => void removeId('table_ids', t.id)}>×</button
+								aria-label={t('ent.removeFromView')}
+								onclick={() => void removeId('table_ids', tbl.id)}>×</button
 							>
 						{/if}
 					</li>
@@ -331,7 +332,7 @@
 	>
 		<div class="float-list" role="listbox">
 			<button type="button" class="option" onclick={() => void setEnterprise(null)}>
-				<span class="option-text muted">None</span>
+				<span class="option-text muted">{t('common.none')}</span>
 			</button>
 			{#each enterprises as ent (ent.id)}
 				<button
@@ -358,7 +359,7 @@
 	>
 		<div class="float-list" role="listbox">
 			{#if unusedMetrics.length === 0}
-				<p class="menu-empty">All metrics already listed</p>
+				<p class="menu-empty">{t('ent.allMetricsListed')}</p>
 			{:else}
 				{#each unusedMetrics as m (m.id)}
 					<button type="button" class="option" onclick={() => void addId('metric_ids', m.id)}>
@@ -380,7 +381,7 @@
 	>
 		<div class="float-list" role="listbox">
 			{#if unusedTables.length === 0}
-				<p class="menu-empty">All tables already listed</p>
+				<p class="menu-empty">{t('ent.allTablesListed')}</p>
 			{:else}
 				{#each unusedTables as t (t.id)}
 					<button type="button" class="option" onclick={() => void addId('table_ids', t.id)}>

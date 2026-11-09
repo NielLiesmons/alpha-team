@@ -14,6 +14,7 @@
 	import NoteEditor from './NoteEditor.svelte';
 	import EditorToolbar from './EditorToolbar.svelte';
 	import { goto } from '$app/navigation';
+	import { t } from '$lib/i18n.svelte.js';
 	import { countTaskMoments } from '$lib/moment-expand.js';
 	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
@@ -28,21 +29,21 @@
 	} from '$lib/workspace.svelte.js';
 
 	const statuses = [
-		{ value: 'backlog', label: 'Backlog' },
-		{ value: 'open', label: 'Open' },
-		{ value: 'planned', label: 'Planned' },
-		{ value: 'inProgress', label: 'In progress' },
-		{ value: 'inReview', label: 'In review' },
-		{ value: 'closed', label: 'Closed' },
-		{ value: 'canceled', label: 'Canceled' }
+		{ value: 'backlog', labelKey: 'tasks.statusBacklog' },
+		{ value: 'open', labelKey: 'tasks.statusOpen' },
+		{ value: 'planned', labelKey: 'tasks.statusPlanned' },
+		{ value: 'inProgress', labelKey: 'tasks.statusInProgress' },
+		{ value: 'inReview', labelKey: 'tasks.statusInReview' },
+		{ value: 'closed', labelKey: 'tasks.statusClosed' },
+		{ value: 'canceled', labelKey: 'tasks.statusCanceled' }
 	];
 
 	const priorities = [
-		{ value: 'none', label: 'None' },
-		{ value: 'low', label: 'Low' },
-		{ value: 'medium', label: 'Medium' },
-		{ value: 'high', label: 'High' },
-		{ value: 'urgent', label: 'Urgent' }
+		{ value: 'none', labelKey: 'tasks.priorityNone' },
+		{ value: 'low', labelKey: 'tasks.priorityLow' },
+		{ value: 'medium', labelKey: 'tasks.priorityMedium' },
+		{ value: 'high', labelKey: 'tasks.priorityHigh' },
+		{ value: 'urgent', labelKey: 'tasks.priorityUrgent' }
 	];
 
 	let title = $state('');
@@ -159,9 +160,9 @@
 
 	/** @param {string} text */
 	function addLabel(text) {
-		const t = text.trim();
-		if (!t) return;
-		if (!labels.includes(t)) labels = [...labels, t];
+		const label = text.trim();
+		if (!label) return;
+		if (!labels.includes(label)) labels = [...labels, label];
 	}
 
 	/** @param {string} text */
@@ -220,7 +221,7 @@
 
 <CreateSheet
 	{open}
-	label={editing ? 'Edit task' : 'New task'}
+	label={editing ? t('tasks.task') : t('create.task')}
 	onclose={() => {
 		if (bottomMenu) {
 			bottomMenu = null;
@@ -235,7 +236,7 @@
 				bind:this={statusBtn}
 				type="button"
 				class="icon-hit"
-				aria-label="Set task status"
+				aria-label={t('meta.status')}
 				aria-expanded={statusOpen}
 				onpointerdown={keepKeyboard}
 				onclick={() => {
@@ -250,9 +251,9 @@
 		<input
 			bind:this={titleInput}
 			class="task-title-input"
-			placeholder="Title of Task"
+			placeholder={t('tasks.titlePlaceholder')}
 			bind:value={title}
-			aria-label="Task title"
+			aria-label={t('tasks.titlePlaceholder')}
 		/>
 
 		<div class="priority-wrapper">
@@ -260,7 +261,7 @@
 				bind:this={priorityBtn}
 				type="button"
 				class="icon-hit"
-				aria-label="Set task priority"
+				aria-label={t('meta.priority')}
 				aria-expanded={priorityOpen}
 				onpointerdown={keepKeyboard}
 				onclick={() => {
@@ -279,7 +280,7 @@
 		{#if open}
 			<NoteEditor
 				value={body}
-				placeholder="Type / for commands"
+				placeholder={t('tasks.typeCommands')}
 				onChange={(html) => (body = html)}
 				onReady={(ed) => (tipTap = ed)}
 			/>
@@ -301,7 +302,7 @@
 					class="meta-pill"
 					class:empty={!hasSchedule}
 					class:on={hasSchedule || bottomMenu === 'schedule'}
-					aria-label="Planning"
+					aria-label={t('tasks.planning')}
 					aria-expanded={bottomMenu === 'schedule'}
 					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('schedule')}
@@ -319,7 +320,7 @@
 							<NavIcon name="planning" size={15} />
 						</span>
 					{/if}
-					<span>Planning</span>
+					<span>{t('tasks.planning')}</span>
 				</button>
 			</div>
 
@@ -329,7 +330,7 @@
 					type="button"
 					class="meta-pill"
 					class:empty={projectIds.length === 0}
-					aria-label="Projects"
+					aria-label={t('tasks.projects')}
 					aria-expanded={bottomMenu === 'projects'}
 					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('projects')}
@@ -344,7 +345,7 @@
 					type="button"
 					class="labels-trigger"
 					class:has-labels={labels.length > 0}
-					aria-label="Add labels"
+					aria-label={t('tasks.addLabels')}
 					aria-expanded={bottomMenu === 'labels'}
 					onpointerdown={keepKeyboard}
 					onclick={() => toggleBottom('labels')}
@@ -365,9 +366,9 @@
 
 		<PrimaryButton size="sheet" disabled={!title.trim() || saving} onclick={save}>
 			{#if saving}
-				<Spinner size={14} label="Saving" />
+				<Spinner size={14} label={t('common.saving')} />
 			{/if}
-			{editing ? 'Save' : 'Publish'}
+			{editing ? t('common.save') : t('tasks.publish')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>
@@ -392,7 +393,7 @@
 				}}
 			>
 				<TaskBox state={opt.value} size={18} />
-				<span class="option-text">{opt.label}</span>
+				<span class="option-text">{t(opt.labelKey)}</span>
 			</button>
 		{/each}
 	</div>
@@ -419,7 +420,7 @@
 				}}
 			>
 				<PriorityBox priority={opt.value} size={18} />
-				<span class="option-text">{opt.label}</span>
+				<span class="option-text">{t(opt.labelKey)}</span>
 			</button>
 		{/each}
 	</div>
@@ -435,38 +436,37 @@
 >
 	<div class="schedule-panel">
 		<label class="date-field">
-			<span class="date-label">Deadline</span>
+			<span class="date-label">{t('tasks.deadline')}</span>
 			<input class="date-input" type="date" bind:value={deadlineDate} />
 		</label>
 
 		<div class="moments-block">
-			<span class="date-label">Moments</span>
+			<span class="date-label">{t('tasks.moments')}</span>
 			<p class="moments-copy">
 				{#if momentCount > 0}
-					{momentCount.toLocaleString()} linked moment{momentCount === 1 ? '' : 's'} (incl. recurring
-					series).
+					{t('tasks.linkedMoments', { n: momentCount.toLocaleString() })}
 				{:else}
-					Schedule one-off or daily series on the Planning board — not here.
+					{t('tasks.planningHint')}
 				{/if}
 			</p>
 			<button type="button" class="planning-link" onclick={openPlanningForTask}>
-				Open Planning
+				{t('tasks.openPlanning')}
 			</button>
 			<details class="one-off">
-				<summary>Optional one-off window</summary>
+				<summary>{t('tasks.optionalWindow')}</summary>
 				<label class="date-field">
-					<span class="date-label">Start</span>
+					<span class="date-label">{t('tasks.start')}</span>
 					<input class="date-input" type="date" bind:value={scheduleStart} />
 				</label>
 				<label class="date-field">
-					<span class="date-label">End</span>
+					<span class="date-label">{t('tasks.end')}</span>
 					<input class="date-input" type="date" bind:value={scheduleEnd} />
 				</label>
 			</details>
 		</div>
 
 		<div class="assignee-block">
-			<span class="date-label">Assignees</span>
+			<span class="date-label">{t('tasks.assignees')}</span>
 			<div class="float-list assignee-list" role="listbox">
 				{#each people as person (person.email)}
 					{@const on = assignees.some((a) => a.email === person.email)}
@@ -501,7 +501,7 @@
 >
 	<div class="float-list" role="listbox">
 		{#if projects.length === 0}
-			<p class="menu-empty">No projects yet</p>
+			<p class="menu-empty">{t('tasks.noProjects')}</p>
 		{:else}
 			{#each projects as project (project.id)}
 				{@const on = projectIds.includes(project.id)}

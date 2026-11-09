@@ -18,6 +18,7 @@
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import { redirectToReturnToIfAny } from '$lib/return-to.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	/** @type {'pick' | 'code' | 'password'} */
 	let step = $state('code');
@@ -78,7 +79,7 @@
 		error = '';
 		const raw = invitePayload.trim();
 		if (!raw) {
-			error = 'Paste your invite code or link.';
+			error = t('welcome.pasteInvite');
 			return;
 		}
 		try {
@@ -136,7 +137,7 @@
 		</div>
 
 		{#if step === 'pick'}
-			<p class="hint-line">Who’s using this device?</p>
+			<p class="hint-line">{t('welcome.whosUsing')}</p>
 					<ul class="pick-list">
 				{#each deviceProfiles as p (p.email)}
 					<li>
@@ -162,16 +163,16 @@
 					</li>
 				{/each}
 			</ul>
-			<button type="button" class="ghost" onclick={() => (step = 'code')}>Add another with a code</button>
+			<button type="button" class="ghost" onclick={() => (step = 'code')}>{t('welcome.addWithCode')}</button>
 		{:else if step === 'code'}
 			<label class="field solo">
-				<span class="sr-only">Invite code</span>
+				<span class="sr-only">{t('welcome.inviteCode')}</span>
 				<textarea
 					bind:this={focusEl}
 					rows="3"
 					bind:value={invitePayload}
 					spellcheck="false"
-					placeholder="Paste invite code or link"
+					placeholder={t('welcome.pasteInvite')}
 					onkeydown={onCodeKeydown}
 				></textarea>
 			</label>
@@ -184,21 +185,21 @@
 				disabled={!invitePayload.trim()}
 				onclick={goPassword}
 			>
-				Continue
+				{t('common.continue')}
 			</button>
 			{#if canPick}
-				<button type="button" class="ghost" onclick={() => (step = 'pick')}>Choose existing profile</button>
+				<button type="button" class="ghost" onclick={() => (step = 'pick')}>{t('welcome.chooseProfile')}</button>
 			{/if}
 		{:else}
-			<p class="hint-line">Enter the passphrase for this invite</p>
+			<p class="hint-line">{t('welcome.enterPassphrase')}</p>
 			<label class="field solo">
-				<span class="sr-only">Passphrase</span>
+				<span class="sr-only">{t('welcome.passphrase')}</span>
 				<input
 					bind:this={focusEl}
 					type="password"
 					bind:value={invitePass}
 					autocomplete="off"
-					placeholder="Passphrase"
+					placeholder={t('welcome.passphrase')}
 					onkeydown={(e) => e.key === 'Enter' && submitPassword()}
 				/>
 			</label>
@@ -211,9 +212,9 @@
 				disabled={busy || !invitePass.trim()}
 				onclick={submitPassword}
 			>
-				{busy ? 'Connecting…' : 'Enter'}
+				{busy ? t('common.connecting') : t('welcome.enter')}
 			</button>
-			<button type="button" class="ghost" disabled={busy} onclick={backToCode}>Back</button>
+			<button type="button" class="ghost" disabled={busy} onclick={backToCode}>{t('common.back')}</button>
 		{/if}
 	</div>
 </main>

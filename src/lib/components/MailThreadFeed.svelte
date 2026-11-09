@@ -97,7 +97,7 @@
 		const plain = String(replyMsg.body || '')
 			.replace(/\s+/g, ' ')
 			.trim();
-		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain || 'Message';
+		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain || t('mail.message');
 		return {
 			name,
 			text,
@@ -203,7 +203,7 @@
 					type: 'status',
 					id: `status-${c.id}`,
 					at: String(c.created_at || ''),
-					text: String(c.body || '').trim() || 'Updated this conversation',
+					text: String(c.body || '').trim() || t('chat.updatedConversation'),
 					email: author,
 					name: displayNameFromEmail(c.author)
 				});
@@ -452,7 +452,7 @@
 			<div class="composer-pill" class:chrome-expanded={chromeExpanded}>
 				{#if replyPreview}
 					<div class="composer-quote-wrap">
-						<div class="composer-quote" role="group" aria-label={`Replying to ${replyPreview.name}`}>
+						<div class="composer-quote" role="group" aria-label={t('mail.replyingTo', { name: replyPreview.name })}>
 							<div
 								class="composer-quote-bar"
 								style:background={replyPreview.accent}
@@ -467,14 +467,14 @@
 							<button
 								type="button"
 								class="composer-quote-clear"
-								aria-label="Cancel reply"
+								aria-label={t('mail.cancelReply')}
 								onclick={clearReply}>×</button
 							>
 						</div>
 					</div>
 				{/if}
 				<div class="composer-row">
-					<button type="button" class="side-btn plus" aria-label="Attach" disabled>
+					<button type="button" class="side-btn plus" aria-label={t('mail.attach')} disabled>
 						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 							<path
 								d="M9 3.5v11M3.5 9h11"
@@ -489,19 +489,19 @@
 							bind:this={inputEl}
 							class="composer-input"
 							rows="1"
-							placeholder={replyMsg ? 'Reply' : 'Message'}
+							placeholder={replyMsg ? t('mail.reply') : t('mail.message')}
 							bind:value={draft}
 							oninput={onInput}
 							onscroll={updateInputFade}
 							onkeydown={onKey}
-							aria-label="Message"
+							aria-label={t('mail.message')}
 						></textarea>
 					</div>
 					{#if canSend}
 						<button
 							type="button"
 							class="side-btn send"
-							aria-label="Send"
+							aria-label={t('mail.send')}
 							disabled={chatUi.posting}
 							onclick={() => void send()}
 						>
@@ -511,9 +511,9 @@
 						<button
 							type="button"
 							class="side-btn mic"
-							aria-label="Voice message"
+							aria-label={t('mail.voiceMessage')}
 							disabled
-							title="Voice coming soon"
+							title={t('mail.voiceSoon')}
 						>
 							<Voice size={22} />
 						</button>

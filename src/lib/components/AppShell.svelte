@@ -21,7 +21,6 @@
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
 	import { bindDetailPopstate, isMobileNav } from '$lib/nav-stack.js';
 	import {
-		PLANNING_ZOOM_LABELS,
 		PLANNING_ZOOMS,
 		planningView,
 		setPlanningZoom
@@ -55,39 +54,40 @@
 	const tasksList = $derived(path.startsWith('/tasks'));
 
 	const filterOptions = $derived.by(() => {
+		locale.value;
 		if (path.startsWith('/notes')) {
 			return [
-				{ id: 'all', label: 'All' },
-				{ id: 'recent', label: 'Recent' },
-				{ id: 'linked', label: 'With project' },
-				{ id: 'unlinked', label: 'Unlinked' }
+				{ id: 'all', label: t('filter.all') },
+				{ id: 'recent', label: t('filter.recent') },
+				{ id: 'linked', label: t('filter.linked') },
+				{ id: 'unlinked', label: t('filter.unlinked') }
 			];
 		}
 		if (path.startsWith('/projects')) {
 			return [
-				{ id: 'all', label: 'All' },
-				{ id: 'active', label: 'Active' },
-				{ id: 'archived', label: 'Archived' }
+				{ id: 'all', label: t('filter.all') },
+				{ id: 'active', label: t('filter.active') },
+				{ id: 'archived', label: t('filter.archived') }
 			];
 		}
 		if (path.startsWith('/entreprises')) {
 			return [
-				{ id: 'all', label: 'All' },
-				{ id: 'active', label: 'Active' },
-				{ id: 'closed', label: 'Closed' }
+				{ id: 'all', label: t('filter.all') },
+				{ id: 'active', label: t('filter.active') },
+				{ id: 'closed', label: t('filter.closed') }
 			];
 		}
 		if (path.startsWith('/tasks')) {
 			return [
-				{ id: 'all', label: 'All' },
-				{ id: 'open', label: 'Open' },
-				{ id: 'done', label: 'Done' }
+				{ id: 'all', label: t('filter.all') },
+				{ id: 'open', label: t('filter.open') },
+				{ id: 'done', label: t('filter.done') }
 			];
 		}
 		if (path.startsWith('/mail')) {
 			return [
-				{ id: 'all', label: 'All' },
-				{ id: 'unread', label: 'Unread' }
+				{ id: 'all', label: t('filter.all') },
+				{ id: 'unread', label: t('filter.unread') }
 			];
 		}
 		return null;
@@ -108,7 +108,11 @@
 				'/projects': 'nav.projects',
 				'/tasks': 'nav.tasks',
 				'/notes': 'nav.notes',
+				'/entreprises': 'nav.entreprises',
 				'/planning': 'nav.planning',
+				'/website': 'nav.website',
+				'/website/shop': 'nav.shop',
+				'/website/content': 'nav.content',
 				'/publications': 'nav.publications',
 				'/settings': 'nav.settings'
 			}[href] || '';
@@ -184,16 +188,19 @@
 	/** Planning / Drive own list actions; Mail keeps filter + plus with custom title. */
 	const customChrome = $derived(planningList || driveList);
 
-	const createMenuItems = [
-		{ kind: 'task', label: 'New task' },
-		{ kind: 'project', label: 'New project' },
-		{ kind: 'note', label: 'New note' },
-		{ kind: 'newsletter', label: 'New newsletter' },
-		{ kind: 'ledger', label: 'New ledger entry' },
-		{ kind: 'cost', label: 'New cost' },
-		{ kind: 'sales', label: 'New sales line' },
-		{ kind: 'enterprise', label: 'New enterprise' }
-	];
+	const createMenuItems = $derived.by(() => {
+		locale.value;
+		return [
+			{ kind: 'task', label: t('create.task') },
+			{ kind: 'project', label: t('create.project') },
+			{ kind: 'note', label: t('create.note') },
+			{ kind: 'newsletter', label: t('create.newsletter') },
+			{ kind: 'ledger', label: t('create.ledger') },
+			{ kind: 'cost', label: t('create.cost') },
+			{ kind: 'sales', label: t('create.sales') },
+			{ kind: 'enterprise', label: t('create.enterprise') }
+		];
+	});
 
 	onMount(() =>
 		bindDetailPopstate({
@@ -311,10 +318,10 @@
 
 	{#snippet listActionsSlot()}
 		{#if planningList}
-			<div class="zoom-seg" role="group" aria-label="Timeframe">
+			<div class="zoom-seg" role="group" aria-label={t('planning.timeframe')}>
 				{#each PLANNING_ZOOMS as z (z)}
 					<button type="button" class:on={planningView.zoom === z} onclick={() => setPlanningZoom(z)}
-						>{PLANNING_ZOOM_LABELS[z]}</button
+						>{t(`planning.${z}`)}</button
 					>
 				{/each}
 			</div>
@@ -323,7 +330,7 @@
 				<button
 					type="button"
 					class="chrome-btn list-plus"
-					aria-label={createKind === 'file' ? 'Upload file' : `New ${createKind}`}
+					aria-label={createKind === 'file' ? t('create.file') : t('create.newKind', { kind: createKind })}
 					onclick={onListPlus}
 				>
 					<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">

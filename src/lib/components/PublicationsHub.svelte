@@ -20,6 +20,7 @@
 		refreshPublications
 	} from '$lib/publications.svelte.js';
 	import { getAdminToken } from '$lib/mail-api.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import { clearSelection, openComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	/** @type {{ filterKind?: string | null, onViewAll?: () => void }} */
@@ -81,11 +82,9 @@
 
 	/** @param {ReturnType<typeof buildPubsFeed>[number]} item */
 	async function deleteItem(item) {
-		const label = item.title || 'this publication';
+		const label = item.title || t('common.untitled');
 		if (
-			!confirm(
-				`Delete “${label}”? This removes it from the public site${item.source === 'campaign' ? ' and the letter record' : ''}. Subscribers are not emailed.`
-			)
+			!confirm(t('pub.deleteConfirm', { label }))
 		)
 			return;
 		actionBusy = true;
@@ -119,9 +118,9 @@
 
 	/** @param {string} bucket */
 	function bucketLabel(bucket) {
-		if (bucket === 'blog' || bucket === 'letter') return 'Blog';
-		if (bucket === 'event') return 'Event';
-		if (bucket === 'post') return 'Post';
+		if (bucket === 'blog' || bucket === 'letter') return t('pub.blog');
+		if (bucket === 'event') return t('pub.event');
+		if (bucket === 'post') return t('pub.post');
 		return bucket;
 	}
 
@@ -151,7 +150,7 @@
 
 	/** @param {string} id */
 	async function ban(id) {
-		if (!confirm('Reject this comment and ban the email from commenting on this project?')) return;
+		if (!confirm(t('pub.rejectBanConfirm'))) return;
 		commentBusy = id;
 		try {
 			await persistBanComment(id);
@@ -170,15 +169,15 @@
 <div class="hub">
 	<div class="hub-bar">
 		<p class="lede">
-			Letters, posts, and events in one place. Blog letters mail subscribers and land on the site.
+			{t('pub.hubHint')}
 		</p>
 		<div class="hub-actions">
 			<button
 				type="button"
 				class="geek"
-				aria-label="Mail & comments settings"
+				aria-label={t('pub.mailComments')}
 				aria-expanded={settingsOpen}
-				title="Welcome, footer, branding, comments"
+				title={t('pub.welcomeFooterComments')}
 				onclick={() => (settingsOpen = !settingsOpen)}
 			>
 				<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -194,7 +193,7 @@
 			<button
 				type="button"
 				class="add"
-				aria-label="New letter"
+				aria-label={t('pub.newLetter')}
 				onclick={() => openComposer('newsletter')}
 			>
 				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -205,7 +204,7 @@
 	</div>
 
 	{#if settingsOpen}
-		<div class="settings-sheet" role="group" aria-label="Mail settings">
+		<div class="settings-sheet" role="group" aria-label={t('detail.mailSettings')}>
 			<button
 				type="button"
 				class="row"
@@ -218,8 +217,8 @@
 					openComposer('welcome');
 				}}
 			>
-				<span class="row-title">Welcome message</span>
-				<span class="row-meta">{mailSettings.welcome.enabled ? 'On' : 'Off'}</span>
+				<span class="row-title">{t('pub.welcomeMessage')}</span>
+				<span class="row-meta">{mailSettings.welcome.enabled ? t('pub.on') : t('pub.off')}</span>
 			</button>
 			<button
 				type="button"
@@ -229,8 +228,8 @@
 					openComposer('welcome');
 				}}
 			>
-				<span class="row-title">Footer & branding</span>
-				<span class="row-meta">Shared</span>
+				<span class="row-title">{t('pub.footerBranding')}</span>
+				<span class="row-meta">{t('pub.shared')}</span>
 			</button>
 			<button
 				type="button"
@@ -240,33 +239,33 @@
 					commentsOpen = true;
 				}}
 			>
-				<span class="row-title">Comments moderation</span>
+				<span class="row-title">{t('pub.commentsModeration')}</span>
 				<span class="row-meta"
-					>{pendingCount > 0 ? `${pendingCount} pending` : 'Reject / ban'}</span
+					>{pendingCount > 0 ? t('pub.pending', { n: pendingCount }) : t('detail.rejectBan')}</span
 				>
 			</button>
 		</div>
 	{/if}
 
 	{#if commentsOpen}
-		<section class="pending" aria-label="Comments moderation">
+		<section class="pending" aria-label={t('pub.commentsModeration')}>
 			<button type="button" class="pending-label as-btn" onclick={() => (commentsOpen = false)}>
-				Comments · {moderationComments.length}{#if pendingCount > 0}
-					· {pendingCount} pending{/if}
+				{t('comments.title')} · {moderationComments.length}{#if pendingCount > 0}
+					· {t('pub.pending', { n: pendingCount })}{/if}
 			</button>
 			<p class="pending-hint">
 				Confirmed subscribers publish live. Reject or ban here for takedown.
 			</p>
 			{#if moderationComments.length === 0}
-				<p class="pending-empty">No comments yet.</p>
+				<p class="pending-empty">{t('pub.noComments')}.</p>
 			{:else}
 				{#each moderationComments as c (c.id)}
 					<div class="pending-card" class:is-pending={c.status === 'pending'}>
 						<p class="pending-meta">
 							<span class="status" data-status={c.status}>{c.status}</span>
 							{c.author_email || c.author_display}
-							{#if c.commenter_banned}<span class="trusted">banned</span>
-							{:else if c.commenter_trusted}<span class="trusted">trusted</span>{/if}
+							{#if c.commenter_banned}<span class="trusted">{t('pub.banned')}</span>
+							{:else if c.commenter_trusted}<span class="trusted">{t('pub.trusted')}</span>{/if}
 							· {c.post_slug}
 							{#if c.created_at}· {formatWhen(c.created_at)}{/if}
 						</p>
@@ -278,20 +277,20 @@
 										type="button"
 										class="act"
 										disabled={commentBusy === c.id}
-										onclick={() => void approve(c.id)}>Approve</button
+										onclick={() => void approve(c.id)}>{t('pub.approve')}</button
 									>
 								{/if}
 								<button
 									type="button"
 									class="act danger"
 									disabled={commentBusy === c.id}
-									onclick={() => void reject(c.id)}>Reject</button
+									onclick={() => void reject(c.id)}>{t('pub.reject')}</button
 								>
 								<button
 									type="button"
 									class="act danger"
 									disabled={commentBusy === c.id || c.commenter_banned}
-									onclick={() => void ban(c.id)}>Ban email</button
+									onclick={() => void ban(c.id)}>{t('pub.banEmail')}</button
 								>
 							</div>
 						{/if}
@@ -301,19 +300,19 @@
 		</section>
 	{:else}
 		<button type="button" class="comments-chip" onclick={() => (commentsOpen = true)}>
-			Comments{#if pendingCount > 0}
-				· {pendingCount} pending{/if}
+			{t('comments.title')}{#if pendingCount > 0}
+				· {t('pub.pending', { n: pendingCount })}{/if}
 		</button>
 	{/if}
 
 	{#if !getAdminToken()}
-		<p class="empty">Add the Publications API token in Settings to load the feed.</p>
+		<p class="empty">{t('pub.addToken')}</p>
 	{:else if pubsUi.error}
 		<p class="empty err" role="alert">{pubsUi.error}</p>
 	{:else if pubsUi.loading && campaigns.length === 0 && feed.length === 0}
-		<p class="empty">Loading…</p>
+		<p class="empty">{t('common.loading')}</p>
 	{:else if items.length === 0}
-		<p class="empty">Nothing published yet — + to compose a letter.</p>
+		<p class="empty">{t('pub.nothingYet')}</p>
 	{:else}
 		<div class="feed">
 			{#each items as item (item.key)}
@@ -327,7 +326,7 @@
 						<span class="row-title">{item.title}</span>
 						<span class="row-meta"
 							>{bucketLabel(item.bucket)}{#if item.updatedAt}
-								· edited{/if}{#if item.status}
+								· {t('pub.edited')}{/if}{#if item.status}
 								· {item.status}{/if}{#if item.when}
 								· {formatWhen(item.when)}{/if}</span
 						>
@@ -337,17 +336,17 @@
 							type="button"
 							class="act"
 							disabled={actionBusy}
-							aria-label="Edit"
-							title="Edit"
-							onclick={() => editItem(item)}>Edit</button
+							aria-label={t('common.edit')}
+							title={t('common.edit')}
+							onclick={() => editItem(item)}>{t('common.edit')}</button
 						>
 						<button
 							type="button"
 							class="act danger"
 							disabled={actionBusy}
-							aria-label="Delete"
-							title="Delete"
-							onclick={() => void deleteItem(item)}>Del</button
+							aria-label={t('common.delete')}
+							title={t('common.delete')}
+							onclick={() => void deleteItem(item)}>{t('pub.del')}</button
 						>
 					</div>
 				</div>
@@ -355,7 +354,7 @@
 		</div>
 	{/if}
 
-	<button type="button" class="view-all-fab" onclick={viewAll}>View all</button>
+	<button type="button" class="view-all-fab" onclick={viewAll}>{t('common.viewAll')}</button>
 </div>
 
 <style>

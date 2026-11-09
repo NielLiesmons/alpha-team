@@ -3,18 +3,19 @@
 	 * List chrome title for Mail — Inbox/Sent/… via design-system dropdown.
 	 */
 	import {
-		MAIL_FOLDER_LABELS,
 		MAIL_FOLDERS,
+		mailFolderLabel,
 		mailView,
 		setMailFolder
 	} from '$lib/mail-view.svelte.js';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let open = $state(false);
 	/** @type {HTMLButtonElement | undefined} */
 	let anchorEl = $state();
 
-	const label = $derived(MAIL_FOLDER_LABELS[mailView.folder] || 'Inbox');
+	const label = $derived(mailFolderLabel(mailView.folder) || t('mail.inbox'));
 
 	function toggle() {
 		open = !open;
@@ -72,16 +73,16 @@
 	</button>
 
 	{#if open}
-		<button type="button" class="menu-scrim" aria-label="Close mailbox menu" onclick={close}
+		<button type="button" class="menu-scrim" aria-label={t('mail.closeMailboxMenu')} onclick={close}
 		></button>
-		<div class="folder-menu" role="listbox" aria-label="Mailbox">
+		<div class="folder-menu" role="listbox" aria-label={t('mail.mailbox')}>
 			{#each MAIL_FOLDERS as f (f)}
 				<button
 					type="button"
 					role="option"
 					aria-selected={mailView.folder === f}
 					class:on={mailView.folder === f}
-					onclick={() => pick(f)}>{MAIL_FOLDER_LABELS[f]}</button
+					onclick={() => pick(f)}>{mailFolderLabel(f)}</button
 				>
 			{/each}
 		</div>

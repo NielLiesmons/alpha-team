@@ -2,6 +2,7 @@
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import ProjectCard from '$lib/components/ProjectCard.svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
@@ -52,7 +53,7 @@
 	}
 </script>
 
-<svelte:head><title>Projects</title></svelte:head>
+<svelte:head><title>{t('projects.title')}</title></svelte:head>
 
 <div class="feed">
 	{#if driveSession.error}
@@ -61,12 +62,12 @@
 	{#if !appBoot.listsReady && projects.length === 0}
 		<FeedSkeleton rows={6} />
 	{:else if projects.length === 0}
-		<p class="empty">No Projects yet</p>
+		<p class="empty">{t('projects.empty')}</p>
 		<button type="button" class="empty-add" onclick={() => openComposer('project')}>
-			Create project
+			{t('projects.create')}
 		</button>
 	{:else if sorted.length === 0}
-		<p class="empty">No projects match this filter</p>
+		<p class="empty">{t('projects.emptyFilter')}</p>
 	{:else}
 		<div class="card-stack">
 			{#each sorted as project (project.id)}

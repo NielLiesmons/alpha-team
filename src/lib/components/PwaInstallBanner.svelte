@@ -5,6 +5,7 @@
 		pwaUi,
 		shouldShowInstallCoach
 	} from '$lib/pwa.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let open = $state(false);
 
@@ -27,24 +28,21 @@
 	<aside class="coach" role="status">
 		<div class="copy">
 			{#if pwaUi.ios}
-				<strong>Install Alpha on this iPhone</strong>
-				<p>
-					Tap <b>Share</b> → <b>Add to Home Screen</b>, then open the new icon. That unlocks
-					notifications when Alpha is closed.
-				</p>
+				<strong>{t('welcome.installAlpha')}</strong>
+				<p>{t('pwa.iosHint')}</p>
 			{:else if pwaUi.canInstall}
-				<strong>Install Alpha</strong>
-				<p>Add it to your home screen for push notifications and faster launches.</p>
+				<strong>{t('welcome.installAlpha')}</strong>
+				<p>{t('pwa.browserHint')}</p>
 			{:else}
-				<strong>Install Alpha</strong>
-				<p>Use your browser menu → Install app / Add to Home Screen for notifications offline.</p>
+				<strong>{t('welcome.installAlpha')}</strong>
+				<p>{t('pwa.browserHint')}</p>
 			{/if}
 		</div>
 		<div class="actions">
 			{#if !pwaUi.ios && pwaUi.canInstall}
-				<button type="button" class="btn" onclick={install}>Install</button>
+				<button type="button" class="btn" onclick={install}>{t('welcome.install')}</button>
 			{/if}
-			<button type="button" class="btn ghost" onclick={dismiss}>Not now</button>
+			<button type="button" class="btn ghost" onclick={dismiss}>{t('welcome.notNow')}</button>
 		</div>
 	</aside>
 {/if}

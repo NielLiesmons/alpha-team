@@ -4,6 +4,7 @@
 	import PrimaryButton from './PrimaryButton.svelte';
 	import { members } from '$lib/actor.svelte.js';
 	import { sendMail } from '$lib/mail.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import { closeComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	let toRaw = $state('');
@@ -69,14 +70,14 @@
 	}
 </script>
 
-<CreateSheet {open} label="New message" onclose={closeComposer}>
+<CreateSheet {open} label={t('mail.newMessage')} onclose={closeComposer}>
 	<div class="sheet-title-row to-row">
-		<span class="to-label">To</span>
+		<span class="to-label">{t('mail.to')}</span>
 		<input
 			bind:this={toInput}
 			class="sheet-input"
 			type="text"
-			placeholder="name@example.com"
+			placeholder={t('mail.emailPlaceholder')}
 			bind:value={toRaw}
 			autocomplete="off"
 			spellcheck="false"
@@ -91,13 +92,14 @@
 	{/if}
 	<div class="form-divider"></div>
 	<div class="sheet-title-row">
-		<input class="sheet-input" placeholder="Subject" bind:value={subject} />
+		<input class="sheet-input" placeholder={t('mail.subject')} bind:value={subject} />
 	</div>
 	<div class="form-divider"></div>
-	<textarea class="sheet-body" placeholder="Write…" rows="10" bind:value={body}></textarea>
+	<textarea class="sheet-body" placeholder={t('mail.write')} rows="10" bind:value={body}></textarea>
 	{#if err}
 		<p class="err" role="alert">{err}</p>
 	{/if}
+	<!-- TODO i18n: missing key for the Space Drive / SMTP hint -->
 	<p class="hint">
 		Stored on your Space Drive for recipients who share this Space. Internet SMTP / IMAP is not wired
 		yet.
@@ -108,7 +110,7 @@
 			disabled={busy || parseRecipients(toRaw).length === 0 || (!subject.trim() && !body.trim())}
 			onclick={() => void send()}
 		>
-			{busy ? 'Sending…' : 'Send'}
+			{busy ? t('mail.sending') : t('mail.send')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>

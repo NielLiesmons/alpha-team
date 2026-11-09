@@ -13,6 +13,7 @@
 	} from '$lib/publications.svelte.js';
 	import { getAdminToken } from '$lib/mail-api.js';
 	import { clearSelection, openComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let actionBusy = $state(false);
 
@@ -47,9 +48,9 @@
 
 	/** @param {string} bucket */
 	function bucketLabel(bucket) {
-		if (bucket === 'blog' || bucket === 'letter') return 'Blog';
-		if (bucket === 'event') return 'Event';
-		if (bucket === 'post') return 'Post';
+		if (bucket === 'blog' || bucket === 'letter') return t('pub.blog');
+		if (bucket === 'event') return t('pub.event');
+		if (bucket === 'post') return t('pub.post');
 		return bucket;
 	}
 
@@ -103,7 +104,7 @@
 	}
 </script>
 
-<svelte:head><title>Publications</title></svelte:head>
+<svelte:head><title>{t('nav.publications')}</title></svelte:head>
 
 <div class="feed">
 	{#if !getAdminToken()}
@@ -113,7 +114,7 @@
 	{:else if pubsUi.error}
 		<p class="banner err" role="alert">
 			{pubsUi.error}
-			<button type="button" class="linkish" onclick={() => refreshPublications()}>Retry</button>
+			<button type="button" class="linkish" onclick={() => refreshPublications()}>{t('common.retry')}</button>
 		</p>
 	{:else if pubsUi.loading && campaigns.length === 0 && feed.length === 0}
 		<FeedSkeleton rows={5} />
@@ -122,11 +123,11 @@
 	<div class="top-bar">
 		<div class="filters" role="tablist" aria-label="Filter">
 			{#each [
-				{ id: 'all', label: 'All' },
-				{ id: 'blog', label: 'Blog' },
-				{ id: 'post', label: 'Posts' },
-				{ id: 'event', label: 'Events' },
-				{ id: 'draft', label: 'Drafts' }
+				{ id: 'all', label: t('pub.all') },
+				{ id: 'blog', label: t('pub.blog') },
+				{ id: 'post', label: t('pub.posts') },
+				{ id: 'event', label: t('pub.events') },
+				{ id: 'draft', label: t('pub.drafts') }
 			] as f (f.id)}
 				<a
 					class="chip"
@@ -141,8 +142,8 @@
 		<button
 			type="button"
 			class="geek"
-			aria-label="Mail settings"
-			title="Welcome, footer, branding"
+			aria-label={t('detail.mailSettings')}
+			title={t('pub.welcomeFooter')}
 			onclick={() => openComposer('welcome')}
 		>
 			<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -167,8 +168,8 @@
 				ondblclick={() => openComposer('welcome')}
 			>
 				<span class="title-row">
-					<span class="title">Welcome message</span>
-					<span class="meta">{mailSettings.welcome.enabled ? 'On' : 'Off'}</span>
+					<span class="title">{t('pub.welcomeMessage')}</span>
+					<span class="meta">{mailSettings.welcome.enabled ? t('pub.on') : t('pub.off')}</span>
 				</span>
 				<span class="preview">Sent when someone joins the list · footer lives here too</span>
 			</button>
@@ -192,7 +193,7 @@
 							<span class="title">{item.title}</span>
 							<span class="meta"
 								>{bucketLabel(item.bucket)}{#if item.updatedAt}
-									· edited{/if}{#if item.status && item.source === 'campaign'}
+									· {t('pub.edited')}{/if}{#if item.status && item.source === 'campaign'}
 									· {item.status}{/if}{#if item.when}
 									· {formatWhen(item.when)}{/if}</span
 							>
@@ -206,13 +207,13 @@
 							type="button"
 							class="act"
 							disabled={actionBusy}
-							onclick={() => editItem(item)}>Edit</button
+							onclick={() => editItem(item)}>{t('common.edit')}</button
 						>
 						<button
 							type="button"
 							class="act danger"
 							disabled={actionBusy}
-							onclick={() => void deleteItem(item)}>Delete</button
+							onclick={() => void deleteItem(item)}>{t('common.delete')}</button
 						>
 					</div>
 				</div>

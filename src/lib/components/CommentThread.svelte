@@ -20,6 +20,7 @@
 		postChatMessage,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import { snapFeedToBottom } from '$lib/feed-scroll.js';
 
 	/** @type {{ type: 'task' | 'note' | 'project' | 'mail', entityId: string }} */
@@ -101,12 +102,12 @@
 	const overviewExpanded = $derived(roots.length === 1);
 
 	$effect(() => {
-		const t = type;
+		const kind = type;
 		const id = entityId;
 		if (!id) return;
 		loading = true;
 		error = null;
-		loadComments(t, id)
+		loadComments(kind, id)
 			.catch((e) => {
 				error = e instanceof Error ? e.message : String(e);
 			})
@@ -125,7 +126,7 @@
 		const d = new Date(iso);
 		if (Number.isNaN(d.getTime())) return '';
 		const diff = Date.now() - d.getTime();
-		if (diff < 60_000) return 'now';
+		if (diff < 60_000) return t('chat.now');
 		if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
 		if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
 		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -279,7 +280,7 @@
 <svelte:window onkeydown={onKey} />
 
 {#if !open}
-	<button type="button" class="chat-pill" aria-label="Comments" onclick={openSheet}>
+	<button type="button" class="chat-pill" aria-label={t('comments.title')} onclick={openSheet}>
 		<svg
 			width="16"
 			height="16"
@@ -322,7 +323,7 @@
 			style:z-index={70 + depth * 2}
 			role="dialog"
 			aria-modal={isTop ? 'true' : undefined}
-			aria-label={focusId ? 'Thread' : 'Comments'}
+			aria-label={focusId ? t('comments.thread') : t('comments.title')}
 			aria-hidden={!isTop}
 		>
 			<div
@@ -331,7 +332,7 @@
 				transition:fly={{ y: depth === 0 ? 48 : 36, duration: 240, easing: cubicOut }}
 			>
 				<div class="sheet-top" aria-hidden="true">
-					<span class="sheet-title">Comments</span>
+					<span class="sheet-title">{t('comments.title')}</span>
 				</div>
 				<div
 					class="list"
@@ -339,9 +340,9 @@
 					data-panel-top={isTop ? '1' : undefined}
 				>
 					{#if loading && messages.length === 0}
-						<p class="hint">Loading…</p>
+						<p class="hint">{t('common.loading')}</p>
 					{:else if messages.length === 0}
-						<p class="hint">No comments yet</p>
+						<p class="hint">{t('comments.empty')}</p>
 					{:else if showExpanded && expandedRoot}
 						{@const rootParent =
 							focusId && expandedRoot.reply_to ? parentOf(expandedRoot) : null}
@@ -400,7 +401,9 @@
 											</div>
 											<ProfilePicStack
 												profiles={repliersFor(msg.id)}
-												text={nestedKids.length === 1 ? '1 reply' : `${nestedKids.length} replies`}
+												text={nestedKids.length === 1
+													? t('common.replyOne')
+													: t('common.replies', { n: nestedKids.length })}
 												size="sm"
 												onclick={isTop ? () => pushThread(msg.id) : null}
 											/>
@@ -436,7 +439,9 @@
 										</div>
 										<ProfilePicStack
 											profiles={repliers}
-											text={kids.length === 1 ? '1 reply' : `${kids.length} replies`}
+											text={kids.length === 1
+											? t('common.replyOne')
+											: t('common.replies', { n: kids.length })}
 											size="sm"
 											onclick={isTop ? () => pushThread(root.id) : null}
 										/>
@@ -459,19 +464,19 @@
 								{#if replyPreview}
 									<div class="reply-bar">
 										<div class="reply-meta">
-											<span class="reply-label">Reply to {replyPreview.name}</span>
+											<span class="reply-label">{t('comments.replyTo', { name: replyPreview.name })}</span>
 											<span class="reply-text">{replyPreview.text}</span>
 										</div>
 										<button
 											type="button"
 											class="reply-clear"
-											aria-label="Cancel reply"
+											aria-label={t('comments.cancelReply')}
 											onclick={clearReply}>×</button
 										>
 									</div>
 								{/if}
 								<div class="composer-row">
-									<button type="button" class="side-btn plus" aria-label="Attach" disabled>
+									<button type="button" class="side-btn plus" aria-label={t('chat.attach')} disabled>
 										<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 											<path
 												d="M9 3.5v11M3.5 9h11"
@@ -490,18 +495,18 @@
 											bind:this={inputEl}
 											class="composer-input"
 											rows="1"
-											placeholder={replyTo ? 'Reply' : 'Comment'}
+											placeholder={replyTo ? t('chat.reply') : t('common.comment')}
 											bind:value={draft}
 											oninput={onInput}
 											onscroll={updateInputFade}
-											aria-label="Comment"
+											aria-label={t('common.comment')}
 										></textarea>
 									</div>
 									{#if canSend}
 										<button
 											type="button"
 											class="side-btn send"
-											aria-label="Send"
+											aria-label={t('common.send')}
 											disabled={chatUi.posting}
 											onclick={() => void send()}
 										>
@@ -511,9 +516,9 @@
 										<button
 											type="button"
 											class="side-btn mic"
-											aria-label="Voice message"
+											aria-label={t('chat.voiceMessage')}
 											disabled
-											title="Voice coming soon"
+											title={t('mail.voiceSoon')}
 										>
 											<Voice size={22} />
 										</button>

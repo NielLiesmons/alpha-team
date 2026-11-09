@@ -129,7 +129,7 @@
 		memberBusy = true;
 		try {
 			await upsertMember({ ...m, role: roleDraft });
-			memberMsg = 'Role saved.';
+			memberMsg = t('settings.roleSaved');
 		} catch (err) {
 			memberMsg = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -141,12 +141,12 @@
 		const m = memberFor(targetEmail);
 		if (!m || !canAdminMembers) return;
 		const label = m.name || m.email;
-		if (!confirm(`Delete ${label} (${m.email}) from this Space?`)) return;
+		if (!confirm(t('settings.confirmDeleteMember', { name: `${label} (${m.email})` }))) return;
 		memberMsg = '';
 		memberBusy = true;
 		try {
 			await removeMember(m.email, { actorEmail: operatorEmail || actor.email });
-			memberMsg = 'Removed from Space.';
+			memberMsg = t('settings.removedFromSpace');
 		} catch (err) {
 			memberMsg = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -156,8 +156,8 @@
 
 	async function disconnectThisProfile() {
 		const email = targetEmail || activeEmailSafe();
-		const label = displayNameFromEmail(email) || email || 'this profile';
-		if (!confirm(`Disconnect ${label} on this device?`)) return;
+		const label = displayNameFromEmail(email) || email || t('common.someone');
+		if (!confirm(t('settings.confirmDisconnect', { name: label }))) return;
 		memberMsg = '';
 		try {
 			if (email) removeDeviceProfile(email);
@@ -167,7 +167,7 @@
 				forceClearSelection();
 				await refreshFromDrive();
 			}
-			memberMsg = 'Disconnected on this device.';
+			memberMsg = t('settings.disconnectedDevice');
 		} catch (err) {
 			memberMsg = err instanceof Error ? err.message : String(err);
 		}
@@ -200,13 +200,13 @@
 		nameMsg = '';
 		const m = memberFor(targetEmail);
 		if (!m) {
-			nameMsg = 'Unknown profile — ask an admin to add you to members.';
+			nameMsg = t('settings.unknownProfile');
 			return;
 		}
 		const name = nameDraft.trim() || m.email.split('@')[0] || m.email;
 		try {
 			await upsertMember({ ...m, name });
-			nameMsg = 'Name saved.';
+			nameMsg = t('settings.nameSaved');
 		} catch (err) {
 			nameMsg = err instanceof Error ? err.message : String(err);
 		}
@@ -226,7 +226,7 @@
 		picMsg = '';
 		try {
 			await setMemberPicture(targetEmail, file);
-			picMsg = 'Profile picture updated.';
+			picMsg = t('settings.pictureUpdated');
 		} catch (err) {
 			picMsg = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -239,7 +239,7 @@
 		picMsg = '';
 		try {
 			await clearMemberPicture(targetEmail);
-			picMsg = 'Profile picture removed.';
+			picMsg = t('settings.pictureRemoved');
 		} catch (err) {
 			picMsg = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -249,12 +249,12 @@
 
 	function saveApiToken() {
 		setAdminToken(apiTokenDraft);
-		apiTokenMsg = 'Saved on this device.';
+		apiTokenMsg = t('settings.tokenSaved');
 	}
 
 	async function saveMailboxPw() {
 		if (!actor.email) {
-			mailboxMsg = 'Pick who you are first.';
+			mailboxMsg = t('settings.pickWhoFirst');
 			return;
 		}
 		mailboxBusy = true;
@@ -264,10 +264,10 @@
 				await testMailboxLogin(actor.email, mailboxPw.trim());
 				setMailboxPassword(actor.email, mailboxPw.trim());
 				await refreshMail();
-				mailboxMsg = `Stalwart OK for ${actor.email}.`;
+				mailboxMsg = t('settings.mailboxConnected');
 			} else {
 				setMailboxPassword(actor.email, '');
-				mailboxMsg = 'Cleared mailbox password on this device.';
+				mailboxMsg = t('settings.mailboxCleared');
 			}
 		} catch (e) {
 			mailboxMsg = e instanceof Error ? e.message : String(e);
@@ -290,8 +290,8 @@
 			saveSession(session);
 			await refreshFromDrive();
 			msg = driveSession.error
-				? `Connected, but load failed: ${driveSession.error}`
-				: 'Connected.';
+				? t('settings.loadFailed', { error: driveSession.error })
+				: t('settings.mailboxConnected');
 		} catch (e) {
 			msg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -305,7 +305,7 @@
 		await refreshFromDrive();
 		token = '';
 		rootKey = '';
-		msg = 'Disconnected.';
+		msg = t('settings.disconnected');
 	}
 
 	async function clearCache() {
@@ -313,7 +313,7 @@
 		cacheMsg = '';
 		try {
 			const r = await clearLocalUiCache();
-			cacheMsg = `Cleared ${r.clearedKeys.length || 0} cache keys + leaf DB. Reload to rehydrate.`;
+			cacheMsg = t('settings.cacheCleared', { n: r.clearedKeys.length || 0 });
 		} catch (e) {
 			cacheMsg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -325,7 +325,7 @@
 {#if sectionId === 'profile'}
 	<section class="block">
 		<p class="field-label">
-			Edit profile
+			{t('settings.editProfile')}
 			{#if !isSelf && targetEmail}
 				<span class="target-email">{targetEmail}</span>
 			{/if}
@@ -339,11 +339,15 @@
 			/>
 			<div class="pic-actions">
 				<PrimaryButton size="sm" disabled={picBusy || !me} onclick={pickPicture}>
-					{picBusy ? 'Uploading…' : me?.picture ? 'Change photo' : 'Set photo'}
+					{picBusy
+						? t('common.uploading')
+						: me?.picture
+							? t('settings.changePhoto')
+							: t('settings.setPhoto')}
 				</PrimaryButton>
 				{#if me?.picture}
 					<button type="button" class="btn ghost" disabled={picBusy} onclick={removePicture}
-						>Remove</button
+						>{t('settings.removePhoto')}</button
 					>
 				{/if}
 				<input
@@ -357,36 +361,36 @@
 		</div>
 		{#if picMsg}<p class="status on">{picMsg}</p>{/if}
 		<label class="row stack">
-			<span>Display name</span>
+			<span>{t('settings.displayName')}</span>
 			<input type="text" bind:value={nameDraft} autocomplete="nickname" disabled={!me} />
 		</label>
 		<div class="actions">
-			<PrimaryButton size="sm" disabled={!me} onclick={saveName}>Save name</PrimaryButton>
+			<PrimaryButton size="sm" disabled={!me} onclick={saveName}>{t('common.save')}</PrimaryButton>
 		</div>
 		{#if nameMsg}<p class="status">{nameMsg}</p>{/if}
 
 		{#if canAdminMembers && me && me.role !== 'owner'}
 			<hr class="rule" />
-			<p class="field-label">Space role</p>
-			<div class="seg" role="radiogroup" aria-label="Role">
+			<p class="field-label">{t('settings.spaceRole')}</p>
+			<div class="seg" role="radiogroup" aria-label={t('settings.spaceRole')}>
 				<button
 					type="button"
 					class:on={roleDraft === 'member'}
 					role="radio"
 					aria-checked={roleDraft === 'member'}
-					onclick={() => (roleDraft = 'member')}>Member</button
+					onclick={() => (roleDraft = 'member')}>{t('settings.roleMember')}</button
 				>
 				<button
 					type="button"
 					class:on={roleDraft === 'admin'}
 					role="radio"
 					aria-checked={roleDraft === 'admin'}
-					onclick={() => (roleDraft = 'admin')}>Admin</button
+					onclick={() => (roleDraft = 'admin')}>{t('settings.roleAdmin')}</button
 				>
 			</div>
 			<div class="actions">
 				<PrimaryButton size="sm" disabled={memberBusy} onclick={() => void saveRole()}
-					>{memberBusy ? 'Saving…' : 'Save role'}</PrimaryButton
+					>{memberBusy ? t('common.saving') : t('settings.saveRole')}</PrimaryButton
 				>
 			</div>
 			{#if !isSelf}
@@ -396,48 +400,50 @@
 					disabled={memberBusy}
 					onclick={() => void deleteTargetMember()}
 				>
-					Delete from Space
+					{t('settings.deleteFromSpace')}
 				</button>
 			{/if}
 		{/if}
 
 		<hr class="rule" />
 		<button type="button" class="btn danger disconnect" onclick={() => void disconnectThisProfile()}>
-			Disconnect {displayNameFromEmail(targetEmail) || 'profile'}
+			{displayNameFromEmail(targetEmail)
+				? t('settings.disconnectProfile', { name: displayNameFromEmail(targetEmail) })
+				: t('settings.disconnectProfileFallback')}
 		</button>
 		{#if memberMsg}<p class="status">{memberMsg}</p>{/if}
 	</section>
 {:else if sectionId === 'notifications'}
 	<section class="block">
-		<p class="field-label">Notifications</p>
+		<p class="field-label">{t('settings.notificationsTitle')}</p>
 		{#if pwaUi.standalone}
-			<p class="hint">Running as an installed app — good for push and offline storage.</p>
+			<p class="hint">{t('settings.notificationsHintStandalone')}</p>
 		{:else if pwaUi.ios}
 			<p class="hint">
-				On iPhone: Safari → Share → Add to Home Screen, then open Alpha from the icon.
+				{t('settings.notificationsHintIos')}
 			</p>
 		{:else}
-			<p class="hint">Install Alpha for faster cold starts and notifications.</p>
+			<p class="hint">{t('settings.notificationsHintDefault')}</p>
 		{/if}
 		<div class="actions">
 			{#if !pwaUi.standalone && (pwaUi.canInstall || !pwaUi.ios)}
 				<PrimaryButton size="sm" onclick={() => promptInstall()}>
-					{pwaUi.canInstall ? 'Install app' : 'How to install'}
+					{pwaUi.canInstall ? t('settings.installApp') : t('settings.howToInstall')}
 				</PrimaryButton>
 			{/if}
 			<PrimaryButton size="sm" disabled={pwaUi.busy || !actor.email} onclick={onTogglePush}>
 				{#if pwaUi.busy}
-					Working…
+					{t('common.working')}
 				{:else if pwaUi.pushSubscribed}
-					Disable notifications
+					{t('settings.disableNotifications')}
 				{:else}
-					Enable notifications
+					{t('settings.enableNotifications')}
 				{/if}
 			</PrimaryButton>
 		</div>
 		<p class="hint tight">
-			Permission: {pwaUi.pushPermission}
-			{#if pwaUi.pushSubscribed}· subscribed{/if}
+			{t('settings.permission', { perm: pwaUi.pushPermission })}
+			{#if pwaUi.pushSubscribed}· {t('settings.subscribed')}{/if}
 		</p>
 		{#if pwaUi.message}<p class="status on">{pwaUi.message}</p>{/if}
 	</section>
@@ -474,34 +480,33 @@
 	</section>
 {:else if sectionId === 'storage'}
 	<section class="block">
-		<p class="field-label">Storage</p>
+		<p class="field-label">{t('settings.storageTitle')}</p>
 		<p class="hint">
 			{#if storageLabel}
-				This browser: {storageLabel}.
+				{t('settings.storageBrowser', { label: storageLabel })}
 			{:else}
-				Local caches speed up chat and workspace after the first load.
+				{t('settings.storageHint')}
 			{/if}
-			{pwaUi.storagePersisted ? ' Kept on device.' : ''}
+			{pwaUi.storagePersisted ? ` ${t('settings.storageKept')}` : ''}
 		</p>
 		<div class="actions">
 			<PrimaryButton size="sm" disabled={cacheBusy} onclick={clearCache}>
-				{cacheBusy ? 'Clearing…' : 'Clear local UI cache'}
+				{cacheBusy ? t('settings.clearing') : t('settings.clearCache')}
 			</PrimaryButton>
 		</div>
 		<p class="hint tight">
-			Drops chat feed snapshot + Drive leaf cache. Does not sign you out or remove profiles.
+			{t('settings.clearCacheHint')}
 		</p>
 		{#if cacheMsg}<p class="status on">{cacheMsg}</p>{/if}
 	</section>
 {:else if sectionId === 'mail'}
 	<section class="block">
-		<p class="field-label">Mail</p>
+		<p class="field-label">{t('settings.mailTitle')}</p>
 		<p class="hint">
-			Mailbox password for the Space mail host (JMAP). Stored on this device for the active
-			profile.
+			{t('settings.mailHint')}
 		</p>
 		<label class="row stack">
-			<span>Password</span>
+			<span>{t('settings.password')}</span>
 			<input
 				type="password"
 				bind:value={mailboxPw}
@@ -512,48 +517,48 @@
 		</label>
 		<div class="actions">
 			<PrimaryButton size="sm" disabled={mailboxBusy || !actor.email} onclick={saveMailboxPw}>
-				{mailboxBusy ? 'Checking…' : 'Save & test'}
+				{mailboxBusy ? t('settings.checking') : t('settings.saveAndTest')}
 			</PrimaryButton>
 		</div>
 		{#if mailboxMsg}<p class="status on">{mailboxMsg}</p>{/if}
 	</section>
 {:else if sectionId === 'publications' && isOperator}
 	<section class="block">
-		<p class="field-label">Publications API</p>
-		<p class="hint">Bearer token for welcome + newsletters. Stored only in this browser.</p>
+		<p class="field-label">{t('settings.publicationsTitle')}</p>
+		<p class="hint">{t('settings.publicationsHint')}</p>
 		<label class="row stack">
-			<span>Admin token</span>
+			<span>{t('settings.adminToken')}</span>
 			<input type="password" bind:value={apiTokenDraft} autocomplete="off" spellcheck="false" />
 		</label>
 		<div class="actions">
-			<PrimaryButton size="sm" onclick={saveApiToken}>Save token</PrimaryButton>
+			<PrimaryButton size="sm" onclick={saveApiToken}>{t('settings.saveToken')}</PrimaryButton>
 		</div>
 		{#if apiTokenMsg}<p class="status on">{apiTokenMsg}</p>{/if}
 	</section>
 {:else if sectionId === 'drive' && isOperator}
 	<section class="block">
-		<p class="field-label">Files</p>
+		<p class="field-label">{t('settings.filesTitle')}</p>
 		<p class="hint">
 			{#if driveSession.connected}
-				Space storage connected ({driveSession.url}). Manual credentials only for recovery.
+				{t('settings.driveConnected')} ({driveSession.url}).
 			{:else}
-				Not connected — add a profile with an invite code.
+				{t('settings.notConnected')}
 			{/if}
 		</p>
 		<button type="button" class="btn ghost" onclick={() => (advancedOpen = !advancedOpen)}>
-			{advancedOpen ? 'Hide' : 'Show'} manual fields
+			{advancedOpen ? t('settings.hideManual') : t('settings.showManual')}
 		</button>
 		{#if advancedOpen}
 			<label class="row stack">
-				<span>URL</span>
+				<span>{t('settings.url')}</span>
 				<input type="url" bind:value={url} autocomplete="off" spellcheck="false" />
 			</label>
 			<label class="row stack">
-				<span>API token</span>
+				<span>{t('settings.apiToken')}</span>
 				<input type="password" bind:value={token} autocomplete="off" spellcheck="false" />
 			</label>
 			<label class="row stack">
-				<span>Root key</span>
+				<span>{t('settings.rootKey')}</span>
 				<input type="password" bind:value={rootKey} autocomplete="off" spellcheck="false" />
 			</label>
 			<div class="actions">
@@ -562,11 +567,15 @@
 					disabled={busy || !token.trim() || !rootKey.trim()}
 					onclick={connect}
 				>
-					{busy ? 'Connecting…' : driveSession.connected ? 'Reconnect' : 'Connect'}
+					{busy
+						? t('common.connecting')
+						: driveSession.connected
+							? t('settings.reconnect')
+							: t('settings.connect')}
 				</PrimaryButton>
 				{#if driveSession.connected}
 					<button type="button" class="btn ghost" disabled={busy} onclick={disconnectDrive}
-						>Disconnect</button
+						>{t('settings.disconnect')}</button
 					>
 				{/if}
 			</div>
@@ -574,7 +583,7 @@
 		{#if msg}<p class="status">{msg}</p>{/if}
 	</section>
 {:else}
-	<p class="hint">Unknown section.</p>
+	<p class="hint">{t('settings.unknownSection')}</p>
 {/if}
 
 <style>

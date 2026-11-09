@@ -12,6 +12,7 @@
 	} from '$lib/file-display.js';
 	import { childrenOf } from '$lib/drive/tree.js';
 	import { selectEntity } from '$lib/workspace.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 
 	/**
 	 * @type {{
@@ -29,10 +30,13 @@
 	const folderCount = $derived(items.filter((i) => i.isFolder).length);
 	const fileCount = $derived(items.length - folderCount);
 	const countsLabel = $derived.by(() => {
+		locale.value;
 		const bits = [];
-		if (folderCount) bits.push(`${folderCount} folder${folderCount === 1 ? '' : 's'}`);
-		if (fileCount) bits.push(`${fileCount} file${fileCount === 1 ? '' : 's'}`);
-		if (!bits.length) return 'Empty';
+		if (folderCount) bits.push(
+				t(folderCount === 1 ? 'drive.folderCount' : 'drive.folderCountPlural', { n: folderCount })
+			);
+		if (fileCount) bits.push(t(fileCount === 1 ? 'drive.fileCount' : 'drive.fileCountPlural', { n: fileCount }));
+		if (!bits.length) return t('drive.empty');
 		return bits.join(', ');
 	});
 
@@ -49,13 +53,13 @@
 			<h2 class="hero-title">{heading}</h2>
 			<p class="hero-meta">
 				<span class="hero-counts">{countsLabel}</span>
-				<span class="hero-enc">Encrypted</span>
+				<span class="hero-enc">{t('drive.encrypted')}</span>
 			</p>
 		</div>
 	</section>
 
 	{#if items.length === 0}
-		<p class="empty">Empty folder</p>
+		<p class="empty">{t('drive.emptyFolder')}</p>
 	{:else}
 		<div class="card-stack">
 			{#each items as item (item.path)}

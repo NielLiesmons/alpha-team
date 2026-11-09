@@ -8,6 +8,7 @@
 	import FloatPanel from './FloatPanel.svelte';
 	import LabelsPicker from './LabelsPicker.svelte';
 	import NavIcon from './NavIcon.svelte';
+	import { locale, t } from '$lib/i18n.svelte.js';
 	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
 		enterprises,
@@ -20,21 +21,21 @@
 	} from '$lib/workspace.svelte.js';
 
 	const STATUSES = [
-		{ value: 'backlog', label: 'Backlog' },
-		{ value: 'open', label: 'Open' },
-		{ value: 'planned', label: 'Planned' },
-		{ value: 'inProgress', label: 'In progress' },
-		{ value: 'inReview', label: 'In review' },
-		{ value: 'closed', label: 'Closed' },
-		{ value: 'canceled', label: 'Canceled' }
+		{ value: 'backlog', labelKey: 'tasks.statusBacklog' },
+		{ value: 'open', labelKey: 'tasks.statusOpen' },
+		{ value: 'planned', labelKey: 'tasks.statusPlanned' },
+		{ value: 'inProgress', labelKey: 'tasks.statusInProgress' },
+		{ value: 'inReview', labelKey: 'tasks.statusInReview' },
+		{ value: 'closed', labelKey: 'tasks.statusClosed' },
+		{ value: 'canceled', labelKey: 'tasks.statusCanceled' }
 	];
 
 	const PRIORITIES = [
-		{ value: 'none', label: 'None' },
-		{ value: 'low', label: 'Low' },
-		{ value: 'medium', label: 'Medium' },
-		{ value: 'high', label: 'High' },
-		{ value: 'urgent', label: 'Urgent' }
+		{ value: 'none', labelKey: 'tasks.priorityNone' },
+		{ value: 'low', labelKey: 'tasks.priorityLow' },
+		{ value: 'medium', labelKey: 'tasks.priorityMedium' },
+		{ value: 'high', labelKey: 'tasks.priorityHigh' },
+		{ value: 'urgent', labelKey: 'tasks.priorityUrgent' }
 	];
 
 	/**
@@ -68,13 +69,17 @@
 	const assignees = $derived(entity?.assignees ?? []);
 	const targets = $derived(entity?.targets ?? []);
 	const labels = $derived(entity?.labels ?? []);
-	const projectIds = $derived(entity?.project_ids ?? targets.map((/** @type {any} */ t) => t.id));
-	const statusLabel = $derived(
-		STATUSES.find((s) => s.value === entity?.status)?.label ?? entity?.status ?? 'Open'
-	);
-	const priorityLabel = $derived(
-		PRIORITIES.find((p) => p.value === entity?.priority)?.label ?? entity?.priority ?? 'None'
-	);
+	const projectIds = $derived(entity?.project_ids ?? targets.map((/** @type {any} */ tg) => tg.id));
+	const statusLabel = $derived.by(() => {
+		locale.value;
+		const key = STATUSES.find((s) => s.value === entity?.status)?.labelKey;
+		return key ? t(key) : (entity?.status ?? t('tasks.statusOpen'));
+	});
+	const priorityLabel = $derived.by(() => {
+		locale.value;
+		const key = PRIORITIES.find((p) => p.value === entity?.priority)?.labelKey;
+		return key ? t(key) : (entity?.priority ?? t('tasks.priorityNone'));
+	});
 	const linkedMoment = $derived(
 		kind === 'task' && entity?.id
 			? moments.find((m) => m.task_id === entity.id && !m.recurrence)
@@ -221,9 +226,9 @@
 
 	/** @param {string} text */
 	async function addLabel(text) {
-		const t = text.trim();
-		if (!t) return;
-		if (!labels.includes(t)) await apply({ labels: [...labels, t] });
+		const label = text.trim();
+		if (!label) return;
+		if (!labels.includes(label)) await apply({ labels: [...labels, label] });
 	}
 
 	/** @param {string} text */
@@ -243,7 +248,7 @@
 				bind:this={statusBtn}
 				type="button"
 				class="meta-pill"
-				aria-label="Status"
+				aria-label={t('meta.status')}
 				aria-expanded={menu === 'status'}
 				onpointerdown={keepKeyboard}
 				onclick={(e) => toggleMenu('status', e)}
@@ -257,7 +262,7 @@
 				bind:this={priorityBtn}
 				type="button"
 				class="meta-pill"
-				aria-label="Priority"
+				aria-label={t('meta.priority')}
 				aria-expanded={menu === 'priority'}
 				onpointerdown={keepKeyboard}
 				onclick={(e) => toggleMenu('priority', e)}
@@ -275,7 +280,7 @@
 				type="button"
 				class="meta-pill"
 				class:empty={!hasSchedule}
-				aria-label="Deadline, moment, and assignees"
+				aria-label={t('meta.deadlineMomentAssignees')}
 				aria-expanded={menu === 'schedule'}
 				onpointerdown={keepKeyboard}
 				onclick={(e) => toggleMenu('schedule', e)}
@@ -288,12 +293,12 @@
 							</span>
 						{/each}
 					</span>
-					<span>Planning</span>
+					<span>{t('meta.planning')}</span>
 				{:else}
 					<span class="planning-ico">
 						<NavIcon name="planning" size={14} />
 					</span>
-					<span>Planning</span>
+					<span>{t('meta.planning')}</span>
 				{/if}
 			</button>
 		</div>
@@ -305,7 +310,7 @@
 			type="button"
 			class="meta-pill"
 			class:empty={targets.length === 0}
-			aria-label="Projects"
+			aria-label={t('meta.projects')}
 			aria-expanded={menu === 'projects'}
 			onpointerdown={keepKeyboard}
 			onclick={(e) => toggleMenu('projects', e)}
@@ -319,7 +324,7 @@
 			type="button"
 			class="meta-label"
 			role="listitem"
-			aria-label="Remove label {labelText}"
+			aria-label="{t('meta.removeLabel')} {labelText}"
 			onclick={(e) => removeLabel(labelText, e)}
 		>
 			<LabelPill text={labelText} size="meta" />
@@ -331,12 +336,12 @@
 			bind:this={labelsBtn}
 			type="button"
 			class="label-add"
-			aria-label="Add label"
+			aria-label={t('meta.addLabel')}
 			aria-expanded={menu === 'labels'}
 			onpointerdown={keepKeyboard}
 			onclick={(e) => toggleMenu('labels', e)}
 		>
-			<span class="label-add-body">Label</span>
+			<span class="label-add-body">{t('meta.label')}</span>
 			<svg class="label-add-tip" width="24" height="32" viewBox="0 0 24 32" fill="none" aria-hidden="true">
 				<path
 					d="M0 0 L4 0 Q9 2 14 6 Q19 10 23 14 Q23.5 16 23 18 Q19 22 14 26 Q9 30 4 32 L0 32 Z"
@@ -366,7 +371,7 @@
 					onclick={(e) => pickStatus(opt.value, e)}
 				>
 					<TaskBox state={opt.value} size={20} />
-					<span class="option-text">{opt.label}</span>
+					<span class="option-text">{t(opt.labelKey)}</span>
 					{#if on}
 						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 							<path
@@ -400,7 +405,7 @@
 					onclick={(e) => pickPriority(opt.value, e)}
 				>
 					<PriorityBox priority={opt.value} size={18} />
-					<span class="option-text">{opt.label}</span>
+					<span class="option-text">{t(opt.labelKey)}</span>
 					{#if on}
 						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 							<path
@@ -429,7 +434,7 @@
 	>
 		<div class="schedule-panel">
 			<label class="date-field">
-				<span class="date-label">Deadline</span>
+				<span class="date-label">{t('meta.deadline')}</span>
 				<input
 					class="date-input"
 					type="date"
@@ -438,7 +443,7 @@
 				/>
 			</label>
 			<label class="date-field">
-				<span class="date-label">Moment start</span>
+				<span class="date-label">{t('meta.momentStart')}</span>
 				<input
 					class="date-input"
 					type="date"
@@ -447,7 +452,7 @@
 				/>
 			</label>
 			<label class="date-field">
-				<span class="date-label">Moment end</span>
+				<span class="date-label">{t('meta.momentEnd')}</span>
 				<input
 					class="date-input"
 					type="date"
@@ -456,7 +461,7 @@
 				/>
 			</label>
 			<div class="assignee-block">
-				<span class="date-label">Assignees</span>
+				<span class="date-label">{t('meta.assignees')}</span>
 				<div class="float-list assignee-list" role="listbox">
 					{#each people as person (person.email)}
 						{@const on = scheduleAssignees.some((a) => a.email === person.email)}
@@ -497,7 +502,7 @@
 >
 	<div class="float-list" role="listbox">
 		{#if projects.length === 0}
-			<p class="menu-empty">No projects yet</p>
+			<p class="menu-empty">{t('meta.noProjects')}</p>
 		{:else}
 			{#each projects as project (project.id)}
 				{@const on = projectIds.includes(project.id)}

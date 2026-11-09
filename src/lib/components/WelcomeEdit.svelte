@@ -7,6 +7,7 @@
 	import EditorToolbar from './EditorToolbar.svelte';
 	import { mailSettings, persistMailSettings } from '$lib/publications.svelte.js';
 	import { closeComposer, ui } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let from = $state('');
 	let enabled = $state(false);
@@ -85,17 +86,17 @@
 	}
 </script>
 
-<CreateSheet {open} label="Welcome message" onclose={closeComposer}>
+<CreateSheet {open} label={t('pub.welcomeMessage')} onclose={closeComposer}>
 	<label class="check">
 		<input type="checkbox" bind:checked={enabled} />
-		<span>Send on new subscribe</span>
+		<span>{t('pub.sendOnSubscribe')}</span>
 	</label>
 	<div class="form-divider"></div>
 	<div class="sheet-title-row">
-		<input class="sheet-input" placeholder="From — Space &lt;news@example.com&gt;" bind:value={from} />
+		<input class="sheet-input" placeholder={`${t('pub.fromSpace')} <news@example.com>`} bind:value={from} />
 	</div>
 	<div class="form-divider"></div>
-	<div class="lang-seg" role="group" aria-label="Language">
+	<div class="lang-seg" role="group" aria-label={t('common.language')}>
 		<button type="button" class:on={lang === 'fr'} onclick={() => (lang = 'fr')}>FR</button>
 		<button type="button" class:on={lang === 'en'} onclick={() => (lang = 'en')}>EN</button>
 	</div>
@@ -124,7 +125,7 @@
 			{#key lang}
 				<NoteEditor
 					value={activeBody}
-					placeholder="Type / for commands"
+					placeholder={t('notes.typeCommands')}
 					onChange={setBody}
 					onReady={(ed) => (tipTap = ed)}
 				/>
@@ -137,7 +138,7 @@
 	<div class="sheet-bottom row">
 		<EditorToolbar editor={tipTap} />
 		<PrimaryButton size="sheet" disabled={busy} onclick={save}>
-			{busy ? 'Saving…' : 'Save welcome'}
+			{busy ? t('common.saving') : t('pub.saveWelcome')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>

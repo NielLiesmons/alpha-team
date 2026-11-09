@@ -7,6 +7,7 @@
 	import PrimaryButton from './PrimaryButton.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import ProjectPillsDisplay from './ProjectPillsDisplay.svelte';
+	import { t } from '$lib/i18n.svelte.js';
 	import { projectLifecycle } from '$lib/project-status.js';
 	import { closeComposer, notes, projects, saveNote, tasks, ui } from '$lib/workspace.svelte.js';
 
@@ -94,7 +95,7 @@
 
 <CreateSheet
 	{open}
-	label={editing ? 'Edit note' : 'New note'}
+	label={editing ? t('notes.note') : t('create.note')}
 	onclose={() => {
 		if (bottomMenu) {
 			bottomMenu = null;
@@ -107,7 +108,7 @@
 		<input
 			bind:this={titleInput}
 			class="sheet-input"
-			placeholder="Note title"
+			placeholder={t('notes.titlePlaceholder')}
 			bind:value={title}
 		/>
 	</div>
@@ -117,7 +118,7 @@
 			{#if open}
 				<NoteEditor
 					value={body}
-					placeholder="Type / for commands"
+					placeholder={t('notes.typeCommands')}
 					onChange={(html) => (body = html)}
 					onReady={(ed) => (tipTap = ed)}
 				/>
@@ -137,7 +138,7 @@
 					type="button"
 					class="meta-pill"
 					class:empty={projectIds.length === 0}
-					aria-label="Projects"
+					aria-label={t('notes.projects')}
 					aria-expanded={bottomMenu === 'projects'}
 					onpointerdown={(e) => e.preventDefault()}
 					onclick={() => (bottomMenu = bottomMenu === 'projects' ? null : 'projects')}
@@ -149,9 +150,9 @@
 
 		<PrimaryButton size="sheet" disabled={!title.trim() || saving} onclick={save}>
 			{#if saving}
-				<Spinner size={14} label="Saving" />
+				<Spinner size={14} label={t('common.saving')} />
 			{/if}
-			{editing ? 'Save' : 'Create'}
+			{editing ? t('common.save') : t('notes.create')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>
@@ -166,7 +167,7 @@
 >
 	<div class="float-list" role="listbox">
 		{#if projects.length === 0}
-			<p class="menu-empty">No projects yet</p>
+			<p class="menu-empty">{t('meta.noProjects')}</p>
 		{:else}
 			{#each projects as project (project.id)}
 				{@const on = projectIds.includes(project.id)}

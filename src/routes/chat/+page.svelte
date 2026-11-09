@@ -12,6 +12,7 @@
 		unreadCountForChannel,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 	import { isMobileNav } from '$lib/nav-stack.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
 
@@ -47,9 +48,9 @@
 			};
 		}
 		if (ch.kind === 'agent') {
-			return { name: ch.title || 'Agent', email: `agent:${ch.id}`, pictureUrl: null };
+			return { name: ch.title || t('chat.agent'), email: `agent:${ch.id}`, pictureUrl: null };
 		}
-		return { name: ch.title || 'Chat', email: `chat:${ch.id}`, pictureUrl: null };
+		return { name: ch.title || t('chat.channel'), email: `chat:${ch.id}`, pictureUrl: null };
 	}
 
 	/** @param {string} chatId */
@@ -69,10 +70,11 @@
 
 	/** @param {any} msg */
 	function previewLine(msg) {
-		if (!msg) return 'No messages yet';
+		locale.value;
+		if (!msg) return t('chat.noMessages');
 		if (msg.kind === 'event') {
 			const who = asPerson(msg.author);
-			const name = who?.name || displayNameFromEmail(msg.author) || 'Someone';
+			const name = who?.name || displayNameFromEmail(msg.author) || t('common.someone');
 			return `${name} ${chatEventLabel(msg)}`;
 		}
 		const who = asPerson(msg.author);
@@ -80,7 +82,7 @@
 		const plain = String(msg.body || '')
 			.replace(/\s+/g, ' ')
 			.trim();
-		const text = plain.length > 64 ? `${plain.slice(0, 64).trim()}…` : plain || 'Attachment';
+		const text = plain.length > 64 ? `${plain.slice(0, 64).trim()}…` : plain || t('chat.attachment');
 		return name ? `${name}: ${text}` : text;
 	}
 
@@ -90,7 +92,7 @@
 		const d = new Date(iso);
 		if (Number.isNaN(d.getTime())) return '';
 		const diff = Date.now() - d.getTime();
-		if (diff < 60_000) return 'now';
+		if (diff < 60_000) return t('chat.now');
 		if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
 		if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
 		if (diff < 6 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d`;
@@ -98,7 +100,7 @@
 	}
 </script>
 
-<svelte:head><title>Chat</title></svelte:head>
+<svelte:head><title>{t('nav.chat')}</title></svelte:head>
 
 <div class="feed chat-list">
 	{#each chatChannels as ch (ch.id)}
@@ -127,7 +129,7 @@
 					<span class="preview">{previewLine(last)}</span>
 					<span class="unread-slot" aria-hidden={unread === 0 ? 'true' : undefined}>
 						{#if unread > 0}
-							<span class="new-count" aria-label="{unread} unread">{unread > 99 ? '99+' : unread}</span>
+							<span class="new-count" aria-label={t('chat.unreadCount', { n: unread })}>{unread > 99 ? '99+' : unread}</span>
 						{/if}
 					</span>
 				</span>

@@ -4,6 +4,7 @@
 	import Spinner from './Spinner.svelte';
 	import PrimaryButton from './PrimaryButton.svelte';
 	import { closeComposer, saveSalesLine, ui } from '$lib/workspace.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 
 	let title = $state('');
 	let price = $state('');
@@ -17,14 +18,17 @@
 	/** @type {null | 'channel'} */
 	let bottomMenu = $state(null);
 
-	const CHANNELS = [
-		{ id: 'farmgate', label: 'Farm gate' },
-		{ id: 'market', label: 'Market' },
-		{ id: 'boutique', label: 'Boutique' },
-		{ id: 'csa', label: 'CSA' },
-		{ id: 'pro', label: 'Pro' },
-		{ id: 'web', label: 'Web' }
-	];
+	const CHANNELS = $derived.by(() => {
+		locale.value;
+		return [
+			{ id: 'farmgate', label: t('acc.channelFarmGate') },
+			{ id: 'market', label: t('acc.channelMarket') },
+			{ id: 'boutique', label: t('acc.channelBoutique') },
+			{ id: 'csa', label: t('acc.channelCsa') },
+			{ id: 'pro', label: t('acc.channelPro') },
+			{ id: 'web', label: t('acc.channelWeb') }
+		];
+	});
 
 	const open = $derived(ui.composer?.kind === 'sales');
 
@@ -75,16 +79,16 @@
 	}
 </script>
 
-<CreateSheet {open} sheetId="sales-create" label="New sales line" onclose={closeComposer}>
+<CreateSheet {open} sheetId="sales-create" label={t('create.sales')} onclose={closeComposer}>
 	<div class="sheet-title-row">
-		<input bind:this={titleInput} class="sheet-input" placeholder="Sales line title" bind:value={title} />
+		<input bind:this={titleInput} class="sheet-input" placeholder={t('acc.salesTitle')} bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
 	<div class="amount-row">
 		<span class="currency">€</span>
 		<input class="sheet-input amount" placeholder="0.00" inputmode="decimal" bind:value={price} />
 		<span class="per">/</span>
-		<input class="unit" placeholder="unit" bind:value={unitLabel} />
+		<input class="unit" placeholder={t('acc.unit')} bind:value={unitLabel} />
 	</div>
 	<div class="form-divider"></div>
 	<div class="task-bottom-row">
@@ -94,10 +98,10 @@
 				class="meta-pill"
 				onclick={() => (bottomMenu = bottomMenu === 'channel' ? null : 'channel')}
 			>
-				{CHANNELS.find((c) => c.id === channel)?.label ?? 'Channel'}
+				{CHANNELS.find((c) => c.id === channel)?.label ?? t('acc.channel')}
 			</button>
 			{#if bottomMenu === 'channel'}
-				<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+				<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 				></button>
 				<div class="bottom-menu">
 					{#each CHANNELS as c (c.id)}
@@ -119,8 +123,8 @@
 			disabled={!title.trim() || !eurosToCents(price) || saving}
 			onclick={save}
 		>
-			{#if saving}<Spinner size={14} label="Saving" />{/if}
-			Add
+			{#if saving}<Spinner size={14} label={t('common.saving')} />{/if}
+			{t('acc.add')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>

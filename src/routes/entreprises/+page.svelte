@@ -10,6 +10,7 @@
 		syncEntreprisesUrl
 	} from '$lib/entity-routes.js';
 	import { primaryEnterpriseId } from '$lib/project-status.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import {
 		dataTables,
 		dataViews,
@@ -95,7 +96,7 @@
 	});
 </script>
 
-<svelte:head><title>Entreprises</title></svelte:head>
+<svelte:head><title>{t('ent.title')}</title></svelte:head>
 
 <div class="feed">
 	{#if driveSession.error}
@@ -105,12 +106,12 @@
 	{#if !appBoot.listsReady && enterprises.length === 0 && dataTables.length === 0}
 		<FeedSkeleton rows={6} />
 	{:else if enterprises.length === 0}
-		<p class="empty">No Entreprises yet</p>
+		<p class="empty">{t('ent.empty')}</p>
 		<button type="button" class="empty-add" onclick={() => openComposer('enterprise')}
-			>Create enterprise</button
+			>{t('ent.create')}</button
 		>
 	{:else if sortedEnterprises.length === 0}
-		<p class="empty">No entreprises match this filter</p>
+		<p class="empty">{t('ent.emptyFilter')}</p>
 	{:else}
 		<div class="card-stack">
 			{#each sortedEnterprises as ent (ent.id)}

@@ -4,6 +4,7 @@
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { appBoot } from '$lib/boot.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import { notePlainText } from '$lib/note-text.js';
 	import { notes, selectEntity, ui } from '$lib/workspace.svelte.js';
 
@@ -47,15 +48,15 @@
 
 </script>
 
-<svelte:head><title>Notes</title></svelte:head>
+<svelte:head><title>{t('notes.title')}</title></svelte:head>
 
 <div class="feed">
 	{#if !appBoot.listsReady && notes.length === 0}
 		<FeedSkeleton rows={8} />
 	{:else if notes.length === 0}
-		<p class="empty">No notes yet</p>
+		<p class="empty">{t('notes.empty')}</p>
 	{:else if filtered.length === 0}
-		<p class="empty">No notes match this filter</p>
+		<p class="empty">{t('notes.emptyFilter')}</p>
 	{:else}
 		<div class="card-stack">
 			{#each filtered as note (note.id)}

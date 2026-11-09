@@ -22,12 +22,13 @@
 	} from '$lib/mail.svelte.js';
 	import {
 		MAIL_CATEGORIES,
-		MAIL_CATEGORY_LABELS,
-		MAIL_FOLDER_LABELS,
+		mailCategoryLabel,
+		mailFolderLabel,
 		mailView,
 		setMailCategory
 	} from '$lib/mail-view.svelte.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	$effect(() => {
 		mailView.folder;
@@ -44,7 +45,7 @@
 		chatFeed.length;
 		Object.keys(commentsByKey).length;
 		const all = mailThreadsForCurrentView();
-		if (ui.listFilter === 'unread') return all.filter((t) => isUnreadFor(t));
+		if (ui.listFilter === 'unread') return all.filter((th) => isUnreadFor(th));
 		return all;
 	});
 
@@ -99,11 +100,11 @@
 	}
 
 	/**
-	 * @param {any} t
+	 * @param {any} thread
 	 */
-	function latestPreview(t) {
-		const last = mailLatestMessage(t);
-		const msgs = threadMessages(t);
+	function latestPreview(thread) {
+		const last = mailLatestMessage(thread);
+		const msgs = threadMessages(thread);
 		const isFollowUp = msgs.length > 1;
 		return {
 			text: mailPreview(last),
@@ -116,18 +117,18 @@
 
 <svelte:head
 	><title
-		>{MAIL_CATEGORY_LABELS[mailView.category]} · {MAIL_FOLDER_LABELS[mailView.folder]} · Mail</title
+		>{mailCategoryLabel(mailView.category)} · {mailFolderLabel(mailView.folder)} · {t('nav.mail')}</title
 	></svelte:head
 >
 
 <div class="feed mail">
-	<div class="category-seg" role="group" aria-label="Mail category">
+	<div class="category-seg" role="group" aria-label={t('mail.category')}>
 		{#each MAIL_CATEGORIES as c (c)}
 			<button
 				type="button"
 				class="seg-btn"
 				class:on={mailView.category === c}
-				onclick={() => setMailCategory(c)}>{MAIL_CATEGORY_LABELS[c]}</button
+				onclick={() => setMailCategory(c)}>{mailCategoryLabel(c)}</button
 			>
 		{/each}
 	</div>
@@ -143,30 +144,33 @@
 		<FeedSkeleton rows={6} />
 	{:else if !actor.email}
 		<p class="empty">
-			Choose who you are
-			<span class="hint">Settings → your mailbox email.</span>
+			{t('mail.chooseWho')}
+			<span class="hint">{t('mail.settingsPathHint')}</span>
 		</p>
 	{:else if threadsList.length === 0}
 		<p class="empty">
 			{ui.listFilter === 'unread'
-				? 'No unread'
-				: `No ${MAIL_CATEGORY_LABELS[mailView.category].toLowerCase()} in ${MAIL_FOLDER_LABELS[mailView.folder]}`}
+				? t('mail.noUnread')
+				: t('mail.emptyFolder', {
+						category: mailCategoryLabel(mailView.category).toLowerCase(),
+						folder: mailFolderLabel(mailView.folder)
+					})}
 			<span class="hint">
 				{#if mailView.category === 'primary'}
-					Primary only shows mail from people you've accepted. New contacts land in New.
+					{t('mail.primaryHint')}
 				{:else}
-					For {actor.email}. Use + to compose.
+					{t('mail.forEmail', { email: actor.email })}
 				{/if}
 			</span>
 		</p>
 	{:else}
 		<div class="card-stack">
-			{#each threadsList as t (t.id)}
-				{@const unread = isUnreadFor(t)}
-				{@const author = mailAuthorLabel(t)}
-				{@const authorEmail = String(t.from || '').toLowerCase()}
-				{@const preview = latestPreview(t)}
-				{@const comments = commentsForThread(t.id)}
+			{#each threadsList as thread (thread.id)}
+				{@const unread = isUnreadFor(thread)}
+				{@const author = mailAuthorLabel(thread)}
+				{@const authorEmail = String(thread.from || '').toLowerCase()}
+				{@const preview = latestPreview(thread)}
+				{@const comments = commentsForThread(thread.id)}
 				{@const latestComment = comments[0] || null}
 				{@const commentPreview = latestComment
 					? String(latestComment.body || '')
@@ -179,10 +183,10 @@
 				<button
 					type="button"
 					class="row"
-					class:on={ui.selection?.kind === 'mail' && ui.selection.id === t.id}
+					class:on={ui.selection?.kind === 'mail' && ui.selection.id === thread.id}
 					class:unread
 					class:has-comments={hasComments}
-					onclick={() => selectEntity('mail', t.id)}
+					onclick={() => selectEntity('mail', thread.id)}
 				>
 					<span class="col-pfp" aria-hidden="true">
 						<span class="pfp-slot">
@@ -215,17 +219,17 @@
 						<span class="meta">
 							<span class="author">{author}</span>
 							<span class="meta-trail">
-								{#if t.count > 1}
-									<span class="count">{t.count}</span>
+								{#if thread.count > 1}
+									<span class="count">{thread.count}</span>
 								{/if}
 								{#if unread}
-									<span class="unread-dot" aria-label="Unread"></span>
+									<span class="unread-dot" aria-label={t('mail.unread')}></span>
 								{/if}
 							</span>
 						</span>
 						<span class="subject">
-							<span class="subject-text">{t.subject || '(no subject)'}</span>
-							<span class="time">{formatMailWhen(t.created_at)}</span>
+							<span class="subject-text">{thread.subject || t('common.noSubject')}</span>
+							<span class="time">{formatMailWhen(thread.created_at)}</span>
 						</span>
 						<span class="snippet-row">
 							{#if preview.showPfp}

@@ -12,6 +12,7 @@
 		tasks,
 		ui
 	} from '$lib/workspace.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 
 	let amount = $state('');
 	let memo = $state('');
@@ -32,28 +33,37 @@
 	/** @type {null | 'account' | 'projects' | 'tasks' | 'channel' | 'behavior' | 'kind'} */
 	let bottomMenu = $state(null);
 
-	const CHANNELS = [
-		{ id: '', label: 'No channel' },
-		{ id: 'farmgate', label: 'Farm gate' },
-		{ id: 'market', label: 'Market' },
-		{ id: 'boutique', label: 'Boutique' },
-		{ id: 'csa', label: 'CSA' },
-		{ id: 'pro', label: 'Pro / wholesale' },
-		{ id: 'web', label: 'Web' },
-		{ id: 'other', label: 'Other' }
-	];
+	const CHANNELS = $derived.by(() => {
+		locale.value;
+		return [
+			{ id: '', label: 'No channel' },
+			{ id: 'farmgate', label: t('acc.channelFarmGate') },
+			{ id: 'market', label: t('acc.channelMarket') },
+			{ id: 'boutique', label: t('acc.channelBoutique') },
+			{ id: 'csa', label: t('acc.channelCsa') },
+			{ id: 'pro', label: `${t('acc.channelPro')} / ${t('acc.channelWholesale').toLowerCase()}` },
+			{ id: 'web', label: t('acc.channelWeb') },
+			{ id: 'other', label: t('acc.channelOther') }
+		];
+	});
 
-	const BEHAVIORS = [
-		{ id: 'variable', label: 'Variable' },
-		{ id: 'fixed', label: 'Fixed' },
-		{ id: 'capex', label: 'Capex' },
-		{ id: 'none', label: 'None' }
-	];
+	const BEHAVIORS = $derived.by(() => {
+		locale.value;
+		return [
+			{ id: 'variable', label: t('acc.variable') },
+			{ id: 'fixed', label: t('acc.fixed') },
+			{ id: 'capex', label: t('acc.capex') },
+			{ id: 'none', label: t('common.none') }
+		];
+	});
 
-	const KINDS = [
-		{ id: 'actual', label: 'Actual' },
-		{ id: 'planned', label: 'Planned' }
-	];
+	const KINDS = $derived.by(() => {
+		locale.value;
+		return [
+			{ id: 'actual', label: t('acc.actual') },
+			{ id: 'planned', label: t('acc.planned') }
+		];
+	});
 
 	const open = $derived(ui.composer?.kind === 'ledger');
 
@@ -153,10 +163,13 @@
 		}
 	}
 
-	const accountLabel = $derived(accounts.find((a) => a.id === accountId)?.title ?? 'Account');
+	const accountLabel = $derived.by(() => {
+		locale.value;
+		return accounts.find((a) => a.id === accountId)?.title ?? t('acc.account');
+	});
 </script>
 
-<CreateSheet {open} label="New entry" onclose={closeComposer}>
+<CreateSheet {open} label={t('acc.newEntry')} onclose={closeComposer}>
 	<div class="sheet-title-row dir-row">
 		<button
 			type="button"
@@ -164,7 +177,7 @@
 			class:on={direction === 'out'}
 			onclick={() => (direction = 'out')}
 		>
-			Expense
+			{t('acc.expense')}
 		</button>
 		<button
 			type="button"
@@ -172,7 +185,7 @@
 			class:on={direction === 'in'}
 			onclick={() => (direction = 'in')}
 		>
-			Income
+			{t('acc.income')}
 		</button>
 	</div>
 	<div class="form-divider"></div>
@@ -187,7 +200,7 @@
 		/>
 	</div>
 	<div class="memo-wrap">
-		<input class="sheet-body memo" placeholder="Memo (optional)" bind:value={memo} />
+		<input class="sheet-body memo" placeholder={t('acc.memo')} bind:value={memo} />
 	</div>
 	<div class="form-divider"></div>
 	<div class="task-bottom-row">
@@ -203,7 +216,7 @@
 					<span class="pill-names">{accountLabel}</span>
 				</button>
 				{#if bottomMenu === 'account'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+					<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 					></button>
 					<div class="bottom-menu" role="listbox">
 						{#each accountChoices as a (a.id)}
@@ -233,17 +246,17 @@
 					onclick={() => (bottomMenu = bottomMenu === 'projects' ? null : 'projects')}
 				>
 					{#if projectIds.length === 0}
-						<span>Project</span>
+						<span>{t('acc.project')}</span>
 					{:else}
 						<span class="pill-projects"><ProjectPillsDisplay {projectIds} /></span>
 					{/if}
 				</button>
 				{#if bottomMenu === 'projects'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+					<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 					></button>
 					<div class="bottom-menu" role="listbox">
 						{#if projects.length === 0}
-							<p class="menu-empty">No projects yet</p>
+							<p class="menu-empty">{t('acc.noProjects')}</p>
 						{:else}
 							{#each projects as project (project.id)}
 								{@const on = projectIds.includes(project.id)}
@@ -265,7 +278,7 @@
 					onclick={() => (bottomMenu = bottomMenu === 'tasks' ? null : 'tasks')}
 				>
 					{#if taskIds.length === 0}
-						<span>Task</span>
+						<span>{t('acc.task')}</span>
 					{:else}
 						<span class="pill-names"
 							>{taskIds.map((id) => tasks.find((t) => t.id === id)?.title ?? id).join(', ')}</span
@@ -273,11 +286,11 @@
 					{/if}
 				</button>
 				{#if bottomMenu === 'tasks'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+					<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 					></button>
 					<div class="bottom-menu" role="listbox">
 						{#if linkedTasks.length === 0}
-							<p class="menu-empty">No tasks</p>
+							<p class="menu-empty">{t('acc.noTasks')}</p>
 						{:else}
 							{#each linkedTasks as task (task.id)}
 								{@const on = taskIds.includes(task.id)}
@@ -299,11 +312,11 @@
 					onclick={() => (bottomMenu = bottomMenu === 'channel' ? null : 'channel')}
 				>
 					<span class="pill-names"
-						>{CHANNELS.find((c) => c.id === channel)?.label ?? 'Channel'}</span
+						>{CHANNELS.find((c) => c.id === channel)?.label ?? t('acc.channel')}</span
 					>
 				</button>
 				{#if bottomMenu === 'channel'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+					<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 					></button>
 					<div class="bottom-menu" role="listbox">
 						{#each CHANNELS as c (c.id)}
@@ -332,11 +345,11 @@
 						onclick={() => (bottomMenu = bottomMenu === 'behavior' ? null : 'behavior')}
 					>
 						<span class="pill-names"
-							>{BEHAVIORS.find((b) => b.id === costBehavior)?.label ?? 'Variable'}</span
+							>{BEHAVIORS.find((b) => b.id === costBehavior)?.label ?? t('acc.variable')}</span
 						>
 					</button>
 					{#if bottomMenu === 'behavior'}
-						<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+						<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 						></button>
 						<div class="bottom-menu" role="listbox">
 							{#each BEHAVIORS as b (b.id)}
@@ -364,10 +377,10 @@
 					aria-expanded={bottomMenu === 'kind'}
 					onclick={() => (bottomMenu = bottomMenu === 'kind' ? null : 'kind')}
 				>
-					<span class="pill-names">{KINDS.find((k) => k.id === kind)?.label ?? 'Actual'}</span>
+					<span class="pill-names">{KINDS.find((k) => k.id === kind)?.label ?? t('acc.actual')}</span>
 				</button>
 				{#if bottomMenu === 'kind'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+					<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 					></button>
 					<div class="bottom-menu" role="listbox">
 						{#each KINDS as k (k.id)}
@@ -394,9 +407,9 @@
 			onclick={save}
 		>
 			{#if saving}
-				<Spinner size={14} label="Saving" />
+				<Spinner size={14} label={t('common.saving')} />
 			{/if}
-			Add
+			{t('acc.add')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>

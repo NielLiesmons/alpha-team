@@ -14,6 +14,7 @@
 	import { customEmojiShortcode, emojiOnlyInfo, tokenizeChatBody } from '$lib/message-emoji.js';
 	import { members } from '$lib/members.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import ChatEmoji from './ChatEmoji.svelte';
 	import { activeSession } from '$lib/drive/session.svelte.js';
@@ -199,9 +200,9 @@
 		if (!pickerOpen) return;
 		/** @param {PointerEvent} e */
 		function onDoc(e) {
-			const t = /** @type {Node | null} */ (e.target);
+			const target = /** @type {Node | null} */ (e.target);
 			const root = document.querySelector(`[data-chat-bubble="${msg.id}"]`);
-			if (root && t && root.contains(t)) return;
+			if (root && target && root.contains(target)) return;
 			pickerOpen = false;
 		}
 		document.addEventListener('pointerdown', onDoc, true);
@@ -271,7 +272,7 @@
 			onpointercancel={onBubblePointerCancel}
 			oncontextmenu={onBubbleContextMenu}
 			role="group"
-			aria-label={isMine ? 'Your message' : `Message from ${name}`}
+			aria-label={isMine ? t('chat.yourMessage') : t('chat.messageFrom', { name })}
 		>
 			{#if !isMine && showAuthor && stackFirst && !emojiOnly}
 				<div class="bubble-head">
@@ -283,7 +284,7 @@
 				<button
 					type="button"
 					class="quote"
-					aria-label={`Jump to message from ${parentName}`}
+					aria-label={`${t('chat.jumpToMessage')}: ${parentName}`}
 					onclick={(e) => {
 						e.stopPropagation();
 						onQuoteClick?.(String(parent.id));
@@ -332,7 +333,7 @@
 						{@const src = att.previewUrl || att.url || (att.path ? attUrls[att.path] : '')}
 						{@const failed = Boolean(att.path && attFailed[att.path])}
 						{#if mediaKind === 'image' && src}
-							<img class="att-image" src={src} alt={att.name || 'Image'} loading="lazy" />
+							<img class="att-image" src={src} alt={att.name || t('chat.image')} loading="lazy" />
 						{:else if mediaKind === 'video' && src}
 							<video class="att-video" src={src} controls playsinline></video>
 						{:else if mediaKind === 'voice' && src}
@@ -343,11 +344,11 @@
 								class:image={mediaKind === 'image'}
 								class:video={mediaKind === 'video'}
 								aria-busy="true"
-								aria-label="Loading media"
+								aria-label={t('chat.loadingMedia')}
 							></div>
 						{:else}
 							<div class="att-file">
-								<span class="att-name">{att.name || att.kind || 'File'}</span>
+								<span class="att-name">{att.name || att.kind || t('chat.file')}</span>
 								{#if att.bytes}
 									<span class="att-size">{Math.round(att.bytes / 1024)} KB</span>
 								{/if}
@@ -363,8 +364,8 @@
 						<span
 							class="receipt"
 							class:read={delivery === 'read'}
-							title={delivery === 'read' ? 'Read' : 'Sent'}
-							aria-label={delivery}
+							title={delivery === 'read' ? t('chat.read') : t('chat.sent')}
+							aria-label={delivery === 'read' ? t('chat.read') : t('chat.sent')}
 						>
 							{#if delivery === 'read'}
 								<svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
@@ -392,11 +393,11 @@
 				</div>
 			{/if}
 			{#if msg._failed && !emojiOnly}
-				<p class="fail-hint">Couldn’t send — pull to refresh and try again.</p>
+				<p class="fail-hint">{t('chat.sendFailed')}</p>
 			{/if}
 
 			{#if pickerOpen}
-				<div class="react-picker" role="listbox" aria-label="Reactions">
+				<div class="react-picker" role="listbox" aria-label={t('chat.reactions')}>
 					{#each customEmojis.slice(0, 6) as em (em.id)}
 						{@const code = customEmojiShortcode(em.name)}
 						{@const src = customEmojiUrl(em.name)}
@@ -441,8 +442,8 @@
 						<span
 							class="receipt"
 							class:read={delivery === 'read'}
-							title={delivery === 'read' ? 'Read' : 'Sent'}
-							aria-label={delivery}
+							title={delivery === 'read' ? t('chat.read') : t('chat.sent')}
+							aria-label={delivery === 'read' ? t('chat.read') : t('chat.sent')}
 						>
 							{#if delivery === 'read'}
 								<svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
@@ -470,7 +471,7 @@
 				</div>
 			{/if}
 			{#if msg._failed && emojiOnly}
-				<p class="fail-hint fail-hint-sticker">Couldn’t send — pull to refresh and try again.</p>
+				<p class="fail-hint fail-hint-sticker">{t('chat.sendFailed')}</p>
 			{/if}
 
 			{#if reactions.length}
@@ -482,7 +483,7 @@
 							class:mine={r.mine}
 							role="listitem"
 							aria-label={r.mine
-								? `Remove your ${r.emoji} reaction`
+								? t('chat.removeReaction', { emoji: r.emoji })
 								: `${r.emoji} ${r.count}`}
 							onclick={() => void onReact(r.emoji)}
 						>
@@ -512,11 +513,11 @@
 			{/if}
 		</div>
 
-		<div class="action-rail" role="group" aria-label="Message actions">
+		<div class="action-rail" role="group" aria-label={t('chat.messageActions')}>
 			<button
 				type="button"
 				class="rail-btn"
-				aria-label="React"
+				aria-label={t('chat.react')}
 				aria-expanded={pickerOpen}
 				onclick={(e) => {
 					e.stopPropagation();
@@ -528,7 +529,7 @@
 			<button
 				type="button"
 				class="rail-btn"
-				aria-label="Reply"
+				aria-label={t('chat.reply')}
 				onclick={(e) => {
 					e.stopPropagation();
 					handleReply();

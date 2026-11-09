@@ -3,6 +3,7 @@
 	import PrimaryButton from './PrimaryButton.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import ProjectBox from './ProjectBox.svelte';
+	import { t } from '$lib/i18n.svelte.js';
 	import { projectDisplayIcon, projectLifecycle } from '$lib/project-status.js';
 	import {
 		closeComposer,
@@ -90,7 +91,7 @@
 		const nextTitle = title.trim();
 		if (!nextTitle) return;
 		if (sortedEnterprises.length > 0 && !enterpriseIds[0]) {
-			alert('Pick at least one enterprise for this project');
+			alert(t('projects.pickEnterprise'));
 			return;
 		}
 		try {
@@ -117,7 +118,7 @@
 
 <CreateSheet
 	{open}
-	label={editing ? 'Edit project' : 'New project'}
+	label={editing ? t('projects.project') : t('create.project')}
 	onclose={() => {
 		if (enterprisesOpen) {
 			enterprisesOpen = false;
@@ -132,7 +133,7 @@
 			type="button"
 			class="box-hit"
 			class:on={enterprisesOpen}
-			aria-label="Enterprises"
+			aria-label={t('projects.entreprises')}
 			aria-expanded={enterprisesOpen}
 			onclick={() => (enterprisesOpen = !enterprisesOpen)}
 		>
@@ -141,12 +142,12 @@
 		<input
 			bind:this={titleInput}
 			class="sheet-input"
-			placeholder="Project title"
+			placeholder={t('projects.titlePlaceholder')}
 			bind:value={title}
 		/>
 	</div>
 	<div class="form-divider"></div>
-	<textarea class="sheet-body" placeholder="Description" bind:value={description}></textarea>
+	<textarea class="sheet-body" placeholder={t('projects.description')} bind:value={description}></textarea>
 	<div class="form-divider"></div>
 	<div class="sheet-bottom">
 		<button
@@ -155,14 +156,14 @@
 			class:on={lifecycle === 'archived'}
 			onclick={() => (lifecycle = lifecycle === 'archived' ? 'active' : 'archived')}
 		>
-			{lifecycle === 'archived' ? 'Archived' : 'Active'}
+			{lifecycle === 'archived' ? t('projects.archived') : t('projects.active')}
 		</button>
 		<PrimaryButton
 			size="sheet"
 			disabled={!title.trim() || (sortedEnterprises.length > 0 && !primaryId)}
 			onclick={save}
 		>
-			{editing ? 'Save' : 'Publish'}
+			{editing ? t('common.save') : t('projects.publish')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>
@@ -177,7 +178,7 @@
 >
 	<div class="float-list" role="listbox">
 		{#if sortedEnterprises.length === 0}
-			<p class="menu-empty">Create an enterprise in Entreprises first</p>
+			<p class="menu-empty">{t('projects.createEnterprise')}</p>
 		{:else}
 			{#each sortedEnterprises as e (e.id)}
 				{@const rank = rankOf(e.id)}

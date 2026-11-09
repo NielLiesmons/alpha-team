@@ -14,6 +14,7 @@
 	} from '$lib/file-display.js';
 	import { filesView, isFilesFolderPath, setFilesEntries } from '$lib/files-view.svelte.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	const RECENT_KEY = 'alpha.files.recent.v1';
 	const FAV_KEY = 'alpha.files.favorites.v1';
@@ -266,7 +267,7 @@
 	</button>
 {/snippet}
 
-<svelte:head><title>Files</title></svelte:head>
+<svelte:head><title>{t('drive.title')}</title></svelte:head>
 
 <div class="feed drive">
 	{#if ui.source === 'drive'}
@@ -274,24 +275,24 @@
 	{/if}
 
 	{#if ui.source !== 'drive'}
-		<p class="empty">Files is disconnected. Connect Drive in Settings, then browse here.</p>
+		<p class="empty">{t('drive.disconnected')}</p>
 	{:else}
 		{#if err}
 			<p class="err">{err}</p>
 		{/if}
 		{#if uploading}
-			<p class="status">Uploading…</p>
+			<p class="status">{t('common.uploading')}</p>
 		{/if}
 		{#if loading && entries.length === 0}
 			<FeedSkeleton rows={8} />
 		{:else}
 			<section class="file-section">
 				<div class="group-header">
-					<span class="eyebrow-label-xs">Recent</span>
+					<span class="eyebrow-label-xs">{t('drive.recent')}</span>
 					<span class="group-count">{recentItems.length}</span>
 				</div>
 				{#if recentItems.length === 0}
-					<p class="section-empty">Nothing recent yet</p>
+					<p class="section-empty">{t('drive.nothingRecent')}</p>
 				{:else}
 					<div class="card-stack">
 						{#each recentItems as item (item.path)}
@@ -303,11 +304,11 @@
 
 			<section class="file-section">
 				<div class="group-header">
-					<span class="eyebrow-label-xs">Favorites</span>
+					<span class="eyebrow-label-xs">{t('drive.favorites')}</span>
 					<span class="group-count">{favoriteItems.length}</span>
 				</div>
 				{#if favoriteItems.length === 0}
-					<p class="section-empty">Right-click a file to favorite it</p>
+					<p class="section-empty">{t('drive.favoriteHint')}</p>
 				{:else}
 					<div class="card-stack">
 						{#each favoriteItems as item (item.path)}
@@ -319,11 +320,11 @@
 
 			<section class="file-section">
 				<div class="group-header">
-					<span class="eyebrow-label-xs">Files</span>
+					<span class="eyebrow-label-xs">{t('drive.title')}</span>
 					<span class="group-count">{items.length}</span>
 				</div>
 				{#if items.length === 0}
-					<p class="section-empty">Empty</p>
+					<p class="section-empty">{t('drive.empty')}</p>
 				{:else}
 					<div class="card-stack">
 						{#each items as item (item.path)}

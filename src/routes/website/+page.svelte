@@ -3,6 +3,7 @@
 	import { refreshPublications } from '$lib/publications.svelte.js';
 	import { space, websiteChildren, websites } from '$lib/sections.js';
 	import { selectEntity } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	/** @param {string} href */
 	function openSection(href) {
@@ -24,9 +25,9 @@
 	}
 </script>
 
-<svelte:head><title>Websites</title></svelte:head>
+<svelte:head><title>{t('nav.website')}</title></svelte:head>
 
-<nav class="feed" aria-label="Websites">
+<nav class="feed" aria-label={t('nav.website')}>
 	<div class="card-stack">
 		{#each websites as site (site.id)}
 			<article class="site-card">
@@ -50,7 +51,7 @@
 						{/if}
 					</div>
 				</div>
-				<div class="site-links" role="group" aria-label="{site.name} sections">
+				<div class="site-links" role="group" aria-label={t('detail.sectionsOf', { name: site.name })}>
 					{#each websiteChildren as item (item.href)}
 						<button type="button" class="site-link" onclick={() => openSection(item.href)}>
 							{item.label}
@@ -61,7 +62,7 @@
 		{/each}
 	</div>
 	{#if websites.length === 0}
-		<p class="hint">No public site linked to this Space yet.</p>
+		<p class="hint">{t('pub.noSite')}</p>
 	{:else}
 		<p class="hint">
 			{space.name}: publications, shop, and public content{space.siteUrl

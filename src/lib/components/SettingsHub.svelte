@@ -89,16 +89,16 @@
 			{
 				id: 'profile',
 				title: t('settings.profile'),
-				description: activeEmail || 'Name, photo, disconnect'
+				description: activeEmail || t('settings.profileDesc')
 			},
 			{
 				id: 'notifications',
 				title: t('settings.notifications'),
 				description: pwaUi.pushSubscribed
-					? 'Push on · this device'
+					? t('settings.notificationsPushOn')
 					: pwaUi.standalone
-						? 'Installed · enable push'
-						: 'Install / enable push'
+						? t('settings.notificationsInstalled')
+						: t('settings.notificationsInstall')
 			},
 			{
 				id: 'appearance',
@@ -183,11 +183,11 @@
 			.trim()
 			.toLowerCase();
 		if (!e.includes('@')) {
-			shareMsg = 'Missing profile email.';
+			shareMsg = t('settings.missingEmail');
 			return;
 		}
 		if (!driveSession.connected) {
-			shareMsg = 'Connect Drive first to share an invite QR.';
+			shareMsg = t('settings.connectDriveFirst');
 			return;
 		}
 		inviteEmail = e;
@@ -196,8 +196,8 @@
 
 	/** @param {MouseEvent} e */
 	function onDocClick(e) {
-		const t = /** @type {Node} */ (e.target);
-		if (!(t instanceof Element) || !t.closest('.menu-wrap')) menuEmail = null;
+		const target = /** @type {Node} */ (e.target);
+		if (!(target instanceof Element) || !target.closest('.menu-wrap')) menuEmail = null;
 	}
 
 	$effect(() => {
@@ -225,7 +225,7 @@
 								>{displayNameFromEmail(activeProfile.email) || activeProfile.name}</span
 							>
 							{#if admin}
-								<span class="crown" title="Admin" aria-label="Admin"><Crown size={13} /></span>
+								<span class="crown" title={t('settings.admin')} aria-label={t('settings.admin')}><Crown size={13} /></span>
 							{/if}
 						</span>
 						<span class="email">{activeProfile.email}</span>
@@ -236,7 +236,7 @@
 					class="chev"
 					class:up={profilesOpen}
 					aria-expanded={profilesOpen}
-					aria-label={profilesOpen ? 'Collapse profiles' : 'Expand profiles'}
+					aria-label={profilesOpen ? t('settings.collapseProfiles') : t('settings.expandProfiles')}
 					onclick={(e) => {
 						e.stopPropagation();
 						toggleProfiles();
@@ -256,7 +256,7 @@
 					<button
 						type="button"
 						class="dots"
-						aria-label="Profile actions"
+						aria-label={t('settings.profileActions')}
 						aria-expanded={menuEmail === activeProfile.email}
 						onclick={(e) => {
 							e.stopPropagation();
@@ -268,10 +268,10 @@
 					{#if menuEmail === activeProfile.email}
 						<div class="menu" role="menu">
 							<button type="button" role="menuitem" onclick={() => onEdit(activeProfile.email)}
-								>Edit profile</button
+								>{t('settings.editProfile')}</button
 							>
 							<button type="button" role="menuitem" onclick={() => onShare(activeProfile.email)}
-								>Share invite</button
+								>{t('settings.shareInvite')}</button
 							>
 						</div>
 					{/if}
@@ -305,7 +305,7 @@
 								<span class="name-row">
 									<span class="name">{displayNameFromEmail(p.email) || p.name}</span>
 									{#if admin}
-										<span class="crown" title="Admin" aria-label="Admin"><Crown size={12} /></span>
+										<span class="crown" title={t('settings.admin')} aria-label={t('settings.admin')}><Crown size={12} /></span>
 									{/if}
 								</span>
 								<span class="email">{p.email}</span>
@@ -315,7 +315,7 @@
 							<button
 								type="button"
 								class="dots"
-								aria-label="Profile actions"
+								aria-label={t('settings.profileActions')}
 								aria-expanded={menuEmail === p.email}
 								onclick={(e) => {
 									e.stopPropagation();
@@ -327,13 +327,13 @@
 							{#if menuEmail === p.email}
 								<div class="menu" role="menu">
 									<button type="button" role="menuitem" onclick={() => onSwitch(p.email)}
-										>Switch to</button
+										>{t('settings.switchTo')}</button
 									>
 									<button type="button" role="menuitem" onclick={() => onEdit(p.email)}
-										>Edit profile</button
+										>{t('settings.editProfile')}</button
 									>
 									<button type="button" role="menuitem" onclick={() => onShare(p.email)}
-										>Share invite</button
+										>{t('settings.shareInvite')}</button
 									>
 								</div>
 							{/if}
@@ -342,7 +342,7 @@
 				{/each}
 				<button type="button" class="add-row" onclick={() => (addProfileOpen = true)}>
 					<span class="add-plus" aria-hidden="true">+</span>
-					<span>Add profile</span>
+					<span>{t('settings.addProfile')}</span>
 				</button>
 			</div>
 		{/if}

@@ -3,6 +3,7 @@
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
 	import { expandMomentsInRange } from '$lib/moment-expand.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 	import {
 		DAY_MS,
 		PLANNING_ZOOMS,
@@ -228,12 +229,13 @@
 	}
 
 	const groups = $derived.by(() => {
+		locale.value;
 		/** @type {{ id: string, title: string, entity: any, rows: { kind: 'project' | 'task', id: string, title: string, entity: any, projectId?: string }[] }[]} */
 		const out = [];
 		const ents =
 			sortedEnterprises.length > 0
 				? sortedEnterprises
-				: [{ id: UNASSIGNED, title: 'Projects', status: 'active', icon: null }];
+				: [{ id: UNASSIGNED, title: t('planning.projects'), status: 'active', icon: null }];
 		const showUnassigned =
 			planningProjects.some((p) => !primaryEnterpriseId(p)) && sortedEnterprises.length > 0;
 
@@ -260,7 +262,7 @@
 		}
 
 		for (const ent of ents) buildGroup(ent);
-		if (showUnassigned) buildGroup({ id: UNASSIGNED, title: 'None', status: 'draft', icon: null });
+		if (showUnassigned) buildGroup({ id: UNASSIGNED, title: t('planning.none'), status: 'draft', icon: null });
 		return out;
 	});
 
@@ -502,7 +504,7 @@
 	});
 </script>
 
-<svelte:head><title>Planning</title></svelte:head>
+<svelte:head><title>{t('planning.title')}</title></svelte:head>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
@@ -519,12 +521,12 @@
 >
 	{#if enterprises.length === 0 && projects.length === 0}
 		<div class="empty">
-			<p class="empty-title">No enterprises yet</p>
+			<p class="empty-title">{t('planning.noEntreprises')}</p>
 			<p class="empty-body">
-				Add farm lines (Eggs, Sheep…) plus General — then attach projects and date their tasks.
+				{t('planning.addFarmLines')}
 			</p>
 			<button type="button" class="tool-btn primary" onclick={() => openComposer('enterprise')}
-				>New enterprise</button
+				>{t('planning.newEnterprise')}</button
 			>
 		</div>
 	{:else}
@@ -563,7 +565,7 @@
 								type="button"
 								class="chev"
 								class:collapsed={collapsedEnterprises.has(group.id)}
-								aria-label="Toggle projects"
+								aria-label={t('planning.toggleProjects')}
 								aria-expanded={!collapsedEnterprises.has(group.id)}
 								onclick={() => toggleEnterprise(group.id)}
 							>
@@ -581,7 +583,7 @@
 						<button
 							type="button"
 							class="row-plus"
-							aria-label="Add project to {group.title}"
+							aria-label={t('planning.addProjectTo', { title: group.title })}
 							onclick={() => addProject(group.id)}
 						>
 							<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -620,7 +622,7 @@
 										type="button"
 										class="chev"
 										class:collapsed={collapsedProjects.has(row.id)}
-										aria-label="Toggle tasks"
+										aria-label={t('planning.toggleTasks')}
 										aria-expanded={!collapsedProjects.has(row.id)}
 										onclick={() => toggleProject(row.id)}
 									>
@@ -638,7 +640,7 @@
 								<button
 									type="button"
 									class="row-plus"
-									aria-label="Add task"
+									aria-label={t('planning.addTask')}
 									onclick={() => addTask(row.id)}
 								>
 									<svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -693,7 +695,7 @@
 											role="button"
 											tabindex="0"
 											title={m._virtual
-												? `${m.title || row.title} (recurring)`
+												? `${m.title || row.title} ${t('common.recurring')}`
 												: m.title || row.title}
 											onpointerdown={(e) => {
 												if (m._virtual) return;
@@ -739,7 +741,7 @@
 										<span
 											class="deadline-line"
 											style:left="{dl}px"
-											title="Deadline"
+											title={t('planning.deadline')}
 											aria-hidden="true"
 										></span>
 									{/if}

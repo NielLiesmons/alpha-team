@@ -5,6 +5,7 @@
 	import Spinner from './Spinner.svelte';
 	import PrimaryButton from './PrimaryButton.svelte';
 	import { closeComposer, projects, saveCostItem, ui } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let title = $state('');
 	let amount = $state('');
@@ -49,6 +50,14 @@
 		return cleaned.includes('.') ? Math.round(n * 100) : Math.round(n * 100);
 	}
 
+	/** @param {string} p */
+	function periodLabel(p) {
+		if (p === 'once') return t('acc.once');
+		if (p === 'month') return t('acc.month');
+		if (p === 'year') return t('acc.year');
+		return p;
+	}
+
 	/** @param {string} id */
 	function toggleProject(id) {
 		if (projectIds.includes(id)) projectIds = projectIds.filter((p) => p !== id);
@@ -80,9 +89,9 @@
 	}
 </script>
 
-<CreateSheet {open} sheetId="cost-create" label="New cost" onclose={closeComposer}>
+<CreateSheet {open} sheetId="cost-create" label={t('create.cost')} onclose={closeComposer}>
 	<div class="sheet-title-row">
-		<input bind:this={titleInput} class="sheet-input" placeholder="Cost title" bind:value={title} />
+		<input bind:this={titleInput} class="sheet-input" placeholder={t('acc.costTitle')} bind:value={title} />
 	</div>
 	<div class="form-divider"></div>
 	<div class="amount-row">
@@ -90,7 +99,7 @@
 		<input class="sheet-input amount" placeholder="0.00" inputmode="decimal" bind:value={amount} />
 		{#if behavior === 'variable'}
 			<span class="per">/</span>
-			<input class="unit" placeholder="unit" bind:value={unitLabel} />
+			<input class="unit" placeholder={t('acc.unit')} bind:value={unitLabel} />
 		{/if}
 	</div>
 	<div class="form-divider"></div>
@@ -102,13 +111,17 @@
 					class="meta-pill"
 					onclick={() => (bottomMenu = bottomMenu === 'behavior' ? null : 'behavior')}
 				>
-					{behavior === 'fixed' ? 'Fixed' : behavior === 'capex' ? 'Capex' : 'Variable'}
+					{behavior === 'fixed'
+						? t('acc.fixed')
+						: behavior === 'capex'
+							? t('acc.capex')
+							: t('acc.variable')}
 				</button>
 				{#if bottomMenu === 'behavior'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+					<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 					></button>
 					<div class="bottom-menu">
-						{#each [['variable', 'Variable'], ['fixed', 'Fixed'], ['capex', 'Capex']] as [id, label]}
+						{#each [['variable', t('acc.variable')], ['fixed', t('acc.fixed')], ['capex', t('acc.capex')]] as [id, label]}
 							<button
 								type="button"
 								class="option"
@@ -129,10 +142,10 @@
 						class="meta-pill"
 						onclick={() => (bottomMenu = bottomMenu === 'period' ? null : 'period')}
 					>
-						{period}
+						{periodLabel(period)}
 					</button>
 					{#if bottomMenu === 'period'}
-						<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+						<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 						></button>
 						<div class="bottom-menu">
 							{#each ['once', 'month', 'year'] as p}
@@ -143,7 +156,7 @@
 									onclick={() => {
 										period = /** @type {any} */ (p);
 										bottomMenu = null;
-									}}>{p}</button
+									}}>{periodLabel(p)}</button
 								>
 							{/each}
 						</div>
@@ -158,13 +171,13 @@
 					onclick={() => (bottomMenu = bottomMenu === 'projects' ? null : 'projects')}
 				>
 					{#if projectIds.length === 0}
-						<span>Project</span>
+						<span>{t('acc.project')}</span>
 					{:else}
 						<ProjectPillsDisplay {projectIds} />
 					{/if}
 				</button>
 				{#if bottomMenu === 'projects'}
-					<button type="button" class="menu-backdrop" aria-label="Close" onclick={() => (bottomMenu = null)}
+					<button type="button" class="menu-backdrop" aria-label={t('common.close')} onclick={() => (bottomMenu = null)}
 					></button>
 					<div class="bottom-menu">
 						{#each projects as project (project.id)}
@@ -184,8 +197,8 @@
 			disabled={!title.trim() || !eurosToCents(amount) || saving}
 			onclick={save}
 		>
-			{#if saving}<Spinner size={14} label="Saving" />{/if}
-			Add
+			{#if saving}<Spinner size={14} label={t('common.saving')} />{/if}
+			{t('acc.add')}
 		</PrimaryButton>
 	</div>
 </CreateSheet>

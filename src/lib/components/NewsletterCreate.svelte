@@ -16,6 +16,7 @@
 	} from '$lib/publications.svelte.js';
 	import { space } from '$lib/sections.js';
 	import { closeComposer, ui } from '$lib/workspace.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 
 	let subject = $state('');
 	let description = $state('');
@@ -105,15 +106,16 @@
 		return readUrl ? `${readUrl}#comments` : '';
 	});
 
-	const sheetLabel = $derived(
-		editingPostSlug
-			? 'Edit publication'
+	const sheetLabel = $derived.by(() => {
+		locale.value;
+		return editingPostSlug
+			? t('pub.editPublication')
 			: editingCampaign
 				? editingCampaign.status === 'sent'
-					? 'Edit letter (site)'
-					: 'Newsletter'
-				: 'New letter'
-	);
+					? t('pub.editLetter')
+					: t('detail.newsletter')
+				: t('pub.newLetter');
+	});
 
 	/** @param {string} md */
 	function mdToEditorHtml(md) {
@@ -232,9 +234,7 @@
 			return;
 		}
 		if (
-			!confirm(
-				'Publish this letter? It will email every subscriber and appear as a Blog post on the site.'
-			)
+			!confirm(t('pub.publishConfirm'))
 		)
 			return;
 		busy = true;
@@ -260,12 +260,13 @@
 	}
 
 	const primaryLabel = $derived.by(() => {
+		locale.value;
 		if (busy) {
-			if (editingPostSlug || editingCampaign?.status === 'sent') return 'Saving…';
-			return 'Sending…';
+			if (editingPostSlug || editingCampaign?.status === 'sent') return t('common.saving');
+			return t('common.sending');
 		}
-		if (editingPostSlug || editingCampaign?.status === 'sent') return 'Update on site';
-		return 'Send to list';
+		if (editingPostSlug || editingCampaign?.status === 'sent') return t('pub.updateOnSite');
+		return t('pub.sendToList');
 	});
 </script>
 
@@ -294,7 +295,7 @@
 		{#if open}
 			<NoteEditor
 				value={body}
-				placeholder="Type / for commands"
+				placeholder={t('notes.typeCommands')}
 				onChange={(html) => (body = html)}
 				onReady={(ed) => (tipTap = ed)}
 			/>
@@ -314,7 +315,7 @@
 	{#if latestPosts.length}
 		<div class="form-divider"></div>
 		<div class="latest">
-			<p class="latest-eyebrow">LATEST POSTS</p>
+			<p class="latest-eyebrow">{t('pub.latestPosts')}</p>
 			<div class="latest-row">
 				{#each latestPosts as post}
 					{#if post.href}
@@ -348,7 +349,7 @@
 					disabled={busy || !subject.trim() || !body.trim()}
 					onclick={saveDraft}
 				>
-					{busy ? '…' : 'Save draft'}
+					{busy ? '…' : t('pub.saveDraft')}
 				</button>
 			{/if}
 			<PrimaryButton

@@ -16,6 +16,7 @@
 	import { generateMailboxPassword, provisionMailbox } from '$lib/stalwart-provision.js';
 	import { mailDomain as spaceMailDomain } from '$lib/space-host.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	/** @type {{ open: boolean, onclose?: () => void }} */
 	let { open = false, onclose = () => {} } = $props();
@@ -114,24 +115,25 @@
 		qr = '';
 		inviteLink = '';
 		mailboxPw = '';
+		/* TODO i18n: deferred-mailbox invite message has no key yet */
 		if (!inviter) {
-			error = 'Only admins can create profiles.';
+			error = t('invite.onlyAdmins');
 			return;
 		}
 		if (!driveSession.connected) {
-			error = 'Connect Drive first.';
+			error = t('settings.connectDriveFirst');
 			return;
 		}
 		if (!createName.trim()) {
-			error = 'Enter a display name.';
+			error = t('invite.enterName');
 			return;
 		}
 		if (!createEmail.includes('@')) {
-			error = `Enter a mailbox name (e.g. alex → alex@${mailDomain}).`;
+			error = t('invite.enterMailbox');
 			return;
 		}
 		if (createPass.trim().length < 6) {
-			error = 'Passphrase must be at least 6 characters.';
+			error = t('invite.passphraseMin');
 			return;
 		}
 		busy = true;
@@ -173,7 +175,7 @@
 			step = 'qr';
 			error = provision.deferred
 				? 'Invite ready. Set the mailbox password in Stalwart once, then share QR + passphrase.'
-				: 'Invite ready. Share the QR and whisper the passphrase.';
+				: t('invite.readyHint');
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -189,31 +191,31 @@
 			class="sheet"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Add profile"
+			aria-label={t('settings.addProfile')}
 			onclick={(e) => e.stopPropagation()}
 		>
 			<header class="head">
 				<div class="mark" aria-hidden="true"><AlphaLogo size={36} /></div>
-				<button type="button" class="icon-pill" aria-label="Close" disabled={busy} onclick={dismiss}
+				<button type="button" class="icon-pill" aria-label={t('common.close')} disabled={busy} onclick={dismiss}
 					>✕</button
 				>
 			</header>
 
 			{#if step === 'create'}
-				<p class="lead">Create a profile and invite QR for someone new.</p>
+				<p class="lead">{t('invite.createProfile')}</p>
 				<label class="quiet">
-					<span class="sr-only">Display name</span>
+					<span class="sr-only">{t('invite.displayName')}</span>
 					<input
 						bind:this={focusEl}
 						class="field"
 						type="text"
 						bind:value={createName}
 						autocomplete="name"
-						placeholder="Display name"
+						placeholder={t('invite.displayName')}
 					/>
 				</label>
 				<label class="quiet">
-					<span class="sr-only">Mailbox</span>
+					<span class="sr-only">{t('invite.mailbox')}</span>
 					<div class="local-row field">
 						<input
 							class="bare"
@@ -221,25 +223,25 @@
 							bind:value={createLocal}
 							autocomplete="off"
 							spellcheck="false"
-							placeholder="alex"
+							placeholder={t('invite.mailboxHint')}
 						/>
 						<span class="domain">@{mailDomain}</span>
 					</div>
 				</label>
-				<div class="seg" role="radiogroup" aria-label="Role">
+				<div class="seg" role="radiogroup" aria-label={t('settings.spaceRole')}>
 					<button
 						type="button"
 						class:on={createRole === 'member'}
 						role="radio"
 						aria-checked={createRole === 'member'}
-						onclick={() => (createRole = 'member')}>Member</button
+						onclick={() => (createRole = 'member')}>{t('settings.roleMember')}</button
 					>
 					<button
 						type="button"
 						class:on={createRole === 'admin'}
 						role="radio"
 						aria-checked={createRole === 'admin'}
-						onclick={() => (createRole = 'admin')}>Admin</button
+						onclick={() => (createRole = 'admin')}>{t('settings.roleAdmin')}</button
 					>
 				</div>
 				<div class="field-shell">
@@ -248,7 +250,7 @@
 						type="password"
 						bind:value={createPass}
 						autocomplete="new-password"
-						placeholder="Passphrase"
+						placeholder={t('invite.passphrase')}
 						onkeydown={(e) => e.key === 'Enter' && createProfile()}
 					/>
 					<button
@@ -257,17 +259,17 @@
 						disabled={busy || createPass.trim().length < 6}
 						onclick={() => void createProfile()}
 					>
-						{busy ? '…' : 'Create'}
+						{busy ? '…' : t('invite.create')}
 					</button>
 				</div>
 				{#if error}
 					<p class="err" role="alert">{error}</p>
 				{/if}
 				<button type="button" class="ghost" onclick={() => (step = 'code')}>
-					I have an invite code
+					{t('invite.haveCode')}
 				</button>
 			{:else if step === 'code'}
-				<p class="lead">Paste an invite code to add a profile on this device.</p>
+				<p class="lead">{t('welcome.pasteInvite')}</p>
 				<div class="field-shell tall">
 					<textarea
 						bind:this={focusEl}
@@ -275,7 +277,7 @@
 						rows="2"
 						bind:value={invitePayload}
 						spellcheck="false"
-						placeholder="Invite code or link"
+						placeholder={t('invite.codeOrLink')}
 						onkeydown={(e) => {
 							if (e.key === 'Enter' && !e.shiftKey) {
 								e.preventDefault();
@@ -289,7 +291,7 @@
 						disabled={!invitePayload.trim()}
 						onclick={goPassword}
 					>
-						Continue
+						{t('common.continue')}
 					</button>
 				</div>
 				{#if error}
@@ -297,11 +299,11 @@
 				{/if}
 				{#if inviter}
 					<button type="button" class="ghost" onclick={() => (step = 'create')}>
-						Create a new profile
+						{t('invite.createProfile')}
 					</button>
 				{/if}
 			{:else if step === 'password'}
-				<p class="lead">Enter the passphrase for this invite.</p>
+				<p class="lead">{t('invite.enterPassphrase')}</p>
 				<div class="field-shell">
 					<input
 						bind:this={focusEl}
@@ -309,7 +311,7 @@
 						type="password"
 						bind:value={invitePass}
 						autocomplete="off"
-						placeholder="Passphrase"
+						placeholder={t('invite.passphrase')}
 						onkeydown={(e) => e.key === 'Enter' && submitPassword()}
 					/>
 					<button
@@ -318,29 +320,29 @@
 						disabled={busy || !invitePass.trim()}
 						onclick={() => void submitPassword()}
 					>
-						{busy ? '…' : 'Add'}
+						{busy ? '…' : t('invite.add')}
 					</button>
 				</div>
 				{#if error}
 					<p class="err" role="alert">{error}</p>
 				{/if}
 				<button type="button" class="ghost" disabled={busy} onclick={() => (step = 'code')}
-					>Back</button
+					>{t('common.back')}</button
 				>
 			{:else}
-				<p class="lead">{error || 'Share this QR and the passphrase.'}</p>
+				<p class="lead">{error || t('invite.shareQr')}</p>
 				{#if qr}
 					<figure class="qr-wrap">
-						<img src={qr} alt="Profile invite QR" width="240" height="240" />
+						<img src={qr} alt={t('invite.ready')} width="240" height="240" />
 					</figure>
 				{/if}
 				{#if mailboxPw}
-					<p class="meta">Mailbox password (Stalwart once): <code>{mailboxPw}</code></p>
+					<p class="meta">{t('invite.mailboxPasswordOnce')} <code>{mailboxPw}</code></p>
 				{/if}
 				{#if inviteLink}
 					<p class="meta link">{inviteLink}</p>
 				{/if}
-				<button type="button" class="ghost" onclick={() => (step = 'create')}>Create another</button>
+				<button type="button" class="ghost" onclick={() => (step = 'create')}>{t('invite.createAnother')}</button>
 			{/if}
 		</div>
 	</div>

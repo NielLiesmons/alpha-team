@@ -2,6 +2,7 @@
 	import { formatMetricValue } from '$lib/format-value.js';
 	import { buildMetricContext, evalMetric } from '$lib/table-metrics.js';
 	import { parentEnterpriseId } from '$lib/entity-routes.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import {
 		clearSelection,
 		dataTables,
@@ -36,7 +37,7 @@
 <header class="detail-top desktop-head">
 	<div class="detail-top-start">
 		{#if parentId}
-			<button type="button" class="icon-hit" aria-label="Back to enterprise" onclick={backToEnterprise}>
+			<button type="button" class="icon-hit" aria-label={t('detail.backToEnterprise')} onclick={backToEnterprise}>
 				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 					<path
 						d="M10 3.5 5.5 8 10 12.5"
@@ -48,7 +49,7 @@
 				</svg>
 			</button>
 		{/if}
-		<span class="detail-top-label">Metric</span>
+		<span class="detail-top-label">{t('detail.metric')}</span>
 	</div>
 </header>
 
@@ -56,11 +57,11 @@
 	<input
 		class="title-input"
 		value={metric.title ?? ''}
-		placeholder="Title"
+		placeholder={t('ent.metricTitle')}
 		oninput={(e) => void persist({ title: e.currentTarget.value })}
 	/>
 	<label class="field">
-		<span>Key</span>
+		<span>{t('ent.key')}</span>
 		<input
 			value={metric.key ?? ''}
 			placeholder="eggs.forecast_month"
@@ -68,7 +69,7 @@
 		/>
 	</label>
 	<label class="field">
-		<span>Expression</span>
+		<span>{t('ent.expression')}</span>
 		<textarea
 			rows="3"
 			value={metric.expr ?? ''}
@@ -77,7 +78,7 @@
 		></textarea>
 	</label>
 	<label class="field">
-		<span>Enterprise</span>
+		<span>{t('nav.enterprise')}</span>
 		<select
 			value={metric.enterprise_id ?? ''}
 			onchange={(e) => void persist({ enterprise_id: e.currentTarget.value || null })}
@@ -89,7 +90,7 @@
 		</select>
 	</label>
 	<label class="field">
-		<span>Unit</span>
+		<span>{t('ent.unit')}</span>
 		<input
 			value={metric.unit ?? ''}
 			placeholder="EUR, eggs, %"
@@ -97,7 +98,7 @@
 		/>
 	</label>
 	<p class="live">
-		Live value: <strong>{formatMetricValue(live, metric.unit)}</strong>
+		{t('detail.liveValue')} <strong>{formatMetricValue(live, metric.unit)}</strong>
 	</p>
 	<p class="hint">
 		Examples: <code>sum(table:egg_actuals, col:dozen)</code>,
