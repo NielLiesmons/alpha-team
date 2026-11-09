@@ -1,0 +1,42 @@
+/** @type {Record<string, string>} */
+export default {
+	'common.more': 'Meer',
+	'common.cancel': 'Annuleren',
+	'common.save': 'Opslaan',
+	'common.language': 'Taal',
+	'common.appearance': 'Weergave',
+
+	'mail.to': 'Aan',
+	'mail.reply': 'Beantwoorden',
+	'mail.showQuote': 'Geciteerde tekst tonen',
+	'mail.hideQuote': 'Geciteerde tekst verbergen',
+
+	'settings.profile': 'Profiel',
+	'settings.notifications': 'Meldingen',
+	'settings.appearance': 'Weergave',
+	'settings.appearanceDesc': '{theme}-thema',
+	'settings.storage': 'Opslag',
+	'settings.storageDesc': 'Caches en offlinegegevens',
+	'settings.mail': 'Mail',
+	'settings.mailDesc': 'Wachtwoord mailbox',
+	'settings.publications': 'Publicaties',
+	'settings.publicationsDesc': 'API-token voor brieven',
+	'settings.files': 'Bestanden',
+	'settings.driveConnected': 'Drive verbonden',
+	'settings.driveDisconnected': 'Drive niet verbonden',
+	'settings.language': 'Taal',
+	'settings.theme': 'Thema',
+	'settings.themeSystem': 'Systeem',
+	'settings.themeLight': 'Licht',
+	'settings.themeDark': 'Donker',
+
+	'nav.settings': 'Instellingen',
+	'nav.chat': 'Chat',
+	'nav.mail': 'Mail',
+	'nav.tasks': 'Taken',
+	'nav.notes': 'Notities',
+	'nav.projects': 'Projecten',
+	'nav.drive': 'Bestanden',
+	'nav.planning': 'Planning',
+	'nav.publications': 'Publicaties'
+};

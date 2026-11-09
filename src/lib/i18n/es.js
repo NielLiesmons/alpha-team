@@ -1,0 +1,42 @@
+/** @type {Record<string, string>} */
+export default {
+	'common.more': 'Más',
+	'common.cancel': 'Cancelar',
+	'common.save': 'Guardar',
+	'common.language': 'Idioma',
+	'common.appearance': 'Apariencia',
+
+	'mail.to': 'Para',
+	'mail.reply': 'Responder',
+	'mail.showQuote': 'Mostrar texto citado',
+	'mail.hideQuote': 'Ocultar texto citado',
+
+	'settings.profile': 'Perfil',
+	'settings.notifications': 'Notificaciones',
+	'settings.appearance': 'Apariencia',
+	'settings.appearanceDesc': 'Tema {theme}',
+	'settings.storage': 'Almacenamiento',
+	'settings.storageDesc': 'Cachés y datos sin conexión',
+	'settings.mail': 'Correo',
+	'settings.mailDesc': 'Contraseña del buzón',
+	'settings.publications': 'Publicaciones',
+	'settings.publicationsDesc': 'Token API para cartas',
+	'settings.files': 'Archivos',
+	'settings.driveConnected': 'Drive conectado',
+	'settings.driveDisconnected': 'Drive no conectado',
+	'settings.language': 'Idioma',
+	'settings.theme': 'Tema',
+	'settings.themeSystem': 'Sistema',
+	'settings.themeLight': 'Claro',
+	'settings.themeDark': 'Oscuro',
+
+	'nav.settings': 'Ajustes',
+	'nav.chat': 'Chat',
+	'nav.mail': 'Correo',
+	'nav.tasks': 'Tareas',
+	'nav.notes': 'Notas',
+	'nav.projects': 'Proyectos',
+	'nav.drive': 'Archivos',
+	'nav.planning': 'Planificación',
+	'nav.publications': 'Publicaciones'
+};

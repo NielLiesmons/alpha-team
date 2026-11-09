@@ -35,6 +35,7 @@
 		togglePush
 	} from '$lib/pwa.svelte.js';
 	import { clearLocalUiCache } from '$lib/ui-cache.js';
+	import { locale, localeChoices, setLocale, t } from '$lib/i18n.svelte.js';
 	import { setTheme, themeChoice } from '$lib/theme.svelte.js';
 	import { forceClearSelection, refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { formatBytes, storageEstimate } from '$lib/offline-store.js';
@@ -75,11 +76,14 @@
 	let memberMsg = $state('');
 	let memberBusy = $state(false);
 
-	const choices = [
-		{ id: 'system', label: 'System' },
-		{ id: 'light', label: 'Light' },
-		{ id: 'dark', label: 'Dark' }
-	];
+	const choices = $derived.by(() => {
+		locale.value;
+		return [
+			{ id: 'system', label: t('settings.themeSystem') },
+			{ id: 'light', label: t('settings.themeLight') },
+			{ id: 'dark', label: t('settings.themeDark') }
+		];
+	});
 
 	let nameDraft = $state('');
 	let picBusy = $state(false);
@@ -439,8 +443,22 @@
 	</section>
 {:else if sectionId === 'appearance'}
 	<section class="block">
-		<p class="field-label">Appearance</p>
-		<div class="seg" role="radiogroup" aria-label="Appearance">
+		<p class="field-label">{t('settings.language')}</p>
+		<div class="seg" role="radiogroup" aria-label={t('settings.language')}>
+			{#each localeChoices as lang (lang.id)}
+				<button
+					type="button"
+					class:on={locale.value === lang.id}
+					role="radio"
+					aria-checked={locale.value === lang.id}
+					onclick={() => setLocale(lang.id)}
+				>
+					{lang.native}
+				</button>
+			{/each}
+		</div>
+		<p class="field-label">{t('settings.theme')}</p>
+		<div class="seg" role="radiogroup" aria-label={t('settings.appearance')}>
 			{#each choices as choice (choice.id)}
 				<button
 					type="button"
@@ -690,14 +708,17 @@
 	}
 	.seg {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.35rem;
 		padding: 0.25rem;
+		margin-bottom: 1rem;
 		border-radius: 12px;
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
 		border: 1px solid var(--white11);
 	}
 	.seg button {
-		flex: 1;
+		flex: 1 1 4.5rem;
+		min-width: 4.5rem;
 		height: 2.1rem;
 		border: 0;
 		border-radius: 9px;

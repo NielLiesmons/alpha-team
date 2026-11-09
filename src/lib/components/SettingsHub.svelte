@@ -18,6 +18,7 @@
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { canManageMembers, members, roleFor } from '$lib/members.svelte.js';
 	import { setProfileTarget, clearProfileTarget } from '$lib/settings-ui.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { pwaUi } from '$lib/pwa.svelte.js';
 	import { selectEntity, ui } from '$lib/workspace.svelte.js';
@@ -82,16 +83,17 @@
 	const stackDepth = $derived(Math.min(3, otherProfiles.length));
 
 	const sections = $derived.by(() => {
+		locale.value; /* re-run when language changes */
 		/** @type {{ id: string, title: string, description: string }[]} */
 		const rows = [
 			{
 				id: 'profile',
-				title: 'Profile',
+				title: t('settings.profile'),
 				description: activeEmail || 'Name, photo, disconnect'
 			},
 			{
 				id: 'notifications',
-				title: 'Notifications',
+				title: t('settings.notifications'),
 				description: pwaUi.pushSubscribed
 					? 'Push on · this device'
 					: pwaUi.standalone
@@ -100,33 +102,41 @@
 			},
 			{
 				id: 'appearance',
-				title: 'Appearance',
-				description: `${String(themeChoice.value || 'system')} theme`
+				title: t('settings.appearance'),
+				description: t('settings.appearanceDesc', {
+					theme: t(
+						themeChoice.value === 'light'
+							? 'settings.themeLight'
+							: themeChoice.value === 'dark'
+								? 'settings.themeDark'
+								: 'settings.themeSystem'
+					)
+				})
 			},
 			{
 				id: 'storage',
-				title: 'Storage',
-				description: pwaUi.storageLabel || 'Caches & offline data'
+				title: t('settings.storage'),
+				description: pwaUi.storageLabel || t('settings.storageDesc')
 			},
 			{
 				id: 'mail',
-				title: 'Mail',
-				description: actor.email ? actor.email : 'Mailbox password'
+				title: t('settings.mail'),
+				description: actor.email ? actor.email : t('settings.mailDesc')
 			}
 		];
 		if (isAdmin) {
 			rows.push(
 				{
 					id: 'publications',
-					title: 'Publications',
-					description: 'API token for letters'
+					title: t('settings.publications'),
+					description: t('settings.publicationsDesc')
 				},
 				{
 					id: 'drive',
-					title: 'Files',
+					title: t('settings.files'),
 					description: driveSession.connected
-						? driveSession.url || 'Drive connected'
-						: 'Drive not connected'
+						? driveSession.url || t('settings.driveConnected')
+						: t('settings.driveDisconnected')
 				}
 			);
 		}

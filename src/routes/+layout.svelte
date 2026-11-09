@@ -9,6 +9,7 @@
 	import { initChatWakeListeners } from '$lib/chat-sync.svelte.js';
 	import { initPwa } from '$lib/pwa.svelte.js';
 	import { startRealtime, stopRealtime } from '$lib/realtime.svelte.js';
+	import { initLocale } from '$lib/i18n.svelte.js';
 	import { initTheme } from '$lib/theme.svelte.js';
 	import { startViewportBridge } from '$lib/viewport.svelte.js';
 	import AppShell from '$lib/components/AppShell.svelte';
@@ -34,6 +35,7 @@
 		const stopChatWake = initChatWakeListeners();
 		initBrand();
 		initTheme();
+		initLocale();
 		bootApp();
 
 		// Light SW registration — avoid hammering iOS with update checks.

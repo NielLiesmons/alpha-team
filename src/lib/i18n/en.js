@@ -1,0 +1,42 @@
+/** @type {Record<string, string>} */
+export default {
+	'common.more': 'More',
+	'common.cancel': 'Cancel',
+	'common.save': 'Save',
+	'common.language': 'Language',
+	'common.appearance': 'Appearance',
+
+	'mail.to': 'To',
+	'mail.reply': 'Reply',
+	'mail.showQuote': 'Show quoted text',
+	'mail.hideQuote': 'Hide quoted text',
+
+	'settings.profile': 'Profile',
+	'settings.notifications': 'Notifications',
+	'settings.appearance': 'Appearance',
+	'settings.appearanceDesc': '{theme} theme',
+	'settings.storage': 'Storage',
+	'settings.storageDesc': 'Caches & offline data',
+	'settings.mail': 'Mail',
+	'settings.mailDesc': 'Mailbox password',
+	'settings.publications': 'Publications',
+	'settings.publicationsDesc': 'API token for letters',
+	'settings.files': 'Files',
+	'settings.driveConnected': 'Drive connected',
+	'settings.driveDisconnected': 'Drive not connected',
+	'settings.language': 'Language',
+	'settings.theme': 'Theme',
+	'settings.themeSystem': 'System',
+	'settings.themeLight': 'Light',
+	'settings.themeDark': 'Dark',
+
+	'nav.settings': 'Settings',
+	'nav.chat': 'Chat',
+	'nav.mail': 'Mail',
+	'nav.tasks': 'Tasks',
+	'nav.notes': 'Notes',
+	'nav.projects': 'Projects',
+	'nav.drive': 'Files',
+	'nav.planning': 'Planning',
+	'nav.publications': 'Publications'
+};

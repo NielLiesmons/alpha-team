@@ -27,6 +27,7 @@
 		setPlanningZoom
 	} from '$lib/planning-view.svelte.js';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
+	import { locale, t } from '$lib/i18n.svelte.js';
 	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
 	import UiShell from '@alpha/ui/UiShell.svelte';
 	import CostCreate from './CostCreate.svelte';
@@ -97,15 +98,46 @@
 		return path === href || path.startsWith(`${href}/`);
 	}
 
-	const roleNav = $derived(navForRole());
-	const roleMobileNav = $derived(mobileNavForRole());
+	/** @param {string} href */
+	function navLabel(href) {
+		const key =
+			{
+				'/chat': 'nav.chat',
+				'/mail': 'nav.mail',
+				'/drive': 'nav.drive',
+				'/projects': 'nav.projects',
+				'/tasks': 'nav.tasks',
+				'/notes': 'nav.notes',
+				'/planning': 'nav.planning',
+				'/publications': 'nav.publications',
+				'/settings': 'nav.settings'
+			}[href] || '';
+		return key ? t(key) : '';
+	}
+
+	/** @param {import('$lib/sections.js').NavItem} item */
+	function withNavLabel(item) {
+		const translated = navLabel(item.href);
+		return translated ? { ...item, label: translated } : item;
+	}
+
+	const roleNav = $derived.by(() => {
+		locale.value;
+		return navForRole().map(withNavLabel);
+	});
+	const roleMobileNav = $derived.by(() => {
+		locale.value;
+		return mobileNavForRole().map(withNavLabel);
+	});
 
 	const activeItem = $derived.by(() => {
+		locale.value;
 		const child = websiteChildren.find((item) => active(item.href));
-		if (child) return child;
+		if (child) return withNavLabel(child);
 		const top = roleNav.find((item) => active(item.href));
 		if (top) return top;
-		if (active('/settings')) return { href: '/settings', label: 'Settings', icon: 'settings' };
+		if (active('/settings'))
+			return { href: '/settings', label: t('nav.settings'), icon: 'settings' };
 		return roleNav[0];
 	});
 
@@ -255,7 +287,7 @@
 	{/snippet}
 
 	{#snippet sidebarLead()}
-		<button type="button" class="pfp-btn" aria-label="Settings" onclick={() => go('/settings')}>
+		<button type="button" class="pfp-btn" aria-label={t('nav.settings')} onclick={() => go('/settings')}>
 			<ProfilePic
 				name={displayNameFromEmail()}
 				email={actor.email}

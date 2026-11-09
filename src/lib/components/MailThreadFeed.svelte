@@ -27,7 +27,8 @@
 		isFeedNearBottom,
 		snapFeedToBottomSoon
 	} from '$lib/feed-scroll.js';
-	import { splitMailQuote } from '$lib/mail-body.js';
+	import { resolveExpandedQuote, splitMailQuote } from '$lib/mail-body.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import {
 		formatMailWhen,
 		mailAuthorLabel,
@@ -346,7 +347,8 @@
 				{@const domain = emailDomain(fromEmail)}
 				{@const toLine = (m.to || []).map(displayNameFromEmail).filter(Boolean).join(', ')}
 				{@const parts = splitMailQuote(m.body || '')}
-				{@const quoteId = String(m.id || item.id)}
+				{@const quoteId = String(m.id || '')}
+				{@const mailKey = quoteId || item.id}
 				<article class="mail-panel" class:draft={isDraft(m)}>
 					<header class="mail-panel-head">
 						<ProfilePic
@@ -367,7 +369,7 @@
 									<button
 										type="button"
 										class="ghost-ico"
-										aria-label="Reply"
+										aria-label={t('mail.reply')}
 										onclick={() =>
 											openComposer('mail', undefined, undefined, {
 												to: fromEmail === me ? m.to?.[0] || replyTo : fromEmail || replyTo
@@ -379,7 +381,7 @@
 									<button
 										type="button"
 										class="ghost-ico ghost-ico-more"
-										aria-label="More"
+										aria-label={t('common.more')}
 										aria-expanded={menuOpen}
 										onclick={onMore}
 									>
@@ -389,7 +391,7 @@
 							</div>
 							<div class="mail-panel-row2">
 								<p class="mail-panel-to">
-									<span class="to-label">To:</span>
+									<span class="to-label">{t('mail.to')}:</span>
 									{toLine || '—'}
 								</p>
 								<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
@@ -403,13 +405,14 @@
 								<MailRichBody text={parts.main} />
 							{/if}
 							{#if parts.quoted}
-								{#if quoteOpen[quoteId]}
-									<MailRichBody text={parts.quoted} minDepth={1} />
+								{#if quoteOpen[mailKey]}
+									{@const expanded = resolveExpandedQuote(parts.quoted, mails, quoteId)}
+									<MailRichBody text={expanded} minDepth={1} />
 									<button
 										type="button"
 										class="quote-toggle"
-										aria-label="Hide quoted text"
-										onclick={() => toggleQuote(quoteId)}
+										aria-label={t('mail.hideQuote')}
+										onclick={() => toggleQuote(mailKey)}
 									>
 										<span class="quote-dots" aria-hidden="true">
 											<span></span><span></span><span></span>
@@ -419,8 +422,8 @@
 									<button
 										type="button"
 										class="quote-toggle"
-										aria-label="Show quoted text"
-										onclick={() => toggleQuote(quoteId)}
+										aria-label={t('mail.showQuote')}
+										onclick={() => toggleQuote(mailKey)}
 									>
 										<span class="quote-dots" aria-hidden="true">
 											<span></span><span></span><span></span>
@@ -563,10 +566,12 @@
 		border-radius: 14px;
 		background: color-mix(in srgb, var(--fg) 4.5%, transparent);
 		border: 0;
-		overflow: hidden;
-		/* Never flex-grow to fill the feed */
+		/* clip x for radius — never clip expanded quote height */
+		overflow-x: clip;
+		overflow-y: visible;
 		flex: none;
 		height: auto;
+		max-height: none;
 	}
 
 	.mail-panel.draft {
@@ -728,6 +733,8 @@
 		flex-direction: column;
 		gap: 10px;
 		align-items: flex-start;
+		max-height: none;
+		overflow: visible;
 	}
 
 	.quote-toggle {
