@@ -224,7 +224,8 @@ export function toUiMessage(email) {
 		transport: 'jmap',
 		read_by: email.keywords?.$seen ? [fromNorm] : [],
 		_jmap: email,
-		_unread: !email.keywords?.$seen
+		_unread: !email.keywords?.$seen,
+		_flagged: Boolean(email.keywords?.$flagged)
 	};
 }
 
@@ -296,6 +297,7 @@ export function groupMailThreads(messages, me) {
 			messages: msgs,
 			count: msgs.length,
 			_unread: msgs.some((m) => m._unread && m.from !== meN),
+			_flagged: msgs.some((m) => m._flagged),
 			created_at: latest.created_at,
 			subject: latest.subject,
 			body: latest.body

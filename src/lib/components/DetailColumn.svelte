@@ -24,7 +24,10 @@
 	import {
 		findMailOrTip,
 		mailCategoryFor,
+		mailComposeSeed,
 		markMailRead,
+		markMailUnread,
+		moveMailThreadLocal,
 		refreshMailForStubOnce,
 		rememberMailTip,
 		threadMessages
@@ -45,7 +48,13 @@
 	import FormDetail from './FormDetail.svelte';
 	import PublicationsHub from './PublicationsHub.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
-	import { channelById, chatUi, ensureChatFeedOpen, setActiveChannel } from '$lib/chat.svelte.js';
+	import {
+		channelById,
+		chatUi,
+		ensureChatFeedOpen,
+		loadComments,
+		setActiveChannel
+	} from '$lib/chat.svelte.js';
 	import {
 		fileDisplayTitle,
 		fileTypeColors,
@@ -249,7 +258,9 @@
 			return;
 		}
 		rememberMailTip(mailMsg);
+		/* Prefetch comments with mark-read so the thread doesn’t pop chat in later. */
 		void markMailRead(id);
+		void loadComments('mail', id).catch(() => {});
 	});
 
 	/** @param {number} cents */
@@ -347,7 +358,7 @@
 		)
 	);
 	const showMoreMenu = $derived(
-		Boolean(canDelete || canShare || canComposerEdit)
+		Boolean(canDelete || canShare || canComposerEdit || mailMsg)
 	);
 
 	const typeLabel = $derived.by(() => {
@@ -595,6 +606,28 @@
 		}
 	}
 
+	/** @param {'reply' | 'replyAll' | 'forward'} mode */
+	function mailAction(mode) {
+		menuOpen = false;
+		if (!mailMsg) return;
+		const seed = mailComposeSeed(mailMsg, mode);
+		openComposer('mail', `act:${mode}:${mailMsg.id}`, undefined, seed);
+	}
+
+	function mailMarkUnread() {
+		menuOpen = false;
+		if (!mailMsg?.id) return;
+		markMailUnread(mailMsg.id);
+	}
+
+	/** @param {'junk' | 'trash'} folder */
+	function mailMove(folder) {
+		menuOpen = false;
+		if (!mailMsg?.id) return;
+		moveMailThreadLocal(mailMsg.id, folder);
+		forceClearSelection();
+	}
+
 	async function shareCurrent() {
 		menuOpen = false;
 		if (fileEntry) {
@@ -752,27 +785,54 @@
 			anchor={menuAnchor}
 			placement="below"
 			align="end"
-			width={200}
-			maxHeight={280}
+			width={mailMsg ? 220 : 200}
+			maxHeight={mailMsg ? 360 : 280}
 			onclose={() => (menuOpen = false)}
 		>
 			<div class="dropdown-list" role="menu">
-				{#if canShare}
-					<button type="button" class="dropdown-item" role="menuitem" onclick={() => void shareCurrent()}>
-						{fileEntry ? t('drive.copyPath') : t('common.share')}
+				{#if mailMsg}
+					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('reply')}>
+						{t('mail.reply')}
 					</button>
-				{/if}
-				{#if canComposerEdit}
-					<button type="button" class="dropdown-item" role="menuitem" onclick={editCurrent}>
-						<Pen size={13} />
-						{t('common.edit')}
+					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('replyAll')}>
+						{t('mail.replyAll')}
 					</button>
-				{/if}
-				{#if canDelete}
-					<button type="button" class="dropdown-item danger" role="menuitem" onclick={deleteCurrent}>
+					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('forward')}>
+						{t('mail.forward')}
+					</button>
+					<button type="button" class="dropdown-item" role="menuitem" onclick={mailMarkUnread}>
+						{t('mail.markUnread')}
+					</button>
+					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailMove('junk')}>
+						{t('mail.moveToJunk')}
+					</button>
+					<button
+						type="button"
+						class="dropdown-item danger"
+						role="menuitem"
+						onclick={() => mailMove('trash')}
+					>
 						<Trash size={15} />
-						{t('common.delete')}
+						{t('mail.moveToTrash')}
 					</button>
+				{:else}
+					{#if canShare}
+						<button type="button" class="dropdown-item" role="menuitem" onclick={() => void shareCurrent()}>
+							{fileEntry ? t('drive.copyPath') : t('common.share')}
+						</button>
+					{/if}
+					{#if canComposerEdit}
+						<button type="button" class="dropdown-item" role="menuitem" onclick={editCurrent}>
+							<Pen size={13} />
+							{t('common.edit')}
+						</button>
+					{/if}
+					{#if canDelete}
+						<button type="button" class="dropdown-item danger" role="menuitem" onclick={deleteCurrent}>
+							<Trash size={15} />
+							{t('common.delete')}
+						</button>
+					{/if}
 				{/if}
 			</div>
 		</DropdownMenu>

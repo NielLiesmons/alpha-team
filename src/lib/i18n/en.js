@@ -189,6 +189,12 @@ export default {
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'To',
 	'mail.reply': 'Reply',
+	'mail.replyAll': 'Reply all',
+	'mail.forward': 'Forward',
+	'mail.markUnread': 'Mark as unread',
+	'mail.moveToJunk': 'Move to Junk',
+	'mail.moveToTrash': 'Move to Trash',
+	'mail.flagged': 'Flagged',
 	'mail.showQuote': 'Show quoted text',
 	'mail.hideQuote': 'Hide quoted text',
 	'mail.inbox': 'Inbox',

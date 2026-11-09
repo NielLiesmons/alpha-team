@@ -1,44 +1,59 @@
 <script>
 	/**
-	 * Renders mail plain text with nested quote bars colored by author email.
+	 * Renders mail plain text with nested quote rails colored by author email.
 	 */
-	import { parseMailSegments } from '$lib/mail-body.js';
+	import { nestMailSegments, parseMailSegments } from '$lib/mail-body.js';
 	import { profileAccentCss } from '$lib/color.js';
 
 	/** @type {{ text?: string, fallbackEmail?: string, minDepth?: number }} */
 	let { text = '', fallbackEmail = '', minDepth = 0 } = $props();
 
-	const segments = $derived(parseMailSegments(text, fallbackEmail, { minDepth }));
+	const tree = $derived(
+		nestMailSegments(parseMailSegments(text, fallbackEmail, { minDepth }))
+	);
 
 	/** @param {string} email @param {number} depth */
 	function barColor(email, depth) {
-		const mix = Math.max(28, 48 - Math.max(0, depth - 1) * 10);
+		const mix = Math.max(32, 58 - Math.max(0, depth - 1) * 8);
 		const accent = profileAccentCss(email || fallbackEmail || 'unknown');
 		return `color-mix(in srgb, ${accent} ${mix}%, transparent)`;
 	}
 </script>
 
-<div class="mail-rich">
-	{#each segments as seg, i (i)}
-		{#if seg.depth <= 0}
-			<pre class="plain">{seg.text}</pre>
+{#snippet nodes(list)}
+	{#each list as node, i (i)}
+		{#if node.depth <= 0}
+			{#if node.text}
+				<pre class="plain">{node.text}</pre>
+			{/if}
+			{#if node.children?.length}
+				{@render nodes(node.children)}
+			{/if}
 		{:else}
 			<div
 				class="quote"
-				style:padding-left="{10 + (seg.depth - 1) * 8}px"
-				style:border-left-color={barColor(seg.email, seg.depth)}
+				style:border-left-color={barColor(node.email, node.depth)}
 			>
-				<pre class="quote-text">{seg.text}</pre>
+				{#if node.text}
+					<pre class="quote-text">{node.text}</pre>
+				{/if}
+				{#if node.children?.length}
+					{@render nodes(node.children)}
+				{/if}
 			</div>
 		{/if}
 	{/each}
+{/snippet}
+
+<div class="mail-rich">
+	{@render nodes(tree)}
 </div>
 
 <style>
 	.mail-rich {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 6px;
 		width: 100%;
 		min-width: 0;
 	}
@@ -61,8 +76,17 @@
 	.quote {
 		box-sizing: border-box;
 		width: 100%;
-		border-left: 3px solid var(--fg-33);
 		min-width: 0;
+		margin: 2px 0 0;
+		padding: 0 0 0 10px;
+		border-left: 3px solid var(--fg-33);
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.quote .quote {
+		margin-top: 4px;
 	}
 
 	.quote-text {

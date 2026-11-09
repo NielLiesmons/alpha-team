@@ -492,6 +492,147 @@ export async function markMailRead(id) {
 	}
 }
 
+/**
+ * @param {string} id
+ */
+export function markMailUnread(id) {
+	const thread = findMail(id);
+	if (!thread) return null;
+	thread._unread = true;
+	if (Array.isArray(thread.messages) && thread.messages.length) {
+		const last = thread.messages[thread.messages.length - 1];
+		if (last) last._unread = true;
+	}
+	return thread;
+}
+
+/**
+ * Conversation participants for inbox card stacks (from + to across the thread).
+ * @param {any} thread
+ * @returns {{ name: string, email: string, pictureUrl: string | null }[]}
+ */
+export function threadParticipantProfiles(thread) {
+	const msgs = threadMessages(thread);
+	const me = mailActorEmail();
+	/** @type {Map<string, { name: string, email: string }>} */
+	const by = new Map();
+	for (const m of msgs) {
+		const from = normEmail(m?.from);
+		if (from && from !== me && !by.has(from)) {
+			by.set(from, {
+				email: from,
+				name: mailAuthorLabel(m) || displayNameFromEmail(m.from)
+			});
+		}
+		for (const p of m?.to_people || []) {
+			const e = normEmail(p?.email);
+			if (!e || e === me || by.has(e)) continue;
+			by.set(e, { email: e, name: p?.name || displayNameFromEmail(e) });
+		}
+		for (const eRaw of m?.to || []) {
+			const e = normEmail(eRaw);
+			if (!e || e === me || by.has(e)) continue;
+			by.set(e, { email: e, name: displayNameFromEmail(e) });
+		}
+	}
+	if (!by.size) {
+		const c = mailThreadContact(thread);
+		if (c.email) by.set(c.email, { email: c.email, name: c.name || displayNameFromEmail(c.email) });
+	}
+	return [...by.values()].map((p) => ({
+		...p,
+		pictureUrl: null
+	}));
+}
+
+/**
+ * @param {string | undefined} subject
+ * @param {'re' | 'fwd'} kind
+ */
+export function mailComposeSubject(subject, kind) {
+	const s = String(subject || '').trim();
+	if (kind === 'fwd') {
+		if (!s) return 'Fwd:';
+		return /^fwd\s*:/i.test(s) || /^fw\s*:/i.test(s) ? s : `Fwd: ${s}`;
+	}
+	if (!s) return 'Re:';
+	return /^re\s*:/i.test(s) ? s : `Re: ${s}`;
+}
+
+/**
+ * Seed fields for Reply / Reply all / Forward composers.
+ * @param {any} thread
+ * @param {'reply' | 'replyAll' | 'forward'} mode
+ */
+export function mailComposeSeed(thread, mode) {
+	const msgs = threadMessages(thread);
+	const last = msgs[msgs.length - 1] || thread;
+	const me = mailActorEmail();
+	const from = normEmail(last?.from);
+	const subject = String(last?.subject || thread?.subject || '').trim();
+	const body = String(last?.body || '')
+		.replace(/\r\n/g, '\n')
+		.trim();
+
+	if (mode === 'forward') {
+		const who = mailAuthorLabel(last) || from || '';
+		const when = last?.created_at ? String(last.created_at) : '';
+		const quoted = [
+			'',
+			'',
+			'---------- Forwarded message ----------',
+			who ? `From: ${who}${from ? ` <${from}>` : ''}` : from ? `From: ${from}` : '',
+			when ? `Date: ${when}` : '',
+			subject ? `Subject: ${subject}` : '',
+			'',
+			body
+		]
+			.filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
+			.join('\n');
+		return {
+			to: '',
+			subject: mailComposeSubject(subject, 'fwd'),
+			body: quoted
+		};
+	}
+
+	/** @type {string[]} */
+	let to = [];
+	if (mode === 'replyAll') {
+		if (from && from !== me) to.push(from);
+		for (const e of last?.to || []) {
+			const n = normEmail(e);
+			if (n && n !== me && !to.includes(n)) to.push(n);
+		}
+	} else if (from === me) {
+		to = (last?.to || []).map(normEmail).filter((e) => e && e !== me);
+	} else if (from) {
+		to = [from];
+	}
+
+	return {
+		to: to.join(', '),
+		subject: mailComposeSubject(subject, 're'),
+		body: ''
+	};
+}
+
+/**
+ * Soft-remove a thread from the current folder list (local until JMAP move exists).
+ * @param {string} id
+ * @param {'junk' | 'trash' | 'inbox'} folder
+ */
+export function moveMailThreadLocal(id, folder) {
+	const idx = mailMessages.findIndex((m) => String(m.id) === String(id));
+	if (idx < 0) return false;
+	/* Drop from the painted list; refreshMail will reconcile on next folder load. */
+	if (folder === 'junk' || folder === 'trash') {
+		mailMessages.splice(idx, 1);
+		return true;
+	}
+	return false;
+}
+
 /** Preview line for list rows. */
 export function mailPreview(msg) {
 	const raw = String(msg?.body || '')

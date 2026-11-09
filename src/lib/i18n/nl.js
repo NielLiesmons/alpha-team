@@ -192,6 +192,12 @@ export default {
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'Aan',
 	'mail.reply': 'Beantwoorden',
+	'mail.replyAll': 'Allen beantwoorden',
+	'mail.forward': 'Doorsturen',
+	'mail.markUnread': 'Markeren als ongelezen',
+	'mail.moveToJunk': 'Verplaatsen naar Ongewenst',
+	'mail.moveToTrash': 'Verplaatsen naar Prullenbak',
+	'mail.flagged': 'Gemarkeerd',
 	'mail.showQuote': 'Geciteerde tekst tonen',
 	'mail.hideQuote': 'Geciteerde tekst verbergen',
 	'mail.inbox': 'Postvak IN',

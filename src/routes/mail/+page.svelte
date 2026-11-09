@@ -1,6 +1,7 @@
 <script>
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import Reply from '$lib/components/icons/Reply.svelte';
+	import PriorityBox from '$lib/components/PriorityBox.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
 	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
@@ -18,7 +19,8 @@
 		mailThreadsForCurrentView,
 		mailUi,
 		refreshMail,
-		threadMessages
+		threadMessages,
+		threadParticipantProfiles
 	} from '$lib/mail.svelte.js';
 	import {
 		MAIL_CATEGORIES,
@@ -180,6 +182,8 @@
 					: ''}
 				{@const commenters = commentProfiles(comments)}
 				{@const hasComments = comments.length > 0}
+				{@const convo = threadParticipantProfiles(thread)}
+				{@const flagged = Boolean(thread._flagged)}
 				<button
 					type="button"
 					class="row"
@@ -219,8 +223,10 @@
 						<span class="meta">
 							<span class="author">{author}</span>
 							<span class="meta-trail">
-								{#if thread.count > 1}
-									<span class="count">{thread.count}</span>
+								{#if flagged}
+									<span class="priority-hit" aria-label={t('mail.flagged')}>
+										<PriorityBox priority="urgent" size={16} />
+									</span>
 								{/if}
 								{#if unread}
 									<span class="unread-dot" aria-label={t('mail.unread')}></span>
@@ -238,16 +244,13 @@
 								</span>
 							{/if}
 							<span class="snippet">{preview.text || ''}</span>
-							{#if preview.showPfp}
-								<span class="snippet-pfp">
-									<ProfilePic
-										name={preview.fromName}
-										email={preview.from}
-										pictureUrl={pictureUrlFor(preview.from)}
-										size={20}
-									/>
-								</span>
-							{/if}
+							<span class="convo-stack">
+								<ProfilePicStack
+									profiles={convo}
+									size="xxs"
+									text={thread.count > 1 ? String(thread.count) : ''}
+								/>
+							</span>
 						</span>
 						{#if hasComments}
 							<span class="team-row">
@@ -477,16 +480,12 @@
 		padding-right: 2px;
 	}
 
-	.count {
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
-		font-weight: 600;
-		color: var(--fg-33);
-		font-variant-numeric: lining-nums;
-		font-feature-settings:
-			'lnum' 1,
-			'tnum' 0,
-			'onum' 0;
+	.priority-hit {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		line-height: 0;
 	}
 
 	.unread-dot {
@@ -524,13 +523,14 @@
 		color: var(--fg-33);
 	}
 
-	/* Fixed to stack xxs (20px) so height matches with/without reply pfp */
+	/* Fixed to stack xxs (20px); +2px air under the subject/title line */
 	.snippet-row {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		min-width: 0;
 		height: 20px;
+		margin-top: 2px;
 	}
 
 	.reply-ico {
@@ -540,12 +540,30 @@
 		color: var(--fg-33);
 	}
 
-	.snippet-pfp {
+	.convo-stack {
 		flex-shrink: 0;
-		width: 20px;
+		display: flex;
+		align-items: center;
 		height: 20px;
-		border-radius: 999px;
-		overflow: hidden;
+		max-width: 42%;
+		min-width: 0;
+	}
+
+	.convo-stack :global(.profile-pic-stack) {
+		max-width: 100%;
+	}
+
+	.convo-stack :global(.pill) {
+		padding: 0 8px 0 12px;
+		background: var(--fg-8);
+	}
+
+	.convo-stack :global(.pill span) {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--fg-33);
+		font-variant-numeric: lining-nums;
 	}
 
 	/* Do not use class "preview" — app.css .preview adds 16px padding for editors */

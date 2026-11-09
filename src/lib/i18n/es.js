@@ -192,6 +192,12 @@ export default {
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'Para',
 	'mail.reply': 'Responder',
+	'mail.replyAll': 'Responder a todos',
+	'mail.forward': 'Reenviar',
+	'mail.markUnread': 'Marcar como no leído',
+	'mail.moveToJunk': 'Mover a Spam',
+	'mail.moveToTrash': 'Mover a la Papelera',
+	'mail.flagged': 'Marcado',
 	'mail.showQuote': 'Mostrar texto citado',
 	'mail.hideQuote': 'Ocultar texto citado',
 	'mail.inbox': 'Bandeja de entrada',

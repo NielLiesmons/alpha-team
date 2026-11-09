@@ -15,6 +15,7 @@
 	import { activePerson, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
+		chatFeed,
 		chatUi,
 		commentsByKey,
 		loadComments,
@@ -52,7 +53,28 @@
 	const threadId = $derived(String(mailMsg?.id || ''));
 	const me = $derived((activePerson().email || '').trim().toLowerCase());
 	const mails = $derived(threadMessages(mailMsg));
-	const comments = $derived(visibleChatMessages(commentsByKey[`mail:${threadId}`] ?? []));
+	/** Instant from chat feed + Drive index — avoids empty→pop-in when opening a thread. */
+	const comments = $derived.by(() => {
+		const id = threadId;
+		if (!id) return [];
+		/** @type {Map<string, any>} */
+		const byId = new Map();
+		for (const m of commentsByKey[`mail:${id}`] ?? []) {
+			if (m && !m._failed) byId.set(String(m.id), m);
+		}
+		for (const m of chatFeed) {
+			if (
+				m?.kind === 'comment' &&
+				m?.ref?.type === 'mail' &&
+				String(m.ref.id) === id &&
+				!m._failed
+			) {
+				byId.set(String(m.id), m);
+			}
+		}
+		return visibleChatMessages([...byId.values()]);
+	});
+	const commentById = $derived(new Map(comments.map((m) => [String(m.id), m])));
 
 	let draft = $state('');
 	/** @type {any | null} */
@@ -123,17 +145,16 @@
 		if (id === loadedThreadId) return;
 		loadedThreadId = id;
 		quoteOpen = {};
-		lastCommentLen = -1;
+		/* Seed length from whatever we already have (chat feed) so later Drive merge doesn’t yank. */
+		lastCommentLen = comments.length;
 		pinBottom = true;
+		void goBottom(true);
 		void (async () => {
 			try {
 				await loadComments('mail', id);
 			} catch {
 				/* ignore */
 			}
-			if (loadedThreadId !== id) return;
-			lastCommentLen = (commentsByKey[`mail:${id}`] ?? []).length;
-			await goBottom(true);
 		})();
 	});
 
@@ -151,6 +172,27 @@
 		const at = String(email || '').indexOf('@');
 		if (at < 0) return '';
 		return String(email).slice(at);
+	}
+
+	/** @param {string | undefined} subject */
+	function replySubject(subject) {
+		const s = String(subject || '').trim();
+		if (!s) return 'Re:';
+		return /^re\s*:/i.test(s) ? s : `Re: ${s}`;
+	}
+
+	/**
+	 * Prefer previous message author for the expanded quote rail color.
+	 * @param {any[]} list
+	 * @param {string} mailId
+	 * @param {string} fallback
+	 */
+	function quoteAuthorEmail(list, mailId, fallback) {
+		const idx = list.findIndex((m) => String(m?.id || '') === String(mailId || ''));
+		const prev = idx > 0 ? list[idx - 1] : null;
+		return String(prev?.from || fallback || '')
+			.trim()
+			.toLowerCase();
 	}
 
 	function measureFeedScroll() {
@@ -333,9 +375,14 @@
 					<ChatStatusLine text={item.text || ''} email={item.email || ''} name={item.name || ''} />
 				</div>
 			{:else if item.type === 'chat' && item.msg}
+				{@const parent =
+					item.msg.reply_to != null
+						? commentById.get(String(item.msg.reply_to)) || null
+						: null}
 				<div class="chat-row">
 					<ChatFeedCard
 						msg={item.msg}
+						{parent}
 						when={formatMailWhen(item.msg.created_at)}
 						onReply={() => startReply(item.msg)}
 					/>
@@ -349,6 +396,8 @@
 				{@const parts = splitMailQuote(m.body || '')}
 				{@const quoteId = String(m.id || '')}
 				{@const mailKey = quoteId || item.id}
+				{@const replyTarget =
+					fromEmail === me ? m.to?.[0] || replyTo : fromEmail || replyTo}
 				<article class="mail-panel" class:draft={isDraft(m)}>
 					<header class="mail-panel-head">
 						<ProfilePic
@@ -365,18 +414,6 @@
 										<span class="mail-panel-domain">{domain}</span>
 									{/if}
 								</span>
-								<button
-									type="button"
-									class="ghost-ico ghost-ico-reply"
-									aria-label={t('mail.reply')}
-									onclick={() =>
-										openComposer('mail', undefined, undefined, {
-											to: fromEmail === me ? m.to?.[0] || replyTo : fromEmail || replyTo
-										})
-									}
-								>
-									<Reply size={11} />
-								</button>
 							</div>
 							<div class="mail-panel-row2">
 								<p class="mail-panel-to">
@@ -386,15 +423,30 @@
 							</div>
 						</div>
 						<div class="mail-panel-trail">
-							<button
-								type="button"
-								class="ghost-ico ghost-ico-more"
-								aria-label={t('common.more')}
-								aria-expanded={menuOpen}
-								onclick={onMore}
-							>
-								<MoreDots size={15} />
-							</button>
+							<div class="mail-panel-actions">
+								<button
+									type="button"
+									class="ghost-ico ghost-ico-reply"
+									aria-label={t('mail.reply')}
+									onclick={() =>
+										openComposer('mail', undefined, undefined, {
+											to: replyTarget,
+											subject: replySubject(m.subject)
+										})
+									}
+								>
+									<Reply size={11} />
+								</button>
+								<button
+									type="button"
+									class="ghost-ico ghost-ico-more"
+									aria-label={t('common.more')}
+									aria-expanded={menuOpen}
+									onclick={onMore}
+								>
+									<MoreDots size={15} />
+								</button>
+							</div>
 							<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
 						</div>
 					</header>
@@ -402,12 +454,13 @@
 					<div class="mail-panel-content">
 						{#if parts.collapsible}
 							{#if parts.main}
-								<MailRichBody text={parts.main} />
+								<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 							{/if}
 							{#if parts.quoted}
 								{#if quoteOpen[mailKey]}
 									{@const expanded = resolveExpandedQuote(parts.quoted, mails, quoteId)}
-									<MailRichBody text={expanded} />
+									{@const quoteFrom = quoteAuthorEmail(mails, quoteId, fromEmail)}
+									<MailRichBody text={expanded} fallbackEmail={quoteFrom} minDepth={1} />
 									<button
 										type="button"
 										class="quote-toggle"
@@ -639,7 +692,7 @@
 		padding-top: 1px;
 	}
 
-	/* ⋯ above timestamp — same right edge */
+	/* Reply + ⋯ tight pair above timestamp — same right edge */
 	.mail-panel-trail {
 		flex-shrink: 0;
 		display: flex;
@@ -648,6 +701,12 @@
 		justify-content: center;
 		gap: 3px;
 		min-width: 0;
+	}
+
+	.mail-panel-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: 1px;
 	}
 
 	.ghost-ico {

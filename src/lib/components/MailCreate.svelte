@@ -28,8 +28,8 @@
 		if (seededFor === key) return;
 		seededFor = key;
 		toRaw = typeof ui.composer?.to === 'string' ? ui.composer.to : '';
-		subject = '';
-		body = '';
+		subject = typeof ui.composer?.subject === 'string' ? ui.composer.subject : '';
+		body = typeof ui.composer?.body === 'string' ? ui.composer.body : '';
 		err = '';
 		busy = false;
 		tick().then(() => toInput?.focus());

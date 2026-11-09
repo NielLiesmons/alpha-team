@@ -289,3 +289,33 @@ export function parseMailSegments(text, fallbackEmail = '', opts = {}) {
 
 	return segments;
 }
+
+/**
+ * Nest flat depth segments into a tree for layered quote rails (Gmail / Apple Mail style).
+ * @param {{ depth: number, email: string, text: string }[]} segments
+ * @returns {{ depth: number, email: string, text: string, children: any[] }[]}
+ */
+export function nestMailSegments(segments) {
+	const list = Array.isArray(segments) ? segments : [];
+	/** @type {{ depth: number, email: string, text: string, children: any[] }} */
+	const root = { depth: -1, email: '', text: '', children: [] };
+	/** @type {typeof root[]} */
+	const stack = [root];
+
+	for (const seg of list) {
+		const depth = Math.max(0, Number(seg.depth) || 0);
+		const node = {
+			depth,
+			email: String(seg.email || ''),
+			text: String(seg.text || ''),
+			children: /** @type {any[]} */ ([])
+		};
+		while (stack.length > 1 && stack[stack.length - 1].depth >= depth) {
+			stack.pop();
+		}
+		stack[stack.length - 1].children.push(node);
+		stack.push(node);
+	}
+
+	return root.children;
+}
