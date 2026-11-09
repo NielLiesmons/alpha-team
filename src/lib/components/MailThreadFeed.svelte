@@ -365,37 +365,37 @@
 										<span class="mail-panel-domain">{domain}</span>
 									{/if}
 								</span>
-								<span class="mail-panel-actions">
-									<button
-										type="button"
-										class="ghost-ico"
-										aria-label={t('mail.reply')}
-										onclick={() =>
-											openComposer('mail', undefined, undefined, {
-												to: fromEmail === me ? m.to?.[0] || replyTo : fromEmail || replyTo
-											})
-										}
-									>
-										<Reply size={13} />
-									</button>
-									<button
-										type="button"
-										class="ghost-ico ghost-ico-more"
-										aria-label={t('common.more')}
-										aria-expanded={menuOpen}
-										onclick={onMore}
-									>
-										<MoreDots size={15} />
-									</button>
-								</span>
+								<button
+									type="button"
+									class="ghost-ico ghost-ico-reply"
+									aria-label={t('mail.reply')}
+									onclick={() =>
+										openComposer('mail', undefined, undefined, {
+											to: fromEmail === me ? m.to?.[0] || replyTo : fromEmail || replyTo
+										})
+									}
+								>
+									<Reply size={11} />
+								</button>
 							</div>
 							<div class="mail-panel-row2">
 								<p class="mail-panel-to">
 									<span class="to-label">{t('mail.to')}:</span>
 									{toLine || '—'}
 								</p>
-								<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
 							</div>
+						</div>
+						<div class="mail-panel-trail">
+							<button
+								type="button"
+								class="ghost-ico ghost-ico-more"
+								aria-label={t('common.more')}
+								aria-expanded={menuOpen}
+								onclick={onMore}
+							>
+								<MoreDots size={15} />
+							</button>
+							<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
 						</div>
 					</header>
 					<div class="mail-panel-rule" aria-hidden="true"></div>
@@ -407,7 +407,7 @@
 							{#if parts.quoted}
 								{#if quoteOpen[mailKey]}
 									{@const expanded = resolveExpandedQuote(parts.quoted, mails, quoteId)}
-									<MailRichBody text={expanded} minDepth={1} />
+									<MailRichBody text={expanded} />
 									<button
 										type="button"
 										class="quote-toggle"
@@ -585,8 +585,7 @@
 		align-items: center;
 		gap: 10px;
 		min-width: 0;
-		/* Less right pad so ⋯ sits further right; To: row compensates */
-		padding: 12px 8px 10px 14px;
+		padding: 12px 14px 10px;
 		box-sizing: border-box;
 	}
 
@@ -640,16 +639,15 @@
 		padding-top: 1px;
 	}
 
-	.mail-panel-actions {
-		display: inline-flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 8px;
+	/* ⋯ above timestamp — same right edge */
+	.mail-panel-trail {
 		flex-shrink: 0;
-		margin: 0;
-		padding: 0;
-		height: 18px;
-		line-height: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		justify-content: center;
+		gap: 3px;
+		min-width: 0;
 	}
 
 	.ghost-ico {
@@ -670,14 +668,15 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 
-	.ghost-ico :global(.icon),
-	.ghost-ico :global(svg) {
+	.ghost-ico-reply :global(.icon),
+	.ghost-ico-reply :global(svg) {
 		display: block;
-		width: 13px;
-		height: 13px;
+		width: 11px;
+		height: 11px;
 	}
 
 	.ghost-ico-more :global(svg) {
+		display: block;
 		width: 15px;
 		height: 15px;
 	}
@@ -690,7 +689,7 @@
 		flex: 1;
 		min-width: 0;
 		margin: 0;
-		padding-right: 6px;
+		padding: 0;
 		font-size: 12px;
 		font-weight: 450;
 		color: var(--fg-33);
@@ -707,15 +706,14 @@
 	}
 
 	.mail-panel-when {
-		flex-shrink: 0;
 		margin: 0;
-		padding-right: 6px;
+		padding: 0;
 		font-size: 11px;
 		font-weight: 500;
 		line-height: 1.25;
 		color: var(--fg-33);
 		white-space: nowrap;
-		box-sizing: border-box;
+		text-align: right;
 	}
 
 	/* Full panel width — padding lives in head/content, not around the rule */

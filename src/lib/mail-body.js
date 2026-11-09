@@ -37,15 +37,22 @@ function looksLikeHtml(text) {
 /** @param {string} html */
 function stripHtml(html) {
 	return String(html || '')
+		.replace(/<style[\s\S]*?<\/style>/gi, '')
+		.replace(/<script[\s\S]*?<\/script>/gi, '')
 		.replace(/<br\s*\/?>/gi, '\n')
 		.replace(/<\/p>/gi, '\n\n')
 		.replace(/<\/div>/gi, '\n')
+		.replace(/<\/li>/gi, '\n')
 		.replace(/<\/tr>/gi, '\n')
+		.replace(/<\/h[1-6]>/gi, '\n\n')
+		.replace(/<hr\b[^>]*>/gi, '\n---\n')
 		.replace(/<[^>]+>/g, '')
 		.replace(/&nbsp;/g, ' ')
 		.replace(/&lt;/g, '<')
 		.replace(/&gt;/g, '>')
 		.replace(/&amp;/g, '&')
+		.replace(/&quot;/g, '"')
+		.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
 		.replace(/[ \t]+\n/g, '\n')
 		.replace(/\n{3,}/g, '\n\n')
 		.trim();
@@ -163,7 +170,21 @@ export function splitMailQuote(body) {
 }
 
 /**
- * Prefer a complete previous message when the inline citation is a thin scrap.
+ * Plain text for a stored mail body (HTML stripped when needed).
+ * @param {unknown} body
+ */
+export function plainMailBody(body) {
+	let text = String(body ?? '')
+		.replace(/\r\n/g, '\n')
+		.trim();
+	if (!text) return '';
+	if (looksLikeHtml(text)) text = stripHtml(text);
+	return text.trim();
+}
+
+/**
+ * Apple Mail–style expand: show the full previous thread message when we have it,
+ * otherwise the entire cited tail from the current body (never a short scrap).
  * @param {string} quoted
  * @param {any[]} mails chronological thread messages
  * @param {string} mailId current message id
@@ -173,15 +194,12 @@ export function resolveExpandedQuote(quoted, mails, mailId) {
 	const list = Array.isArray(mails) ? mails : [];
 	const idx = list.findIndex((m) => String(m?.id || '') === String(mailId || ''));
 	const prev = idx > 0 ? list[idx - 1] : null;
-	let prevBody = String(prev?.body || '').trim();
-	if (prevBody && looksLikeHtml(prevBody)) prevBody = stripHtml(prevBody);
-	if (!prevBody) return q;
-	if (!q) return prevBody;
-	/* Citation clearly shorter than the prior mail → show the prior mail in full. */
-	if (prevBody.length > 40 && q.length < Math.max(80, prevBody.length * 0.55)) {
-		return prevBody;
-	}
-	return q;
+	const prevBody = prev ? plainMailBody(prev.body) : '';
+
+	/* Prefer the longer complete source so expand never looks clipped. */
+	if (prevBody && prevBody.length >= q.length) return prevBody;
+	if (q) return q;
+	return prevBody;
 }
 
 /** @param {string} line */

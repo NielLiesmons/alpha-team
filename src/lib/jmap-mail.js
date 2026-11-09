@@ -170,6 +170,32 @@ function addrDisplayName(addr) {
 }
 
 /**
+ * Full message text from JMAP bodyValues (plain preferred, else HTML).
+ * Falls back to preview only when bodies weren't fetched.
+ * @param {any} email
+ */
+function bodyFromEmail(email) {
+	const values = email?.bodyValues && typeof email.bodyValues === 'object' ? email.bodyValues : {};
+	/** @param {any[]} parts */
+	const fromParts = (parts) => {
+		if (!Array.isArray(parts)) return '';
+		const chunks = [];
+		for (const p of parts) {
+			const id = p?.partId;
+			if (!id) continue;
+			const v = values[id]?.value;
+			if (v) chunks.push(String(v));
+		}
+		return chunks.join('\n').trim();
+	};
+	const plain = fromParts(email?.textBody);
+	if (plain) return plain;
+	const html = fromParts(email?.htmlBody);
+	if (html) return html;
+	return String(email?.preview || '').trim();
+}
+
+/**
  * @param {any} email
  */
 export function toUiMessage(email) {
@@ -193,7 +219,7 @@ export function toUiMessage(email) {
 				name: addrDisplayName(a)
 			})),
 		subject: email.subject || '(no subject)',
-		body: email.preview || '',
+		body: bodyFromEmail(email),
 		created_at: created,
 		transport: 'jmap',
 		read_by: email.keywords?.$seen ? [fromNorm] : [],
@@ -290,7 +316,10 @@ const EMAIL_PROPS = [
 	'sentAt',
 	'preview',
 	'keywords',
-	'mailboxIds'
+	'mailboxIds',
+	'textBody',
+	'htmlBody',
+	'bodyValues'
 ];
 
 /**
@@ -355,7 +384,18 @@ export async function listJmapFolder(email, password, folder, limit = 50) {
 	if (!allEmailIds.length) return [];
 
 	const got = await jmapCall(apiUrl, email, password, [
-		['Email/get', { accountId, ids: allEmailIds, properties: EMAIL_PROPS }, '0']
+		[
+			'Email/get',
+			{
+				accountId,
+				ids: allEmailIds,
+				properties: EMAIL_PROPS,
+				fetchTextBodyValues: true,
+				fetchHTMLBodyValues: true,
+				maxBodyValueBytes: 1_000_000
+			},
+			'0'
+		]
 	]);
 	const list = (firstResult(got.methodResponses, 'Email/get')?.list || []).map(toUiMessage);
 	return groupMailThreads(list, email);
