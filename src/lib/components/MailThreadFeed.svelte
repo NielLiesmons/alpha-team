@@ -338,7 +338,6 @@
 						msg={item.msg}
 						when={formatMailWhen(item.msg.created_at)}
 						onReply={() => startReply(item.msg)}
-						threaded
 					/>
 				</div>
 			{:else if item.type === 'mail' && item.mail}

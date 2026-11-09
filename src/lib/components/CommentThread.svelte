@@ -1,7 +1,7 @@
 <script>
 	/**
 	 * FAB → chronological comment feed (same bubble language as chat panels).
-	 * Left-aligned threaded cards; reply quotes in the composer — no nested modals.
+	 * Reply quotes in the composer — no nested modals.
 	 */
 	import { fade, fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -256,7 +256,6 @@
 							parent={parentOf(msg)}
 							when={formatWhen(msg.created_at)}
 							onReply={() => startReply(msg)}
-							threaded
 						/>
 					{/each}
 				{/if}
