@@ -1,8 +1,7 @@
 <script>
 	/**
-	 * FAB → comment panel (Zapstore-style threads + ChatFeedCard parity).
-	 * Desktop: wider bottom-right panel (FAB inset). Quiet “Comments” top fader.
-	 * Composer overlays the feed (ChatChannelPanel pattern). Nested replies: panel-on-panel.
+	 * FAB → chronological comment feed (same bubble language as chat panels).
+	 * Left-aligned threaded cards; reply quotes in the composer — no nested modals.
 	 */
 	import { fade, fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -10,9 +9,7 @@
 	import Voice from './icons/Voice.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ComposerSuggest from './ComposerSuggest.svelte';
-	import ProfilePicStack from './ProfilePicStack.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
-	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		chatUi,
 		commentsByKey,
@@ -37,69 +34,17 @@
 	let listEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
-	/**
-	 * Panel stack: null = overview (all roots). String = focused thread root id.
-	 * @type {(string | null)[]}
-	 */
-	let panelStack = $state([null]);
 
 	const key = $derived(`${type}:${entityId}`);
 	const allMessages = $derived(commentsByKey[key] ?? []);
-	const messages = $derived(visibleChatMessages(allMessages));
+	const messages = $derived(
+		[...visibleChatMessages(allMessages)].sort((a, b) =>
+			String(a.created_at || '').localeCompare(String(b.created_at || ''))
+		)
+	);
 	const byId = $derived(new Map(messages.map((m) => [m.id, m])));
 
-	/** Top-level comments (no parent in this set). */
-	const roots = $derived.by(() => {
-		const ids = new Set(messages.map((m) => m.id));
-		return messages.filter((m) => !m.reply_to || !ids.has(m.reply_to));
-	});
-
-	/** @param {string} parentId */
-	function childrenOf(parentId) {
-		return messages.filter((m) => m.reply_to === parentId);
-	}
-
-	/**
-	 * Flatten descendants depth-first (for single-thread expanded view).
-	 * @param {string} rootId
-	 */
-	function descendantsOf(rootId) {
-		/** @type {any[]} */
-		const out = [];
-		/** @param {string} id */
-		function walk(id) {
-			for (const c of childrenOf(id)) {
-				out.push(c);
-				walk(c.id);
-			}
-		}
-		walk(rootId);
-		return out;
-	}
-
-	/**
-	 * Unique replier profiles under a root (for L-shape stack).
-	 * @param {string} rootId
-	 */
-	function repliersFor(rootId) {
-		const seen = new Set();
-		/** @type {{ name: string, email: string, pictureUrl: string | null }[]} */
-		const profiles = [];
-		for (const m of descendantsOf(rootId)) {
-			const email = String(m.author || '').trim().toLowerCase();
-			if (!email || seen.has(email)) continue;
-			seen.add(email);
-			const person = asPerson(m.author);
-			const name = person?.name || displayNameFromEmail(m.author);
-			profiles.push({ name, email, pictureUrl: pictureUrlFor(m.author) });
-		}
-		return profiles;
-	}
-
 	const canSend = $derived(Boolean(draft.trim()));
-	const activeRootId = $derived(panelStack[panelStack.length - 1] ?? null);
-	/** Single-thread overview → auto-expand (Zapstore). */
-	const overviewExpanded = $derived(roots.length === 1);
 
 	$effect(() => {
 		const kind = type;
@@ -140,31 +85,17 @@
 
 	function openSheet() {
 		open = true;
-		panelStack = [null];
-		queueMicrotask(() => inputEl?.focus());
+		queueMicrotask(() => {
+			snapFeedToBottom(listEl);
+			inputEl?.focus();
+		});
 	}
 
 	function closeSheet() {
 		open = false;
-		panelStack = [null];
 		replyTo = null;
 		draft = '';
 		error = null;
-	}
-
-	function popPanel() {
-		if (panelStack.length <= 1) {
-			closeSheet();
-			return;
-		}
-		panelStack = panelStack.slice(0, -1);
-		replyTo = null;
-	}
-
-	/** @param {string} rootId */
-	function pushThread(rootId) {
-		panelStack = [...panelStack, rootId];
-		replyTo = null;
 	}
 
 	/** @param {any} msg */
@@ -193,7 +124,7 @@
 				body,
 				kind: 'comment',
 				ref: { type, id: entityId },
-				reply_to: parent?.id ?? activeRootId ?? null
+				reply_to: parent?.id ?? null
 			});
 			queueMicrotask(() => {
 				snapFeedToBottom(listEl);
@@ -212,7 +143,7 @@
 				clearReply();
 				return;
 			}
-			popPanel();
+			closeSheet();
 			return;
 		}
 		if (e.key === 'Enter' && !e.shiftKey && open) {
@@ -274,7 +205,6 @@
 	});
 
 	const pillExpanded = $derived(Boolean(replyPreview) || fieldTall);
-
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -301,394 +231,208 @@
 {/if}
 
 {#if open}
-	<!-- Invisible hit target — dismiss / back without a darkening scrim -->
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div
 		class="overlay"
 		transition:fade={{ duration: 160 }}
-		onclick={popPanel}
+		onclick={closeSheet}
 		role="presentation"
 	></div>
 
-	{#each panelStack as focusId, depth (focusId ?? `overview-${depth}`)}
-		{@const isTop = depth === panelStack.length - 1}
-		{@const focusRoot = focusId ? byId.get(focusId) : null}
-		{@const showExpanded = Boolean(focusId) || overviewExpanded || roots.length === 0}
-		{@const expandedRoot = focusRoot ?? (overviewExpanded ? roots[0] : null)}
-		{@const expandedKids = expandedRoot ? descendantsOf(expandedRoot.id) : []}
-		<div
-			class="wrap"
-			class:top={isTop}
-			class:behind={!isTop}
-			style:z-index={70 + depth * 2}
-			role="dialog"
-			aria-modal={isTop ? 'true' : undefined}
-			aria-label={focusId ? t('comments.thread') : t('comments.title')}
-			aria-hidden={!isTop}
-		>
-			<div
-				class="sheet"
-				class:grow-in={depth === 0 && isTop}
-				transition:fly={{ y: depth === 0 ? 48 : 36, duration: 240, easing: cubicOut }}
-			>
-				<div class="sheet-top" aria-hidden="true">
-					<span class="sheet-title">{t('comments.title')}</span>
-				</div>
-				<div
-					class="list"
-					bind:this={listEl}
-					data-panel-top={isTop ? '1' : undefined}
-				>
-					{#if loading && messages.length === 0}
-						<p class="hint">{t('common.loading')}</p>
-					{:else if messages.length === 0}
-						<p class="hint">{t('comments.empty')}</p>
-					{:else if showExpanded && expandedRoot}
-						{@const rootParent =
-							focusId && expandedRoot.reply_to ? parentOf(expandedRoot) : null}
+	<div class="wrap" role="dialog" aria-modal="true" aria-label={t('comments.title')}>
+		<div class="sheet grow-in" transition:fly={{ y: 48, duration: 240, easing: cubicOut }}>
+			<div class="sheet-top" aria-hidden="true">
+				<span class="sheet-title">{t('comments.title')}</span>
+			</div>
+			<div class="list" bind:this={listEl}>
+				{#if loading && messages.length === 0}
+					<p class="hint">{t('common.loading')}</p>
+				{:else if messages.length === 0}
+					<p class="hint">{t('comments.empty')}</p>
+				{:else}
+					{#each messages as msg (msg.id)}
 						<ChatFeedCard
-							msg={expandedRoot}
-							parent={rootParent}
-							when={formatWhen(expandedRoot.created_at)}
-							onReply={isTop ? () => startReply(expandedRoot) : undefined}
+							{msg}
+							parent={parentOf(msg)}
+							when={formatWhen(msg.created_at)}
+							onReply={() => startReply(msg)}
 							threaded
 						/>
-
-						{#each expandedKids as msg, idx (msg.id)}
-							{@const parent = parentOf(msg)}
-							{@const quoteParent =
-								parent && parent.id !== expandedRoot.id ? parent : null}
-							{@const last = idx === expandedKids.length - 1}
-							{@const nestedKids = childrenOf(msg.id)}
-							<div class="thread-row">
-								<div class="thread-rail" aria-hidden="true">
-									{#if last}
-										<div class="elbow">
-											<svg viewBox="0 0 27 16" fill="none">
-												<path
-													d="M1 0 A 15 15 0 0 0 16 15 L27 15"
-													stroke="currentColor"
-													stroke-width="1.5"
-													fill="none"
-													stroke-linecap="round"
-												/>
-											</svg>
-										</div>
-									{:else}
-										<div class="branch"></div>
-									{/if}
-								</div>
-								<div class="thread-main">
-									<ChatFeedCard
-										msg={msg}
-										parent={quoteParent}
-										when={formatWhen(msg.created_at)}
-										onReply={isTop ? () => startReply(msg) : undefined}
-										threaded
-									/>
-									{#if nestedKids.length > 0 && focusId}
-										<div class="reply-indicator">
-											<div class="connector-column">
-												<div class="connector-vertical"></div>
-												<div class="connector-corner">
-													<svg viewBox="0 0 27 16" fill="none">
-														<path
-															d="M1 0 L1 0 Q1 15 16 15 L27 15"
-															stroke="currentColor"
-															stroke-width="1.5"
-															fill="none"
-														/>
-													</svg>
-												</div>
-											</div>
-											<ProfilePicStack
-												profiles={repliersFor(msg.id)}
-												text={nestedKids.length === 1
-													? t('common.replyOne')
-													: t('common.replies', { n: nestedKids.length })}
-												size="sm"
-												onclick={isTop ? () => pushThread(msg.id) : null}
-											/>
-										</div>
-									{/if}
-								</div>
-							</div>
-						{/each}
-					{:else}
-						{#each roots as root (root.id)}
-							{@const kids = descendantsOf(root.id)}
-							{@const repliers = repliersFor(root.id)}
-							<div class="root-block">
-								<ChatFeedCard
-									msg={root}
-									when={formatWhen(root.created_at)}
-									onReply={isTop ? () => startReply(root) : undefined}
-									threaded
-								/>
-								{#if kids.length > 0}
-									<div class="reply-indicator">
-										<div class="connector-column">
-											<div class="connector-vertical"></div>
-											<div class="connector-corner">
-												<svg viewBox="0 0 27 16" fill="none">
-													<path
-														d="M1 0 L1 0 Q1 15 16 15 L27 15"
-														stroke="currentColor"
-														stroke-width="1.5"
-														fill="none"
-													/>
-												</svg>
-											</div>
-										</div>
-										<ProfilePicStack
-											profiles={repliers}
-											text={kids.length === 1
-											? t('common.replyOne')
-											: t('common.replies', { n: kids.length })}
-											size="sm"
-											onclick={isTop ? () => pushThread(root.id) : null}
-										/>
-									</div>
-								{/if}
-							</div>
-						{/each}
-					{/if}
-				</div>
-
-				{#if isTop}
-					{#if error}
-						<p class="err">{error}</p>
-					{/if}
-					<div class="composer-fade" aria-hidden="true"></div>
-					<div class="composer-dock">
-						<div class="composer-stack">
-							<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
-							<div class="composer-pill" class:expanded={pillExpanded}>
-								{#if replyPreview}
-									<div class="reply-bar">
-										<div class="reply-meta">
-											<span class="reply-label">{t('comments.replyTo', { name: replyPreview.name })}</span>
-											<span class="reply-text">{replyPreview.text}</span>
-										</div>
-										<button
-											type="button"
-											class="reply-clear"
-											aria-label={t('comments.cancelReply')}
-											onclick={clearReply}>×</button
-										>
-									</div>
-								{/if}
-								<div class="composer-row">
-									<button type="button" class="side-btn plus" aria-label={t('chat.attach')} disabled>
-										<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-											<path
-												d="M9 3.5v11M3.5 9h11"
-												stroke="currentColor"
-												stroke-width="1.7"
-												stroke-linecap="round"
-											/>
-										</svg>
-									</button>
-									<div
-										class="composer-field"
-										class:fade-top={fadeTop}
-										class:fade-bottom={fadeBottom}
-									>
-										<textarea
-											bind:this={inputEl}
-											class="composer-input"
-											rows="1"
-											placeholder={replyTo ? t('chat.reply') : t('common.comment')}
-											bind:value={draft}
-											oninput={onInput}
-											onscroll={updateInputFade}
-											aria-label={t('common.comment')}
-										></textarea>
-									</div>
-									{#if canSend}
-										<button
-											type="button"
-											class="side-btn send"
-											aria-label={t('common.send')}
-											disabled={chatUi.posting}
-											onclick={() => void send()}
-										>
-											<AlphaLogo size={15} />
-										</button>
-									{:else}
-										<button
-											type="button"
-											class="side-btn mic"
-											aria-label={t('chat.voiceMessage')}
-											disabled
-											title={t('mail.voiceSoon')}
-										>
-											<Voice size={22} />
-										</button>
-									{/if}
-								</div>
-							</div>
-						</div>
-					</div>
+					{/each}
 				{/if}
 			</div>
+
+			{#if error}
+				<p class="err">{error}</p>
+			{/if}
+			<div class="composer-fade" aria-hidden="true"></div>
+			<div class="composer-dock">
+				<div class="composer-stack">
+					<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+					<div class="composer-pill" class:expanded={pillExpanded}>
+						{#if replyPreview}
+							<div class="reply-bar">
+								<div class="reply-meta">
+									<span class="reply-label"
+										>{t('comments.replyTo', { name: replyPreview.name })}</span
+									>
+									<span class="reply-text">{replyPreview.text}</span>
+								</div>
+								<button
+									type="button"
+									class="reply-clear"
+									aria-label={t('comments.cancelReply')}
+									onclick={clearReply}>×</button
+								>
+							</div>
+						{/if}
+						<div class="composer-row">
+							<button type="button" class="side-btn plus" aria-label={t('chat.attach')} disabled>
+								<span class="plus-glyph" aria-hidden="true">+</span>
+							</button>
+							<div
+								class="field-shell"
+								class:fade-top={fadeTop}
+								class:fade-bottom={fadeBottom}
+								class:tall={fieldTall}
+							>
+								<textarea
+									bind:this={inputEl}
+									bind:value={draft}
+									rows="1"
+									placeholder={replyTo ? t('comments.replyTo', { name: '' }).replace(/\s+$/, '…') : t('common.comment')}
+									aria-label={t('common.comment')}
+									oninput={onInput}
+									onscroll={updateInputFade}
+								></textarea>
+							</div>
+							{#if canSend}
+								<button
+									type="button"
+									class="side-btn send"
+									aria-label={t('chat.send')}
+									disabled={chatUi.posting}
+									onclick={() => void send()}
+								>
+									<AlphaLogo size={22} />
+								</button>
+							{:else}
+								<button type="button" class="side-btn voice" aria-label={t('chat.voiceMessage')} disabled>
+									<Voice size={18} />
+								</button>
+							{/if}
+						</div>
+					</div>
+				</div>
+			</div>
 		</div>
-	{/each}
+	</div>
 {/if}
 
 <style>
 	.chat-pill {
-		position: absolute;
-		right: 20px;
-		bottom: max(20px, env(safe-area-inset-bottom));
-		z-index: 6;
+		position: fixed;
+		z-index: 60;
+		right: max(16px, env(safe-area-inset-right));
+		bottom: max(16px, env(safe-area-inset-bottom));
 		display: inline-flex;
 		align-items: center;
-		gap: 0.35rem;
-		height: 36px;
-		padding: 0 0.75rem;
+		gap: 6px;
+		height: 40px;
+		padding: 0 14px 0 12px;
+		border: 0;
 		border-radius: 999px;
-		border: 1px solid var(--glass-border);
-		background: var(--popover);
+		background: color-mix(in srgb, var(--fg) 10%, transparent);
 		color: var(--fg-66);
 		cursor: pointer;
-		box-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.18));
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-style: normal;
-		font-variant-numeric: normal;
-		letter-spacing: 0;
+		-webkit-tap-highlight-color: transparent;
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 	}
 
 	.chat-pill:hover {
 		color: var(--fg);
+		background: color-mix(in srgb, var(--fg) 14%, transparent);
 	}
 
-	.count {
-		font-family: inherit;
+	.chat-pill .count {
 		font-size: 13px;
-		font-weight: 600;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
 		color: inherit;
-		font-variant-numeric: normal;
-		font-feature-settings: 'kern' 1;
 	}
 
 	.overlay {
 		position: fixed;
 		inset: 0;
-		z-index: 60;
+		z-index: 70;
 		background: transparent;
 	}
 
 	.wrap {
 		position: fixed;
-		z-index: 70;
-		left: 0;
-		right: 0;
-		bottom: 0;
+		z-index: 72;
+		right: max(12px, env(safe-area-inset-right));
+		bottom: max(12px, env(safe-area-inset-bottom));
+		left: auto;
+		top: auto;
+		width: min(420px, calc(100vw - 24px));
+		height: min(640px, calc(100dvh - 24px));
+		max-height: calc(100dvh - 24px);
 		display: flex;
-		justify-content: stretch;
+		flex-direction: column;
 		pointer-events: none;
-	}
-
-	.wrap.behind {
-		pointer-events: none;
-	}
-
-	.wrap.behind .sheet {
-		transform: translateY(10px) scale(0.97);
-		opacity: 0.88;
-		filter: brightness(0.92);
 	}
 
 	.sheet {
-		position: relative;
 		pointer-events: auto;
+		flex: 1;
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		width: 100%;
-		max-height: min(78svh, 640px);
-		border: 1px solid var(--glass-border);
-		border-bottom: none;
-		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
-		background: var(--modal-bg);
-		box-shadow: 0 16px 48px var(--shadow-strong, rgba(0, 0, 0, 0.28));
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+		border-radius: 18px;
 		overflow: hidden;
-		transform-origin: bottom right;
+		background: var(--popover, var(--bg));
+		border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+		box-shadow: 0 16px 48px color-mix(in srgb, #000 28%, transparent);
 	}
 
 	.sheet.grow-in {
-		animation: fab-grow 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+		transform-origin: 100% 100%;
 	}
 
-	@keyframes fab-grow {
-		from {
-			opacity: 0.55;
-			transform: scale(0.22);
-		}
-		to {
-			opacity: 1;
-			transform: scale(1);
-		}
-	}
-
-	/* Subtle top fader + quiet centered title (≤ bubble text size) */
 	.sheet-top {
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: 0;
-		z-index: 3;
-		height: 36px;
+		flex-shrink: 0;
 		display: flex;
-		align-items: center;
+		align-items: flex-end;
 		justify-content: center;
-		pointer-events: none;
+		height: 44px;
+		padding: 0 16px 10px;
+		box-sizing: border-box;
 		background: linear-gradient(
 			to bottom,
-			var(--modal-bg) 0%,
-			color-mix(in srgb, var(--modal-bg) 80%, transparent) 55%,
-			transparent 100%
+			var(--popover, var(--bg)) 40%,
+			color-mix(in srgb, var(--popover, var(--bg)) 0%, transparent)
 		);
+		pointer-events: none;
 	}
 
 	.sheet-title {
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
-		font-weight: 550;
-		letter-spacing: 0.01em;
-		color: var(--fg-66);
-	}
-
-	@media (min-width: 768px) {
-		/* Match FAB inset: right/bottom 20px */
-		.wrap {
-			justify-content: flex-end;
-			padding: 0 20px max(20px, env(safe-area-inset-bottom));
-		}
-
-		.sheet {
-			width: min(560px, calc(100vw - 40px));
-			max-width: 560px;
-			margin: 0;
-			border-radius: 28px;
-			border-bottom: 1px solid var(--glass-border);
-			max-height: min(78svh, 680px);
-		}
+		font-weight: 650;
+		color: var(--fg-33);
 	}
 
 	.list {
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		/* ~4px tighter than prior 14px; bottom clears floating composer */
-		padding: 36px 10px calc(72px + env(safe-area-inset-bottom, 0px));
+		-webkit-overflow-scrolling: touch;
+		padding: 8px 12px calc(88px + env(safe-area-inset-bottom, 0px));
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 2px;
+		box-sizing: border-box;
 	}
 
 	.hint {
@@ -698,114 +442,11 @@
 		color: var(--fg-33);
 	}
 
-	.root-block {
-		display: flex;
-		flex-direction: column;
-		gap: 0;
-	}
-
-	/* Zapstore L-shape / thread rail — bubbles via ChatFeedCard */
-	.thread-row {
-		display: flex;
-		gap: 0;
-		align-items: stretch;
-		--thread-rail-line: 1.5px;
-		--thread-rail-pic: 34px;
-		--thread-rail-inset: calc(var(--thread-rail-pic) / 2 - var(--thread-rail-line) / 2);
-	}
-
-	.thread-rail {
-		flex-shrink: 0;
-		width: 34px;
-		position: relative;
-		color: color-mix(in srgb, var(--fg) 16%, transparent);
-		margin-left: 0;
-	}
-
-	.branch {
-		position: absolute;
-		left: var(--thread-rail-inset);
-		top: 0;
-		bottom: 0;
-		width: var(--thread-rail-line);
-		background: currentColor;
-	}
-
-	.branch::after {
-		content: '';
-		position: absolute;
-		left: 0;
-		top: 18px;
-		width: 18px;
-		height: var(--thread-rail-line);
-		background: currentColor;
-	}
-
-	.elbow {
-		position: absolute;
-		left: calc(var(--thread-rail-inset) - 0.25px);
-		top: 0;
-		width: 27px;
-		height: 32px;
-		color: inherit;
-	}
-
-	.elbow svg {
-		display: block;
-		width: 27px;
-		height: 16px;
-		margin-top: 14px;
-	}
-
-	.thread-main {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0;
-	}
-
-	.reply-indicator {
-		display: flex;
-		align-items: flex-start;
-		gap: 0;
-		margin-top: 2px;
-		margin-left: 6px;
-		color: color-mix(in srgb, var(--fg) 16%, transparent);
-	}
-
-	.connector-column {
-		display: flex;
-		flex-direction: column;
-		width: 28px;
-		flex-shrink: 0;
-		align-items: stretch;
-	}
-
-	.connector-vertical {
-		width: 1.5px;
-		height: 10px;
-		margin-left: 15px;
-		background: currentColor;
-	}
-
-	.connector-corner {
-		width: 27px;
-		height: 16px;
-		margin-left: 14.75px;
-	}
-
-	.connector-corner svg {
-		display: block;
-		width: 27px;
-		height: 16px;
-	}
-
 	.err {
 		position: absolute;
-		left: 10px;
-		right: 10px;
-		bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+		left: 14px;
+		right: 14px;
+		bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 		z-index: 5;
 		margin: 0;
 		font-size: 12px;
@@ -813,101 +454,54 @@
 		pointer-events: none;
 	}
 
-	/* Soft veil behind composer — ChatChannelPanel pattern */
 	.composer-fade {
 		position: absolute;
 		left: 0;
 		right: 0;
 		bottom: 0;
-		z-index: 3;
-		height: calc(88px + env(safe-area-inset-bottom, 0px));
+		height: 88px;
 		pointer-events: none;
 		background: linear-gradient(
 			to top,
-			var(--modal-bg) 0%,
-			color-mix(in srgb, var(--modal-bg) 80%, transparent)
-				calc(28px + env(safe-area-inset-bottom, 0px) * 0.5),
-			transparent 100%
+			var(--popover, var(--bg)) 30%,
+			color-mix(in srgb, var(--popover, var(--bg)) 0%, transparent)
 		);
 	}
 
-	/* Float over bubbles — feed scrolls underneath */
 	.composer-dock {
 		position: absolute;
 		left: 0;
 		right: 0;
 		bottom: 0;
 		z-index: 4;
-		padding: 4px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+		padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 		pointer-events: none;
-		border-top: 0;
-		background: transparent;
 	}
 
-	.composer-dock > * {
+	.composer-stack {
 		pointer-events: auto;
+		position: relative;
 	}
 
 	.composer-pill {
 		display: flex;
 		flex-direction: column;
-		align-items: stretch;
-		gap: 0;
-		min-height: 47px;
-		padding: 0;
-		border-radius: 9999px;
-		box-sizing: border-box;
-		/*
-		 * Flat translucent fill only. Shine lives on ::after as a 1px masked ring
-		 * so the diagonal never shows through the fill.
-		 */
-		position: relative;
-		isolation: isolate;
-		border: 0;
-		background: color-mix(in srgb, var(--glass) 72%, transparent);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+		border-radius: 22px;
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
+		border: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
 		overflow: hidden;
 	}
 
-	.composer-pill::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		padding: 1px;
-		pointer-events: none;
-		z-index: 1;
-		background: linear-gradient(
-			135deg,
-			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
-			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
-			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
-			color-mix(in srgb, var(--fg) 9%, transparent) 100%
-		);
-		-webkit-mask:
-			linear-gradient(#fff 0 0) content-box,
-			linear-gradient(#fff 0 0);
-		mask:
-			linear-gradient(#fff 0 0) content-box,
-			linear-gradient(#fff 0 0);
-		-webkit-mask-composite: xor;
-		mask-composite: exclude;
-	}
-
 	.composer-pill.expanded {
-		border-radius: 16px 16px 23.5px 23.5px;
+		border-radius: 18px;
 	}
 
 	.reply-bar {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 8px;
-		margin: 0;
 		padding: 8px 10px 0;
-		border: 0;
-		background: transparent;
 	}
 
 	.reply-meta {
@@ -920,150 +514,108 @@
 
 	.reply-label {
 		font-size: 12px;
-		font-weight: 600;
-		color: var(--accent-1);
+		font-weight: 650;
+		color: var(--fg-66);
 	}
 
 	.reply-text {
 		font-size: 12px;
-		color: var(--fg-66);
+		color: var(--fg-33);
+		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.reply-clear {
 		flex-shrink: 0;
-		width: 28px;
-		height: 28px;
-		display: grid;
-		place-items: center;
-		padding: 0;
+		width: 22px;
+		height: 22px;
 		border: 0;
 		border-radius: 999px;
 		background: transparent;
 		color: var(--fg-33);
-		font-size: 20px;
-		line-height: 1;
 		cursor: pointer;
+		font-size: 16px;
+		line-height: 1;
 	}
 
 	.composer-row {
 		display: flex;
 		align-items: flex-end;
-		gap: 7px;
-		min-height: calc(47px - 14px);
-		padding: 7px;
-		box-sizing: border-box;
-	}
-
-	.composer-pill:has(.reply-bar) .composer-row {
-		padding-top: 4px;
+		gap: 4px;
+		padding: 4px 4px 4px 6px;
 	}
 
 	.side-btn {
-		width: 33px;
-		height: 33px;
 		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
 		display: grid;
 		place-items: center;
-		padding: 0;
 		border: 0;
-		border-radius: 9999px;
-		cursor: pointer;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.side-btn.plus {
-		background: color-mix(in srgb, var(--fg) 12%, transparent);
-		color: var(--fg-66);
-	}
-
-	.side-btn.plus:disabled,
-	.side-btn.mic:disabled {
-		opacity: 0.55;
-		cursor: default;
-	}
-
-	.side-btn.mic {
+		border-radius: 999px;
 		background: transparent;
-		color: var(--fg-33);
+		color: var(--fg-66);
+		cursor: pointer;
 	}
 
-	.side-btn.send {
-		background: var(--gradient-accent-1);
-		color: #fff;
-	}
-
-	.side-btn.send:disabled {
+	.side-btn:disabled {
 		opacity: 0.45;
 		cursor: default;
 	}
 
-	.composer-stack {
-		position: relative;
-		width: 100%;
-		z-index: 5;
+	.side-btn.send {
+		color: var(--fg);
 	}
 
-	.composer-field {
+	.plus-glyph {
+		font-size: 22px;
+		font-weight: 400;
+		line-height: 1;
+	}
+
+	.field-shell {
 		flex: 1;
 		min-width: 0;
-		max-height: 140px;
 		display: flex;
-		align-items: flex-end;
-		-webkit-mask-image: linear-gradient(#000, #000);
-		mask-image: linear-gradient(#000, #000);
 	}
 
-	.composer-field.fade-top {
-		-webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
-		mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
-	}
-
-	.composer-field.fade-bottom {
-		-webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 8px), transparent 100%);
-		mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 8px), transparent 100%);
-	}
-
-	.composer-field.fade-top.fade-bottom {
-		-webkit-mask-image: linear-gradient(
-			to bottom,
-			transparent 0,
-			#000 8px,
-			#000 calc(100% - 8px),
-			transparent 100%
-		);
-		mask-image: linear-gradient(
-			to bottom,
-			transparent 0,
-			#000 8px,
-			#000 calc(100% - 8px),
-			transparent 100%
-		);
-	}
-
-	.composer-input {
-		flex: 1;
-		min-width: 0;
+	.field-shell textarea {
 		width: 100%;
-		min-height: 20px;
-		max-height: 140px;
 		margin: 0;
-		padding: 6px 4px 7px;
+		padding: 8px 6px;
 		border: 0;
-		outline: none;
 		resize: none;
-		overflow-y: auto;
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
 		font-size: 15px;
-		line-height: 20px;
-		field-sizing: content;
+		line-height: 1.35;
+		max-height: 140px;
+		outline: none;
 	}
 
-	.composer-input::placeholder {
-		color: var(--fg-33);
+	@media (max-width: 767px) {
+		.wrap {
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			max-height: none;
+			right: 0;
+			bottom: 0;
+			left: 0;
+			top: 0;
+		}
+
+		.sheet {
+			border-radius: 0;
+			border: 0;
+			box-shadow: none;
+		}
+
+		.chat-pill {
+			right: max(14px, env(safe-area-inset-right));
+			bottom: max(14px, env(safe-area-inset-bottom));
+		}
 	}
 </style>

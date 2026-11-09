@@ -278,13 +278,9 @@
 			role="group"
 			aria-label={isMine ? t('chat.yourMessage') : t('chat.messageFrom', { name })}
 		>
-			{#if showAuthor && stackFirst && !emojiOnly && (threaded || !isMine)}
+			{#if showAuthor && stackFirst && !emojiOnly && !isMine}
 				<div class="bubble-head">
-					<span
-						class="author"
-						style:color={isMine && threaded ? 'rgba(255,255,255,0.92)' : nameColor(msg.author, name)}
-						>{name}</span
-					>
+					<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
 					{#if when}<span class="when">{when}</span>{/if}
 				</div>
 			{/if}
