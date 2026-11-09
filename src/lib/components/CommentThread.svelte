@@ -351,6 +351,7 @@
 							parent={rootParent}
 							when={formatWhen(expandedRoot.created_at)}
 							onReply={isTop ? () => startReply(expandedRoot) : undefined}
+							threaded
 						/>
 
 						{#each expandedKids as msg, idx (msg.id)}
@@ -383,6 +384,7 @@
 										parent={quoteParent}
 										when={formatWhen(msg.created_at)}
 										onReply={isTop ? () => startReply(msg) : undefined}
+										threaded
 									/>
 									{#if nestedKids.length > 0 && focusId}
 										<div class="reply-indicator">
@@ -421,6 +423,7 @@
 									msg={root}
 									when={formatWhen(root.created_at)}
 									onReply={isTop ? () => startReply(root) : undefined}
+									threaded
 								/>
 								{#if kids.length > 0}
 									<div class="reply-indicator">
@@ -711,20 +714,12 @@
 		--thread-rail-inset: calc(var(--thread-rail-pic) / 2 - var(--thread-rail-line) / 2);
 	}
 
-	.thread-row:has(:global(.card.mine)) {
-		flex-direction: row-reverse;
-	}
-
 	.thread-rail {
 		flex-shrink: 0;
 		width: 34px;
 		position: relative;
 		color: color-mix(in srgb, var(--fg) 16%, transparent);
 		margin-left: 0;
-	}
-
-	.thread-row:has(:global(.card.mine)) .thread-rail {
-		display: none;
 	}
 
 	.branch {

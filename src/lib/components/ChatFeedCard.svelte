@@ -1,8 +1,9 @@
 <script>
 	/**
 	 * Family chat bubble — Alpha Chat look + Zapstore desktop hover actions.
-	 * Outgoing: accent gradient, no profile pic. Incoming: muted bubble + avatar.
-	 * Desktop: React / Reply circle buttons on hover. Mobile: long-press → react picker.
+	 * Peer chat outgoing: accent gradient, right-aligned, no pfp.
+	 * Threaded (comments / pub panels): all left + pfp; mine still accent gradient.
+	 * Desktop: React / Reply on hover. Mobile: long-press → react picker.
 	 */
 	import ProfilePic from './ProfilePic.svelte';
 	import Heart from './icons/Heart.svelte';
@@ -36,7 +37,8 @@
 	 *   onQuoteClick?: (parentId: string) => void,
 	 *   stackFirst?: boolean,
 	 *   stackLast?: boolean,
-	 *   showAuthor?: boolean
+	 *   showAuthor?: boolean,
+	 *   threaded?: boolean
 	 * }}
 	 */
 	let {
@@ -47,7 +49,8 @@
 		onQuoteClick,
 		stackFirst = true,
 		stackLast = true,
-		showAuthor = true
+		showAuthor = true,
+		threaded = false
 	} = $props();
 
 	let pickerOpen = $state(false);
@@ -241,13 +244,14 @@
 <article
 	class="card desktop-bubble-actions-target"
 	class:mine={isMine}
+	class:threaded
 	class:failed={msg._failed}
 	class:stack-first={stackFirst}
 	class:stack-last={stackLast}
 	class:stack-mid={!stackFirst && !stackLast}
 	data-chat-bubble={msg.id}
 >
-	{#if !isMine}
+	{#if threaded || !isMine}
 		<div class="avatar-wrap" class:hidden-slot={!stackLast}>
 			{#if stackLast}
 				<ProfilePic name={name} email={msg.author} pictureUrl={pictureUrlFor(msg.author)} size={34} />
@@ -274,9 +278,13 @@
 			role="group"
 			aria-label={isMine ? t('chat.yourMessage') : t('chat.messageFrom', { name })}
 		>
-			{#if !isMine && showAuthor && stackFirst && !emojiOnly}
+			{#if showAuthor && stackFirst && !emojiOnly && (threaded || !isMine)}
 				<div class="bubble-head">
-					<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
+					<span
+						class="author"
+						style:color={isMine && threaded ? 'rgba(255,255,255,0.92)' : nameColor(msg.author, name)}
+						>{name}</span
+					>
 					{#if when}<span class="when">{when}</span>{/if}
 				</div>
 			{/if}
@@ -568,7 +576,7 @@
 		margin-bottom: 28px;
 	}
 
-	.card.mine {
+	.card.mine:not(.threaded) {
 		flex-direction: row-reverse;
 		justify-content: flex-start;
 	}
@@ -596,7 +604,7 @@
 		max-width: calc(100% - 40px);
 	}
 
-	.card.mine .bubble-trailing {
+	.card.mine:not(.threaded) .bubble-trailing {
 		flex-direction: row-reverse;
 		max-width: 100%;
 	}
@@ -610,7 +618,7 @@
 		max-width: 100%;
 	}
 
-	.card.mine .bubble-stack {
+	.card.mine:not(.threaded) .bubble-stack {
 		align-items: flex-end;
 	}
 
@@ -639,6 +647,15 @@
 		padding-bottom: 4px;
 	}
 
+	/* Threaded comments: left tail even when mine (Zapstore forum). */
+	.card.threaded .bubble.mine {
+		border-radius: 16px 16px 16px 4px;
+	}
+
+	.card.threaded .bubble.mine.stack-last {
+		border-radius: 16px 16px 16px 4px;
+	}
+
 	/* 1–3 emoji stickers: no chrome, just the glyphs */
 	.bubble.emoji-only,
 	.bubble.emoji-only.mine {
@@ -654,7 +671,7 @@
 		border-radius: 16px;
 	}
 
-	.bubble.mine.stack-last {
+	.card:not(.threaded) .bubble.mine.stack-last {
 		border-radius: 16px 16px 4px 16px;
 	}
 
@@ -987,7 +1004,7 @@
 		box-shadow: 0 8px 24px var(--shadow);
 	}
 
-	.card.mine .react-picker {
+	.card.mine:not(.threaded) .react-picker {
 		left: auto;
 		right: 0;
 	}
@@ -1034,7 +1051,7 @@
 		z-index: 2;
 	}
 
-	.card.mine .reaction-pills {
+	.card.mine:not(.threaded) .reaction-pills {
 		left: auto;
 		right: 0;
 		padding-left: 0;
