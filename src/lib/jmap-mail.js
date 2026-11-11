@@ -109,8 +109,15 @@ export async function jmapSession(email, password) {
  * @param {string} email
  * @param {string} password
  * @param {any[]} methodCalls
+ * @param {string[]} [using]
  */
-async function jmapCall(apiUrl, email, password, methodCalls) {
+async function jmapCall(
+	apiUrl,
+	email,
+	password,
+	methodCalls,
+	using = ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail']
+) {
 	let res;
 	try {
 		res = await fetch(apiUrl || `${jmapBase()}/`, {
@@ -121,7 +128,7 @@ async function jmapCall(apiUrl, email, password, methodCalls) {
 				Authorization: basicAuth(email, password)
 			},
 			body: JSON.stringify({
-				using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'],
+				using,
 				methodCalls
 			})
 		});
@@ -411,6 +418,118 @@ export async function testMailboxLogin(email, password) {
 	const session = await jmapSession(email, password);
 	primaryMailAccountId(session);
 	return true;
+}
+
+/**
+ * @param {unknown} value
+ */
+function cleanContactEmail(value) {
+	let s = String(value || '')
+		.trim()
+		.toLowerCase();
+	if (s.startsWith('mailto:')) s = s.slice(7);
+	s = s.split('?')[0].trim();
+	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return '';
+	return s;
+}
+
+/**
+ * @param {any} card
+ */
+function contactDisplayName(card) {
+	const name = card?.name;
+	if (typeof name === 'string' && name.trim()) return name.trim();
+	if (name && typeof name === 'object') {
+		if (typeof name.full === 'string' && name.full.trim()) return name.full.trim();
+		const comps = name.components;
+		/** @type {string[]} */
+		const parts = [];
+		const pushComp = (c) => {
+			const v = String(c?.value || '').trim();
+			if (v) parts.push(v);
+		};
+		if (Array.isArray(comps)) comps.forEach(pushComp);
+		else if (comps && typeof comps === 'object') Object.values(comps).forEach(pushComp);
+		if (parts.length) return parts.join(' ');
+	}
+	if (typeof card?.fullName === 'string' && card.fullName.trim()) return card.fullName.trim();
+	const nicks = card?.nicknames;
+	if (nicks && typeof nicks === 'object') {
+		for (const nick of Object.values(nicks)) {
+			if (typeof nick === 'string' && nick.trim()) return nick.trim();
+			const named = /** @type {any} */ (nick)?.name;
+			if (typeof named === 'string' && named.trim()) return named.trim();
+		}
+	}
+	return '';
+}
+
+/**
+ * @param {any} card
+ * @returns {string[]}
+ */
+function contactEmails(card) {
+	/** @type {string[]} */
+	const out = [];
+	const push = (value) => {
+		const email = cleanContactEmail(value);
+		if (email && !out.includes(email)) out.push(email);
+	};
+	const emails = card?.emails;
+	if (Array.isArray(emails)) {
+		for (const item of emails) push(item?.address || item?.email || item);
+	} else if (emails && typeof emails === 'object') {
+		for (const item of Object.values(emails)) {
+			push(/** @type {any} */ (item)?.address || /** @type {any} */ (item)?.email || item);
+		}
+	}
+	if (!out.length && typeof card?.vCard === 'string') {
+		for (const match of card.vCard.matchAll(/EMAIL[^:\n]*:([^\s]+)/gi)) push(match[1]);
+	}
+	return out;
+}
+
+/**
+ * JSContact cards from Stalwart `ContactCard/get` → one row per email.
+ * @param {any[]} cards
+ * @returns {{ email: string, name: string }[]}
+ */
+export function contactsFromCards(cards) {
+	/** @type {Map<string, string>} */
+	const byEmail = new Map();
+	for (const card of cards || []) {
+		const name = contactDisplayName(card);
+		for (const email of contactEmails(card)) {
+			if (!byEmail.has(email)) byEmail.set(email, name);
+			else if (!byEmail.get(email) && name) byEmail.set(email, name);
+		}
+	}
+	return [...byEmail.entries()].map(([email, name]) => ({ email, name }));
+}
+
+/**
+ * Address book on the signed-in Stalwart mailbox (RFC 9610 ContactCard).
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{ email: string, name: string }[]>}
+ */
+export async function listJmapContacts(email, password) {
+	const session = await jmapSession(email, password);
+	const cap = 'urn:ietf:params:jmap:contacts';
+	const accountId = session?.primaryAccounts?.[cap];
+	if (!accountId) return [];
+	const apiUrl = session.apiUrl || `${jmapBase()}/`;
+	const got = await jmapCall(
+		apiUrl,
+		email,
+		password,
+		[['ContactCard/get', { accountId }, 'contacts']],
+		['urn:ietf:params:jmap:core', cap]
+	);
+	const row = got?.methodResponses?.find((r) => r?.[0] === 'ContactCard/get' || r?.[2] === 'contacts');
+	if (!row || row[0] === 'error') return [];
+	const list = row[1]?.list || [];
+	return contactsFromCards(list);
 }
 
 /** @deprecated use listJmapFolder */

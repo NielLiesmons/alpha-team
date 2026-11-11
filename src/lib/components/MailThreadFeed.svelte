@@ -28,7 +28,7 @@
 		isFeedNearBottom,
 		snapFeedToBottomSoon
 	} from '$lib/feed-scroll.js';
-	import { resolveExpandedQuote, splitMailQuote } from '$lib/mail-body.js';
+	import { isHtmlMailBody, resolveExpandedQuote, safeMailHtml, splitMailQuote } from '$lib/mail-body.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import {
 		formatMailWhen,
@@ -394,6 +394,7 @@
 				{@const domain = emailDomain(fromEmail)}
 				{@const toLine = (m.to || []).map(displayNameFromEmail).filter(Boolean).join(', ')}
 				{@const parts = splitMailQuote(m.body || '')}
+				{@const rich = isHtmlMailBody(m.body) && !parts.collapsible}
 				{@const quoteId = String(m.id || '')}
 				{@const mailKey = quoteId || item.id}
 				{@const replyTarget =
@@ -452,7 +453,9 @@
 					</header>
 					<div class="mail-panel-rule" aria-hidden="true"></div>
 					<div class="mail-panel-content">
-						{#if parts.collapsible}
+						{#if rich}
+							<div class="mail-prose">{@html safeMailHtml(m.body || '')}</div>
+						{:else if parts.collapsible}
 							{#if parts.main}
 								<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 							{/if}
@@ -792,6 +795,78 @@
 		align-items: flex-start;
 		max-height: none;
 		overflow: visible;
+	}
+
+	.mail-prose {
+		width: 100%;
+		min-width: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 15px;
+		line-height: 1.55;
+		color: var(--fg-83);
+		overflow-wrap: anywhere;
+	}
+
+	.mail-prose :global(p) {
+		margin: 0 0 0.65em;
+	}
+
+	.mail-prose :global(p:last-child) {
+		margin-bottom: 0;
+	}
+
+	.mail-prose :global(h1),
+	.mail-prose :global(h2),
+	.mail-prose :global(h3) {
+		margin: 0.85em 0 0.4em;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		line-height: 1.25;
+		color: var(--fg);
+	}
+
+	.mail-prose :global(h1) {
+		font-size: 1.45rem;
+	}
+
+	.mail-prose :global(h2) {
+		font-size: 1.2rem;
+	}
+
+	.mail-prose :global(h3) {
+		font-size: 1.05rem;
+	}
+
+	.mail-prose :global(ul),
+	.mail-prose :global(ol) {
+		margin: 0 0 0.65em;
+		padding-left: 1.25rem;
+	}
+
+	.mail-prose :global(blockquote) {
+		margin: 0 0 0.65em;
+		padding-left: 0.85rem;
+		border-left: 2px solid var(--fg-16, var(--fg-8));
+		color: var(--fg-66);
+	}
+
+	.mail-prose :global(pre) {
+		margin: 0 0 0.65em;
+		padding: 0.65rem 0.75rem;
+		border-radius: 8px;
+		background: var(--fg-8);
+		overflow-x: auto;
+	}
+
+	.mail-prose :global(a) {
+		color: var(--link);
+	}
+
+	.mail-prose :global(img) {
+		display: block;
+		max-width: 100%;
+		border-radius: 12px;
+		margin: 0.5em 0;
 	}
 
 	.quote-toggle {

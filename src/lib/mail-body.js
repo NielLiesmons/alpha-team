@@ -28,10 +28,23 @@ const ORIGINAL_MESSAGE =
 	/^(?:-{2,}\s*Original Message\s*-{2,}|-{2,}\s*Message d['’]origine\s*-{2,}|-{2,}\s*Oorspronkelijk bericht\s*-{2,}|-{2,}\s*Mensaje original\s*-{2,})\s*$/i;
 
 /** Real markup — not `Name <user@host>` angle addresses. */
-function looksLikeHtml(text) {
+export function isHtmlMailBody(text) {
 	return /<\/?(?:br|p|div|span|blockquote|html|body|table|tr|td|th|a|img|font|b|i|u|strong|em|ul|ol|li|h[1-6]|head|meta|style|pre|hr)\b/i.test(
 		String(text || '')
 	);
+}
+
+/**
+ * TipTap / composer HTML safe to drop into the thread.
+ * Strips scripts, styles, and inline event handlers.
+ * @param {string} html
+ */
+export function safeMailHtml(html) {
+	return String(html || '')
+		.replace(/<script[\s\S]*?<\/script>/gi, '')
+		.replace(/<style[\s\S]*?<\/style>/gi, '')
+		.replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+		.replace(/\s(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, '');
 }
 
 /** @param {string} html */
@@ -107,7 +120,7 @@ export function splitMailQuote(body) {
 	let main = text;
 	let quoted = '';
 
-	if (looksLikeHtml(text)) {
+	if (isHtmlMailBody(text)) {
 		const qAt = findHtmlQuoteIndex(text);
 		if (qAt > 0) {
 			main = stripHtml(text.slice(0, qAt));
@@ -178,7 +191,7 @@ export function plainMailBody(body) {
 		.replace(/\r\n/g, '\n')
 		.trim();
 	if (!text) return '';
-	if (looksLikeHtml(text)) text = stripHtml(text);
+	if (isHtmlMailBody(text)) text = stripHtml(text);
 	return text.trim();
 }
 

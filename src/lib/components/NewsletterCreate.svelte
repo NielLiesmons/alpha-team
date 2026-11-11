@@ -301,6 +301,9 @@
 			/>
 		{/if}
 	</div>
+	<div class="editor-tools">
+		<EditorToolbar editor={tipTap} />
+	</div>
 	{#if commentHref}
 		<div class="mail-extra">
 			{#if commentHref.startsWith('mailto:')}
@@ -340,7 +343,6 @@
 		<p class="hint">Saves the website article only — subscribers are not re-emailed.</p>
 	{/if}
 	<div class="sheet-bottom row">
-		<EditorToolbar editor={tipTap} />
 		<div class="actions">
 			{#if !editingCampaign && !editingPostSlug}
 				<button
@@ -369,8 +371,13 @@
 	}
 
 	.body-pad {
-		padding: 8px 14px 12px;
+		padding: 8px 14px 4px;
 		min-height: 160px;
+	}
+
+	.editor-tools {
+		padding: 0 14px 10px;
+		flex-shrink: 0;
 	}
 
 	.sheet-bottom.row {

@@ -5,8 +5,8 @@
 	 * @type {{ size?: number, className?: string }}
 	 */
 	let { size = 28, className = '' } = $props();
-	const w = size;
-	const h = Math.round(size * (18 / 23));
+	const w = $derived(size);
+	const h = $derived(Math.round(size * (18 / 23)));
 </script>
 
 <span class="icon {className}" style:width="{w}px" style:height="{h}px">

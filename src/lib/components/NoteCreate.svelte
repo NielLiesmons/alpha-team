@@ -125,7 +125,6 @@
 			{/if}
 		{/key}
 	</div>
-	<div class="form-divider"></div>
 	<div class="editor-tools">
 		<EditorToolbar editor={tipTap} />
 	</div>
@@ -214,7 +213,7 @@
 	}
 
 	.editor-tools {
-		padding: 0 16px 4px;
+		padding: 0 16px 10px;
 		flex-shrink: 0;
 	}
 
