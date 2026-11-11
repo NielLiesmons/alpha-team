@@ -2553,6 +2553,7 @@
 			transition: transform 0.34s var(--ease);
 			pointer-events: none;
 			visibility: visible;
+			/* List underlay scale/dim is owned by UiShell (:has(.detail.open)). */
 		}
 
 		/* Full-bleed under glass bottom nav so the feed can blur through */
