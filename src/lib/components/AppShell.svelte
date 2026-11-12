@@ -286,6 +286,7 @@
 	}}
 	onRefresh={() => refreshAllDrive()}
 	feedPadClass={tasksList ? 'tasks-pad' : ''}
+	accountLabel={displayNameFromEmail()}
 >
 	{#snippet banners()}
 		<PwaInstallBanner />
