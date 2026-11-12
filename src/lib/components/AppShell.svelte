@@ -24,6 +24,12 @@
 		planningView,
 		setPlanningZoom
 	} from '$lib/planning-view.svelte.js';
+	import {
+		MAIL_FOLDERS,
+		mailFolderLabel,
+		mailView,
+		setMailFolder
+	} from '$lib/mail-view.svelte.js';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
 	import { locale, t } from '$lib/i18n.svelte.js';
 	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
@@ -33,7 +39,6 @@
 	import EnterpriseCreate from './EnterpriseCreate.svelte';
 	import FormCreate from './FormCreate.svelte';
 	import LedgerCreate from './LedgerCreate.svelte';
-	import MailFolderTitle from './MailFolderTitle.svelte';
 	import MetricCreate from './MetricCreate.svelte';
 	import TableCreate from './TableCreate.svelte';
 	import ViewCreate from './ViewCreate.svelte';
@@ -124,13 +129,31 @@
 		return translated ? { ...item, label: translated } : item;
 	}
 
+	/** @param {import('$lib/sections.js').NavItem} item */
+	function withMailChildren(item) {
+		const labeled = withNavLabel(item);
+		if (item.href !== '/mail') return labeled;
+		mailView.folder;
+		locale.value;
+		return {
+			...labeled,
+			children: MAIL_FOLDERS.map((id) => ({
+				id,
+				label: mailFolderLabel(id),
+				active: mailView.folder === id
+			}))
+		};
+	}
+
 	const roleNav = $derived.by(() => {
 		locale.value;
-		return navForRole().map(withNavLabel);
+		mailView.folder;
+		return navForRole().map(withMailChildren);
 	});
 	const roleMobileNav = $derived.by(() => {
 		locale.value;
-		return mobileNavForRole().map(withNavLabel);
+		mailView.folder;
+		return mobileNavForRole().map(withMailChildren);
 	});
 
 	const activeItem = $derived.by(() => {
@@ -181,8 +204,7 @@
 	/** Planning fills list+detail columns (no third-column pane). */
 	const wideList = $derived(planningList);
 	const driveList = $derived(path.startsWith('/drive'));
-	const mailList = $derived(path.startsWith('/mail'));
-	/** Planning / Drive own list actions; Mail keeps filter + plus with custom title. */
+	/** Planning / Drive own list actions. */
 	const customChrome = $derived(planningList || driveList);
 
 	const createMenuItems = $derived.by(() => {
@@ -213,6 +235,8 @@
 		}
 		const replace = Boolean(typeof history !== 'undefined' && history.state?.alphaLayer);
 		forceClearSelection();
+		/* Fresh entry to Mail always lands on Inbox; in-section folder picks keep state. */
+		if (href === '/mail' && !path.startsWith('/mail')) setMailFolder('inbox');
 		goto(href, { replaceState: replace });
 	}
 
@@ -248,6 +272,17 @@
 		if (kind) openComposer(/** @type {any} */ (kind));
 	}
 
+	/**
+	 * @param {string} parentHref
+	 * @param {string} childId
+	 */
+	function onNavChild(parentHref, childId) {
+		if (parentHref === '/mail') {
+			setMailFolder(/** @type {import('$lib/mail-view.svelte.js').MailFolder} */ (childId));
+			if (!path.startsWith('/mail')) go('/mail');
+		}
+	}
+
 	function onListPlus() {
 		if (createKind === 'file') {
 			requestDriveUpload();
@@ -279,6 +314,7 @@
 	defaultListActions={!customChrome && !chatList}
 	{isSectionActive}
 	onNavigate={go}
+	onNavChild={onNavChild}
 	onCreate={create}
 	onNavPlus={onNavPlus}
 	onFilterChange={(id) => {
@@ -304,15 +340,11 @@
 	{/snippet}
 
 	{#snippet listTitleSlot()}
-		{#if mailList}
-			<MailFolderTitle />
-		{:else}
-			<ListTitleChrome
-				title={activeItem.label}
-				syncing={syncUi.active}
-				titleClass={planningList ? 'planning-title' : ''}
-			/>
-		{/if}
+		<ListTitleChrome
+			title={activeItem.label}
+			syncing={syncUi.active}
+			titleClass={planningList ? 'planning-title' : ''}
+		/>
 	{/snippet}
 
 	{#snippet listActionsSlot()}
