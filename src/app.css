@@ -132,7 +132,8 @@
 	--shell-col-sum: calc(1 + var(--phi) + var(--phi) * var(--phi));
 	--side: clamp(210px, calc(100vw / var(--shell-col-sum)), 280px);
 	--list: calc(var(--side) * var(--phi));
-	--list-chat: calc(var(--side) * var(--phi) * 1.2);
+	/* Chat shares the standard 2nd-column width */
+	--list-chat: var(--list);
 	--radius-16: 16px;
 	--radius-hero: 32px;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);

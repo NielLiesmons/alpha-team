@@ -40,7 +40,7 @@ export default {
 
 	/* ── nav ──────────────────────────────────────────── */
 	'nav.settings': 'Réglages',
-	'nav.chat': 'Discussion',
+	'nav.chat': 'Chat',
 	'nav.mail': 'Courrier',
 	'nav.tasks': 'Tâches',
 	'nav.notes': 'Notes',
@@ -243,7 +243,7 @@ export default {
 	/* ── chat ─────────────────────────────────────────── */
 	'chat.noMessages': 'Aucun message pour l’instant',
 	'chat.writeBelow': 'Écrivez ci-dessous pour démarrer la conversation.',
-	'chat.channel': 'Discussion',
+	'chat.channel': 'Chat',
 	'chat.agent': 'Agent',
 	'chat.attachment': 'Pièce jointe',
 	'chat.now': 'maintenant',

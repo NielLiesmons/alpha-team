@@ -1108,7 +1108,7 @@
 		right: 24px;
 		/* Above composer dock: pad 10 + pill 47 + gap 10 */
 		bottom: calc(67px + env(safe-area-inset-bottom, 0px));
-		z-index: 5;
+		z-index: 8;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
@@ -1216,7 +1216,8 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		z-index: 3;
+		/* Above shell list-bottom-fade (z5) when that chrome is present elsewhere */
+		z-index: 6;
 		height: calc(88px + env(safe-area-inset-bottom, 0px));
 		pointer-events: none;
 		background: linear-gradient(
@@ -1234,7 +1235,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		z-index: 4;
+		z-index: 7;
 		padding: 10px 24px calc(10px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 		pointer-events: none;
