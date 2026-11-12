@@ -286,7 +286,7 @@ export default {
 	'chat.noMatches': 'No matches',
 	'chat.noChatSelected': 'No chat selected',
 	'chat.pickChat': 'Pick a chat from the list.',
-	'chat.general': 'General',
+	'chat.general': 'Chat',
 	'chat.emojiNameHint': 'name (for :name:)',
 
 	/* ── tasks ────────────────────────────────────────── */

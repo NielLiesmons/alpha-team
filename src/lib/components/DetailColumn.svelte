@@ -48,13 +48,7 @@
 	import FormDetail from './FormDetail.svelte';
 	import PublicationsHub from './PublicationsHub.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
-	import {
-		channelById,
-		chatUi,
-		ensureChatFeedOpen,
-		loadComments,
-		setActiveChannel
-	} from '$lib/chat.svelte.js';
+	import { channelById, loadComments } from '$lib/chat.svelte.js';
 	import {
 		fileDisplayTitle,
 		fileTypeColors,
@@ -702,28 +696,17 @@
 			clearTimeout(draftSaveTimer);
 			void persistDraft();
 		}
-		const onChat = $page.url.pathname.startsWith('/chat');
-		const restoreChat =
-			onChat && selection?.kind && selection.kind !== 'chat'
-				? String(chatUi.activeChannelId || 'general')
-				: null;
 		clearSelection();
-		/* Desktop only — mobile must stay list-first after back. */
-		if (restoreChat && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
-			const reopen = () => {
-				if (ui.selection) return;
-				if (!$page.url.pathname.startsWith('/chat')) return;
-				setActiveChannel(restoreChat);
-				ensureChatFeedOpen();
-			};
-			queueMicrotask(reopen);
-			setTimeout(reopen, 50);
-		}
+		/* Chat feed lives in the list column — don't reopen it as a detail pane. */
 	}
 
 	/** Keep body mounted through the mobile slide-out so the panel doesn’t blank mid-transition. */
 	let renderBody = $state(false);
 	let panelOpen = $state(false);
+	/** 0..1 while edge-swiping back; null when idle. Drives list underlay in UiShell. */
+	let detailDrag = $state(/** @type {number | null} */ (null));
+
+	const detailProgress = $derived(detailDrag != null ? detailDrag : panelOpen ? 1 : 0);
 
 	$effect(() => {
 		if (open) {
@@ -741,6 +724,7 @@
 			};
 		}
 		panelOpen = false;
+		detailDrag = null;
 		const mobile =
 			typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
 		if (!mobile) {
@@ -749,8 +733,113 @@
 		}
 		const t = setTimeout(() => {
 			renderBody = false;
-		}, 340);
+		}, 400);
 		return () => clearTimeout(t);
+	});
+
+	/* Publish progress to the workspace so the list underlay moves in lockstep. */
+	$effect(() => {
+		const el = detailRoot;
+		if (!el || typeof window === 'undefined') return;
+		const ws = el.closest('.workspace');
+		if (!(ws instanceof HTMLElement)) return;
+		const p = detailProgress;
+		ws.style.setProperty('--detail-progress', String(p));
+		ws.classList.toggle('detail-dragging', detailDrag != null);
+		return () => {
+			if (detailDrag == null && !panelOpen) {
+				ws.style.setProperty('--detail-progress', '0');
+				ws.classList.remove('detail-dragging');
+			}
+		};
+	});
+
+	/* iOS-like edge swipe-back: detail + list underlay track the finger. */
+	$effect(() => {
+		const el = detailRoot;
+		const isOpen = panelOpen;
+		if (!el || typeof window === 'undefined' || !isOpen) return;
+
+		const EDGE = 28;
+		const CLAIM = 10;
+		const SPAN = Math.min(320, window.innerWidth * 0.55);
+
+		let startX = 0;
+		let startY = 0;
+		let tracking = false;
+		let claimed = false;
+
+		function mobile() {
+			return window.matchMedia('(max-width: 767px)').matches;
+		}
+
+		/** @param {TouchEvent} e */
+		function onStart(e) {
+			if (!mobile() || e.touches.length !== 1) return;
+			const touch = e.touches[0];
+			if (touch.clientX > EDGE) return;
+			const t = e.target;
+			if (
+				t instanceof Element &&
+				t.closest(
+					'input, textarea, select, [contenteditable="true"], [data-no-detail-swipe]'
+				)
+			) {
+				return;
+			}
+			startX = touch.clientX;
+			startY = touch.clientY;
+			tracking = true;
+			claimed = false;
+		}
+
+		/** @param {TouchEvent} e */
+		function onMove(e) {
+			if (!tracking || e.touches.length !== 1) return;
+			const touch = e.touches[0];
+			const dx = touch.clientX - startX;
+			const dy = touch.clientY - startY;
+			if (!claimed) {
+				if (Math.abs(dx) < CLAIM && Math.abs(dy) < CLAIM) return;
+				if (Math.abs(dy) > Math.abs(dx) * 0.85 || dx < 0) {
+					tracking = false;
+					detailDrag = null;
+					return;
+				}
+				claimed = true;
+			}
+			e.preventDefault();
+			detailDrag = Math.max(0, Math.min(1, 1 - dx / SPAN));
+		}
+
+		function onEnd() {
+			if (!tracking) return;
+			const p = detailDrag;
+			const wasClaimed = claimed;
+			tracking = false;
+			claimed = false;
+			if (!wasClaimed || p == null) {
+				detailDrag = null;
+				return;
+			}
+			const shouldClose = p < 0.68;
+			detailDrag = null;
+			if (shouldClose) close();
+			else {
+				/* Snap back open — progress returns to 1 via panelOpen. */
+			}
+		}
+
+		el.addEventListener('touchstart', onStart, { passive: true });
+		el.addEventListener('touchmove', onMove, { passive: false });
+		el.addEventListener('touchend', onEnd);
+		el.addEventListener('touchcancel', onEnd);
+		return () => {
+			el.removeEventListener('touchstart', onStart);
+			el.removeEventListener('touchmove', onMove);
+			el.removeEventListener('touchend', onEnd);
+			el.removeEventListener('touchcancel', onEnd);
+		};
 	});
 </script>
 
@@ -758,9 +847,10 @@
 	class="detail"
 	class:open={panelOpen}
 	class:empty={!renderBody}
+	class:dragging={detailDrag != null}
 	aria-label="Detail"
 	bind:this={detailRoot}
-	style="--chrome-scroll-fade: {detailFade}"
+	style="--chrome-scroll-fade: {detailFade}; --detail-progress: {detailProgress}"
 	class:titles-syncing={syncUi.active}
 	aria-busy={syncUi.active || undefined}
 >
@@ -2549,11 +2639,18 @@
 			width: 100%;
 			/* Match mobile shell (desktop sidebar) — stay mounted off-screen for slide */
 			background: var(--shell);
-			transform: translate3d(100%, 0, 0);
-			transition: transform 0.34s var(--ease);
+			/* Progress 0 = off-screen right; 1 = fully covering. List underlay uses the same var. */
+			transform: translate3d(calc((1 - var(--detail-progress, 0)) * 100%), 0, 0)
+				scale(calc(1.02 - 0.02 * var(--detail-progress, 0)));
+			transform-origin: right center;
+			transition:
+				transform 0.4s var(--ease),
+				box-shadow 0.4s var(--ease);
 			pointer-events: none;
 			visibility: visible;
-			/* List underlay scale/dim is owned by UiShell (:has(.detail.open)). */
+			box-shadow: -12px 0 40px
+				color-mix(in srgb, var(--fg-raw, #000) calc(22% * var(--detail-progress, 0)), transparent);
+			will-change: transform;
 		}
 
 		/* Full-bleed under glass bottom nav so the feed can blur through */
@@ -2563,8 +2660,11 @@
 		}
 
 		.detail.open {
-			transform: translate3d(0, 0, 0);
 			pointer-events: auto;
+		}
+
+		.detail.dragging {
+			transition: none;
 		}
 
 		/* Keep off-screen panel in the layer tree (no display:none — that kills slide) */

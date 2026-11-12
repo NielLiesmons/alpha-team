@@ -141,7 +141,20 @@ export async function ensureSpace(session, name = 'Family') {
 	try {
 		await getPath(session, 'meta/space.json');
 		return null;
-	} catch {
+	} catch (e) {
+		/* Missing tip / missing leaf on a fresh Drive — seed meta/space.json. */
+		const msg = e instanceof Error ? e.message : String(e);
+		if (
+			msg.includes('Drive tip missing') ||
+			msg.includes('Drive unreachable') ||
+			msg.includes('not found') ||
+			msg.includes('404') ||
+			msg.includes('GET /v1/') ||
+			!msg
+		) {
+			return initSpace(session, name);
+		}
+		/* Path missing after tip exists — still init. */
 		return initSpace(session, name);
 	}
 }

@@ -16,6 +16,8 @@ import {
 	redirectToReturnToIfAny
 } from './return-to.js';
 import { ensureEggsExample } from './seed-eggs-forecast.js';
+import { syncSpaceFromHost } from './sections.js';
+import { parentDomain } from './space-host.js';
 import { hydrateWorkspaceFromCache, ui } from './workspace.svelte.js';
 
 /** @type {{ ready: boolean, listsReady: boolean }} */
@@ -40,6 +42,7 @@ function isOffline() {
  */
 export async function bootApp() {
 	absorbReturnToFromLocation();
+	syncSpaceFromHost();
 	loadActor();
 	loadDeviceProfiles();
 	loadSessionFromStorage();
@@ -106,7 +109,10 @@ export async function bootApp() {
 			await refreshChatFeed();
 			void refreshMembersAndAvatars().catch((e) => console.warn('members/avatars', e));
 			void refreshBackgroundDrive().then(() => {
-				void ensureEggsExample().catch((e) => console.warn('ensureEggsExample', e));
+				/* Eggs demo is Bley-only — never auto-seed other Spaces. */
+				if (parentDomain() === 'bley.farm') {
+					void ensureEggsExample().catch((e) => console.warn('ensureEggsExample', e));
+				}
 			});
 		} catch {
 			/* errors land on driveSession / chatUi — local data stays */

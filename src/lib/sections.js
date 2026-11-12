@@ -2,6 +2,8 @@
  * Primary nav IA. Icons live in alpha-ui/icons (shared design system).
  */
 
+import { parentDomain } from './space-host.js';
+
 /**
  * @typedef {{
  *   href: string,
@@ -23,8 +25,39 @@ export const websiteChildren = [
 	{ href: '/website/content', label: 'Content', icon: 'website' }
 ];
 
-/** Sites shown as cards on /website — filled from Space brand / site config later. */
+/**
+ * Sites shown as cards on /website.
+ * @type {{ id: string, name: string, siteUrl: string, tagline?: string, ogImage?: string }[]}
+ */
 export const websites = [];
+
+/** Display labels for the signed-in Space — override from brand.json later. */
+export const space = {
+	name: 'Space',
+	description: '',
+	siteUrl: ''
+};
+
+/** Derive Space name + public site card from `admin.{apex}` (or leave empty on localhost). */
+export function syncSpaceFromHost() {
+	const apex = parentDomain();
+	if (!apex) return;
+	const label = apex.split('.')[0] || apex;
+	space.name = label.charAt(0).toUpperCase() + label.slice(1);
+	space.siteUrl = `https://${apex}`;
+	const existing = websites.find((w) => w.id === apex);
+	if (existing) {
+		existing.name = space.name;
+		existing.siteUrl = space.siteUrl;
+		return;
+	}
+	websites.length = 0;
+	websites.push({
+		id: apex,
+		name: space.name,
+		siteUrl: space.siteUrl
+	});
+}
 
 /** Shown for every signed-in profile. */
 /** @type {NavItem[]} */
@@ -72,10 +105,3 @@ export function navForRole() {
 export function mobileNavForRole() {
 	return mobileNav;
 }
-
-/** Display labels for the signed-in Space — override from brand.json later. */
-export const space = {
-	name: 'Space',
-	description: '',
-	siteUrl: ''
-};

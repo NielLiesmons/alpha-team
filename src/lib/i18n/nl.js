@@ -289,7 +289,7 @@ export default {
 	'chat.noMatches': 'Geen resultaten',
 	'chat.noChatSelected': 'Geen chat geselecteerd',
 	'chat.pickChat': 'Kies een chat uit de lijst.',
-	'chat.general': 'Algemeen',
+	'chat.general': 'Chat',
 	'chat.emojiNameHint': 'naam (voor :naam:)',
 
 	/* ── tasks ────────────────────────────────────────── */

@@ -101,9 +101,18 @@ async function api(session, method, path, body, contentType, signal) {
 /**
  * @param {DriveSession} session
  * @param {AbortSignal} [signal]
+ * @returns {Promise<string>} tip hash, or '' when the Drive has never been initialized
  */
 export async function getTip(session, signal) {
-	const res = await api(session, 'GET', '/v1/tip', undefined, undefined, signal);
+	const headers = { Authorization: `Bearer ${session.token}` };
+	const res = await fetch(`${session.url.replace(/\/$/, '')}/v1/tip`, {
+		method: 'GET',
+		headers,
+		signal
+	});
+	/* Empty Drive — no tip yet (genesis). */
+	if (res.status === 404) return '';
+	if (!res.ok) throw new Error(`GET /v1/tip: ${res.status}`);
 	const body = await res.json();
 	return body.root_hash ?? '';
 }
@@ -180,7 +189,9 @@ export async function loadRootDirWithTip(session, signal) {
 	if (!tip) {
 		const local = await fallbackRootDir(session);
 		if (local) return local;
-		throw new Error('Drive tip missing and no local directory cache');
+		/* Brand-new Space: no tip on server and no device cache — empty root for genesis writes. */
+		const empty = { schema: 'alpha.dir/1', children: {} };
+		return { tip: '', dir: empty };
 	}
 
 	if (rootDirCache && rootDirCache.key === cacheKey && rootDirCache.tip === tip) {

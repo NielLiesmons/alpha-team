@@ -16,10 +16,9 @@
 	} from '$lib/workspace.svelte.js';
 	import { onMount } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
-	import { chatUi, openChatChannel } from '$lib/chat.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
-	import { bindDetailPopstate, isMobileNav } from '$lib/nav-stack.js';
+	import { bindDetailPopstate } from '$lib/nav-stack.js';
 	import {
 		PLANNING_ZOOMS,
 		planningView,
@@ -174,13 +173,11 @@
 			ui.listFilter = 'all';
 			resetAccountingBrowse();
 		}
-		/* Desktop only: third column opens last/General. Mobile stays list-first. */
-		if (p.startsWith('/chat') && !isMobileNav()) {
-			openChatChannel(chatUi.activeChannelId || 'general');
-		}
+		/* Chat feed lives in the list column — don't open it as a detail pane. */
 	});
 
 	const planningList = $derived(path.startsWith('/planning'));
+	const chatList = $derived(path.startsWith('/chat'));
 	/** Planning fills list+detail columns (no third-column pane). */
 	const wideList = $derived(planningList);
 	const driveList = $derived(path.startsWith('/drive'));
@@ -273,12 +270,13 @@
 	title={activeItem.label}
 	{counts}
 	{wideList}
+	listSize={chatList ? 'chat' : 'default'}
 	syncing={syncUi.active}
 	filterOptions={customChrome ? null : filterOptions}
 	filterValue={ui.listFilter}
 	{createMenuItems}
 	createKind={customChrome ? undefined : createKind}
-	defaultListActions={!customChrome}
+	defaultListActions={!customChrome && !chatList}
 	{isSectionActive}
 	onNavigate={go}
 	onCreate={create}

@@ -289,7 +289,7 @@ export default {
 	'chat.noMatches': 'Sin coincidencias',
 	'chat.noChatSelected': 'Ningún chat seleccionado',
 	'chat.pickChat': 'Elige un chat de la lista.',
-	'chat.general': 'General',
+	'chat.general': 'Chat',
 	'chat.emojiNameHint': 'nombre (para :nombre:)',
 
 	/* ── tasks ────────────────────────────────────────── */

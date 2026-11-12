@@ -13,7 +13,7 @@
 	import { decodeInvite, invitePayloadFromLocation, isInvitePayload } from '$lib/drive/invite.js';
 	import { driveSession, saveSession } from '$lib/drive/session.svelte.js';
 	import { setMailboxPassword } from '$lib/jmap-mail.js';
-	import { markMemberJoined } from '$lib/members.svelte.js';
+	import { markMemberJoined, upsertMember } from '$lib/members.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import { redirectToReturnToIfAny } from '$lib/return-to.js';
@@ -114,6 +114,22 @@
 				setMailboxPassword(session.email, session.mailboxPassword);
 			}
 			await connectSession(session);
+			/* Genesis / first invite: directory may be empty — upsert from the invite itself. */
+			const role =
+				session.role === 'owner' || session.role === 'admin' || session.role === 'member'
+					? session.role
+					: 'member';
+			try {
+				await upsertMember({
+					email: session.email,
+					name: session.displayName || session.email.split('@')[0] || session.email,
+					role,
+					status: 'active',
+					joined_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+				});
+			} catch (e) {
+				console.warn('welcome upsert member', e);
+			}
 			await markMemberJoined(session.email);
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);

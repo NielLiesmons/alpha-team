@@ -13,16 +13,28 @@ import {
 import { activeSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
 import { mailTipFor } from './mail.svelte.js';
-import { pushDetailLayer } from './nav-stack.js';
 import {
 	enterprises,
 	notes,
 	projects,
 	selectEntity,
-	tasks,
-	ui
+	tasks
 } from './workspace.svelte.js';
 import { projectDisplayIcon, projectLifecycle } from './project-status.js';
+import { getContentType, resolveContentTypeCard } from './content-types/index.js';
+
+/** Chat ref.type → entity schema / package lookup */
+const REF_TYPE_SCHEMA = {
+	task: 'alpha.task/3',
+	note: 'alpha.note/1',
+	project: 'alpha.project/1',
+	mail: 'alpha.mail_message/1',
+	sheet: 'alpha.table/1',
+	table: 'alpha.table/1',
+	ai_thread: 'alpha.ai_thread/1',
+	git_repo: 'alpha.git_repo/1',
+	file: 'alpha.media_blob/1'
+};
 
 /** @type {any[]} */
 export const chatFeed = $state([]);
@@ -40,17 +52,17 @@ export const chatUi = $state({
 	 * Until then the panel shows skeleton — never a false empty flash.
 	 */
 	settled: false,
-	/** Active chat id (list + detail). Default General. */
+	/** Active chat id (list + detail). Default shared feed. */
 	activeChannelId: 'general'
 });
 
-/** Built-in + future DM/agent channels (Drive-backed later). */
+/** Built-in shared feed (+ future DM/agent channels, Drive-backed later). */
 export const chatChannels = $state([
 	{
 		schema: 'alpha.chat_channel/1',
 		id: 'general',
 		kind: 'general',
-		title: 'General',
+		title: 'Chat',
 		created_at: '2020-01-01T00:00:00Z',
 		members: []
 	}
@@ -73,25 +85,19 @@ export function channelById(id) {
 }
 
 /**
- * Open the active chat channel in the detail pane when nothing is selected.
- * Used after closing a tip so the feed isn't blank.
+ * @deprecated Chat feed lives in the list column — kept for call-site compat.
  */
 export function ensureChatFeedOpen() {
-	if (ui.selection) return;
-	openChatChannel(chatUi.activeChannelId || 'general');
+	setActiveChannel(chatUi.activeChannelId || 'general');
 }
 
 /**
- * Force-open a chat channel (section enter → General). Overwrites non-chat selection.
+ * Remember the active channel id. Does not open a detail pane — the Chat section
+ * owns the feed in the list column.
  * @param {string} [id]
  */
 export function openChatChannel(id = 'general') {
-	const sid = String(id || 'general');
-	setActiveChannel(sid);
-	if (ui.selection?.kind === 'chat' && String(ui.selection.id) === sid) return;
-	const opening = !ui.selection;
-	ui.selection = { kind: 'chat', id: sid };
-	if (opening) pushDetailLayer('selection');
+	setActiveChannel(id);
 }
 
 /**
@@ -769,6 +775,15 @@ export function openChatRef(msg) {
 	const ref = msg?.ref;
 	if (!ref?.type || !ref?.id) return;
 
+	/* Git: leave Admin for the forge URL (trust plane B — not cryptree). */
+	if (ref.type === 'git_repo') {
+		const href = String(ref.web_url || ref.remote_url || '').trim();
+		if (href && typeof window !== 'undefined') {
+			window.open(href, '_blank', 'noopener,noreferrer');
+		}
+		return;
+	}
+
 	/** @type {'task' | 'note' | 'project' | 'enterprise' | 'mail' | null} */
 	let kind = null;
 	if (ref.type === 'task') kind = 'task';
@@ -810,7 +825,12 @@ export function chatPublicationRefKey(msg) {
 		ref.type !== 'note' &&
 		ref.type !== 'project' &&
 		ref.type !== 'enterprise' &&
-		ref.type !== 'mail'
+		ref.type !== 'mail' &&
+		ref.type !== 'sheet' &&
+		ref.type !== 'table' &&
+		ref.type !== 'ai_thread' &&
+		ref.type !== 'git_repo' &&
+		ref.type !== 'file'
 	) {
 		return null;
 	}
@@ -836,26 +856,46 @@ export function chatPublicationRefKey(msg) {
 export function chatRefMeta(msg) {
 	const ref = msg?.ref;
 	if (!ref?.type) return null;
+
+	const pkg = getContentType(REF_TYPE_SCHEMA[ref.type] || '');
+	const typeName = pkg?.chat?.type_name;
+	const typeIcon = pkg?.chat?.icon;
+
 	if (ref.type === 'task') {
 		const t = tasks.find((x) => x.id === ref.id);
+		const card = resolveContentTypeCard(t ? { ...t, schema: 'alpha.task/3' } : null, {
+			packageId: 'alpha.tasks'
+		});
 		return {
-			kind: 'Task',
-			title: t?.title || 'Task',
-			icon: 'tasks',
+			kind: card?.typeName || typeName || 'Task',
+			title: card?.title || t?.title || 'Task',
+			icon: card?.icon || typeIcon || 'tasks',
+			/* First-party host status glyph — not package CSS. */
 			box: 'task',
 			status: t?.status || 'open'
 		};
 	}
 	if (ref.type === 'note') {
 		const n = notes.find((x) => x.id === ref.id);
-		return { kind: 'Note', title: n?.title || 'Untitled', icon: 'notes', box: 'note' };
+		const card = resolveContentTypeCard(n ? { ...n, schema: 'alpha.note/1' } : null, {
+			packageId: 'alpha.notes'
+		});
+		return {
+			kind: card?.typeName || typeName || 'Note',
+			title: card?.title || n?.title || 'Untitled',
+			icon: card?.icon || typeIcon || 'notes',
+			box: 'note'
+		};
 	}
 	if (ref.type === 'project') {
 		const p = projects.find((x) => x.id === ref.id);
+		const card = resolveContentTypeCard(p ? { ...p, schema: 'alpha.project/1' } : null, {
+			packageId: 'alpha.projects'
+		});
 		return {
-			kind: 'Project',
-			title: p?.title || 'Project',
-			icon: 'projects',
+			kind: card?.typeName || typeName || 'Project',
+			title: card?.title || p?.title || 'Project',
+			icon: card?.icon || typeIcon || 'projects',
 			box: 'project',
 			project: p ?? null
 		};
@@ -868,6 +908,68 @@ export function chatRefMeta(msg) {
 			icon: 'entreprises',
 			box: 'enterprise',
 			enterprise: e ?? null
+		};
+	}
+	if (ref.type === 'sheet' || ref.type === 'table') {
+		const card = resolveContentTypeCard(
+			{ schema: 'alpha.table/1', id: ref.id, title: ref.title, key: ref.key },
+			{ packageId: 'alpha.sheets' }
+		);
+		return {
+			kind: card?.typeName || typeName || 'Sheet',
+			title: card?.title || String(ref.title || 'Sheet'),
+			icon: card?.icon || typeIcon || 'enterprise',
+			summary: card?.summary || ''
+		};
+	}
+	if (ref.type === 'ai_thread') {
+		const card = resolveContentTypeCard(
+			{
+				schema: 'alpha.ai_thread/1',
+				id: ref.id,
+				title: ref.title,
+				status: ref.status
+			},
+			{ packageId: 'alpha.ai_threads' }
+		);
+		return {
+			kind: card?.typeName || typeName || 'AI thread',
+			title: card?.title || String(ref.title || 'AI thread'),
+			icon: card?.icon || typeIcon || 'chat',
+			summary: card?.summary || ''
+		};
+	}
+	if (ref.type === 'git_repo') {
+		const card = resolveContentTypeCard(
+			{
+				schema: 'alpha.git_repo/1',
+				id: ref.id,
+				title: ref.title,
+				default_branch: ref.default_branch
+			},
+			{ packageId: 'alpha.git_repos' }
+		);
+		return {
+			kind: card?.typeName || typeName || 'Git repo',
+			title: card?.title || String(ref.title || 'Git repo'),
+			icon: card?.icon || typeIcon || 'drive',
+			summary: card?.summary || ''
+		};
+	}
+	if (ref.type === 'file') {
+		const card = resolveContentTypeCard(
+			{
+				schema: 'alpha.media_blob/1',
+				name: ref.title || ref.name,
+				content_type: ref.content_type
+			},
+			{ packageId: 'alpha.files', path: ref.path || ref.id }
+		);
+		return {
+			kind: card?.typeName || typeName || 'File',
+			title: card?.title || String(ref.title || ref.name || 'File'),
+			icon: card?.icon || typeIcon || 'drive',
+			summary: card?.summary || ''
 		};
 	}
 	if (ref.type === 'mail') {
@@ -894,12 +996,19 @@ export function chatRefMeta(msg) {
 		if (!fromName) fromName = String(tip?.from_name || '').trim();
 		if (!subject) subject = '(no subject)';
 		return {
-			kind: 'Mail',
+			kind: typeName || 'Mail',
 			title: subject,
-			icon: 'mail',
+			icon: typeIcon || 'mail',
 			/* Tip row pfps = mail contact (not team comment authors). */
 			tipEmails: from ? [from] : [],
 			tipNames: from ? { [from]: fromName || displayNameFromEmail(from) } : {}
+		};
+	}
+	if (pkg) {
+		return {
+			kind: pkg.chat.type_name,
+			title: String(ref.title || pkg.chat.type_name),
+			icon: pkg.chat.icon
 		};
 	}
 	return { kind: String(ref.type), title: String(ref.type), icon: 'chat' };
