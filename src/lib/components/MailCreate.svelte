@@ -214,7 +214,7 @@
 		{#if menuOpen}
 			<div
 				id="mail-recipient-suggest"
-				class="suggest"
+				class="suggest alpha-popover"
 				role="listbox"
 				tabindex="-1"
 				aria-label={t('mail.emailPlaceholder')}
@@ -274,17 +274,12 @@
 		{/key}
 	</div>
 
-	<div class="post-action-row">
-		<EditorToolbar editor={tipTap} />
-	</div>
-
-	<div class="form-divider"></div>
-
 	{#if err}
 		<p class="err" role="alert">{err}</p>
 	{/if}
 
-	<div class="sheet-bottom">
+	<div class="post-action-row">
+		<EditorToolbar editor={tipTap} />
 		<PrimaryButton
 			size="sheet"
 			disabled={busy || parseRecipients(toRaw).length === 0 || (!subject.trim() && !plainBody)}
@@ -335,12 +330,9 @@
 	.post-action-row {
 		display: flex;
 		align-items: center;
-		padding: 0 16px 10px;
+		gap: 8px;
+		padding: 0 16px 12px;
 		flex-shrink: 0;
-	}
-
-	.sheet-bottom {
-		justify-content: flex-end;
 	}
 
 	.err {
@@ -350,7 +342,6 @@
 		color: var(--fg-66);
 	}
 
-	/* Same popover as the chat composer @ menu. */
 	.suggest {
 		position: absolute;
 		left: 16px;
@@ -359,12 +350,6 @@
 		width: min(320px, calc(100vw - 32px));
 		min-width: 240px;
 		max-width: 320px;
-		border: 0.33px solid color-mix(in srgb, var(--fg) 33%, transparent);
-		border-radius: 12px;
-		background: var(--popover, var(--bg));
-		backdrop-filter: blur(var(--glass-blur, 14px));
-		-webkit-backdrop-filter: blur(var(--glass-blur, 14px));
-		box-shadow: 0 8px 24px color-mix(in srgb, #000 40%, transparent);
 		overflow: hidden;
 	}
 

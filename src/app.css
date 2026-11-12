@@ -1,4 +1,5 @@
 @import url('https://fonts.bunny.net/css?family=inter:400,500,600,700|ovo:400&display=swap');
+@import '@alpha/ui/popover.css';
 
 /*
  * Alpha Admin — shared token model with the public site (DESIGN_SYSTEM).

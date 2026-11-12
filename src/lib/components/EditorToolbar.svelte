@@ -1,9 +1,10 @@
 <script>
 	/**
-	 * Compact editor tools for create sheets / mobile — square tools + wide
-	 * dropdown triggers (icon + chevron) for headings / lists.
+	 * Compact editor tools for create sheets — square tools with FloatPanel
+	 * menus for headings / lists (same surface as the project selector).
 	 * Glyphs: alpha-ui camera + ue* formatting icons.
 	 */
+	import DropdownMenu from './DropdownMenu.svelte';
 	import Camera from './icons/Camera.svelte';
 	import EditorGlyph from './icons/EditorGlyph.svelte';
 	import { t } from '$lib/i18n.svelte.js';
@@ -13,20 +14,50 @@
 	 * }} */
 	let { editor = null, onMedia } = $props();
 
-	/** @type {'heading' | 'list' | null} */
-	let menu = $state(null);
+	let headingOpen = $state(false);
+	let listOpen = $state(false);
+	/** @type {HTMLButtonElement | null} */
+	let headingBtn = $state(null);
+	/** @type {HTMLButtonElement | null} */
+	let listBtn = $state(null);
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput = $state();
 
-	/** @param {'heading' | 'list'} which */
-	function toggleMenu(which) {
-		menu = menu === which ? null : which;
+	const headingItems = $derived.by(() => {
+		void editor;
+		return [
+			{
+				id: 'h1',
+				label: t('fmt.heading1'),
+				onclick: () => editor?.chain().focus().toggleHeading({ level: 1 }).run()
+			},
+			{
+				id: 'h2',
+				label: t('fmt.heading2'),
+				onclick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run()
+			},
+			{
+				id: 'h3',
+				label: t('fmt.heading3'),
+				onclick: () => editor?.chain().focus().toggleHeading({ level: 3 }).run()
+			}
+		];
+	});
+
+	function toggleHeading() {
+		listOpen = false;
+		headingOpen = !headingOpen;
+	}
+
+	function toggleList() {
+		headingOpen = false;
+		listOpen = !listOpen;
 	}
 
 	/** @param {() => void} run */
-	function act(run) {
-		menu = null;
+	function runList(run) {
 		run();
+		listOpen = false;
 	}
 
 	/** @param {Event} e */
@@ -46,79 +77,51 @@
 </script>
 
 <div class="tools" role="toolbar" aria-label={t('fmt.formatting')}>
-	<div class="tool-wrap">
-		<button
-			type="button"
-			class="tool wide"
-			class:on={menu === 'heading'}
-			aria-label={t('fmt.headings')}
-			aria-expanded={menu === 'heading'}
-			disabled={!editor}
-			onclick={() => toggleMenu('heading')}
-		>
-			<span class="h-mark">H</span>
-			<svg class="chev" width="10" height="6" viewBox="0 0 14 8" fill="none" aria-hidden="true">
-				<path
-					d="M12.7 0.7 6.71 6.69 0.7 0.7"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				/>
-			</svg>
-		</button>
-		{#if menu === 'heading'}
-			<div class="menu" role="menu">
-				<button type="button" role="menuitem" onclick={() => act(() => editor?.chain().focus().toggleHeading({ level: 1 }).run())}
-					>{t('fmt.heading1')}</button
-				>
-				<button type="button" role="menuitem" onclick={() => act(() => editor?.chain().focus().toggleHeading({ level: 2 }).run())}
-					>{t('fmt.heading2')}</button
-				>
-				<button type="button" role="menuitem" onclick={() => act(() => editor?.chain().focus().toggleHeading({ level: 3 }).run())}
-					>{t('fmt.heading3')}</button
-				>
-			</div>
-		{/if}
-	</div>
+	<button
+		bind:this={headingBtn}
+		type="button"
+		class="tool wide"
+		class:on={headingOpen}
+		aria-label={t('fmt.headings')}
+		aria-expanded={headingOpen}
+		aria-haspopup="menu"
+		disabled={!editor}
+		onclick={toggleHeading}
+	>
+		<span class="h-mark">H</span>
+		<svg class="chev" width="10" height="6" viewBox="0 0 14 8" fill="none" aria-hidden="true">
+			<path
+				d="M12.7 0.7 6.71 6.69 0.7 0.7"
+				stroke="currentColor"
+				stroke-width="1.6"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		</svg>
+	</button>
 
-	<div class="tool-wrap">
-		<button
-			type="button"
-			class="tool wide"
-			class:on={menu === 'list'}
-			aria-label={t('fmt.lists')}
-			aria-expanded={menu === 'list'}
-			disabled={!editor}
-			onclick={() => toggleMenu('list')}
-		>
-			<EditorGlyph name="list" size={16} />
-			<svg class="chev" width="10" height="6" viewBox="0 0 14 8" fill="none" aria-hidden="true">
-				<path
-					d="M12.7 0.7 6.71 6.69 0.7 0.7"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				/>
-			</svg>
-		</button>
-		{#if menu === 'list'}
-			<div class="menu" role="menu">
-				<button type="button" class="menu-item" role="menuitem" onclick={() => act(() => editor?.chain().focus().toggleBulletList().run())}>
-					<EditorGlyph name="list" size={16} />
-					<span>{t('fmt.bulletList')}</span>
-				</button>
-				<button type="button" class="menu-item" role="menuitem" onclick={() => act(() => editor?.chain().focus().toggleOrderedList().run())}>
-					<EditorGlyph name="numbered" size={16} />
-					<span>{t('fmt.numberedList')}</span>
-				</button>
-				<button type="button" role="menuitem" onclick={() => act(() => editor?.chain().focus().toggleBlockquote().run())}
-					>{t('fmt.quote')}</button
-				>
-			</div>
-		{/if}
-	</div>
+	<button
+		bind:this={listBtn}
+		type="button"
+		class="tool wide"
+		class:on={listOpen}
+		aria-label={t('fmt.lists')}
+		aria-expanded={listOpen}
+		aria-haspopup="menu"
+		disabled={!editor}
+		onclick={toggleList}
+	>
+		<EditorGlyph name="list" size={16} />
+		<svg class="chev" width="10" height="6" viewBox="0 0 14 8" fill="none" aria-hidden="true">
+			<path
+				d="M12.7 0.7 6.71 6.69 0.7 0.7"
+				stroke="currentColor"
+				stroke-width="1.6"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		</svg>
+	</button>
 
 	<button
 		type="button"
@@ -153,16 +156,60 @@
 	<input bind:this={fileInput} type="file" accept="image/*" hidden onchange={onFile} />
 </div>
 
+<DropdownMenu
+	open={headingOpen}
+	anchor={headingBtn}
+	placement="above"
+	width={200}
+	onclose={() => (headingOpen = false)}
+	items={headingItems}
+/>
+
+<DropdownMenu
+	open={listOpen}
+	anchor={listBtn}
+	placement="above"
+	width={220}
+	onclose={() => (listOpen = false)}
+>
+	<div class="dropdown-list" role="menu">
+		<button
+			type="button"
+			class="dropdown-item"
+			role="menuitem"
+			onclick={() => runList(() => editor?.chain().focus().toggleBulletList().run())}
+		>
+			<EditorGlyph name="list" size={16} />
+			<span>{t('fmt.bulletList')}</span>
+		</button>
+		<button
+			type="button"
+			class="dropdown-item"
+			role="menuitem"
+			onclick={() => runList(() => editor?.chain().focus().toggleOrderedList().run())}
+		>
+			<EditorGlyph name="numbered" size={16} />
+			<span>{t('fmt.numberedList')}</span>
+		</button>
+		<button
+			type="button"
+			class="dropdown-item"
+			role="menuitem"
+			onclick={() => runList(() => editor?.chain().focus().toggleBlockquote().run())}
+		>
+			{t('fmt.quote')}
+		</button>
+	</div>
+</DropdownMenu>
+
 <style>
 	.tools {
 		display: flex;
 		align-items: center;
 		gap: 6px;
+		flex: 1;
+		min-width: 0;
 		flex-wrap: wrap;
-	}
-
-	.tool-wrap {
-		position: relative;
 	}
 
 	.tool {
@@ -175,21 +222,20 @@
 		padding: 0 8px;
 		border: 0;
 		border-radius: 10px;
-		background: var(--fg-4);
+		background: var(--fg-8);
 		color: var(--fg-66);
 		cursor: pointer;
 	}
 
 	.tool.wide {
 		padding: 0 8px 0 10px;
-		border-radius: 10px;
 		min-width: 44px;
 	}
 
 	.tool:hover:not(:disabled),
 	.tool.on {
 		color: var(--fg);
-		background: var(--fg-8);
+		background: var(--float-trigger-on);
 	}
 
 	.tool:disabled {
@@ -207,44 +253,5 @@
 
 	.chev {
 		opacity: 0.7;
-	}
-
-	.menu {
-		position: absolute;
-		bottom: calc(100% + 6px);
-		left: 0;
-		z-index: 30;
-		min-width: 160px;
-		padding: 6px;
-		border-radius: 12px;
-		border: 1px solid var(--glass-border);
-		background: var(--popover);
-		box-shadow: 0 10px 28px var(--shadow, rgba(0, 0, 0, 0.2));
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.menu button {
-		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		padding: 8px 10px;
-		text-align: left;
-		font: inherit;
-		font-size: 13px;
-		font-weight: 550;
-		color: var(--fg);
-		cursor: pointer;
-	}
-
-	.menu-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.menu button:hover {
-		background: var(--fg-4);
 	}
 </style>

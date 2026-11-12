@@ -260,7 +260,7 @@
 </script>
 
 {#if open}
-	<div class="suggest" role="listbox" aria-label={trigger === '@' ? t('suggest.mentions') : t('suggest.emoji')}>
+	<div class="suggest alpha-popover" role="listbox" aria-label={trigger === '@' ? t('suggest.mentions') : t('suggest.emoji')}>
 		{#if trigger === '@'}
 			<div class="tabs" role="tablist">
 				<button
@@ -365,10 +365,6 @@
 {/if}
 
 <style>
-	/*
-	 * Zapstore ShortTextInput suggestion menu → Alpha DS tokens.
-	 * Popover bg, dark shadow, capped width, tab chips, selected wash + hairline rows.
-	 */
 	.suggest {
 		position: absolute;
 		left: 0;
@@ -377,12 +373,6 @@
 		width: min(320px, calc(100vw - 32px));
 		min-width: 240px;
 		max-width: 320px;
-		border: 0.33px solid color-mix(in srgb, var(--fg) 33%, transparent);
-		border-radius: 12px;
-		background: var(--popover, var(--bg));
-		backdrop-filter: blur(var(--glass-blur, 14px));
-		-webkit-backdrop-filter: blur(var(--glass-blur, 14px));
-		box-shadow: 0 8px 24px color-mix(in srgb, #000 40%, transparent);
 		overflow: hidden;
 		pointer-events: auto;
 	}

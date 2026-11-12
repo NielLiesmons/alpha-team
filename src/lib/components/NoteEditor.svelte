@@ -331,7 +331,7 @@
 		<div class="host" bind:this={host}></div>
 		{#if slash?.open && filteredSlash.length}
 			<div
-				class="slash-menu"
+				class="slash-menu alpha-popover"
 				style:top="{slash.top}px"
 				style:left="{slash.left}px"
 				role="listbox"
@@ -381,12 +381,6 @@
 		max-height: 280px;
 		overflow: auto;
 		padding: 6px;
-		border-radius: 12px;
-		border: 1px solid var(--glass-border);
-		background: var(--popover);
-		box-shadow: 0 12px 36px var(--shadow-strong, rgba(0, 0, 0, 0.28));
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
 	.slash-item {
