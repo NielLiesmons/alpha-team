@@ -546,8 +546,7 @@
 		flex-direction: row;
 		align-items: center;
 		gap: 10px;
-		/* Match left pad on top/bottom around the TaskBox row */
-		padding: 16px;
+		padding: 12px 16px 10px;
 		position: relative;
 		z-index: 2;
 	}

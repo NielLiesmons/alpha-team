@@ -223,18 +223,19 @@
 		border: 0;
 		border-radius: 10px;
 		background: var(--fg-8);
-		color: var(--fg-66);
+		color: var(--fg-33);
 		cursor: pointer;
 	}
 
 	.tool.wide {
+		gap: 8px;
 		padding: 0 8px 0 10px;
 		min-width: 44px;
 	}
 
 	.tool:hover:not(:disabled),
 	.tool.on {
-		color: var(--fg);
+		color: var(--fg-66);
 		background: var(--float-trigger-on);
 	}
 
@@ -253,5 +254,7 @@
 
 	.chev {
 		opacity: 0.7;
+		padding-top: 1px;
+		box-sizing: content-box;
 	}
 </style>

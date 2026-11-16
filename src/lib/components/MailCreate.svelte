@@ -15,7 +15,9 @@
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { closeComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
 
-	let toRaw = $state('');
+	/** @type {string[]} */
+	let recipients = $state([]);
+	let draft = $state('');
 	let subject = $state('');
 	let body = $state('');
 	let busy = $state(false);
@@ -27,15 +29,13 @@
 	let toInput = $state();
 	/** @type {import('@tiptap/core').Editor | null} */
 	let tipTap = $state(null);
-	let query = $state('');
-	let tokenStart = $state(0);
-	let tokenEnd = $state(0);
 	let dismissed = $state(false);
 	let selected = $state(0);
 
 	const open = $derived(ui.composer?.kind === 'mail');
 	const editorKey = $derived(open ? String(ui.composer?.id ?? 'new') : 'closed');
 	const plainBody = $derived(plainMailBody(body));
+	const query = $derived(draft.trim());
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -46,7 +46,7 @@
 	});
 
 	/** @param {string} raw */
-	function parseRecipients(raw) {
+	function parseEmails(raw) {
 		const found = [];
 		const re = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 		for (const match of String(raw || '').matchAll(re)) {
@@ -56,12 +56,17 @@
 		return found;
 	}
 
+	/** @param {string} email */
+	function contactLabel(email) {
+		const hit = mailAddressBook.find((c) => c.email === email);
+		return hit?.name || displayNameFromEmail(email);
+	}
+
 	const suggestions = $derived.by(() => {
 		mailAddressBook.length;
-		const q = query.trim().toLowerCase();
+		const q = query.toLowerCase();
 		if (!q) return [];
-		const taken = new Set(parseRecipients(toRaw));
-		if (q.includes('@')) taken.delete(q);
+		const taken = new Set(recipients);
 		const rows = [];
 		for (const contact of mailAddressBook) {
 			if (taken.has(contact.email)) continue;
@@ -75,7 +80,7 @@
 		return rows.slice(0, 8);
 	});
 
-	const menuOpen = $derived(query.trim().length > 0 && !dismissed && (suggestions.length > 0 || bookReady));
+	const menuOpen = $derived(query.length > 0 && !dismissed && (suggestions.length > 0 || bookReady));
 
 	$effect(() => {
 		query;
@@ -87,62 +92,57 @@
 			seededFor = null;
 			bookReady = false;
 			dismissed = false;
-			query = '';
+			draft = '';
 			return;
 		}
 		const key = ui.composer?.id ?? '__new__';
 		if (seededFor === key) return;
 		seededFor = key;
-		toRaw = typeof ui.composer?.to === 'string' ? ui.composer.to : '';
+		recipients = parseEmails(typeof ui.composer?.to === 'string' ? ui.composer.to : '');
+		draft = '';
 		subject = typeof ui.composer?.subject === 'string' ? ui.composer.subject : '';
 		body = typeof ui.composer?.body === 'string' ? ui.composer.body : '';
 		err = '';
 		busy = false;
 		dismissed = false;
-		query = '';
 		bookReady = mailAddressBook.length > 0;
 		void refreshMailAddressBook().finally(() => {
 			if (open) bookReady = true;
 		});
 		tick().then(() => {
-			requestAnimationFrame(() => {
-				toInput?.focus();
-				const end = toInput?.value.length ?? 0;
-				toInput?.setSelectionRange(end, end);
-				syncToken();
-			});
+			requestAnimationFrame(() => toInput?.focus());
 		});
 	});
 
-	function syncToken() {
-		const el = toInput;
-		const value = el?.value ?? toRaw;
-		const cursor = el?.selectionStart ?? value.length;
-		const before = value.slice(0, cursor);
-		const start = Math.max(before.lastIndexOf(','), before.lastIndexOf(';'), before.lastIndexOf('\n')) + 1;
-		const rawToken = before.slice(start);
-		const nextQuery = rawToken.trim();
-		if (nextQuery !== query) dismissed = false;
-		query = nextQuery;
-		tokenStart = start + rawToken.length - rawToken.trimStart().length;
-		tokenEnd = cursor;
+	/** @param {string} email */
+	function addRecipient(email) {
+		const e = String(email || '')
+			.trim()
+			.toLowerCase();
+		if (!e.includes('@') || recipients.includes(e)) return;
+		recipients = [...recipients, e];
+		draft = '';
+		dismissed = true;
+		queueMicrotask(() => toInput?.focus());
+	}
+
+	/** @param {string} email */
+	function removeRecipient(email) {
+		recipients = recipients.filter((r) => r !== email);
+		queueMicrotask(() => toInput?.focus());
 	}
 
 	/** @param {{ email: string }} contact */
 	function choose(contact) {
-		const value = toInput?.value ?? toRaw;
-		const head = value.slice(0, tokenStart).replace(/\s*$/, '');
-		const prefix = head && !/[,;]$/.test(head) ? `${head}, ` : head ? `${head} ` : '';
-		const tail = value.slice(tokenEnd).replace(/^\s*,?\s*/, '');
-		const insert = `${contact.email}, `;
-		toRaw = tail ? `${prefix}${insert}${tail}` : `${prefix}${insert}`;
-		dismissed = true;
-		query = '';
-		const pos = (prefix + insert).length;
-		queueMicrotask(() => {
-			toInput?.focus();
-			toInput?.setSelectionRange(pos, pos);
-		});
+		addRecipient(contact.email);
+	}
+
+	function commitDraftEmails() {
+		const found = parseEmails(draft);
+		if (!found.length) return false;
+		for (const e of found) addRecipient(e);
+		draft = '';
+		return true;
 	}
 
 	/**
@@ -154,6 +154,20 @@
 			e.stopPropagation();
 			dismissed = true;
 			return;
+		}
+		if (e.key === 'Backspace' && !draft && recipients.length) {
+			e.preventDefault();
+			removeRecipient(recipients[recipients.length - 1]);
+			return;
+		}
+		if ((e.key === ',' || e.key === ';' || e.key === 'Enter') && draft.trim()) {
+			if (menuOpen && suggestions.length && (e.key === 'Enter' || e.key === 'Tab')) {
+				/* fall through to suggestion select below */
+			} else if (parseEmails(draft).length) {
+				e.preventDefault();
+				commitDraftEmails();
+				return;
+			}
 		}
 		if (!menuOpen || !suggestions.length) return;
 		if (e.key === 'ArrowDown') {
@@ -172,8 +186,17 @@
 		}
 	}
 
+	function onDraftInput() {
+		dismissed = false;
+		const trailing = /[,;]\s*$/.test(draft);
+		if (trailing && parseEmails(draft).length) {
+			commitDraftEmails();
+		}
+	}
+
 	async function send() {
-		const to = parseRecipients(toRaw);
+		if (parseEmails(draft).length) commitDraftEmails();
+		const to = recipients;
 		const nextBody = plainBody ? body : '';
 		if (!to.length || busy) return;
 		if (!subject.trim() && !plainBody) return;
@@ -193,24 +216,41 @@
 
 <CreateSheet {open} label={t('mail.newMessage')} onclose={closeComposer}>
 	<div class="recipients-row">
-		<input
-			bind:this={toInput}
-			class="recipients"
-			type="text"
-			inputmode="email"
-			autocomplete="off"
-			autocapitalize="off"
-			spellcheck="false"
-			placeholder={t('mail.emailPlaceholder')}
-			aria-label={t('mail.emailPlaceholder')}
-			aria-autocomplete="list"
-			aria-controls="mail-recipient-suggest"
-			bind:value={toRaw}
-			oninput={syncToken}
-			onclick={syncToken}
-			onkeyup={syncToken}
-			onkeydown={onKeydown}
-		/>
+		<div class="recipients-field">
+			{#each recipients as email (email)}
+				<span class="to-pill">
+					<ProfilePic
+						name={contactLabel(email)}
+						email={email}
+						pictureUrl={pictureUrlFor(email)}
+						size={18}
+					/>
+					<span class="pill-label">{contactLabel(email)}</span>
+					<button
+						type="button"
+						class="pill-x"
+						aria-label={t('common.remove')}
+						onclick={() => removeRecipient(email)}>×</button
+					>
+				</span>
+			{/each}
+			<input
+				bind:this={toInput}
+				class="recipients"
+				type="text"
+				inputmode="email"
+				autocomplete="off"
+				autocapitalize="off"
+				spellcheck="false"
+				placeholder={recipients.length ? '' : t('mail.emailPlaceholder')}
+				aria-label={t('mail.emailPlaceholder')}
+				aria-autocomplete="list"
+				aria-controls="mail-recipient-suggest"
+				bind:value={draft}
+				oninput={onDraftInput}
+				onkeydown={onKeydown}
+			/>
+		</div>
 		{#if menuOpen}
 			<div
 				id="mail-recipient-suggest"
@@ -282,7 +322,7 @@
 		<EditorToolbar editor={tipTap} />
 		<PrimaryButton
 			size="sheet"
-			disabled={busy || parseRecipients(toRaw).length === 0 || (!subject.trim() && !plainBody)}
+			disabled={busy || recipients.length === 0 || (!subject.trim() && !plainBody)}
 			onclick={() => void send()}
 		>
 			{busy ? t('mail.sending') : t('mail.send')}
@@ -295,14 +335,68 @@
 		position: relative;
 		z-index: 4;
 		flex-shrink: 0;
-		padding: 12px 16px 10px;
+		padding: 10px 16px 8px;
+	}
+
+	.recipients-field {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.to-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		max-width: 100%;
+		height: 26px;
+		padding: 0 4px 0 3px;
+		border-radius: 9999px;
+		background: var(--fg-8);
+		box-sizing: border-box;
+	}
+
+	.pill-label {
+		min-width: 0;
+		max-width: 10rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 1;
+		color: var(--fg-66);
+	}
+
+	.pill-x {
+		width: 18px;
+		height: 18px;
+		display: grid;
+		place-items: center;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 9999px;
+		background: transparent;
+		color: var(--fg-33);
+		font-size: 14px;
+		line-height: 1;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.pill-x:hover {
+		color: var(--fg);
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
 	}
 
 	.recipients {
-		display: block;
-		width: 100%;
+		flex: 1 1 8rem;
+		min-width: 6rem;
 		margin: 0;
-		padding: 0;
+		padding: 4px 0;
 		border: 0;
 		background: transparent;
 		outline: none;
@@ -311,7 +405,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 15px;
 		font-weight: 400;
-		line-height: 1.55;
+		line-height: 1.4;
 	}
 
 	.recipients::placeholder {
@@ -328,6 +422,7 @@
 	}
 
 	.post-action-row {
+		--ctrl-h: 32px;
 		display: flex;
 		align-items: center;
 		gap: 8px;
