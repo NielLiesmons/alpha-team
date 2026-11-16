@@ -6,6 +6,7 @@
 	import Forward from './icons/Forward.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
 	import Reply from './icons/Reply.svelte';
+	import ReplyAll from './icons/ReplyAll.svelte';
 	import MailRichBody from './MailRichBody.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
@@ -43,6 +44,8 @@
 	let loadedThreadId = '';
 	/** @type {Record<string, boolean>} */
 	let quoteOpen = $state({});
+	/** Which message’s reply/forward menu is open. */
+	let replyMenuId = $state('');
 
 	$effect(() => {
 		const id = threadId;
@@ -64,13 +67,6 @@
 		const at = String(email || '').indexOf('@');
 		if (at < 0) return '';
 		return String(email).slice(at);
-	}
-
-	/** @param {string | undefined} subject */
-	function replySubject(subject) {
-		const s = String(subject || '').trim();
-		if (!s) return 'Re:';
-		return /^re\s*:/i.test(s) ? s : `Re: ${s}`;
 	}
 
 	/**
@@ -96,6 +92,56 @@
 	function isDraft(m) {
 		return Boolean(m?.draft || m?.keywords?.$draft || mailView.folder === 'drafts');
 	}
+
+	/** @param {string | undefined | null} email */
+	function normEmail(email) {
+		return String(email || '')
+			.trim()
+			.toLowerCase();
+	}
+
+	/** Reply-all is the default when more than one other party is on the message. */
+	/** @param {any} m */
+	function preferReplyAll(m) {
+		const parties = new Set();
+		const from = normEmail(m?.from);
+		if (from && from !== me) parties.add(from);
+		for (const e of m?.to || []) {
+			const n = normEmail(e);
+			if (n && n !== me) parties.add(n);
+		}
+		return parties.size > 1;
+	}
+
+	/**
+	 * @param {any} m
+	 * @param {'reply' | 'replyAll' | 'forward'} mode
+	 */
+	function composeAction(m, mode) {
+		replyMenuId = '';
+		openComposer(
+			'mail',
+			`act:${mode}:${m.id}`,
+			undefined,
+			mailComposeSeed(
+				{
+					id: m.id,
+					from: m.from,
+					from_name: m.from_name,
+					to: m.to,
+					subject: m.subject,
+					body: m.body,
+					created_at: m.created_at
+				},
+				mode
+			)
+		);
+	}
+
+	/** @param {string} id */
+	function toggleReplyMenu(id) {
+		replyMenuId = replyMenuId === id ? '' : id;
+	}
 </script>
 
 <div class="mail-thread-shell">
@@ -110,8 +156,8 @@
 				{@const rich = isHtmlMailBody(m.body) && !parts.collapsible}
 				{@const quoteId = String(m.id || '')}
 				{@const mailKey = quoteId}
-				{@const replyTarget =
-					fromEmail === me ? m.to?.[0] || replyTo : fromEmail || replyTo}
+				{@const useReplyAll = preferReplyAll(m)}
+				{@const menuFor = replyMenuId === quoteId}
 				<article class="mail-panel" class:draft={isDraft(m)}>
 					<header class="mail-panel-head">
 						<ProfilePic
@@ -144,7 +190,7 @@
 								aria-expanded={menuOpen}
 								onclick={onMore}
 							>
-								<MoreDots size={18} />
+								<MoreDots size={12} />
 							</button>
 							<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
 						</div>
@@ -192,43 +238,69 @@
 					<div class="mail-corner-pill" role="group" aria-label={t('mail.reply')}>
 						<button
 							type="button"
-							class="corner-btn"
-							aria-label={t('mail.reply')}
-							onclick={() =>
-								openComposer('mail', undefined, undefined, {
-									to: replyTarget,
-									subject: replySubject(m.subject)
-								})
-							}
+							class="corner-btn corner-main"
+							aria-label={useReplyAll ? t('mail.replyAll') : t('mail.reply')}
+							onclick={() => composeAction(m, useReplyAll ? 'replyAll' : 'reply')}
 						>
-							<Reply size={14} />
+							{#if useReplyAll}
+								<ReplyAll size={14} />
+							{:else}
+								<Reply size={14} />
+							{/if}
 						</button>
+						<span class="corner-divider" aria-hidden="true"></span>
 						<button
 							type="button"
-							class="corner-btn"
-							aria-label={t('mail.forward')}
-							onclick={() =>
-								openComposer(
-									'mail',
-									`act:forward:${m.id}`,
-									undefined,
-									mailComposeSeed(
-										{
-											id: m.id,
-											from: m.from,
-											from_name: m.from_name,
-											to: m.to,
-											subject: m.subject,
-											body: m.body,
-											created_at: m.created_at
-										},
-										'forward'
-									)
-								)
-							}
+							class="corner-btn corner-chev"
+							aria-label={t('common.more')}
+							aria-expanded={menuFor}
+							aria-haspopup="menu"
+							onclick={() => toggleReplyMenu(quoteId)}
 						>
-							<Forward size={14} />
+							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+								<path
+									d="M3 4.5 6 7.5 9 4.5"
+									stroke="currentColor"
+									stroke-width="1.5"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
 						</button>
+						{#if menuFor}
+							<button
+								type="button"
+								class="corner-scrim"
+								aria-label={t('common.close')}
+								onclick={() => (replyMenuId = '')}
+							></button>
+							<div class="corner-menu" role="menu">
+								<button
+									type="button"
+									role="menuitem"
+									onclick={() => composeAction(m, 'reply')}
+								>
+									<Reply size={14} />
+									<span>{t('mail.reply')}</span>
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									onclick={() => composeAction(m, 'replyAll')}
+								>
+									<ReplyAll size={14} />
+									<span>{t('mail.replyAll')}</span>
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									onclick={() => composeAction(m, 'forward')}
+								>
+									<Forward size={14} />
+									<span>{t('mail.forward')}</span>
+								</button>
+							</div>
+						{/if}
 					</div>
 				</article>
 			{/each}
@@ -253,8 +325,7 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		display: block;
-		/* Side room so the corner reply/forward pill isn’t clipped */
-		padding: 56px 18px 96px;
+		padding: 56px 14px 96px;
 		box-sizing: border-box;
 	}
 
@@ -353,10 +424,10 @@
 		align-self: flex-start;
 	}
 
-	/* Same outer size as the author pfp */
+	/* Half the pfp hit target; glyph ~⅓ smaller than before */
 	.mail-more {
-		width: 36px;
-		height: 36px;
+		width: 18px;
+		height: 18px;
 		display: grid;
 		place-items: center;
 		margin: 0;
@@ -376,17 +447,16 @@
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
 	}
 
-	/* Reply + Forward — half off the bottom-right corner of the card */
+	/* Reply split control — inset from the right edge, half off the bottom */
 	.mail-corner-pill {
 		position: absolute;
-		right: 0;
+		right: 12px;
 		bottom: 0;
 		z-index: 2;
 		display: inline-flex;
-		align-items: center;
-		gap: 2px;
+		align-items: stretch;
 		height: 36px;
-		padding: 3px;
+		padding: 0;
 		box-sizing: border-box;
 		border: 1px solid transparent;
 		border-radius: 9999px;
@@ -395,19 +465,17 @@
 			var(--glass-shine) border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
-		transform: translate(28%, 42%);
+		transform: translateY(42%);
 		box-shadow: 0 4px 16px color-mix(in srgb, var(--fg-raw, #000) 12%, transparent);
+		overflow: visible;
 	}
 
 	.corner-btn {
-		width: 30px;
-		height: 30px;
 		display: grid;
 		place-items: center;
 		margin: 0;
 		padding: 0;
 		border: 0;
-		border-radius: 9999px;
 		background: transparent;
 		color: var(--fg-66);
 		cursor: pointer;
@@ -415,9 +483,80 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 
+	.corner-main {
+		width: 36px;
+		border-radius: 9999px 0 0 9999px;
+	}
+
+	.corner-chev {
+		width: 28px;
+		border-radius: 0 9999px 9999px 0;
+	}
+
 	.corner-btn:hover {
 		color: var(--fg);
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
+	}
+
+	.corner-divider {
+		width: 1px;
+		align-self: stretch;
+		margin: 0;
+		background: color-mix(in srgb, var(--fg) 12%, transparent);
+		flex-shrink: 0;
+	}
+
+	.corner-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		cursor: default;
+	}
+
+	.corner-menu {
+		position: absolute;
+		right: 0;
+		bottom: calc(100% + 6px);
+		z-index: 50;
+		min-width: 168px;
+		padding: 0;
+		border: 1px solid var(--glass-border);
+		border-radius: 12px;
+		background: var(--glass);
+		overflow: hidden;
+		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw, #000) 18%, transparent);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+	}
+
+	.corner-menu button {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 8px 12px;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 0.9375rem;
+		font-weight: 500;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.corner-menu button:not(:last-child) {
+		border-bottom: 0.33px solid var(--fg-8);
+	}
+
+	.corner-menu button:hover {
+		background: var(--fg-4);
+		color: var(--fg);
 	}
 
 	.mail-panel-to {
