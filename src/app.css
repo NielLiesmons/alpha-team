@@ -105,13 +105,13 @@
 	);
 	--glass-blur: 28px;
 	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
-	/* Soft specular stroke — CTAs + top-bar chrome (tweak for more/less glass) */
+	/* Soft specular stroke — quiet corners so translucent fills don’t glare */
 	--glass-shine: linear-gradient(
 		135deg,
-		color-mix(in srgb, var(--fg) 42%, transparent) 0%,
-		color-mix(in srgb, var(--fg) 12%, transparent) 38%,
+		color-mix(in srgb, var(--fg) 18%, transparent) 0%,
+		color-mix(in srgb, var(--fg) 9%, transparent) 38%,
 		color-mix(in srgb, var(--fg) 8%, transparent) 55%,
-		color-mix(in srgb, var(--fg) 28%, transparent) 100%
+		color-mix(in srgb, var(--fg) 14%, transparent) 100%
 	);
 	--popover: var(--glass-panel);
 	--modal-bg: var(--glass-panel);
@@ -232,10 +232,10 @@
 	--glass-border: color-mix(in srgb, var(--fg) 10%, transparent);
 	--glass-shine: linear-gradient(
 		135deg,
-		color-mix(in srgb, #fff 68%, transparent) 0%,
-		color-mix(in srgb, var(--fg) 10%, transparent) 38%,
-		color-mix(in srgb, var(--fg) 8%, transparent) 55%,
-		color-mix(in srgb, var(--fg) 22%, transparent) 100%
+		color-mix(in srgb, #fff 28%, transparent) 0%,
+		color-mix(in srgb, var(--fg) 8%, transparent) 38%,
+		color-mix(in srgb, var(--fg) 7%, transparent) 55%,
+		color-mix(in srgb, var(--fg) 12%, transparent) 100%
 	);
 	--popover: var(--glass-panel);
 	--modal-bg: var(--glass-panel);
