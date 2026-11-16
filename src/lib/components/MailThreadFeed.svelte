@@ -3,6 +3,7 @@
 	 * Mail thread panels only — private chat lives in CommentThread (FAB panel),
 	 * same pattern as Tasks / Notes / Projects.
 	 */
+	import Forward from './icons/Forward.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
 	import Reply from './icons/Reply.svelte';
 	import MailRichBody from './MailRichBody.svelte';
@@ -15,6 +16,7 @@
 	import {
 		formatMailWhen,
 		mailAuthorLabel,
+		mailComposeSeed,
 		rememberMailTip,
 		threadMessages
 	} from '$lib/mail.svelte.js';
@@ -135,30 +137,15 @@
 							</div>
 						</div>
 						<div class="mail-panel-trail">
-							<div class="mail-panel-actions">
-								<button
-									type="button"
-									class="ghost-ico ghost-ico-reply"
-									aria-label={t('mail.reply')}
-									onclick={() =>
-										openComposer('mail', undefined, undefined, {
-											to: replyTarget,
-											subject: replySubject(m.subject)
-										})
-									}
-								>
-									<Reply size={11} />
-								</button>
-								<button
-									type="button"
-									class="ghost-ico ghost-ico-more"
-									aria-label={t('common.more')}
-									aria-expanded={menuOpen}
-									onclick={onMore}
-								>
-									<MoreDots size={15} />
-								</button>
-							</div>
+							<button
+								type="button"
+								class="mail-more"
+								aria-label={t('common.more')}
+								aria-expanded={menuOpen}
+								onclick={onMore}
+							>
+								<MoreDots size={18} />
+							</button>
 							<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
 						</div>
 					</header>
@@ -202,6 +189,47 @@
 							<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 						{/if}
 					</div>
+					<div class="mail-corner-pill" role="group" aria-label={t('mail.reply')}>
+						<button
+							type="button"
+							class="corner-btn"
+							aria-label={t('mail.reply')}
+							onclick={() =>
+								openComposer('mail', undefined, undefined, {
+									to: replyTarget,
+									subject: replySubject(m.subject)
+								})
+							}
+						>
+							<Reply size={14} />
+						</button>
+						<button
+							type="button"
+							class="corner-btn"
+							aria-label={t('mail.forward')}
+							onclick={() =>
+								openComposer(
+									'mail',
+									`act:forward:${m.id}`,
+									undefined,
+									mailComposeSeed(
+										{
+											id: m.id,
+											from: m.from,
+											from_name: m.from_name,
+											to: m.to,
+											subject: m.subject,
+											body: m.body,
+											created_at: m.created_at
+										},
+										'forward'
+									)
+								)
+							}
+						>
+							<Forward size={14} />
+						</button>
+					</div>
 				</article>
 			{/each}
 		</div>
@@ -235,14 +263,14 @@
 	}
 
 	.mail-panel {
+		position: relative;
 		display: block;
 		padding: 0;
-		margin: 0 0 10px;
+		margin: 0 0 18px;
 		border-radius: 14px;
 		background: color-mix(in srgb, var(--fg) 4.5%, transparent);
 		border: 0;
-		overflow-x: clip;
-		overflow-y: visible;
+		overflow: visible;
 		flex: none;
 		height: auto;
 		max-height: none;
@@ -319,26 +347,21 @@
 		flex-direction: column;
 		align-items: flex-end;
 		justify-content: center;
-		gap: 3px;
+		gap: 4px;
 		min-width: 0;
+		align-self: flex-start;
 	}
 
-	.mail-panel-actions {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-	}
-
-	.ghost-ico {
-		width: 18px;
-		height: 18px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
+	/* Same outer size as the author pfp */
+	.mail-more {
+		width: 36px;
+		height: 36px;
+		display: grid;
+		place-items: center;
 		margin: 0;
 		padding: 0;
 		border: 0;
-		border-radius: 0;
+		border-radius: 9999px;
 		background: transparent;
 		color: var(--fg-66);
 		cursor: pointer;
@@ -347,21 +370,53 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 
-	.ghost-ico-reply :global(.icon),
-	.ghost-ico-reply :global(svg) {
-		display: block;
-		width: 11px;
-		height: 11px;
-	}
-
-	.ghost-ico-more :global(svg) {
-		display: block;
-		width: 15px;
-		height: 15px;
-	}
-
-	.ghost-ico:hover {
+	.mail-more:hover {
 		color: var(--fg);
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
+	}
+
+	/* Reply + Forward — half off the bottom-right corner of the card */
+	.mail-corner-pill {
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		z-index: 2;
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		height: 36px;
+		padding: 3px;
+		box-sizing: border-box;
+		border: 1px solid transparent;
+		border-radius: 9999px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		transform: translate(28%, 42%);
+		box-shadow: 0 4px 16px color-mix(in srgb, var(--fg-raw, #000) 12%, transparent);
+	}
+
+	.corner-btn {
+		width: 30px;
+		height: 30px;
+		display: grid;
+		place-items: center;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 9999px;
+		background: transparent;
+		color: var(--fg-66);
+		cursor: pointer;
+		line-height: 0;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.corner-btn:hover {
+		color: var(--fg);
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
 	}
 
 	.mail-panel-to {

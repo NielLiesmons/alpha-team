@@ -1,6 +1,7 @@
 <script>
 	/**
-	 * Horizontal ⋯ overflow glyph — shared across chrome, mail panels, settings.
+	 * Vertical ⋮ overflow glyph — shared across chrome, mail panels, settings.
+	 * (Mail quote “view more” keeps its own horizontal dots, not this icon.)
 	 * @type {{ size?: number, className?: string }}
 	 */
 	let { size = 16, className = '' } = $props();
@@ -15,9 +16,9 @@
 		xmlns="http://www.w3.org/2000/svg"
 		aria-hidden="true"
 	>
-		<circle cx="3.2" cy="8" r="1.35" fill="currentColor" />
+		<circle cx="8" cy="3.2" r="1.35" fill="currentColor" />
 		<circle cx="8" cy="8" r="1.35" fill="currentColor" />
-		<circle cx="12.8" cy="8" r="1.35" fill="currentColor" />
+		<circle cx="8" cy="12.8" r="1.35" fill="currentColor" />
 	</svg>
 </span>
 
