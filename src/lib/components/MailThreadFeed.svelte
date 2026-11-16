@@ -253,7 +253,8 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		display: block;
-		padding: 56px 0 88px;
+		/* Side room so the corner reply/forward pill isn’t clipped */
+		padding: 56px 18px 96px;
 		box-sizing: border-box;
 	}
 
@@ -458,7 +459,8 @@
 	}
 
 	.mail-panel-content {
-		padding: 12px 14px 14px;
+		/* Extra bottom/right so body clears the corner action pill */
+		padding: 12px 14px 28px;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
