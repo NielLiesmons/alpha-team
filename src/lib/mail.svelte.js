@@ -14,6 +14,7 @@ import {
 	groupMailThreads,
 	listJmapFolder,
 	mailPersonName,
+	sendJmapMail,
 	setJmapEmailsSeen
 } from './jmap-mail.js';
 import { approvedContacts, isApprovedContact } from './mail-contacts.svelte.js';
@@ -517,9 +518,77 @@ export async function refreshMail() {
 }
 
 /**
- * @param {{ to: string[], subject: string, body: string }} input
+ * Insert / merge a message into the in-memory thread list (optimistic or server).
+ * @param {any} msg
+ * @param {string} [replaceId] pending id to swap out
  */
-export async function sendMail(input) {
+function upsertMailMessage(msg, replaceId = '') {
+	if (!msg?.id) return;
+	const threadKey = String(msg.threadId || msg.id);
+	const pendingKey = String(replaceId || '');
+
+	/* Prefer merging into an existing thread row. */
+	const threadIdx = mailMessages.findIndex((t) => {
+		const tid = String(t.threadId || t.id);
+		if (tid === threadKey) return true;
+		if (pendingKey && String(t.id) === pendingKey) return true;
+		const msgs = Array.isArray(t.messages) ? t.messages : [];
+		return msgs.some((m) => String(m.id) === pendingKey || String(m.id) === String(msg.id));
+	});
+
+	if (threadIdx >= 0) {
+		const thread = mailMessages[threadIdx];
+		const msgs = Array.isArray(thread.messages) ? [...thread.messages] : threadMessages(thread);
+		const without = msgs.filter(
+			(m) => String(m.id) !== pendingKey && String(m.id) !== String(msg.id)
+		);
+		without.push(msg);
+		without.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+		const latest = without[without.length - 1] || msg;
+		const nextId = thread.id === pendingKey ? threadKey : thread.id;
+		mailMessages[threadIdx] = {
+			...thread,
+			...latest,
+			id: nextId,
+			threadId: threadKey,
+			messages: without,
+			_pending: without.some((m) => m._pending),
+			_sendError: msg._sendError || undefined
+		};
+		rememberMailTip(mailMessages[threadIdx]);
+		if (pendingKey && typeof window !== 'undefined') {
+			/* Keep detail open when pending id swaps to server id. */
+			import('./workspace.svelte.js').then(({ ui }) => {
+				if (ui.selection?.kind === 'mail' && String(ui.selection.id) === pendingKey) {
+					ui.selection = { kind: 'mail', id: String(nextId) };
+				}
+			});
+		}
+		return mailMessages[threadIdx];
+	}
+
+	const row = {
+		...msg,
+		threadId: threadKey,
+		messages: [msg]
+	};
+	mailMessages.unshift(row);
+	rememberMailTip(row);
+	return row;
+}
+
+/**
+ * Optimistic send: paint immediately, deliver via JMAP (or Drive fallback) in background.
+ * @param {{
+ *   to: string[],
+ *   subject: string,
+ *   body: string,
+ *   threadId?: string,
+ *   inReplyTo?: string,
+ *   scheduleAt?: string | null
+ * }} input
+ */
+export function sendMail(input) {
 	const from = activePerson().email;
 	if (!from) throw new Error('Pick who you are in Settings first');
 	const to = [...new Set((input.to || []).map(normEmail).filter(Boolean))];
@@ -528,36 +597,85 @@ export async function sendMail(input) {
 	const body = (input.body || '').trim();
 	if (!subject && !body) throw new Error('Write a subject or body');
 
+	const pendingId = `pending:${crypto.randomUUID()}`;
+	const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+	const scheduleAt = input.scheduleAt ? String(input.scheduleAt) : '';
+	const scheduleMs = scheduleAt ? Date.parse(scheduleAt) : NaN;
+	const scheduled = Number.isFinite(scheduleMs) && scheduleMs > Date.now() + 5_000;
+	const threadId = String(input.threadId || pendingId);
+	const fromName = activePerson().name || '';
+
+	const optimistic = {
+		schema: 'alpha.mail_message/1',
+		id: pendingId,
+		threadId,
+		from: normEmail(from),
+		from_name: fromName,
+		to,
+		subject: subject || '(no subject)',
+		body,
+		created_at: scheduled ? new Date(scheduleMs).toISOString() : now,
+		transport: 'jmap',
+		read_by: [normEmail(from)],
+		_pending: true,
+		_scheduled: scheduled,
+		_scheduledAt: scheduled ? new Date(scheduleMs).toISOString() : undefined,
+		_unread: false
+	};
+
+	const row = upsertMailMessage(optimistic);
 	mailUi.sending = true;
-	try {
-		const session = activeSession();
-		if (!session) {
-			const local = {
-				schema: 'alpha.mail_message/1',
-				id: crypto.randomUUID(),
-				from,
-				to,
-				subject: subject || '(no subject)',
-				body,
-				created_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-				transport: 'drive',
-				read_by: [from],
-				_local: true
-			};
-			mailMessages.unshift(local);
-			return local;
+	mailUi.error = null;
+
+	void (async () => {
+		try {
+			const me = mailActorEmail();
+			const pw = me ? getMailboxPassword(me) : '';
+			let created;
+			if (me && pw) {
+				created = await sendJmapMail(me, pw, {
+					to,
+					subject: subject || '(no subject)',
+					body,
+					fromName,
+					inReplyTo: input.inReplyTo || '',
+					threadId: threadId === pendingId ? undefined : threadId,
+					scheduleAt: scheduled ? new Date(scheduleMs).toISOString() : null
+				});
+			} else {
+				const session = activeSession();
+				if (!session) {
+					created = { ...optimistic, id: crypto.randomUUID(), _pending: false, _local: true, transport: 'drive' };
+				} else {
+					created = await createMailMessage(session, {
+						from,
+						to,
+						subject: subject || '(no subject)',
+						body
+					});
+					created = { ...created, threadId: created.threadId || threadId };
+				}
+			}
+			upsertMailMessage(
+				{
+					...created,
+					threadId: created.threadId || threadId,
+					_pending: false,
+					_scheduled: Boolean(created._scheduled || scheduled),
+					_scheduledAt: created._scheduledAt || optimistic._scheduledAt
+				},
+				pendingId
+			);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			mailUi.error = msg;
+			upsertMailMessage({ ...optimistic, _pending: false, _sendError: msg }, pendingId);
+		} finally {
+			mailUi.sending = false;
 		}
-		const created = await createMailMessage(session, {
-			from,
-			to,
-			subject: subject || '(no subject)',
-			body
-		});
-		mailMessages.unshift(created);
-		return created;
-	} finally {
-		mailUi.sending = false;
-	}
+	})();
+
+	return row;
 }
 
 /**
@@ -737,6 +855,10 @@ export function mailComposeSeed(thread, mode) {
 		.replace(/\r\n/g, '\n')
 		.trim();
 
+	const threadId = String(thread?.threadId || thread?.id || last?.threadId || '');
+	const inReplyTo =
+		String(last?._jmap?.messageId || last?.messageId || last?.id || '').trim() || '';
+
 	if (mode === 'forward') {
 		const who = mailAuthorLabel(last) || from || '';
 		const when = last?.created_at ? String(last.created_at) : '';
@@ -755,7 +877,10 @@ export function mailComposeSeed(thread, mode) {
 		return {
 			to: '',
 			subject: mailComposeSubject(subject, 'fwd'),
-			body: quoted
+			body: quoted,
+			threadId: '',
+			inReplyTo: '',
+			focus: 'to'
 		};
 	}
 
@@ -776,7 +901,10 @@ export function mailComposeSeed(thread, mode) {
 	return {
 		to: to.join(', '),
 		subject: mailComposeSubject(subject, 're'),
-		body: ''
+		body: '',
+		threadId,
+		inReplyTo,
+		focus: 'body'
 	};
 }
 

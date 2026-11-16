@@ -6,6 +6,7 @@
 	import { attachChromeScrollFade } from './chrome-scroll-fade.js';
 	import { navPngUrl } from './nav-png.js';
 	import NavIcon from './NavIcon.svelte';
+	import Search from './icons/Search.svelte';
 	import PullToRefresh from './PullToRefresh.svelte';
 
 	/**
@@ -20,7 +21,8 @@
 	 * @typedef {{
 	 *   href: string,
 	 *   label: string,
-	 *   icon: string,
+	 *   icon?: string,
+	 *   faviconUrl?: string,
 	 *   id?: string,
 	 *   countKey?: string,
 	 *   createKind?: string,
@@ -30,9 +32,20 @@
 	 */
 
 	/**
+	 * @typedef {{
+	 *   type: 'group',
+	 *   id: string,
+	 *   label: string,
+	 *   creatable?: boolean,
+	 *   createKind?: string,
+	 *   items: ShellSection[]
+	 * }} ShellNavGroup
+	 */
+
+	/**
 	 * @type {{
-	 *   sections?: ShellSection[],
-	 *   mobileSections?: ShellSection[] | null,
+	 *   sections?: (ShellSection | ShellNavGroup)[],
+	 *   mobileSections?: (ShellSection | ShellNavGroup)[] | null,
 	 *   activeHref?: string,
 	 *   title?: string,
 	 *   counts?: Record<string, number>,
@@ -50,6 +63,7 @@
 	 *   onNavChild?: (parentHref: string, childId: string) => void,
 	 *   onCreate?: (kind: string) => void,
 	 *   onNavPlus?: (kind: string | undefined) => void,
+	 *   onGroupPlus?: ((groupId: string) => void) | null,
 	 *   onFilterChange?: (id: string) => void,
 	 *   onRefresh?: (() => Promise<void> | void) | null,
 	 *   isSectionActive?: ((href: string) => boolean) | null,
@@ -90,6 +104,7 @@
 		onNavChild = () => {},
 		onCreate = () => {},
 		onNavPlus = () => {},
+		onGroupPlus = null,
 		onFilterChange = () => {},
 		onRefresh = null,
 		isSectionActive = null,
@@ -177,10 +192,28 @@
 		return activeHref === href || activeHref.startsWith(`${href}/`);
 	}
 
+	/** @param {ShellSection | ShellNavGroup} entry */
+	function isNavGroup(entry) {
+		return Boolean(entry && /** @type {ShellNavGroup} */ (entry).type === 'group');
+	}
+
 	const activeItem = $derived.by(() => {
-		const hit = sections.find((item) => active(item.href));
-		if (hit) return hit;
-		return sections[0] ?? { href: '', label: title || 'Alpha', icon: 'dot' };
+		for (const entry of sections) {
+			if (isNavGroup(entry)) {
+				const group = /** @type {ShellNavGroup} */ (entry);
+				const hit = group.items.find((item) => active(item.href));
+				if (hit) return hit;
+				continue;
+			}
+			const item = /** @type {ShellSection} */ (entry);
+			if (active(item.href)) return item;
+		}
+		const first = sections[0];
+		if (first && isNavGroup(first)) {
+			const g = /** @type {ShellNavGroup} */ (first);
+			return g.items[0] ?? { href: '', label: title || 'Alpha', icon: 'dot' };
+		}
+		return /** @type {ShellSection} */ (first) ?? { href: '', label: title || 'Alpha', icon: 'dot' };
 	});
 
 	const resolvedTitle = $derived(title || activeItem.label);
@@ -196,7 +229,22 @@
 	const filteredNav = $derived.by(() => {
 		const q = search.trim().toLowerCase();
 		if (!q) return sections;
-		return sections.filter((item) => item.label.toLowerCase().includes(q));
+		/** @type {(ShellSection | ShellNavGroup)[]} */
+		const out = [];
+		for (const entry of sections) {
+			if (isNavGroup(entry)) {
+				const group = /** @type {ShellNavGroup} */ (entry);
+				const items = group.items.filter(
+					(item) =>
+						item.label.toLowerCase().includes(q) || group.label.toLowerCase().includes(q)
+				);
+				if (items.length) out.push({ ...group, items });
+				continue;
+			}
+			const item = /** @type {ShellSection} */ (entry);
+			if (item.label.toLowerCase().includes(q)) out.push(item);
+		}
+		return out;
 	});
 
 	function isMobileShell() {
@@ -547,15 +595,7 @@
 			{#if searchOpen && searchEnabled}
 				<label class="search search-expanded">
 					<span class="sr-only">Search</span>
-					<svg class="search-icon" width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-						<!-- alpha-chat / polli search (ic_polli_search) -->
-						<path
-							fill="currentColor"
-							fill-rule="evenodd"
-							clip-rule="evenodd"
-							d="M5.102 1.243C5.967 0.884 6.895 0.7 7.831 0.7C8.768 0.7 9.695 0.884 10.56 1.243C11.425 1.601 12.212 2.126 12.874 2.789C13.536 3.451 14.061 4.237 14.42 5.102C14.778 5.967 14.962 6.895 14.962 7.831C14.962 8.768 14.778 9.695 14.42 10.56C14.064 11.419 13.543 12.2 12.888 12.86L16.734 16.706C16.742 16.714 16.742 16.726 16.734 16.734C16.726 16.742 16.714 16.742 16.706 16.734L12.86 12.888C11.524 14.216 9.716 14.962 7.831 14.962C5.94 14.962 4.126 14.211 2.789 12.874C1.451 11.536 0.7 9.723 0.7 7.831C0.7 5.94 1.451 4.126 2.789 2.789C3.451 2.126 4.237 1.601 5.102 1.243Z"
-						/>
-					</svg>
+					<span class="search-icon" aria-hidden="true"><Search size={16} /></span>
 					<input
 						bind:this={searchInputEl}
 						type="search"
@@ -604,15 +644,7 @@
 							queueMicrotask(() => searchInputEl?.focus());
 						}}
 					>
-						<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-							<!-- alpha-chat / polli search (ic_polli_search) -->
-							<path
-								fill="currentColor"
-								fill-rule="evenodd"
-								clip-rule="evenodd"
-								d="M5.102 1.243C5.967 0.884 6.895 0.7 7.831 0.7C8.768 0.7 9.695 0.884 10.56 1.243C11.425 1.601 12.212 2.126 12.874 2.789C13.536 3.451 14.061 4.237 14.42 5.102C14.778 5.967 14.962 6.895 14.962 7.831C14.962 8.768 14.778 9.695 14.42 10.56C14.064 11.419 13.543 12.2 12.888 12.86L16.734 16.706C16.742 16.714 16.742 16.726 16.734 16.734C16.726 16.742 16.714 16.742 16.706 16.734L12.86 12.888C11.524 14.216 9.716 14.962 7.831 14.962C5.94 14.962 4.126 14.211 2.789 12.874C1.451 11.536 0.7 9.723 0.7 7.831C0.7 5.94 1.451 4.126 2.789 2.789C3.451 2.126 4.237 1.601 5.102 1.243Z"
-							/>
-						</svg>
+						<Search size={16} />
 					</button>
 				{/if}
 				{#if createMenuItems.length}
@@ -652,81 +684,146 @@
 		</header>
 
 		<nav class="sidebar-nav" aria-label="Sections">
-			{#each filteredNav as item (item.href)}
-				{@const count = item.countKey ? counts[item.countKey] : null}
-				{@const rowActive = active(item.href)}
-				{@const kids = item.children || []}
-				{@const expanded = rowActive && kids.length > 0}
-				{@const png = rowActive ? navPngUrl(item.icon) : null}
-				<div
-					class="nav-block"
-					class:active={rowActive}
-					class:expanded={expanded}
-				>
-					<div
-						class="nav-row"
-						class:creatable={Boolean(item.createKind)}
-					>
-						<button
-							type="button"
-							class="nav-item"
-							class:active={rowActive}
-							onclick={() => go(item.href)}
-						>
-							<span class="icon-wrap" class:png={Boolean(png)} class:empty={rowActive && !png}>
-								{#if rowActive}
-									{#if png}
-										<img class="nav-png" src={png} alt="" width="18" height="18" />
-									{/if}
-								{:else}
-									<NavIcon name={item.icon} size={18} />
-								{/if}
-							</span>
-							<span class="nav-label">{item.label}</span>
-						</button>
-						{#if item.createKind || count != null}
-							<span class="row-end">
-								{#if count != null}
-									<span class="count">{count}</span>
-								{/if}
-								{#if item.createKind}
-									<button
-										type="button"
-										class="row-plus"
-										aria-label={`New ${item.createKind}`}
-										onclick={() => onNavPlus(item.createKind)}
-									>
-										<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-											<path
-												d="M6 1.5v9M1.5 6h9"
-												stroke="currentColor"
-												stroke-width="1.6"
-												stroke-linecap="round"
-											/>
-										</svg>
-									</button>
-								{/if}
-							</span>
-						{/if}
-					</div>
-					{#if expanded}
-						<div class="nav-sub" role="group" aria-label={item.label}>
-							{#each kids as child (child.id)}
+			{#each filteredNav as entry (isNavGroup(entry) ? `g:${/** @type {ShellNavGroup} */ (entry).id}` : /** @type {ShellSection} */ (entry).href)}
+				{#if isNavGroup(entry)}
+					{@const group = /** @type {ShellNavGroup} */ (entry)}
+					<div class="nav-group" role="group" aria-label={group.label}>
+						<div class="nav-group-head">
+							<span class="nav-group-eyebrow eyebrow-label-xs">{group.label}</span>
+							{#if group.creatable}
 								<button
 									type="button"
-									class="nav-sub-item"
-									class:active={Boolean(child.active)}
+									class="row-plus"
+									aria-label={`Add ${group.label}`}
+									title={`Add ${group.label}`}
 									onclick={() => {
-										onNavChild(item.href, child.id);
-										closeMobileNav({ history: false });
+										if (onGroupPlus) onGroupPlus(group.id);
+										else if (group.createKind) onNavPlus(group.createKind);
 									}}
 								>
-									{child.label}
+									<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+										<path
+											d="M6 1.5v9M1.5 6h9"
+											stroke="currentColor"
+											stroke-width="1.6"
+											stroke-linecap="round"
+										/>
+									</svg>
 								</button>
-							{/each}
+							{/if}
 						</div>
-					{/if}
-				</div>
+						{#each group.items as item (item.id || item.href)}
+							{@const rowActive = active(item.href)}
+							{@const fav = String(item.faviconUrl || '').trim()}
+							<div class="nav-block" class:active={rowActive}>
+								<div class="nav-row">
+									<button
+										type="button"
+										class="nav-item"
+										class:active={rowActive}
+										onclick={() => go(item.href)}
+									>
+										<span class="icon-wrap" class:favicon={Boolean(fav)} class:empty={rowActive && !fav}>
+											{#if fav}
+												<img
+													class="nav-favicon"
+													src={fav}
+													alt=""
+													width="18"
+													height="18"
+													loading="lazy"
+													onerror={(e) => {
+														const el = /** @type {HTMLImageElement} */ (e.currentTarget);
+														el.style.display = 'none';
+													}}
+												/>
+											{:else if item.icon}
+												<NavIcon name={item.icon} size={18} />
+											{/if}
+										</span>
+										<span class="nav-label">{item.label}</span>
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					{@const item = /** @type {ShellSection} */ (entry)}
+					{@const count = item.countKey ? counts[item.countKey] : null}
+					{@const rowActive = active(item.href)}
+					{@const kids = item.children || []}
+					{@const expanded = rowActive && kids.length > 0}
+					{@const png = rowActive && item.icon ? navPngUrl(item.icon) : null}
+					<div
+						class="nav-block"
+						class:active={rowActive}
+						class:expanded={expanded}
+					>
+						<div
+							class="nav-row"
+							class:creatable={Boolean(item.createKind)}
+						>
+							<button
+								type="button"
+								class="nav-item"
+								class:active={rowActive}
+								onclick={() => go(item.href)}
+							>
+								<span class="icon-wrap" class:png={Boolean(png)} class:empty={rowActive && !png}>
+									{#if rowActive}
+										{#if png}
+											<img class="nav-png" src={png} alt="" width="18" height="18" />
+										{/if}
+									{:else if item.icon}
+										<NavIcon name={item.icon} size={18} />
+									{/if}
+								</span>
+								<span class="nav-label">{item.label}</span>
+							</button>
+							{#if item.createKind || count != null}
+								<span class="row-end">
+									{#if count != null}
+										<span class="count">{count}</span>
+									{/if}
+									{#if item.createKind}
+										<button
+											type="button"
+											class="row-plus"
+											aria-label={`New ${item.createKind}`}
+											onclick={() => onNavPlus(item.createKind)}
+										>
+											<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+												<path
+													d="M6 1.5v9M1.5 6h9"
+													stroke="currentColor"
+													stroke-width="1.6"
+													stroke-linecap="round"
+												/>
+											</svg>
+										</button>
+									{/if}
+								</span>
+							{/if}
+						</div>
+						{#if expanded}
+							<div class="nav-sub" role="group" aria-label={item.label}>
+								{#each kids as child (child.id)}
+									<button
+										type="button"
+										class="nav-sub-item"
+										class:active={Boolean(child.active)}
+										onclick={() => {
+											onNavChild(item.href, child.id);
+											closeMobileNav({ history: false });
+										}}
+									>
+										{child.label}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{/if}
 			{/each}
 		</nav>
 		{#if sidebarTrail}
@@ -1270,6 +1367,45 @@
 
 	.nav-item.active {
 		color: var(--white);
+	}
+
+	.nav-group {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		margin-top: 10px;
+		padding-top: 4px;
+	}
+
+	.nav-group-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 4px 12px 6px;
+		min-height: 28px;
+		box-sizing: border-box;
+	}
+
+	.nav-group-eyebrow {
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--white33, var(--fg-33));
+	}
+
+	.nav-favicon {
+		display: block;
+		width: 18px;
+		height: 18px;
+		border-radius: 4px;
+		object-fit: cover;
+	}
+
+	.icon-wrap.favicon {
+		overflow: hidden;
+		border-radius: 4px;
 	}
 
 	.nav-sub {

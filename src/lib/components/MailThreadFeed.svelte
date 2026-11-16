@@ -38,6 +38,11 @@
 	const threadId = $derived(String(mailMsg?.id || ''));
 	const me = $derived((activePerson().email || '').trim().toLowerCase());
 	const mails = $derived(threadMessages(mailMsg));
+	const lastMail = $derived(mails[mails.length - 1] || mailMsg);
+	const useReplyAll = $derived(preferReplyAll(lastMail, me));
+	const replyName = $derived(
+		mailAuthorLabel(lastMail) || displayNameFromEmail(lastMail?.from || replyTo || '')
+	);
 
 	/** @type {HTMLDivElement | undefined} */
 	let feedEl = $state();
@@ -107,16 +112,23 @@
 			mailComposeSeed(
 				{
 					id: m.id,
+					threadId: m.threadId || mailMsg?.threadId || mailMsg?.id,
 					from: m.from,
 					from_name: m.from_name,
 					to: m.to,
 					subject: m.subject,
 					body: m.body,
-					created_at: m.created_at
+					created_at: m.created_at,
+					_jmap: m._jmap,
+					messageId: m.messageId
 				},
 				mode
 			)
 		);
+	}
+
+	function composeThreadReply() {
+		composeAction(lastMail, useReplyAll ? 'replyAll' : 'reply');
 	}
 
 	/** @param {string} id */
@@ -137,10 +149,10 @@
 				{@const rich = isHtmlMailBody(m.body) && !parts.collapsible}
 				{@const quoteId = String(m.id || '')}
 				{@const mailKey = quoteId}
-				{@const useReplyAll = preferReplyAll(m, me)}
+				{@const msgReplyAll = preferReplyAll(m, me)}
 				{@const menuFor = replyMenuId === quoteId}
 				{@const hasQuote = Boolean(parts.collapsible && parts.quoted)}
-				<article class="mail-panel" class:draft={isDraft(m)}>
+				<article class="mail-panel" class:draft={isDraft(m)} class:pending={m._pending}>
 					<header class="mail-panel-head">
 						<ProfilePic
 							name={fromName}
@@ -165,56 +177,24 @@
 							</div>
 						</div>
 						<div class="mail-panel-trail">
-							<button
-								type="button"
-								class="mail-more"
-								aria-label={t('common.more')}
-								aria-expanded={menuOpen}
-								onclick={onMore}
-							>
-								<MoreDots size={12} />
-							</button>
-							<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
-						</div>
-					</header>
-					<div class="mail-panel-rule" aria-hidden="true"></div>
-					<div class="mail-panel-content">
-						{#if rich}
-							<div class="mail-prose">{@html safeMailHtml(m.body || '')}</div>
-						{:else if parts.collapsible}
-							{#if parts.main}
-								<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
-							{/if}
-							{#if hasQuote && quoteOpen[mailKey]}
-								{@const expanded = resolveExpandedQuote(parts.quoted, mails, quoteId)}
-								{@const quoteFrom = quoteAuthorEmail(mails, quoteId, fromEmail)}
-								<MailRichBody text={expanded} fallbackEmail={quoteFrom} minDepth={1} />
-							{/if}
-						{:else if parts.main}
-							<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
-						{/if}
-						<div class="mail-panel-actions">
-							{#if hasQuote}
-								<button
-									type="button"
-									class="quote-toggle"
-									aria-label={quoteOpen[mailKey] ? t('mail.hideQuote') : t('mail.showQuote')}
-									aria-expanded={Boolean(quoteOpen[mailKey])}
-									onclick={() => toggleQuote(mailKey)}
-								>
-									<span class="quote-dots" aria-hidden="true">
-										<span></span><span></span><span></span>
-									</span>
-								</button>
+							{#if m._pending}
+								<span class="mail-panel-status" aria-label={t('mail.sending')}>
+									<span class="status-dot" aria-hidden="true"></span>
+									{t('mail.sending')}
+								</span>
+							{:else if m._sendError}
+								<span class="mail-panel-status err" title={m._sendError}>{t('mail.sendFailed')}</span>
+							{:else}
+								<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
 							{/if}
 							<div class="mail-reply-pill" role="group" aria-label={t('mail.reply')}>
 								<button
 									type="button"
 									class="corner-btn corner-main"
-									aria-label={useReplyAll ? t('mail.replyAll') : t('mail.reply')}
-									onclick={() => composeAction(m, useReplyAll ? 'replyAll' : 'reply')}
+									aria-label={msgReplyAll ? t('mail.replyAll') : t('mail.reply')}
+									onclick={() => composeAction(m, msgReplyAll ? 'replyAll' : 'reply')}
 								>
-									{#if useReplyAll}
+									{#if msgReplyAll}
 										<ReplyAll size={13} />
 									{:else}
 										<Reply size={13} />
@@ -223,21 +203,13 @@
 								<span class="corner-divider" aria-hidden="true"></span>
 								<button
 									type="button"
-									class="corner-btn corner-chev"
+									class="corner-btn corner-more"
 									aria-label={t('common.more')}
 									aria-expanded={menuFor}
 									aria-haspopup="menu"
 									onclick={() => toggleReplyMenu(quoteId)}
 								>
-									<svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-										<path
-											d="M3 4.5 6 7.5 9 4.5"
-											stroke="currentColor"
-											stroke-width="1.5"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
+									<MoreDots size={10} />
 								</button>
 								{#if menuFor}
 									<button
@@ -271,13 +243,67 @@
 											<Forward size={14} />
 											<span>{t('mail.forward')}</span>
 										</button>
+										<button
+											type="button"
+											role="menuitem"
+											onclick={() => {
+												replyMenuId = '';
+												onMore();
+											}}
+										>
+											<MoreDots size={14} />
+											<span>{t('common.more')}</span>
+										</button>
 									</div>
 								{/if}
 							</div>
 						</div>
+					</header>
+					<div class="mail-panel-rule" aria-hidden="true"></div>
+					<div class="mail-panel-content">
+						{#if rich}
+							<div class="mail-prose">{@html safeMailHtml(m.body || '')}</div>
+						{:else if parts.collapsible}
+							{#if parts.main}
+								<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
+							{/if}
+							{#if hasQuote && quoteOpen[mailKey]}
+								{@const expanded = resolveExpandedQuote(parts.quoted, mails, quoteId)}
+								{@const quoteFrom = quoteAuthorEmail(mails, quoteId, fromEmail)}
+								<MailRichBody text={expanded} fallbackEmail={quoteFrom} minDepth={1} />
+							{/if}
+						{:else if parts.main}
+							<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
+						{/if}
+						{#if hasQuote}
+							<div class="mail-panel-actions">
+								<button
+									type="button"
+									class="quote-toggle"
+									aria-label={quoteOpen[mailKey] ? t('mail.hideQuote') : t('mail.showQuote')}
+									aria-expanded={Boolean(quoteOpen[mailKey])}
+									onclick={() => toggleQuote(mailKey)}
+								>
+									<span class="quote-dots" aria-hidden="true">
+										<span></span><span></span><span></span>
+									</span>
+								</button>
+							</div>
+						{/if}
 					</div>
 				</article>
 			{/each}
+
+			<button type="button" class="mail-reply-field" onclick={composeThreadReply}>
+				<span class="reply-field-icon" aria-hidden="true">
+					{#if useReplyAll}
+						<ReplyAll size={15} />
+					{:else}
+						<Reply size={15} />
+					{/if}
+				</span>
+				<span class="reply-field-label">{t('mail.replyPrompt', { name: replyName || '…' })}</span>
+			</button>
 		</div>
 	</div>
 </div>
@@ -327,6 +353,10 @@
 		background: color-mix(in srgb, var(--fg) 3%, transparent);
 		outline: 1px dashed color-mix(in srgb, var(--fg) 12%, transparent);
 		outline-offset: -1px;
+	}
+
+	.mail-panel.pending {
+		opacity: 0.92;
 	}
 
 	.mail-panel-head {
@@ -394,41 +424,58 @@
 		flex-direction: column;
 		align-items: flex-end;
 		justify-content: center;
-		gap: 4px;
+		gap: 6px;
 		min-width: 0;
-		align-self: flex-start;
+		align-self: center;
 	}
 
-	/* Half the pfp hit target; glyph ~⅓ smaller than before */
-	.mail-more {
-		width: 18px;
-		height: 18px;
-		display: grid;
-		place-items: center;
+	.mail-panel-when,
+	.mail-panel-status {
 		margin: 0;
 		padding: 0;
-		border: 0;
-		border-radius: 9999px;
-		background: transparent;
+		font-size: 11px;
+		font-weight: 500;
+		line-height: 1.25;
+		color: var(--fg-33);
+		white-space: nowrap;
+		text-align: right;
+	}
+
+	.mail-panel-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+	}
+
+	.mail-panel-status.err {
 		color: var(--fg-66);
-		cursor: pointer;
-		line-height: 0;
-		flex-shrink: 0;
-		-webkit-tap-highlight-color: transparent;
 	}
 
-	.mail-more:hover {
-		color: var(--fg);
-		background: color-mix(in srgb, var(--fg) 6%, transparent);
+	.status-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 999px;
+		background: var(--fg-33);
+		animation: mail-pending-pulse 1s ease-in-out infinite;
 	}
 
-	/* Reply + actions — same quiet fill as view-more (no glass) */
+	@keyframes mail-pending-pulse {
+		0%,
+		100% {
+			opacity: 0.35;
+		}
+		50% {
+			opacity: 1;
+		}
+	}
+
+	/* Reply + ⋯ — quiet fill; sits flush right of the profile header row */
 	.mail-reply-pill {
 		position: relative;
 		z-index: 2;
 		display: inline-flex;
 		align-items: stretch;
-		height: 26px;
+		height: 24px;
 		padding: 0;
 		box-sizing: border-box;
 		border: 0;
@@ -452,12 +499,12 @@
 	}
 
 	.corner-main {
-		width: 30px;
+		width: 28px;
 		border-radius: 9999px 0 0 9999px;
 	}
 
-	.corner-chev {
-		width: 24px;
+	.corner-more {
+		width: 22px;
 		border-radius: 0 9999px 9999px 0;
 	}
 
@@ -488,7 +535,7 @@
 	.corner-menu {
 		position: absolute;
 		right: 0;
-		bottom: calc(100% + 6px);
+		top: calc(100% + 6px);
 		z-index: 50;
 		min-width: 168px;
 		padding: 0;
@@ -547,17 +594,6 @@
 		color: var(--fg-33);
 	}
 
-	.mail-panel-when {
-		margin: 0;
-		padding: 0;
-		font-size: 11px;
-		font-weight: 500;
-		line-height: 1.25;
-		color: var(--fg-33);
-		white-space: nowrap;
-		text-align: right;
-	}
-
 	.mail-panel-rule {
 		height: 1px;
 		margin: 0;
@@ -583,10 +619,6 @@
 		width: 100%;
 		min-height: 28px;
 		margin-top: 2px;
-	}
-
-	.mail-panel-actions .mail-reply-pill {
-		margin-left: auto;
 	}
 
 	.mail-prose {
@@ -694,5 +726,46 @@
 		height: 3.5px;
 		border-radius: 999px;
 		background: currentColor;
+	}
+
+	.mail-reply-field {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		min-height: 44px;
+		margin: 4px 0 0;
+		padding: 0 14px;
+		border: 0;
+		border-radius: 14px;
+		background: var(--mail-panel-bg, color-mix(in srgb, var(--fg) 4.5%, transparent));
+		color: var(--fg-33);
+		font: inherit;
+		font-size: 14px;
+		font-weight: 500;
+		text-align: left;
+		cursor: pointer;
+		box-sizing: border-box;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.mail-reply-field:hover {
+		color: var(--fg-66);
+		background: color-mix(in srgb, var(--fg) 6.5%, transparent);
+	}
+
+	.reply-field-icon {
+		display: grid;
+		place-items: center;
+		line-height: 0;
+		color: var(--fg-66);
+		flex-shrink: 0;
+	}
+
+	.reply-field-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 </style>

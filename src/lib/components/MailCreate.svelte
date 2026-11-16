@@ -31,6 +31,13 @@
 	let tipTap = $state(null);
 	let dismissed = $state(false);
 	let selected = $state(0);
+	/** @type {'to' | 'body'} */
+	let focusTarget = $state('to');
+	let threadId = $state('');
+	let inReplyTo = $state('');
+	let scheduleOpen = $state(false);
+	/** @type {string} */
+	let scheduleLocal = $state('');
 
 	const open = $derived(ui.composer?.kind === 'mail');
 	const editorKey = $derived(open ? String(ui.composer?.id ?? 'new') : 'closed');
@@ -93,6 +100,8 @@
 			bookReady = false;
 			dismissed = false;
 			draft = '';
+			scheduleOpen = false;
+			scheduleLocal = '';
 			return;
 		}
 		const key = ui.composer?.id ?? '__new__';
@@ -102,16 +111,29 @@
 		draft = '';
 		subject = typeof ui.composer?.subject === 'string' ? ui.composer.subject : '';
 		body = typeof ui.composer?.body === 'string' ? ui.composer.body : '';
+		threadId = typeof ui.composer?.threadId === 'string' ? ui.composer.threadId : '';
+		inReplyTo = typeof ui.composer?.inReplyTo === 'string' ? ui.composer.inReplyTo : '';
+		focusTarget = ui.composer?.focus === 'body' ? 'body' : 'to';
 		err = '';
 		busy = false;
 		dismissed = false;
+		scheduleOpen = false;
+		scheduleLocal = '';
 		bookReady = mailAddressBook.length > 0;
 		void refreshMailAddressBook().finally(() => {
 			if (open) bookReady = true;
 		});
 		tick().then(() => {
-			requestAnimationFrame(() => toInput?.focus());
+			requestAnimationFrame(() => {
+				if (focusTarget === 'body') tipTap?.commands?.focus?.('end');
+				else toInput?.focus();
+			});
 		});
+	});
+
+	$effect(() => {
+		if (!open || focusTarget !== 'body' || !tipTap) return;
+		queueMicrotask(() => tipTap?.commands?.focus?.('end'));
 	});
 
 	/** @param {string} email */
@@ -194,7 +216,8 @@
 		}
 	}
 
-	async function send() {
+	/** @param {string | null} [at] */
+	function send(at = null) {
 		if (parseEmails(draft).length) commitDraftEmails();
 		const to = recipients;
 		const nextBody = plainBody ? body : '';
@@ -203,14 +226,27 @@
 		busy = true;
 		err = '';
 		try {
-			const msg = await sendMail({ to, subject, body: nextBody });
+			const msg = sendMail({
+				to,
+				subject,
+				body: nextBody,
+				threadId: threadId || undefined,
+				inReplyTo: inReplyTo || undefined,
+				scheduleAt: at
+			});
 			closeComposer();
 			selectEntity('mail', msg.id);
 		} catch (e) {
 			err = e instanceof Error ? e.message : String(e);
-		} finally {
 			busy = false;
 		}
+	}
+
+	function confirmSchedule() {
+		if (!scheduleLocal) return;
+		const iso = new Date(scheduleLocal).toISOString();
+		scheduleOpen = false;
+		send(iso);
 	}
 </script>
 
@@ -320,13 +356,60 @@
 
 	<div class="post-action-row">
 		<EditorToolbar editor={tipTap} />
-		<PrimaryButton
-			size="sheet"
-			disabled={busy || recipients.length === 0 || (!subject.trim() && !plainBody)}
-			onclick={() => void send()}
-		>
-			{busy ? t('mail.sending') : t('mail.send')}
-		</PrimaryButton>
+		<div class="send-split" role="group" aria-label={t('mail.send')}>
+			<PrimaryButton
+				size="sheet"
+				class="send-main"
+				disabled={busy || recipients.length === 0 || (!subject.trim() && !plainBody)}
+				onclick={() => send(null)}
+			>
+				{t('mail.send')}
+			</PrimaryButton>
+			<span class="send-divider" aria-hidden="true"></span>
+			<button
+				type="button"
+				class="send-schedule"
+				aria-label={t('mail.sendLater')}
+				aria-expanded={scheduleOpen}
+				disabled={busy || recipients.length === 0 || (!subject.trim() && !plainBody)}
+				onclick={() => (scheduleOpen = !scheduleOpen)}
+			>
+				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+					<path
+						d="M3 4.5 6 7.5 9 4.5"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</button>
+			{#if scheduleOpen}
+				<button
+					type="button"
+					class="schedule-scrim"
+					aria-label={t('common.close')}
+					onclick={() => (scheduleOpen = false)}
+				></button>
+				<div class="schedule-pop" role="dialog" aria-label={t('mail.sendLater')}>
+					<label class="schedule-label" for="mail-schedule-at">{t('mail.scheduleAt')}</label>
+					<input
+						id="mail-schedule-at"
+						class="schedule-input"
+						type="datetime-local"
+						bind:value={scheduleLocal}
+					/>
+					<button
+						type="button"
+						class="schedule-confirm"
+						disabled={!scheduleLocal}
+						onclick={confirmSchedule}
+					>
+						{t('mail.scheduleSend')}
+					</button>
+				</div>
+			{/if}
+		</div>
 	</div>
 </CreateSheet>
 
@@ -426,8 +509,143 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 0 16px 12px;
+		padding: 0 16px;
 		flex-shrink: 0;
+	}
+
+	.send-split {
+		position: relative;
+		margin-left: auto;
+		display: inline-flex;
+		align-items: stretch;
+		height: var(--ctrl-h, 32px);
+		border-radius: 9999px;
+		overflow: visible;
+		flex-shrink: 0;
+		background:
+			var(--button-primary-bg) padding-box,
+			var(--glass-shine) border-box;
+		border: 1px solid transparent;
+		box-sizing: border-box;
+	}
+
+	.send-split :global(.send-main.alpha-btn.sheet) {
+		margin-left: 0;
+		border-radius: 9999px 0 0 9999px;
+		padding-right: 14px;
+		padding-left: 16px;
+		border: 0;
+		background: transparent;
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		height: 100%;
+		min-height: 0;
+		transform: none;
+	}
+
+	.send-split :global(.send-main.alpha-btn.sheet:hover:not(:disabled)),
+	.send-split :global(.send-main.alpha-btn.sheet:active:not(:disabled)) {
+		transform: none;
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
+	}
+
+	.send-divider {
+		width: 1px;
+		align-self: stretch;
+		margin: 5px 0;
+		background: color-mix(in srgb, var(--button-primary-fg, var(--fg)) 22%, transparent);
+		flex-shrink: 0;
+		z-index: 1;
+	}
+
+	.send-schedule {
+		width: 30px;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 0 9999px 9999px 0;
+		display: grid;
+		place-items: center;
+		background: transparent;
+		color: var(--button-primary-fg, var(--fg));
+		cursor: pointer;
+		line-height: 0;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.send-schedule:disabled {
+		opacity: 0.45;
+		cursor: default;
+	}
+
+	.send-schedule:not(:disabled):hover {
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
+	}
+
+	.schedule-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		cursor: default;
+	}
+
+	.schedule-pop {
+		position: absolute;
+		right: 0;
+		bottom: calc(100% + 8px);
+		z-index: 50;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 220px;
+		padding: 12px;
+		border: 1px solid var(--glass-border);
+		border-radius: 12px;
+		background: var(--glass);
+		box-shadow: 0 8px 28px var(--shadow);
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+	}
+
+	.schedule-label {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-66);
+	}
+
+	.schedule-input {
+		width: 100%;
+		margin: 0;
+		padding: 8px 10px;
+		border: 0;
+		border-radius: 8px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		box-sizing: border-box;
+	}
+
+	.schedule-confirm {
+		margin: 0;
+		padding: 8px 12px;
+		border: 0;
+		border-radius: 9999px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 550;
+		cursor: pointer;
+	}
+
+	.schedule-confirm:disabled {
+		opacity: 0.45;
+		cursor: default;
 	}
 
 	.err {

@@ -85,7 +85,17 @@ function basicAuth(email, password) {
  * @param {string} email
  * @param {string} password
  */
+/** @type {Map<string, { session: any, at: number }>} */
+const sessionCache = new Map();
+const SESSION_TTL_MS = 5 * 60_000;
+
 export async function jmapSession(email, password) {
+	const key = `${String(email || '')
+		.trim()
+		.toLowerCase()}|${password || ''}`;
+	const hit = sessionCache.get(key);
+	if (hit && Date.now() - hit.at < SESSION_TTL_MS) return hit.session;
+
 	let res;
 	try {
 		res = await fetch(`${jmapBase()}/session`, {
@@ -97,10 +107,14 @@ export async function jmapSession(email, password) {
 	} catch (e) {
 		throw new Error(networkHint(e));
 	}
-	if (res.status === 401) throw new Error('Mailbox password rejected by Stalwart');
+	if (res.status === 401) {
+		sessionCache.delete(key);
+		throw new Error('Mailbox password rejected by Stalwart');
+	}
 	if (!res.ok) throw new Error(`JMAP session HTTP ${res.status}`);
 	const session = /** @type {any} */ (await res.json());
 	session.apiUrl = `${jmapBase()}/`;
+	sessionCache.set(key, { session, at: Date.now() });
 	return session;
 }
 
@@ -408,6 +422,180 @@ export async function listJmapFolder(email, password, folder, limit = 50) {
 	]);
 	const list = (firstResult(got.methodResponses, 'Email/get')?.list || []).map(toUiMessage);
 	return groupMailThreads(list, email);
+}
+
+/** @type {Map<string, { draftsId: string, sentId: string, at: number }>} */
+const mailboxRoleCache = new Map();
+const MAILBOX_TTL_MS = 10 * 60_000;
+
+/**
+ * Resolve Drafts + Sent mailbox ids in one Mailbox/get (cached).
+ * @param {string} apiUrl
+ * @param {string} email
+ * @param {string} password
+ * @param {string} accountId
+ */
+async function draftsAndSentIds(apiUrl, email, password, accountId) {
+	const key = `${accountId}`;
+	const hit = mailboxRoleCache.get(key);
+	if (hit && Date.now() - hit.at < MAILBOX_TTL_MS) {
+		return { draftsId: hit.draftsId, sentId: hit.sentId };
+	}
+	const boxes = await jmapCall(apiUrl, email, password, [
+		[
+			'Mailbox/get',
+			{ accountId, ids: null, properties: ['id', 'name', 'role'] },
+			'0'
+		]
+	]);
+	const list = firstResult(boxes.methodResponses, 'Mailbox/get')?.list || [];
+	const drafts = list.find((m) => m.role === 'drafts');
+	const sent = list.find((m) => m.role === 'sent');
+	const draftsId = drafts?.id ? String(drafts.id) : '';
+	const sentId = sent?.id ? String(sent.id) : '';
+	mailboxRoleCache.set(key, { draftsId, sentId, at: Date.now() });
+	return { draftsId, sentId };
+}
+
+/**
+ * Send via Stalwart JMAP (Email/set draft + EmailSubmission/set).
+ * Session + mailboxes + submit = 3 round-trips (not Drive putPaths).
+ * @param {string} email
+ * @param {string} password
+ * @param {{
+ *   to: string[],
+ *   subject: string,
+ *   body: string,
+ *   fromName?: string,
+ *   inReplyTo?: string,
+ *   threadId?: string,
+ *   scheduleAt?: string | null
+ * }} input
+ */
+export async function sendJmapMail(email, password, input) {
+	const session = await jmapSession(email, password);
+	const accountId = primaryMailAccountId(session);
+	const apiUrl = session.apiUrl || `${jmapBase()}/`;
+	const to = [...new Set((input.to || []).map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+	if (!to.length) throw new Error('Add at least one recipient');
+	const subject = String(input.subject || '').trim() || '(no subject)';
+	const body = String(input.body || '');
+	const fromEmail = String(email || '')
+		.trim()
+		.toLowerCase();
+	const fromName = String(input.fromName || '').trim();
+	const looksHtml = /<[a-z][\s\S]*>/i.test(body);
+
+	const { draftsId, sentId } = await draftsAndSentIds(apiUrl, email, password, accountId);
+	const mailboxIds = {};
+	if (draftsId) mailboxIds[draftsId] = true;
+	else if (sentId) mailboxIds[sentId] = true;
+	else throw new Error('No Drafts/Sent mailbox on this account');
+
+	/** @type {Record<string, any>} */
+	const draft = {
+		mailboxIds,
+		keywords: { $draft: true, $seen: true },
+		from: [{ email: fromEmail, ...(fromName ? { name: fromName } : {}) }],
+		to: to.map((e) => ({ email: e })),
+		subject,
+		bodyValues: { body: { value: body, charset: 'utf-8' } },
+		...(looksHtml
+			? { htmlBody: [{ partId: 'body', type: 'text/html' }] }
+			: { textBody: [{ partId: 'body', type: 'text/plain' }] })
+	};
+	if (input.inReplyTo) {
+		draft['header:In-Reply-To:asText'] = String(input.inReplyTo);
+		draft['header:References:asText'] = String(input.inReplyTo);
+	}
+
+	const scheduleAt = input.scheduleAt ? String(input.scheduleAt) : '';
+	const scheduleMs = scheduleAt ? Date.parse(scheduleAt) : NaN;
+	const scheduleFuture = Number.isFinite(scheduleMs) && scheduleMs > Date.now() + 5_000;
+
+	if (scheduleFuture) {
+		/* Save as draft only — server-side snooze varies by provider. */
+		const res = await jmapCall(
+			apiUrl,
+			email,
+			password,
+			[['Email/set', { accountId, create: { draft } }, '0']],
+			['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail']
+		);
+		const created = firstResult(res.methodResponses, 'Email/set')?.created?.draft;
+		if (!created?.id) throw new Error('JMAP could not create scheduled draft');
+		const ui = toUiMessage({
+			...draft,
+			id: created.id,
+			threadId: input.threadId || created.threadId || created.id,
+			receivedAt: new Date(scheduleMs).toISOString(),
+			sentAt: new Date(scheduleMs).toISOString(),
+			keywords: { $draft: true, $seen: true }
+		});
+		return { ...ui, _scheduled: true, _scheduledAt: new Date(scheduleMs).toISOString() };
+	}
+
+	/** @type {Record<string, any> | undefined} */
+	let onSuccessUpdateEmail;
+	if (sentId || draftsId) {
+		onSuccessUpdateEmail = {
+			'#send': {
+				...(draftsId ? { [`mailboxIds/${draftsId}`]: null } : {}),
+				...(sentId ? { [`mailboxIds/${sentId}`]: true } : {}),
+				'keywords/$draft': null,
+				'keywords/$seen': true
+			}
+		};
+	}
+
+	/* One JMAP request: create draft + submit (session/mailboxes usually cached). */
+	const res = await jmapCall(
+		apiUrl,
+		email,
+		password,
+		[
+			['Email/set', { accountId, create: { draft } }, '0'],
+			[
+				'EmailSubmission/set',
+				{
+					accountId,
+					create: {
+						send: {
+							emailId: '#draft',
+							envelope: {
+								mailFrom: { email: fromEmail },
+								rcptTo: to.map((e) => ({ email: e }))
+							}
+						}
+					},
+					...(onSuccessUpdateEmail ? { onSuccessUpdateEmail } : {})
+				},
+				'1'
+			]
+		],
+		['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail', 'urn:ietf:params:jmap:submission']
+	);
+
+	const emailSet = firstResult(res.methodResponses, 'Email/set');
+	const created = emailSet?.created?.draft;
+	if (!created?.id) {
+		const not = emailSet?.notCreated?.draft;
+		throw new Error(not?.description || not?.type || 'JMAP could not create message');
+	}
+	const sub = firstResult(res.methodResponses, 'EmailSubmission/set');
+	if (sub?.notCreated?.send) {
+		const fail = sub.notCreated.send;
+		throw new Error(fail?.description || fail?.type || 'JMAP submission failed');
+	}
+
+	return toUiMessage({
+		...draft,
+		id: created.id,
+		threadId: input.threadId || created.threadId || created.id,
+		receivedAt: new Date().toISOString(),
+		sentAt: new Date().toISOString(),
+		keywords: { $seen: true }
+	});
 }
 
 /**
