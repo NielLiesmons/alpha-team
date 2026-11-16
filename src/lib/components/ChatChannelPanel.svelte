@@ -1138,7 +1138,7 @@
 		cursor: pointer;
 		backdrop-filter: blur(12px);
 		-webkit-backdrop-filter: blur(12px);
-		box-shadow: 0 4px 16px color-mix(in srgb, var(--fg-raw, #000) 18%, transparent);
+		box-shadow: 0 4px 16px var(--shadow);
 	}
 
 	.scroll-fab {
@@ -1151,7 +1151,7 @@
 		padding: 0;
 		border: 0;
 		border-radius: 999px;
-		background: color-mix(in srgb, var(--glass) 72%, transparent);
+		background: var(--composer-bg, color-mix(in srgb, var(--glass) 72%, transparent));
 		color: var(--fg-33);
 		cursor: pointer;
 		backdrop-filter: blur(var(--glass-blur));

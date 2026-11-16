@@ -496,7 +496,7 @@
 		border-radius: 12px;
 		background: var(--glass);
 		overflow: hidden;
-		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw, #000) 18%, transparent);
+		box-shadow: 0 8px 28px var(--shadow);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}

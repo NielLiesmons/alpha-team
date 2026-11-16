@@ -1143,7 +1143,7 @@
 		border-radius: 12px;
 		background: var(--glass);
 		overflow: hidden;
-		box-shadow: 0 8px 28px color-mix(in srgb, var(--fg-raw) 18%, transparent);
+		box-shadow: 0 8px 28px var(--shadow);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
@@ -1707,9 +1707,7 @@
 			padding: calc(36px + env(safe-area-inset-top, 0px)) 14px
 				calc(12px + env(safe-area-inset-bottom, 0px));
 			background: var(--bg);
-			/* Glass chrome relative to this nav surface */
-			--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--bg));
-			--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+			/* Glass/lift come from theme tokens — do not re-mix ink into bg here */
 			pointer-events: none;
 		}
 

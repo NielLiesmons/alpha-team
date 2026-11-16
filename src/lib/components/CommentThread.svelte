@@ -411,7 +411,7 @@
 			var(--glass-shine) border-box;
 		color: var(--fg-66);
 		cursor: pointer;
-		box-shadow: 0 4px 16px color-mix(in srgb, var(--fg-raw, #000) 12%, transparent);
+		box-shadow: 0 4px 16px var(--shadow);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		-webkit-tap-highlight-color: transparent;
