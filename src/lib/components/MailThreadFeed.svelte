@@ -315,7 +315,7 @@
 		padding: 0;
 		margin: 0 0 18px;
 		border-radius: 14px;
-		background: color-mix(in srgb, var(--fg) 4.5%, transparent);
+		background: var(--mail-panel-bg, color-mix(in srgb, var(--fg) 4.5%, transparent));
 		border: 0;
 		overflow: visible;
 		flex: none;

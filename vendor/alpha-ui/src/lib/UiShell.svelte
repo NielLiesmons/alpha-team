@@ -38,6 +38,7 @@
 	 *   counts?: Record<string, number>,
 	 *   wideList?: boolean,
 	 *   listSize?: 'default' | 'chat',
+	 *   commsFeed?: boolean,
 	 *   syncing?: boolean,
 	 *   searchEnabled?: boolean,
 	 *   feedPadClass?: string,
@@ -74,6 +75,8 @@
 		wideList = false,
 		/** Wider list column (Chat feed on desktop). */
 		listSize = 'default',
+		/** Chat/mail: slightly recessed feed canvas in light mode. */
+		commsFeed = false,
 		syncing = false,
 		searchEnabled = true,
 		feedPadClass = '',
@@ -531,6 +534,7 @@
 	class:nav-dragging={menuDrag != null}
 	class:detail-covering={detailCovering}
 	class:list-chat={listSize === 'chat'}
+	class:comms-feed={commsFeed}
 	bind:this={shellEl}
 	style="--menu-progress: {menuProgress}"
 >
@@ -543,12 +547,13 @@
 			{#if searchOpen && searchEnabled}
 				<label class="search search-expanded">
 					<span class="sr-only">Search</span>
-					<svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+					<svg class="search-icon" width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+						<!-- alpha-chat / polli search (ic_polli_search) -->
 						<path
-							d="M7 12.5A5.5 5.5 0 1 0 7 1.5a5.5 5.5 0 0 0 0 11Zm0 0L14 14.5"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
+							fill="currentColor"
+							fill-rule="evenodd"
+							clip-rule="evenodd"
+							d="M5.102 1.243C5.967 0.884 6.895 0.7 7.831 0.7C8.768 0.7 9.695 0.884 10.56 1.243C11.425 1.601 12.212 2.126 12.874 2.789C13.536 3.451 14.061 4.237 14.42 5.102C14.778 5.967 14.962 6.895 14.962 7.831C14.962 8.768 14.778 9.695 14.42 10.56C14.064 11.419 13.543 12.2 12.888 12.86L16.734 16.706C16.742 16.714 16.742 16.726 16.734 16.734C16.726 16.742 16.714 16.742 16.706 16.734L12.86 12.888C11.524 14.216 9.716 14.962 7.831 14.962C5.94 14.962 4.126 14.211 2.789 12.874C1.451 11.536 0.7 9.723 0.7 7.831C0.7 5.94 1.451 4.126 2.789 2.789C3.451 2.126 4.237 1.601 5.102 1.243Z"
 						/>
 					</svg>
 					<input
@@ -599,12 +604,13 @@
 							queueMicrotask(() => searchInputEl?.focus());
 						}}
 					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+							<!-- alpha-chat / polli search (ic_polli_search) -->
 							<path
-								d="M7 12.5A5.5 5.5 0 1 0 7 1.5a5.5 5.5 0 0 0 0 11Zm0 0L14 14.5"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
+								fill="currentColor"
+								fill-rule="evenodd"
+								clip-rule="evenodd"
+								d="M5.102 1.243C5.967 0.884 6.895 0.7 7.831 0.7C8.768 0.7 9.695 0.884 10.56 1.243C11.425 1.601 12.212 2.126 12.874 2.789C13.536 3.451 14.061 4.237 14.42 5.102C14.778 5.967 14.962 6.895 14.962 7.831C14.962 8.768 14.778 9.695 14.42 10.56C14.064 11.419 13.543 12.2 12.888 12.86L16.734 16.706C16.742 16.714 16.742 16.726 16.734 16.734C16.726 16.742 16.714 16.742 16.706 16.734L12.86 12.888C11.524 14.216 9.716 14.962 7.831 14.962C5.94 14.962 4.126 14.211 2.789 12.874C1.451 11.536 0.7 9.723 0.7 7.831C0.7 5.94 1.451 4.126 2.789 2.789C3.451 2.126 4.237 1.601 5.102 1.243Z"
 							/>
 						</svg>
 					</button>
@@ -618,8 +624,13 @@
 							aria-expanded={createMenuOpen}
 							onclick={() => (createMenuOpen = !createMenuOpen)}
 						>
-							<svg width="16" height="16" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-								<path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+							<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+								<path
+									d="M8 3.25v9.5M3.25 8h9.5"
+									stroke="currentColor"
+									stroke-width="1.5"
+									stroke-linecap="round"
+								/>
 							</svg>
 						</button>
 						{#if createMenuOpen}
@@ -1008,7 +1019,8 @@
 
 	.account-pill.on {
 		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
+			linear-gradient(var(--nav-selected, var(--glass)), var(--nav-selected, var(--glass)))
+				padding-box,
 			var(--glass-shine) border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
@@ -1210,7 +1222,8 @@
 
 	.nav-block.active {
 		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
+			linear-gradient(var(--nav-selected, var(--glass)), var(--nav-selected, var(--glass)))
+				padding-box,
 			var(--glass-shine) border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
@@ -1412,10 +1425,14 @@
 		align-items: stretch;
 		overflow: hidden;
 		border-radius: 20px;
-		/* Follows theme page bg (#121212-ish dark / soft light) */
+		/* Follows theme page bg; comms feeds use --feed-bg in light */
 		background: var(--bg);
 		border: 1px solid var(--hairline);
 		color: var(--white);
+	}
+
+	.shell.comms-feed .workspace {
+		background: var(--feed-bg, var(--bg));
 	}
 
 	.list-col {

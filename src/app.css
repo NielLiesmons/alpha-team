@@ -100,7 +100,7 @@
 	 */
 	--lift: color-mix(in srgb, var(--fg) 6%, var(--bg));
 	--glass-fill: var(--lift);
-	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+	--glass: color-mix(in srgb, var(--glass-fill) 66%, transparent);
 	/* Large surfaces (modals / sheets): quiet dark lift — not bright */
 	--glass-panel: color-mix(
 		in srgb,
@@ -119,6 +119,12 @@
 	);
 	/* Chat / comment bottom bars — same visual as prior glass@72% in dark */
 	--composer-bg: color-mix(in srgb, var(--glass) 72%, transparent);
+	/* Nav selected pill — dark = glass lift; light overrides to a darker wash */
+	--nav-selected: var(--glass);
+	/* Comms feed canvas (chat/mail); defaults to page bg outside light feeds */
+	--feed-bg: var(--bg);
+	--bubble-bg: color-mix(in srgb, var(--fg) 12%, transparent);
+	--mail-panel-bg: color-mix(in srgb, var(--fg) 4.5%, transparent);
 	--popover: var(--glass-panel);
 	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
@@ -183,7 +189,7 @@
 	--surface: #161616;
 	--lift: color-mix(in srgb, var(--fg) 6%, var(--bg));
 	--glass-fill: var(--lift);
-	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+	--glass: color-mix(in srgb, var(--glass-fill) 66%, transparent);
 	--glass-panel: color-mix(
 		in srgb,
 		color-mix(in srgb, var(--fg) 5%, var(--bg)) 92%,
@@ -192,6 +198,10 @@
 	--glass-blur: 22px;
 	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
 	--composer-bg: color-mix(in srgb, var(--glass) 72%, transparent);
+	--nav-selected: var(--glass);
+	--feed-bg: var(--bg);
+	--bubble-bg: color-mix(in srgb, var(--fg) 12%, transparent);
+	--mail-panel-bg: color-mix(in srgb, var(--fg) 4.5%, transparent);
 	--popover: var(--glass-panel);
 	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
@@ -220,8 +230,8 @@
 }
 
 :root[data-theme='light'] {
-	/* Recessed canvas; keep --bg-raw as dark-mode fg pole (#f8f8f8) */
-	--bg: #ececec;
+	/* Columns default white; keep --bg-raw as dark-mode fg pole (#f8f8f8) */
+	--bg: #ffffff;
 	--fg: var(--fg-raw);
 	--fg-83: color-mix(in srgb, var(--fg) 83%, transparent);
 	--fg-66: color-mix(in srgb, var(--fg) 66%, transparent);
@@ -239,7 +249,7 @@
 	/* Elevated chrome = white (not ink-into-bg) */
 	--lift: #ffffff;
 	--glass-fill: var(--lift);
-	--glass: color-mix(in srgb, var(--lift) 90%, transparent);
+	--glass: color-mix(in srgb, var(--lift) 66%, transparent);
 	--glass-panel: color-mix(in srgb, var(--lift) 88%, transparent);
 	--glass-blur: 22px;
 	--glass-border: color-mix(in srgb, var(--fg) 10%, transparent);
@@ -251,6 +261,12 @@
 		color-mix(in srgb, var(--fg) 22%, transparent) 100%
 	);
 	--composer-bg: #ffffff;
+	/* Nav selected = darker than shell (not white glass) */
+	--nav-selected: color-mix(in srgb, var(--fg) 10%, transparent);
+	/* Chat/mail feed canvas slightly off-white; panels/bubbles stay white */
+	--feed-bg: #ececec;
+	--bubble-bg: #ffffff;
+	--mail-panel-bg: #ffffff;
 	--popover: var(--glass-panel);
 	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
@@ -294,7 +310,7 @@
 	:root[data-theme='dark'] {
 		--lift: color-mix(in srgb, var(--fg) 6%, var(--shell));
 		--glass-fill: var(--lift);
-		--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
+		--glass: color-mix(in srgb, var(--glass-fill) 66%, transparent);
 		--glass-panel: color-mix(
 			in srgb,
 			color-mix(in srgb, var(--fg) 5.5%, var(--shell)) 92%,
@@ -311,7 +327,7 @@
 	:root[data-theme='light'] {
 		--lift: #ffffff;
 		--glass-fill: var(--lift);
-		--glass: color-mix(in srgb, var(--lift) 90%, transparent);
+		--glass: color-mix(in srgb, var(--lift) 66%, transparent);
 		--glass-panel: color-mix(in srgb, var(--lift) 88%, transparent);
 		--composer-bg: #ffffff;
 		--float-panel-bg: color-mix(in srgb, #ffffff 82%, transparent);

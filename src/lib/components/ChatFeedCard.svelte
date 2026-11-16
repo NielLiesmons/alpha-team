@@ -627,7 +627,7 @@
 		padding: 6px 0 7px;
 		border: 0;
 		border-radius: 16px 16px 16px 4px;
-		background: color-mix(in srgb, var(--fg) 12%, transparent);
+		background: var(--bubble-bg, color-mix(in srgb, var(--fg) 12%, transparent));
 		color: inherit;
 		text-align: left;
 		font: inherit;

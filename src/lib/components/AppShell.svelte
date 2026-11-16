@@ -56,6 +56,8 @@
 
 	const path = $derived($page.url.pathname);
 	const chatList = $derived(path.startsWith('/chat'));
+	const mailList = $derived(path.startsWith('/mail'));
+	const commsFeed = $derived(chatList || mailList);
 
 	const filterOptions = $derived.by(() => {
 		locale.value;
@@ -305,6 +307,7 @@
 	{counts}
 	{wideList}
 	listSize={chatList ? 'chat' : 'default'}
+	{commsFeed}
 	syncing={syncUi.active}
 	filterOptions={customChrome ? null : filterOptions}
 	filterValue={ui.listFilter}
