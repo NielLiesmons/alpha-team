@@ -13,7 +13,8 @@ import {
 	getMailboxPassword,
 	groupMailThreads,
 	listJmapFolder,
-	mailPersonName
+	mailPersonName,
+	setJmapEmailsSeen
 } from './jmap-mail.js';
 import { approvedContacts, isApprovedContact } from './mail-contacts.svelte.js';
 import { mailView } from './mail-view.svelte.js';
@@ -29,8 +30,108 @@ export const mailUi = $state({
 	sending: false
 });
 
+/**
+ * Optimistic unread overrides survive refresh until JMAP/$seen catches up (or TTL).
+ * @type {Map<string, { unread: boolean, until: number }>}
+ */
+const unreadOverrides = new Map();
+
+const UNREAD_OVERRIDE_MS = 120_000;
+
 function normEmail(value) {
 	return (value || '').trim().toLowerCase();
+}
+
+/**
+ * @param {string} id
+ * @param {boolean} unread
+ */
+function rememberUnreadOverride(id, unread) {
+	const key = String(id || '');
+	if (!key) return;
+	unreadOverrides.set(key, { unread, until: Date.now() + UNREAD_OVERRIDE_MS });
+}
+
+/**
+ * @param {any} thread
+ * @param {boolean} unread
+ */
+function applyThreadUnreadLocal(thread, unread) {
+	if (!thread) return;
+	thread._unread = unread;
+	const msgs = Array.isArray(thread.messages) ? thread.messages : null;
+	if (!msgs?.length) {
+		if (thread._jmap?.keywords) {
+			if (unread) delete thread._jmap.keywords.$seen;
+			else thread._jmap.keywords.$seen = true;
+		}
+		return;
+	}
+	const me = mailActorEmail();
+	if (!unread) {
+		for (const m of msgs) {
+			m._unread = false;
+			if (m._jmap?.keywords) m._jmap.keywords.$seen = true;
+		}
+		return;
+	}
+	/* Mark latest inbound (or latest) unread so the thread shows as unread. */
+	let target = [...msgs].reverse().find((m) => normEmail(m?.from) !== me) || msgs[msgs.length - 1];
+	for (const m of msgs) m._unread = false;
+	if (target) {
+		target._unread = true;
+		if (target._jmap?.keywords) delete target._jmap.keywords.$seen;
+	}
+}
+
+/**
+ * JMAP Email ids to patch for seen/unseen.
+ * @param {any} thread
+ * @param {boolean} seen
+ * @param {string[]} [preferIds] snapshot taken before local mutation
+ */
+function jmapIdsForSeen(thread, seen, preferIds) {
+	if (preferIds?.length) return preferIds;
+	const msgs = Array.isArray(thread?.messages) ? thread.messages : thread ? [thread] : [];
+	const me = mailActorEmail();
+	if (seen) {
+		/* Mark whole thread read — every real Email id in the conversation. */
+		return msgs.map((m) => String(m.id || '')).filter(Boolean);
+	}
+	const inbound = [...msgs].reverse().find((m) => normEmail(m?.from) !== me) || msgs[msgs.length - 1];
+	const id = String(inbound?.id || '');
+	return id ? [id] : [];
+}
+
+/**
+ * @param {any} thread
+ * @param {boolean} seen
+ * @param {string[]} [ids]
+ */
+async function persistJmapSeen(thread, seen, ids) {
+	const me = mailActorEmail();
+	const pw = me ? getMailboxPassword(me) : '';
+	if (!me || !pw) return;
+	if (!(thread?.transport === 'jmap' || Array.isArray(thread?.messages))) return;
+	const emailIds = jmapIdsForSeen(thread, seen, ids);
+	if (!emailIds.length) return;
+	await setJmapEmailsSeen(me, pw, emailIds, seen);
+}
+
+/**
+ * Re-apply optimistic unread after a list replace from the server.
+ */
+function reapplyUnreadOverrides() {
+	const now = Date.now();
+	for (const [id, ov] of [...unreadOverrides.entries()]) {
+		if (now >= ov.until) {
+			unreadOverrides.delete(id);
+			continue;
+		}
+		const thread = findMail(id);
+		if (!thread) continue;
+		if (Boolean(thread._unread) !== ov.unread) applyThreadUnreadLocal(thread, ov.unread);
+	}
 }
 
 /** Signed-in mailbox used to filter inbox / sent. */
@@ -380,6 +481,7 @@ export async function refreshMail() {
 			mailMessages.length = 0;
 			mailMessages.push(...list);
 			for (const m of list) rememberMailTip(m);
+			reapplyUnreadOverrides();
 			return;
 		}
 
@@ -388,6 +490,7 @@ export async function refreshMail() {
 			const locals = mailMessages.filter((m) => m._local);
 			mailMessages.splice(0, mailMessages.length, ...locals);
 			for (const m of locals) rememberMailTip(m);
+			reapplyUnreadOverrides();
 			if (me && !pw) {
 				mailUi.error =
 					'Add your mailbox password in Settings → Mail (Stalwart) to load the real inbox.';
@@ -398,6 +501,7 @@ export async function refreshMail() {
 		mailMessages.length = 0;
 		mailMessages.push(...list);
 		for (const m of list) rememberMailTip(m);
+		reapplyUnreadOverrides();
 		if (me && !pw) {
 			mailUi.error =
 				'Showing Drive drafts only — add mailbox password in Settings to sync Stalwart.';
@@ -464,10 +568,29 @@ export async function markMailRead(id) {
 	const thread = findMail(id);
 	if (!me || !thread) return thread;
 
+	const ov = unreadOverrides.get(String(id));
+	/* Don't clobber a fresh mark-unread while the thread is still open / refreshing. */
+	if (ov?.unread && Date.now() < ov.until) return thread;
+
 	if (thread.transport === 'jmap' || Array.isArray(thread.messages)) {
-		thread._unread = false;
-		if (Array.isArray(thread.messages)) {
-			for (const m of thread.messages) m._unread = false;
+		const msgs = Array.isArray(thread.messages) ? thread.messages : [thread];
+		const ids = msgs.map((m) => String(m.id || '')).filter(Boolean);
+		if (!thread._unread && !msgsStillUnread(thread)) {
+			rememberUnreadOverride(id, false);
+			/* Still push $seen in case local was optimistic-only. */
+			try {
+				await persistJmapSeen(thread, true, ids);
+			} catch (e) {
+				mailUi.error = e instanceof Error ? e.message : String(e);
+			}
+			return thread;
+		}
+		applyThreadUnreadLocal(thread, false);
+		rememberUnreadOverride(id, false);
+		try {
+			await persistJmapSeen(thread, true, ids);
+		} catch (e) {
+			mailUi.error = e instanceof Error ? e.message : String(e);
 		}
 		return thread;
 	}
@@ -476,9 +599,10 @@ export async function markMailRead(id) {
 	const read = Array.isArray(thread.read_by) ? thread.read_by.map(normEmail) : [];
 	if (read.includes(me)) return thread;
 
-	const next = { ...thread, read_by: [...read, me] };
+	const next = { ...thread, read_by: [...read, me], _unread: false };
 	const idx = mailMessages.findIndex((m) => m.id === id);
 	if (idx >= 0) mailMessages[idx] = next;
+	rememberUnreadOverride(id, false);
 
 	const session = activeSession();
 	if (!session || thread._local) return next;
@@ -492,16 +616,49 @@ export async function markMailRead(id) {
 	}
 }
 
+/** @param {any} thread */
+function msgsStillUnread(thread) {
+	const msgs = Array.isArray(thread?.messages) ? thread.messages : [];
+	return msgs.some((m) => m?._unread);
+}
+
 /**
  * @param {string} id
  */
-export function markMailUnread(id) {
+export async function markMailUnread(id) {
 	const thread = findMail(id);
 	if (!thread) return null;
-	thread._unread = true;
-	if (Array.isArray(thread.messages) && thread.messages.length) {
-		const last = thread.messages[thread.messages.length - 1];
-		if (last) last._unread = true;
+	const unreadIds = jmapIdsForSeen(thread, false);
+	applyThreadUnreadLocal(thread, true);
+	rememberUnreadOverride(id, true);
+
+	if (thread.transport === 'jmap' || Array.isArray(thread.messages)) {
+		try {
+			await persistJmapSeen(thread, false, unreadIds);
+		} catch (e) {
+			mailUi.error = e instanceof Error ? e.message : String(e);
+		}
+		return thread;
+	}
+
+	const me = mailActorEmail();
+	if (me && isInboxFor(thread, me)) {
+		const read = (Array.isArray(thread.read_by) ? thread.read_by : [])
+			.map(normEmail)
+			.filter((e) => e && e !== me);
+		thread.read_by = read;
+		const idx = mailMessages.findIndex((m) => m.id === id);
+		if (idx >= 0) mailMessages[idx] = thread;
+		const session = activeSession();
+		if (session && !thread._local) {
+			try {
+				const saved = await putMailMessage(session, thread);
+				if (idx >= 0) mailMessages[idx] = saved;
+				return saved;
+			} catch (e) {
+				mailUi.error = e instanceof Error ? e.message : String(e);
+			}
+		}
 	}
 	return thread;
 }

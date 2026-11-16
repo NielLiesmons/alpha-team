@@ -245,16 +245,24 @@
 		});
 	});
 
+	/** Only auto-mark-read once per opened thread id (avoids fighting mark-unread). */
+	let autoReadMailId = $state('');
+
 	$effect(() => {
 		const id = mailMsg?.id;
-		if (!id) return;
+		if (!id) {
+			autoReadMailId = '';
+			return;
+		}
 		if (mailMsg?._stub) {
 			refreshMailForStubOnce(id);
 			return;
 		}
 		rememberMailTip(mailMsg);
-		/* Prefetch comments with mark-read so the thread doesn’t pop chat in later. */
-		void markMailRead(id);
+		if (id !== autoReadMailId) {
+			autoReadMailId = id;
+			void markMailRead(id);
+		}
 		void loadComments('mail', id).catch(() => {});
 	});
 
@@ -612,7 +620,11 @@
 	function mailMarkUnread() {
 		menuOpen = false;
 		if (!mailMsg?.id) return;
-		markMailUnread(mailMsg.id);
+		const id = mailMsg.id;
+		autoReadMailId = '';
+		void markMailUnread(id);
+		/* Leave the thread so the open-effect cannot immediately re-mark read. */
+		forceClearSelection();
 	}
 
 	/** @param {'junk' | 'trash'} folder */

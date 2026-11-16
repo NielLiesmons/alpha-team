@@ -195,6 +195,7 @@ export default {
 	'mail.replyAll': 'Responder a todos',
 	'mail.forward': 'Reenviar',
 	'mail.markUnread': 'Marcar como no leído',
+	'mail.markRead': 'Marcar como leído',
 	'mail.moveToJunk': 'Mover a Spam',
 	'mail.moveToTrash': 'Mover a la Papelera',
 	'mail.flagged': 'Marcado',

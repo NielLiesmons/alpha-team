@@ -195,6 +195,7 @@ export default {
 	'mail.replyAll': 'Allen beantwoorden',
 	'mail.forward': 'Doorsturen',
 	'mail.markUnread': 'Markeren als ongelezen',
+	'mail.markRead': 'Markeren als gelezen',
 	'mail.moveToJunk': 'Verplaatsen naar Ongewenst',
 	'mail.moveToTrash': 'Verplaatsen naar Prullenbak',
 	'mail.flagged': 'Gemarkeerd',

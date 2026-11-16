@@ -192,6 +192,7 @@ export default {
 	'mail.replyAll': 'Reply all',
 	'mail.forward': 'Forward',
 	'mail.markUnread': 'Mark as unread',
+	'mail.markRead': 'Mark as read',
 	'mail.moveToJunk': 'Move to Junk',
 	'mail.moveToTrash': 'Move to Trash',
 	'mail.flagged': 'Flagged',

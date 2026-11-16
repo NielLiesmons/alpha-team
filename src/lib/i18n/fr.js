@@ -195,6 +195,7 @@ export default {
 	'mail.replyAll': 'Répondre à tous',
 	'mail.forward': 'Transférer',
 	'mail.markUnread': 'Marquer comme non lu',
+	'mail.markRead': 'Marquer comme lu',
 	'mail.moveToJunk': 'Déplacer vers Indésirables',
 	'mail.moveToTrash': 'Déplacer vers la Corbeille',
 	'mail.flagged': 'Marqué',

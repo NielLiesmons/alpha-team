@@ -151,21 +151,12 @@ export function splitMailQuote(body) {
 				break;
 			}
 		}
-		if (start < 0) {
-			for (let i = 0; i < lines.length; i++) {
-				if (!/^\s*>/.test(lines[i])) continue;
-				start = i;
-				if (i > 0 && isReplyHeaderLine(lines[i - 1].trim())) start = i - 1;
-				else if (
-					i > 1 &&
-					lines[i - 1].trim() === '' &&
-					isReplyHeaderLine(lines[i - 2].trim())
-				) {
-					start = i - 2;
-				}
-				break;
-			}
-		}
+		/*
+		 * Do NOT collapse on bare `>` lines alone. Intentional callouts / menus
+		 * (e.g. “> Yuna…”) are not reply quotes — only real attribution headers
+		 * (On…wrote / Original Message / From+Date) start a collapsible region.
+		 * MailRichBody still paints `>` depth as quote rails when shown in full.
+		 */
 		if (start === 0) {
 			main = '';
 			quoted = text;

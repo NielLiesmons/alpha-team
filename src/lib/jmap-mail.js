@@ -411,6 +411,36 @@ export async function listJmapFolder(email, password, folder, limit = 50) {
 }
 
 /**
+ * Persist $seen on one or more JMAP Email ids (Stalwart).
+ * @param {string} email
+ * @param {string} password
+ * @param {string[]} emailIds
+ * @param {boolean} seen
+ */
+export async function setJmapEmailsSeen(email, password, emailIds, seen) {
+	const ids = [...new Set((emailIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+	if (!ids.length) return;
+	const session = await jmapSession(email, password);
+	const accountId = primaryMailAccountId(session);
+	const apiUrl = session.apiUrl || `${jmapBase()}/`;
+	/** @type {Record<string, { 'keywords/$seen': boolean }>} */
+	const update = {};
+	for (const id of ids) update[id] = { 'keywords/$seen': seen };
+	const res = await jmapCall(apiUrl, email, password, [
+		['Email/set', { accountId, update }, '0']
+	]);
+	const set = firstResult(res.methodResponses, 'Email/set');
+	if (set?.notUpdated && Object.keys(set.notUpdated).length) {
+		const first = Object.values(set.notUpdated)[0];
+		const detail =
+			first && typeof first === 'object'
+				? /** @type {any} */ (first).description || /** @type {any} */ (first).type
+				: '';
+		throw new Error(detail || 'JMAP could not update $seen');
+	}
+}
+
+/**
  * @param {string} email
  * @param {string} password
  */

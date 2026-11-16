@@ -1,4 +1,5 @@
 <script>
+	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import Reply from '$lib/components/icons/Reply.svelte';
 	import PriorityBox from '$lib/components/PriorityBox.svelte';
@@ -13,11 +14,15 @@
 		formatMailWhen,
 		isUnreadFor,
 		mailAuthorLabel,
+		mailComposeSeed,
 		mailLatestMessage,
 		mailMessages,
 		mailPreview,
 		mailThreadsForCurrentView,
 		mailUi,
+		markMailRead,
+		markMailUnread,
+		moveMailThreadLocal,
 		refreshMail,
 		threadMessages,
 		threadParticipantProfiles
@@ -29,12 +34,90 @@
 		mailView,
 		setMailCategory
 	} from '$lib/mail-view.svelte.js';
-	import { selectEntity, ui } from '$lib/workspace.svelte.js';
+	import { forceClearSelection, openComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 
 	$effect(() => {
 		mailView.folder;
 		void refreshMail();
+	});
+
+	let menuOpen = $state(false);
+	/** @type {HTMLElement | null} */
+	let menuAnchor = $state(null);
+	/** @type {any | null} */
+	let menuThread = $state(null);
+
+	/** @param {MouseEvent} e @param {any} thread */
+	function openRowMenu(e, thread) {
+		e.preventDefault();
+		e.stopPropagation();
+		menuAnchor = /** @type {HTMLElement} */ (e.currentTarget);
+		menuThread = thread;
+		menuOpen = true;
+	}
+
+	function closeRowMenu() {
+		menuOpen = false;
+		menuThread = null;
+	}
+
+	/** @param {'reply' | 'replyAll' | 'forward'} mode */
+	function menuCompose(mode) {
+		const thread = menuThread;
+		closeRowMenu();
+		if (!thread?.id) return;
+		selectEntity('mail', thread.id);
+		const seed = mailComposeSeed(thread, mode);
+		openComposer('mail', `act:${mode}:${thread.id}`, undefined, seed);
+	}
+
+	function menuToggleRead() {
+		const thread = menuThread;
+		closeRowMenu();
+		if (!thread?.id) return;
+		if (isUnreadFor(thread)) {
+			void markMailRead(thread.id);
+			return;
+		}
+		void markMailUnread(thread.id);
+		if (ui.selection?.kind === 'mail' && ui.selection.id === thread.id) {
+			forceClearSelection();
+		}
+	}
+
+	/** @param {'junk' | 'trash'} folder */
+	function menuMove(folder) {
+		const thread = menuThread;
+		closeRowMenu();
+		if (!thread?.id) return;
+		moveMailThreadLocal(thread.id, folder);
+		if (ui.selection?.kind === 'mail' && ui.selection.id === thread.id) {
+			forceClearSelection();
+		}
+	}
+
+	const menuItems = $derived.by(() => {
+		const thread = menuThread;
+		if (!thread) return [];
+		const unread = isUnreadFor(thread);
+		return [
+			{ id: 'reply', label: t('mail.reply'), onclick: () => menuCompose('reply') },
+			{ id: 'replyAll', label: t('mail.replyAll'), onclick: () => menuCompose('replyAll') },
+			{ id: 'forward', label: t('mail.forward'), onclick: () => menuCompose('forward') },
+			{
+				id: 'read',
+				label: unread ? t('mail.markRead') : t('mail.markUnread'),
+				onclick: () => menuToggleRead()
+			},
+			{ id: 'junk', label: t('mail.moveToJunk'), onclick: () => menuMove('junk') },
+			{
+				id: 'trash',
+				label: t('mail.moveToTrash'),
+				danger: true,
+				onclick: () => menuMove('trash')
+			}
+		];
 	});
 
 	const threadsList = $derived.by(() => {
@@ -191,6 +274,7 @@
 					class:unread
 					class:has-comments={hasComments}
 					onclick={() => selectEntity('mail', thread.id)}
+					oncontextmenu={(e) => openRowMenu(e, thread)}
 				>
 					<span class="col-pfp" aria-hidden="true">
 						<span class="pfp-slot">
@@ -272,6 +356,17 @@
 		</div>
 	{/if}
 </div>
+
+<DropdownMenu
+	open={menuOpen}
+	anchor={menuAnchor}
+	placement="below"
+	align="end"
+	width={220}
+	maxHeight={360}
+	items={menuItems}
+	onclose={closeRowMenu}
+/>
 
 <style>
 	.mail {
