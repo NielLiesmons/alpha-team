@@ -14,8 +14,10 @@ import {
 	fetchModerationComments,
 	fetchPost,
 	fetchPosts,
+	patchCampaign,
 	rejectComment,
 	saveMailSettings,
+	scheduleCampaign,
 	sendCampaign,
 	updatePost
 } from './mail-api.js';
@@ -45,6 +47,7 @@ export const defaultMailBranding = {
 /** @type {{
  *   from: string,
  *   brand_name: string,
+ *   footer_html: string,
  *   branding: typeof defaultMailBranding,
  *   welcome: {
  *     enabled: boolean,
@@ -57,6 +60,7 @@ export const defaultMailBranding = {
 export const mailSettings = $state({
 	from: '',
 	brand_name: 'Space',
+	footer_html: '',
 	branding: { ...defaultMailBranding },
 	welcome: {
 		enabled: false,
@@ -73,6 +77,7 @@ export const mailSettings = $state({
 function applyMailSettings(raw) {
 	mailSettings.from = raw?.from || '';
 	mailSettings.brand_name = raw?.brand_name || 'Space';
+	mailSettings.footer_html = raw?.footer_html || '';
 	mailSettings.branding = {
 		...defaultMailBranding,
 		...(raw?.branding && typeof raw.branding === 'object' ? raw.branding : {})
@@ -239,7 +244,7 @@ export async function persistBanComment(id) {
 }
 
 /**
- * @param {{ from?: string, brand_name?: string, branding?: object, welcome?: object }} patch
+ * @param {{ from?: string, brand_name?: string, footer_html?: string, branding?: object, welcome?: object }} patch
  */
 export async function persistMailSettings(patch) {
 	const saved = await saveMailSettings(patch);
@@ -248,11 +253,38 @@ export async function persistMailSettings(patch) {
 }
 
 /**
- * @param {{ subject: string, body: string, description?: string, image_url?: string }} input
+ * @param {{
+ *   subject: string,
+ *   body: string,
+ *   description?: string,
+ *   image_url?: string,
+ *   publisher_email?: string,
+ *   publisher_name?: string
+ * }} input
  */
 export async function persistCampaign(input) {
 	const c = await createCampaign(input);
 	campaigns.splice(0, 0, c);
+	return c;
+}
+
+/**
+ * @param {string} id
+ * @param {{
+ *   subject?: string,
+ *   body?: string,
+ *   description?: string,
+ *   image_url?: string,
+ *   publisher_email?: string,
+ *   publisher_name?: string,
+ *   scheduled_at?: string | null
+ * }} patch
+ */
+export async function persistUpdateCampaign(id, patch) {
+	const c = await patchCampaign(id, patch);
+	const idx = campaigns.findIndex((x) => x.id === id);
+	if (idx >= 0) campaigns[idx] = c;
+	else campaigns.splice(0, 0, c);
 	return c;
 }
 
@@ -271,6 +303,18 @@ export async function persistSendCampaign(id) {
 	} catch {
 		/* ignore */
 	}
+	return c;
+}
+
+/**
+ * @param {string} id
+ * @param {string} scheduledAt ISO datetime
+ */
+export async function persistScheduleCampaign(id, scheduledAt) {
+	const c = await scheduleCampaign(id, scheduledAt);
+	const idx = campaigns.findIndex((x) => x.id === id);
+	if (idx >= 0) campaigns[idx] = c;
+	else campaigns.splice(0, 0, c);
 	return c;
 }
 

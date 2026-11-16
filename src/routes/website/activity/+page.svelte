@@ -1,0 +1,38 @@
+<script>
+	import { onMount } from 'svelte';
+	import { refreshPublications } from '$lib/publications.svelte.js';
+	import { selectEntity } from '$lib/workspace.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
+
+	onMount(() => {
+		void refreshPublications();
+		selectEntity('pubs', 'activity');
+	});
+</script>
+
+<svelte:head><title>{t('web.activityTitle')}</title></svelte:head>
+
+<div class="feed">
+	<p class="hint">{t('web.activityPreview')}</p>
+</div>
+
+<style>
+	.feed {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+		align-items: center;
+		justify-content: center;
+		padding: var(--feed-pad-top, 48px) 16px var(--feed-pad-bottom, 40px);
+		box-sizing: border-box;
+	}
+
+	.hint {
+		margin: 0;
+		font-size: 13px;
+		line-height: 1.45;
+		color: var(--fg-33);
+		text-align: center;
+		max-width: 32ch;
+	}
+</style>

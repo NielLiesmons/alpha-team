@@ -1,10 +1,11 @@
 <script>
 	/**
 	 * Mail compose preview — matches alpha-api `render_letter_html`:
-	 * top bar outside hero (LETTER n · logo+name · Open Online), plain rounded image,
-	 * title + description under the image.
+	 * top bar (logo+name · Open Online), hero image, title + description + byline.
 	 */
 	import Camera from './icons/Camera.svelte';
+	import ProfilePic from './ProfilePic.svelte';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 
 	/** @type {{
 	 *   brand?: string,
@@ -19,6 +20,9 @@
 	 *   title?: string,
 	 *   description?: string,
 	 *   imageUrl?: string | null,
+	 *   publisherName?: string,
+	 *   publisherEmail?: string,
+	 *   publishedAt?: string | null,
 	 *   onTitle?: (v: string) => void,
 	 *   onDescription?: (v: string) => void,
 	 *   onImage?: (dataUrl: string) => void
@@ -26,8 +30,8 @@
 	let {
 		brand = 'Space',
 		logoUrl = '',
-		eyebrow = 'Letter',
-		letterNumber = null,
+		eyebrow: _eyebrow = 'Letter',
+		letterNumber: _letterNumber = null,
 		readCta = 'Open Online',
 		readUrl = '',
 		accent = '#dd8f87',
@@ -36,19 +40,23 @@
 		title = '',
 		description = '',
 		imageUrl = null,
+		publisherName = '',
+		publisherEmail = '',
+		publishedAt = null,
 		onTitle,
 		onDescription,
 		onImage
 	} = $props();
 
+	const bylineWhen = $derived.by(() => {
+		if (!publishedAt) return '';
+		const d = new Date(publishedAt);
+		if (Number.isNaN(d.getTime())) return '';
+		return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+	});
+
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput = $state();
-
-	const letterPill = $derived.by(() => {
-		const n = Number(letterNumber);
-		if (!Number.isFinite(n) || n < 1) return '';
-		return `${String(eyebrow || 'Letter').toUpperCase()} ${Math.floor(n)}`;
-	});
 
 	/**
 	 * Resize/compress before upload — raw phone photos blow Axum's body limit
@@ -111,48 +119,41 @@
 
 <section class="mail-hero" style:--mail-accent={accent} style:--mail-page-bg={pageBg} style:--mail-ink={ink}>
 	<div class="top-bar" role="presentation">
-		<span class="bar-slot start">
-			{#if letterPill}
-				<span class="stroke-pill letter-pill">{letterPill}</span>
-			{/if}
-		</span>
-		<span class="bar-slot brand-slot">
+		<span class="brand-slot">
 			{#if logoUrl}
 				<img class="brand-mark" src={logoUrl} alt="" width="16" height="18" />
 			{/if}
 			<span class="brand-name">{brand}</span>
 		</span>
-		<span class="bar-slot end">
-			{#if readUrl}
-				<a class="stroke-pill read-cta" href={readUrl} target="_blank" rel="noopener noreferrer">
-					{readCta}
-					<svg class="cta-arrow" width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
-						<path
-							d="M3.5 2.5h6v6M9.5 2.5 2.5 9.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-				</a>
-			{:else}
-				<span class="stroke-pill read-cta static">
-					{readCta}
-					<svg class="cta-arrow" width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
-						<path
-							d="M3.5 2.5h6v6M9.5 2.5 2.5 9.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-				</span>
-			{/if}
-		</span>
+		{#if readUrl}
+			<a class="stroke-pill read-cta" href={readUrl} target="_blank" rel="noopener noreferrer">
+				{readCta}
+				<svg class="cta-arrow" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+					<path
+						d="M6 9.25V2.75M6 2.75 3.25 5.5M6 2.75 8.75 5.5"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.55"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</a>
+		{:else}
+			<span class="stroke-pill read-cta static">
+				{readCta}
+				<svg class="cta-arrow" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+					<path
+						d="M6 9.25V2.75M6 2.75 3.25 5.5M6 2.75 8.75 5.5"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.55"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</span>
+		{/if}
 	</div>
 
 	<button
@@ -164,7 +165,7 @@
 		aria-label={imageUrl ? 'Change image' : 'Add image'}
 	>
 		<span class="camera-affordance">
-			<Camera size={32} />
+			<Camera size={imageUrl ? 32 : 26} />
 		</span>
 	</button>
 
@@ -182,6 +183,22 @@
 			value={description}
 			oninput={(e) => onDescription?.(e.currentTarget.value)}
 		></textarea>
+		{#if publisherName}
+			<div class="byline">
+				<span class="byline-left">
+					<ProfilePic
+						name={publisherName}
+						email={publisherEmail}
+						pictureUrl={pictureUrlFor(publisherEmail)}
+						size={20}
+					/>
+					<span class="byline-name">{publisherName}</span>
+				</span>
+				{#if bylineWhen}
+					<time class="byline-when" datetime={String(publishedAt)}>{bylineWhen}</time>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	<input bind:this={fileInput} type="file" accept="image/*" hidden onchange={onFile} />
@@ -200,30 +217,17 @@
 	}
 
 	.top-bar {
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
+		display: flex;
 		align-items: center;
-		gap: 8px;
-	}
-
-	.bar-slot {
-		min-width: 0;
-	}
-
-	.bar-slot.start {
-		justify-self: start;
+		justify-content: space-between;
+		gap: 12px;
 	}
 
 	.brand-slot {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		justify-self: center;
-	}
-
-	.bar-slot.end {
-		display: flex;
-		justify-content: flex-end;
+		min-width: 0;
 	}
 
 	.brand-mark {
@@ -242,6 +246,8 @@
 		line-height: 1;
 		color: var(--mail-ink);
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.stroke-pill {
@@ -260,12 +266,7 @@
 		white-space: nowrap;
 		border: 1px solid color-mix(in srgb, var(--mail-ink) 22%, transparent);
 		box-sizing: border-box;
-	}
-
-	.letter-pill {
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
+		flex-shrink: 0;
 	}
 
 	.read-cta.static {
@@ -282,7 +283,8 @@
 		--hero-photo: none;
 		position: relative;
 		isolation: isolate;
-		aspect-ratio: 1.618 / 1;
+		/* Empty upload: ~half the golden-ratio height (φ ≈ 1.618 → ~3.24) */
+		aspect-ratio: 3.236 / 1;
 		width: 100%;
 		margin: 0;
 		padding: 0;
@@ -294,6 +296,10 @@
 		display: grid;
 		place-items: center;
 		-webkit-tap-highlight-color: transparent;
+	}
+
+	.hero-frame.has-image {
+		aspect-ratio: 1.618 / 1;
 	}
 
 	.hero-frame::before {
@@ -326,6 +332,40 @@
 		flex-direction: column;
 		gap: 4px;
 		padding: 0 2px;
+	}
+
+	.byline {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		margin-top: 6px;
+	}
+
+	.byline-left {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+
+	.byline-name {
+		font-family: Inter, Helvetica, Arial, sans-serif;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--mail-ink);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.byline-when {
+		flex-shrink: 0;
+		font-family: Inter, Helvetica, Arial, sans-serif;
+		font-size: 12px;
+		font-weight: 500;
+		color: color-mix(in srgb, var(--mail-ink) 55%, transparent);
+		padding-right: 2px;
 	}
 
 	.hero-title,

@@ -8,26 +8,46 @@ import { parentDomain } from './space-host.js';
  * @typedef {{
  *   href: string,
  *   label: string,
- *   icon: string,
+ *   icon?: string,
+ *   faviconUrl?: string,
  *   countKey?: 'tasks' | 'projects' | 'notes' | 'enterprises' | 'ledger',
  *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'file',
- *   children?: NavItem[]
+ *   children?: NavItem[],
+ *   active?: boolean
  * }} NavItem
  */
 
 /**
- * Per-site surfaces (order fixed: Publications → Shop → Content).
- * Labels only — no icons in the website card links for now.
+ * @typedef {{
+ *   type: 'group',
+ *   id: string,
+ *   label: string,
+ *   creatable?: boolean,
+ *   createKind?: string,
+ *   items: NavItem[]
+ * }} NavGroup
+ */
+
+/**
+ * Per-site surfaces (order fixed: Publications → Activity → Shop → Content).
+ * @type {{ href: string, labelKey: string, icon: string, createKind?: string }[]}
  */
 export const websiteChildren = [
-	{ href: '/publications', label: 'Publications', icon: 'publications', createKind: 'newsletter' },
-	{ href: '/website/shop', label: 'Shop', icon: 'shop' },
-	{ href: '/website/content', label: 'Content', icon: 'website' }
+	{ href: '/publications', labelKey: 'nav.publications', icon: 'publications', createKind: 'newsletter' },
+	{ href: '/website/activity', labelKey: 'nav.activity', icon: 'chat' },
+	{ href: '/website/shop', labelKey: 'nav.shop', icon: 'shop' },
+	{ href: '/website/content', labelKey: 'nav.content', icon: 'website' }
 ];
 
 /**
- * Sites shown as cards on /website.
- * @type {{ id: string, name: string, siteUrl: string, tagline?: string, ogImage?: string }[]}
+ * Sites shown under the WEBSITES nav eyebrow.
+ * @type {{
+ *   id: string,
+ *   host: string,
+ *   siteUrl: string,
+ *   faviconUrl: string,
+ *   isDefault: boolean
+ * }[]}
  */
 export const websites = [];
 
@@ -35,49 +55,95 @@ export const websites = [];
 export const space = {
 	name: 'Space',
 	description: '',
-	siteUrl: ''
+	siteUrl: '',
+	/** Active website id in Admin (default www). */
+	activeSiteId: 'www'
 };
 
-/** Derive Space name + public site card from `admin.{apex}` (or leave empty on localhost). */
+/** @returns {{ id: string, host: string, siteUrl: string, faviconUrl: string, isDefault: boolean } | null} */
+export function activeWebsite() {
+	return websites.find((w) => w.id === space.activeSiteId) || websites[0] || null;
+}
+
+/**
+ * Derive Space name + default www.{apex} site from `admin.{apex}`.
+ * Later: users can add more sites on the same apex; www stays the default one.
+ */
 export function syncSpaceFromHost() {
 	const apex = parentDomain();
-	if (!apex) return;
+	if (!apex) {
+		websites.length = 0;
+		space.siteUrl = '';
+		return;
+	}
 	const label = apex.split('.')[0] || apex;
 	space.name = label.charAt(0).toUpperCase() + label.slice(1);
-	space.siteUrl = `https://${apex}`;
-	const existing = websites.find((w) => w.id === apex);
+	const host = `www.${apex}`;
+	const siteUrl = `https://${host}`;
+	space.siteUrl = siteUrl;
+	space.activeSiteId = 'www';
+	const existing = websites.find((w) => w.id === 'www');
 	if (existing) {
-		existing.name = space.name;
-		existing.siteUrl = space.siteUrl;
+		existing.host = host;
+		existing.siteUrl = siteUrl;
+		existing.faviconUrl = `${siteUrl}/favicon.ico`;
+		existing.isDefault = true;
 		return;
 	}
 	websites.length = 0;
 	websites.push({
-		id: apex,
-		name: space.name,
-		siteUrl: space.siteUrl
+		id: 'www',
+		host,
+		siteUrl,
+		faviconUrl: `${siteUrl}/favicon.ico`,
+		isDefault: true
 	});
 }
 
-/** Shown for every signed-in profile. */
-/** @type {NavItem[]} */
-export const primaryNav = [
-	{ href: '/chat', label: 'Chat', icon: 'chat' },
-	{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
-	{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
-	{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
-	{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
-	{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
-	{
-		href: '/entreprises',
-		label: 'Entreprises',
-		icon: 'enterprise',
-		countKey: 'enterprises',
-		createKind: 'enterprise'
-	},
-	{ href: '/planning', label: 'Planning', icon: 'planning' },
-	{ href: '/website', label: 'Websites', icon: 'website' }
-];
+/**
+ * Nav entries — flat sections plus optional WEBSITES group at the end.
+ * @returns {(NavItem | NavGroup)[]}
+ */
+export function navForRole() {
+	/** @type {(NavItem | NavGroup)[]} */
+	const items = [
+		{ href: '/chat', label: 'Chat', icon: 'chat' },
+		{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
+		{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
+		{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
+		{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
+		{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
+		{
+			href: '/entreprises',
+			label: 'Entreprises',
+			icon: 'enterprise',
+			countKey: 'enterprises',
+			createKind: 'enterprise'
+		},
+		{ href: '/planning', label: 'Planning', icon: 'planning' }
+	];
+
+	if (websites.length > 0) {
+		items.push({
+			type: 'group',
+			id: 'websites',
+			label: 'Websites',
+			creatable: true,
+			createKind: 'website',
+			items: websites.map((w) => ({
+				href: '/website',
+				label: w.host,
+				faviconUrl: w.faviconUrl,
+				icon: 'website',
+				id: w.id
+			}))
+		});
+	} else {
+		items.push({ href: '/website', label: 'Websites', icon: 'website' });
+	}
+
+	return items;
+}
 
 /**
  * Horizontal mobile pill — Chat centered; Websites hub owns Content/Shop/Publications.
@@ -96,12 +162,7 @@ export const mobileNav = [
 	{ href: '/settings', label: 'Settings', icon: 'settings' }
 ];
 
-/** @returns {NavItem[]} */
-export function navForRole() {
-	return primaryNav;
-}
-
-/** @returns {NavItem[]} */
+/** @returns {(NavItem | NavGroup)[]} */
 export function mobileNavForRole() {
-	return mobileNav;
+	return navForRole();
 }

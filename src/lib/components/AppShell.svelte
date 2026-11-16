@@ -1,7 +1,13 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { mobileNavForRole, navForRole, websiteChildren } from '$lib/sections.js';
+	import {
+		activeWebsite,
+		mobileNavForRole,
+		navForRole,
+		websiteChildren,
+		websites
+	} from '$lib/sections.js';
 	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
@@ -119,6 +125,7 @@
 				'/website': 'nav.website',
 				'/website/shop': 'nav.shop',
 				'/website/content': 'nav.content',
+				'/website/activity': 'nav.activity',
 				'/publications': 'nav.publications',
 				'/settings': 'nav.settings'
 			}[href] || '';
@@ -127,12 +134,25 @@
 
 	/** @param {import('$lib/sections.js').NavItem} item */
 	function withNavLabel(item) {
+		/* Site rows keep domain host as label. */
+		if (item.faviconUrl) return item;
 		const translated = navLabel(item.href);
 		return translated ? { ...item, label: translated } : item;
 	}
 
-	/** @param {import('$lib/sections.js').NavItem} item */
-	function withMailChildren(item) {
+	/** @param {import('$lib/sections.js').NavItem | import('$lib/sections.js').NavGroup} entry */
+	function withMailChildren(entry) {
+		if (entry && /** @type {any} */ (entry).type === 'group') {
+			const group = /** @type {import('$lib/sections.js').NavGroup} */ (entry);
+			locale.value;
+			websites.length;
+			return {
+				...group,
+				label: t('nav.website'),
+				items: group.items.map((item) => withNavLabel(item))
+			};
+		}
+		const item = /** @type {import('$lib/sections.js').NavItem} */ (entry);
 		const labeled = withNavLabel(item);
 		if (item.href !== '/mail') return labeled;
 		mailView.folder;
@@ -150,28 +170,65 @@
 	const roleNav = $derived.by(() => {
 		locale.value;
 		mailView.folder;
+		websites.length;
 		return navForRole().map(withMailChildren);
 	});
 	const roleMobileNav = $derived.by(() => {
 		locale.value;
 		mailView.folder;
+		websites.length;
 		return mobileNavForRole().map(withMailChildren);
 	});
 
+	const websiteOpen = $derived(
+		active('/website') ||
+			active('/publications') ||
+			websiteChildren.some((c) => active(c.href))
+	);
+
 	const activeItem = $derived.by(() => {
 		locale.value;
-		const child = websiteChildren.find((item) => active(item.href));
-		if (child) return withNavLabel(child);
-		const top = roleNav.find((item) => active(item.href));
-		if (top) return top;
+		websites.length;
+		const site = activeWebsite();
+		if (websiteOpen && site) {
+			const child = websiteChildren.find((item) => active(item.href));
+			if (child) {
+				return {
+					href: child.href,
+					label: t(child.labelKey),
+					icon: child.icon,
+					createKind: child.createKind
+				};
+			}
+			if (active('/website') && path === '/website') {
+				return {
+					href: '/website',
+					label: site.host,
+					icon: 'website',
+					faviconUrl: site.faviconUrl
+				};
+			}
+			if (active('/publications')) {
+				return {
+					href: '/publications',
+					label: t('nav.publications'),
+					icon: 'publications',
+					createKind: 'newsletter'
+				};
+			}
+		}
+		for (const entry of roleNav) {
+			if (/** @type {any} */ (entry).type === 'group') continue;
+			const item = /** @type {import('$lib/sections.js').NavItem} */ (entry);
+			if (active(item.href)) return item;
+		}
 		if (active('/settings'))
 			return { href: '/settings', label: t('nav.settings'), icon: 'settings' };
-		return roleNav[0];
+		const first = roleNav[0];
+		return /** @type {any} */ (first)?.type === 'group'
+			? /** @type {any} */ (first).items?.[0]
+			: first;
 	});
-
-	const websiteOpen = $derived(
-		active('/website') || active('/publications') || websiteChildren.some((c) => active(c.href))
-	);
 
 	const counts = $derived({
 		tasks: tasks.length,
@@ -270,7 +327,18 @@
 			requestDriveUpload();
 			return;
 		}
+		if (kind === 'website') {
+			alert(t('web.addSiteSoon'));
+			return;
+		}
 		if (kind) openComposer(/** @type {any} */ (kind));
+	}
+
+	/** @param {string} groupId */
+	function onGroupPlus(groupId) {
+		if (groupId === 'websites') {
+			alert(t('web.addSiteSoon'));
+		}
 	}
 
 	/**
@@ -319,6 +387,7 @@
 	onNavChild={onNavChild}
 	onCreate={create}
 	onNavPlus={onNavPlus}
+	onGroupPlus={onGroupPlus}
 	onFilterChange={(id) => {
 		ui.listFilter = id;
 	}}

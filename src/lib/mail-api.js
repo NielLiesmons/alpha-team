@@ -114,7 +114,14 @@ export function deletePost(idOrSlug) {
 }
 
 /**
- * @param {{ subject: string, body: string, description?: string, image_url?: string }} input
+ * @param {{
+ *   subject: string,
+ *   body: string,
+ *   description?: string,
+ *   image_url?: string,
+ *   publisher_email?: string,
+ *   publisher_name?: string
+ * }} input
  */
 export function createCampaign(input) {
 	return api(`/v1/projects/${project()}/campaigns`, {
@@ -125,10 +132,40 @@ export function createCampaign(input) {
 
 /**
  * @param {string} id
+ * @param {{
+ *   subject?: string,
+ *   body?: string,
+ *   description?: string,
+ *   image_url?: string,
+ *   publisher_email?: string,
+ *   publisher_name?: string,
+ *   scheduled_at?: string | null
+ * }} patch
+ */
+export function patchCampaign(id, patch) {
+	return api(`/v1/projects/${project()}/campaigns/${encodeURIComponent(id)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch)
+	});
+}
+
+/**
+ * @param {string} id
  */
 export function sendCampaign(id) {
 	return api(`/v1/projects/${project()}/campaigns/${encodeURIComponent(id)}/send`, {
 		method: 'POST'
+	});
+}
+
+/**
+ * @param {string} id
+ * @param {string} scheduledAt ISO datetime
+ */
+export function scheduleCampaign(id, scheduledAt) {
+	return api(`/v1/projects/${project()}/campaigns/${encodeURIComponent(id)}/schedule`, {
+		method: 'POST',
+		body: JSON.stringify({ scheduled_at: scheduledAt })
 	});
 }
 
