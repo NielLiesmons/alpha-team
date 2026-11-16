@@ -2,6 +2,7 @@
 	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import Reply from '$lib/components/icons/Reply.svelte';
+	import ReplyAll from '$lib/components/icons/ReplyAll.svelte';
 	import PriorityBox from '$lib/components/PriorityBox.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
@@ -23,6 +24,7 @@
 		markMailRead,
 		markMailUnread,
 		moveMailThreadLocal,
+		preferReplyAll,
 		refreshMail,
 		threadMessages,
 		threadParticipantProfiles
@@ -195,7 +197,8 @@
 			text: mailPreview(last),
 			from: String(last?.from || '').toLowerCase(),
 			fromName: mailAuthorLabel(last) || displayNameFromEmail(last?.from),
-			showPfp: isFollowUp
+			showPfp: isFollowUp,
+			replyAll: isFollowUp && preferReplyAll(last)
 		};
 	}
 </script>
@@ -289,9 +292,9 @@
 							<span class="l-rail">
 								<span class="l-vert"></span>
 								<span class="l-elbow">
-									<svg viewBox="0 0 27 16" fill="none" aria-hidden="true">
+									<svg viewBox="0 0 31 16" fill="none" aria-hidden="true">
 										<path
-											d="M1 0 A 15 15 0 0 0 16 15 L27 15"
+											d="M1 0 A 15 15 0 0 0 16 15 L31 15"
 											stroke="currentColor"
 											stroke-width="1.5"
 											fill="none"
@@ -324,7 +327,11 @@
 						<span class="snippet-row">
 							{#if preview.showPfp}
 								<span class="reply-ico" aria-hidden="true">
-									<Reply size={12} />
+									{#if preview.replyAll}
+										<ReplyAll size={12} />
+									{:else}
+										<Reply size={12} />
+									{/if}
 								</span>
 							{/if}
 							<span class="snippet">{preview.text || ''}</span>
@@ -534,13 +541,14 @@
 		position: absolute;
 		left: calc(var(--rail-inset) - 0.25px);
 		bottom: 0;
-		width: 27px;
+		/* Span to col-main start (36px col + 12px gap − rail inset) — zero gap to team stack */
+		width: 31px;
 		height: 16px;
 	}
 
 	.l-elbow svg {
 		display: block;
-		width: 27px;
+		width: 31px;
 		height: 16px;
 	}
 
@@ -698,8 +706,9 @@
 	}
 
 	.row.has-comments .team-row {
-		/* Align stack center with L-elbow tip (~bottom of pfp column rail) */
+		/* Align stack flush with L-elbow tip — no horizontal gap */
 		padding-left: 0;
+		margin-left: 0;
 	}
 
 	.team-stack {
@@ -707,6 +716,7 @@
 		display: flex;
 		align-items: center;
 		height: 20px;
+		margin-left: 0;
 	}
 
 	.team-snippet {

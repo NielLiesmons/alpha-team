@@ -706,6 +706,23 @@ export function mailComposeSubject(subject, kind) {
 }
 
 /**
+ * Reply-all is the default when the message has more than one other party (to/cc + from).
+ * @param {any} msg
+ * @param {string} [meEmail]
+ */
+export function preferReplyAll(msg, meEmail = '') {
+	const me = normEmail(meEmail || mailActorEmail());
+	const parties = new Set();
+	const from = normEmail(msg?.from);
+	if (from && from !== me) parties.add(from);
+	for (const e of [...(msg?.to || []), ...(msg?.cc || [])]) {
+		const n = normEmail(e);
+		if (n && n !== me) parties.add(n);
+	}
+	return parties.size > 1;
+}
+
+/**
  * Seed fields for Reply / Reply all / Forward composers.
  * @param {any} thread
  * @param {'reply' | 'replyAll' | 'forward'} mode

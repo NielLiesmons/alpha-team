@@ -18,6 +18,7 @@
 		formatMailWhen,
 		mailAuthorLabel,
 		mailComposeSeed,
+		preferReplyAll,
 		rememberMailTip,
 		threadMessages
 	} from '$lib/mail.svelte.js';
@@ -93,26 +94,6 @@
 		return Boolean(m?.draft || m?.keywords?.$draft || mailView.folder === 'drafts');
 	}
 
-	/** @param {string | undefined | null} email */
-	function normEmail(email) {
-		return String(email || '')
-			.trim()
-			.toLowerCase();
-	}
-
-	/** Reply-all is the default when more than one other party is on the message. */
-	/** @param {any} m */
-	function preferReplyAll(m) {
-		const parties = new Set();
-		const from = normEmail(m?.from);
-		if (from && from !== me) parties.add(from);
-		for (const e of m?.to || []) {
-			const n = normEmail(e);
-			if (n && n !== me) parties.add(n);
-		}
-		return parties.size > 1;
-	}
-
 	/**
 	 * @param {any} m
 	 * @param {'reply' | 'replyAll' | 'forward'} mode
@@ -156,8 +137,9 @@
 				{@const rich = isHtmlMailBody(m.body) && !parts.collapsible}
 				{@const quoteId = String(m.id || '')}
 				{@const mailKey = quoteId}
-				{@const useReplyAll = preferReplyAll(m)}
+				{@const useReplyAll = preferReplyAll(m, me)}
 				{@const menuFor = replyMenuId === quoteId}
+				{@const hasQuote = Boolean(parts.collapsible && parts.quoted)}
 				<article class="mail-panel" class:draft={isDraft(m)}>
 					<header class="mail-panel-head">
 						<ProfilePic
@@ -203,104 +185,96 @@
 							{#if parts.main}
 								<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 							{/if}
-							{#if parts.quoted}
-								{#if quoteOpen[mailKey]}
-									{@const expanded = resolveExpandedQuote(parts.quoted, mails, quoteId)}
-									{@const quoteFrom = quoteAuthorEmail(mails, quoteId, fromEmail)}
-									<MailRichBody text={expanded} fallbackEmail={quoteFrom} minDepth={1} />
-									<button
-										type="button"
-										class="quote-toggle"
-										aria-label={t('mail.hideQuote')}
-										onclick={() => toggleQuote(mailKey)}
-									>
-										<span class="quote-dots" aria-hidden="true">
-											<span></span><span></span><span></span>
-										</span>
-									</button>
-								{:else}
-									<button
-										type="button"
-										class="quote-toggle"
-										aria-label={t('mail.showQuote')}
-										onclick={() => toggleQuote(mailKey)}
-									>
-										<span class="quote-dots" aria-hidden="true">
-											<span></span><span></span><span></span>
-										</span>
-									</button>
-								{/if}
+							{#if hasQuote && quoteOpen[mailKey]}
+								{@const expanded = resolveExpandedQuote(parts.quoted, mails, quoteId)}
+								{@const quoteFrom = quoteAuthorEmail(mails, quoteId, fromEmail)}
+								<MailRichBody text={expanded} fallbackEmail={quoteFrom} minDepth={1} />
 							{/if}
 						{:else if parts.main}
 							<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 						{/if}
-					</div>
-					<div class="mail-corner-pill" role="group" aria-label={t('mail.reply')}>
-						<button
-							type="button"
-							class="corner-btn corner-main"
-							aria-label={useReplyAll ? t('mail.replyAll') : t('mail.reply')}
-							onclick={() => composeAction(m, useReplyAll ? 'replyAll' : 'reply')}
-						>
-							{#if useReplyAll}
-								<ReplyAll size={14} />
-							{:else}
-								<Reply size={14} />
+						<div class="mail-panel-actions">
+							{#if hasQuote}
+								<button
+									type="button"
+									class="quote-toggle"
+									aria-label={quoteOpen[mailKey] ? t('mail.hideQuote') : t('mail.showQuote')}
+									aria-expanded={Boolean(quoteOpen[mailKey])}
+									onclick={() => toggleQuote(mailKey)}
+								>
+									<span class="quote-dots" aria-hidden="true">
+										<span></span><span></span><span></span>
+									</span>
+								</button>
 							{/if}
-						</button>
-						<span class="corner-divider" aria-hidden="true"></span>
-						<button
-							type="button"
-							class="corner-btn corner-chev"
-							aria-label={t('common.more')}
-							aria-expanded={menuFor}
-							aria-haspopup="menu"
-							onclick={() => toggleReplyMenu(quoteId)}
-						>
-							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-								<path
-									d="M3 4.5 6 7.5 9 4.5"
-									stroke="currentColor"
-									stroke-width="1.5"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								/>
-							</svg>
-						</button>
-						{#if menuFor}
-							<button
-								type="button"
-								class="corner-scrim"
-								aria-label={t('common.close')}
-								onclick={() => (replyMenuId = '')}
-							></button>
-							<div class="corner-menu" role="menu">
+							<div class="mail-reply-pill" role="group" aria-label={t('mail.reply')}>
 								<button
 									type="button"
-									role="menuitem"
-									onclick={() => composeAction(m, 'reply')}
+									class="corner-btn corner-main"
+									aria-label={useReplyAll ? t('mail.replyAll') : t('mail.reply')}
+									onclick={() => composeAction(m, useReplyAll ? 'replyAll' : 'reply')}
 								>
-									<Reply size={14} />
-									<span>{t('mail.reply')}</span>
+									{#if useReplyAll}
+										<ReplyAll size={13} />
+									{:else}
+										<Reply size={13} />
+									{/if}
 								</button>
+								<span class="corner-divider" aria-hidden="true"></span>
 								<button
 									type="button"
-									role="menuitem"
-									onclick={() => composeAction(m, 'replyAll')}
+									class="corner-btn corner-chev"
+									aria-label={t('common.more')}
+									aria-expanded={menuFor}
+									aria-haspopup="menu"
+									onclick={() => toggleReplyMenu(quoteId)}
 								>
-									<ReplyAll size={14} />
-									<span>{t('mail.replyAll')}</span>
+									<svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+										<path
+											d="M3 4.5 6 7.5 9 4.5"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
 								</button>
-								<button
-									type="button"
-									role="menuitem"
-									onclick={() => composeAction(m, 'forward')}
-								>
-									<Forward size={14} />
-									<span>{t('mail.forward')}</span>
-								</button>
+								{#if menuFor}
+									<button
+										type="button"
+										class="corner-scrim"
+										aria-label={t('common.close')}
+										onclick={() => (replyMenuId = '')}
+									></button>
+									<div class="corner-menu" role="menu">
+										<button
+											type="button"
+											role="menuitem"
+											onclick={() => composeAction(m, 'reply')}
+										>
+											<Reply size={14} />
+											<span>{t('mail.reply')}</span>
+										</button>
+										<button
+											type="button"
+											role="menuitem"
+											onclick={() => composeAction(m, 'replyAll')}
+										>
+											<ReplyAll size={14} />
+											<span>{t('mail.replyAll')}</span>
+										</button>
+										<button
+											type="button"
+											role="menuitem"
+											onclick={() => composeAction(m, 'forward')}
+										>
+											<Forward size={14} />
+											<span>{t('mail.forward')}</span>
+										</button>
+									</div>
+								{/if}
 							</div>
-						{/if}
+						</div>
 					</div>
 				</article>
 			{/each}
@@ -325,7 +299,8 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		display: block;
-		padding: 56px 14px 96px;
+		/* Horizontal pad lives on .mail-thread-body / panel — not here */
+		padding: 56px 0 96px;
 		box-sizing: border-box;
 	}
 
@@ -447,27 +422,20 @@
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
 	}
 
-	/* Reply split control — inset from the right edge, half off the bottom */
-	.mail-corner-pill {
-		position: absolute;
-		right: 12px;
-		bottom: 0;
+	/* Reply + actions — same quiet fill as view-more (no glass) */
+	.mail-reply-pill {
+		position: relative;
 		z-index: 2;
 		display: inline-flex;
 		align-items: stretch;
-		height: 36px;
+		height: 26px;
 		padding: 0;
 		box-sizing: border-box;
-		border: 1px solid transparent;
+		border: 0;
 		border-radius: 9999px;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		transform: translateY(42%);
-		box-shadow: 0 4px 16px color-mix(in srgb, var(--fg-raw, #000) 12%, transparent);
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
 		overflow: visible;
+		flex-shrink: 0;
 	}
 
 	.corner-btn {
@@ -484,12 +452,12 @@
 	}
 
 	.corner-main {
-		width: 36px;
+		width: 30px;
 		border-radius: 9999px 0 0 9999px;
 	}
 
 	.corner-chev {
-		width: 28px;
+		width: 24px;
 		border-radius: 0 9999px 9999px 0;
 	}
 
@@ -501,7 +469,7 @@
 	.corner-divider {
 		width: 1px;
 		align-self: stretch;
-		margin: 0;
+		margin: 4px 0;
 		background: color-mix(in srgb, var(--fg) 12%, transparent);
 		flex-shrink: 0;
 	}
@@ -598,8 +566,7 @@
 	}
 
 	.mail-panel-content {
-		/* Extra bottom/right so body clears the corner action pill */
-		padding: 12px 14px 28px;
+		padding: 12px 14px 14px;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
@@ -607,6 +574,19 @@
 		align-items: flex-start;
 		max-height: none;
 		overflow: visible;
+	}
+
+	.mail-panel-actions {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		min-height: 28px;
+		margin-top: 2px;
+	}
+
+	.mail-panel-actions .mail-reply-pill {
+		margin-left: auto;
 	}
 
 	.mail-prose {
@@ -685,8 +665,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		height: 22px;
-		padding: 0 10px;
+		height: 28px;
+		padding: 0 12px;
 		margin: 0;
 		border: 0;
 		border-radius: 999px;
@@ -694,6 +674,7 @@
 		color: var(--fg-33);
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
+		flex-shrink: 0;
 	}
 
 	.quote-toggle:hover {
@@ -704,13 +685,13 @@
 	.quote-dots {
 		display: inline-flex;
 		align-items: center;
-		gap: 3px;
+		gap: 3.5px;
 		line-height: 0;
 	}
 
 	.quote-dots span {
-		width: 3px;
-		height: 3px;
+		width: 3.5px;
+		height: 3.5px;
 		border-radius: 999px;
 		background: currentColor;
 	}
