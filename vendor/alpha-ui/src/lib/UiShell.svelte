@@ -926,6 +926,7 @@
 	.shell {
 		/* Pad ≈ control row; fade is short/soft so content stays readable until the bar */
 		/* Clears the solid control row; fade veil is scroll-driven */
+		/* Default = Chat / reverse-scroll; `.feed-pad` aligns Tasks / Mail / … */
 		--feed-pad-top: 44px;
 		--feed-pad-bottom: 36px;
 		--chrome-fade: var(--bg);
@@ -1546,8 +1547,11 @@
 		display: none;
 	}
 
-	/* Tasks keep prior feed offset; other feeds sit ~4px higher */
-	.shell.tasks-pad {
+	/*
+	 * Shared list start for Tasks / Mail / Files / Notes / … (not Chat).
+	 * Desktop matches Tasks “In Progress” group header; mobile sits +4px lower.
+	 */
+	.shell.feed-pad {
 		--feed-pad-top: 48px;
 	}
 
@@ -1684,8 +1688,8 @@
 			background: var(--bg);
 		}
 
-		.shell.tasks-pad {
-			--feed-pad-top: calc(56px + env(safe-area-inset-top, 0px));
+		.shell.feed-pad {
+			--feed-pad-top: calc(60px + env(safe-area-inset-top, 0px));
 		}
 
 		/*

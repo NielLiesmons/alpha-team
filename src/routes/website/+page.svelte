@@ -79,7 +79,7 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		padding-top: var(--feed-pad-top, 44px);
+		padding-top: var(--feed-pad-top, 48px);
 		padding-bottom: var(--feed-pad-bottom, 40px);
 		box-sizing: border-box;
 	}

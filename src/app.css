@@ -862,7 +862,7 @@ table.data tr.selected td {
 	min-height: 0;
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
-	padding-top: var(--feed-pad-top, 44px);
+	padding-top: var(--feed-pad-top, 48px);
 	padding-bottom: var(--feed-pad-bottom, 36px);
 	box-sizing: border-box;
 }

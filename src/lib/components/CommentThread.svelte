@@ -393,7 +393,7 @@
 {/if}
 
 <style>
-	/* Inset inside the detail column — not glued to the viewport edge */
+	/* Inset inside the detail column — glass stroke like mail reply / chrome pills */
 	.chat-pill {
 		position: absolute;
 		right: 20px;
@@ -405,11 +405,13 @@
 		height: 36px;
 		padding: 0 0.75rem;
 		border-radius: 999px;
-		border: 1px solid var(--glass-border);
-		background: var(--popover, var(--glass-panel));
+		border: 1px solid transparent;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
 		color: var(--fg-66);
 		cursor: pointer;
-		box-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.18));
+		box-shadow: 0 4px 16px color-mix(in srgb, var(--fg-raw, #000) 12%, transparent);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		-webkit-tap-highlight-color: transparent;
@@ -421,6 +423,13 @@
 
 	.chat-pill:hover {
 		color: var(--fg);
+		background:
+			linear-gradient(
+					color-mix(in srgb, var(--fg) 6%, var(--glass)),
+					color-mix(in srgb, var(--fg) 6%, var(--glass))
+				)
+				padding-box,
+			var(--glass-shine) border-box;
 	}
 
 	.chat-pill .count {

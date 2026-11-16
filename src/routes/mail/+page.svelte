@@ -375,7 +375,7 @@
 		min-height: 0;
 	}
 
-	/* Recessed category track — no outer stroke; selected chip has a clear fill */
+	/* Quiet recessed track; selected chip = glass stroke leaning toward --bg */
 	.category-seg {
 		display: grid;
 		grid-auto-flow: column;
@@ -386,7 +386,7 @@
 		padding: 4px;
 		border-radius: 999px;
 		border: 0;
-		background: color-mix(in srgb, var(--fg) 6%, transparent);
+		background: color-mix(in srgb, var(--fg) 4%, transparent);
 		overflow-x: auto;
 		scrollbar-width: none;
 		box-sizing: border-box;
@@ -398,7 +398,7 @@
 
 	.seg-btn {
 		appearance: none;
-		border: 0;
+		border: 1px solid transparent;
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
@@ -409,6 +409,7 @@
 		border-radius: 999px;
 		cursor: pointer;
 		white-space: nowrap;
+		box-sizing: border-box;
 		transition:
 			background 0.15s ease,
 			color 0.15s ease;
@@ -419,9 +420,17 @@
 	}
 
 	.seg-btn.on {
-		background: color-mix(in srgb, var(--fg) 14%, var(--bg, transparent));
 		color: var(--fg);
-		box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
+		background:
+			linear-gradient(
+					color-mix(in srgb, var(--bg) 78%, var(--glass-fill)),
+					color-mix(in srgb, var(--bg) 78%, var(--glass-fill))
+				)
+				padding-box,
+			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		box-shadow: none;
 	}
 
 	.banner {

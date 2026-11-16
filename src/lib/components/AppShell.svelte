@@ -55,7 +55,7 @@
 	let { children } = $props();
 
 	const path = $derived($page.url.pathname);
-	const tasksList = $derived(path.startsWith('/tasks'));
+	const chatList = $derived(path.startsWith('/chat'));
 
 	const filterOptions = $derived.by(() => {
 		locale.value;
@@ -200,7 +200,6 @@
 	});
 
 	const planningList = $derived(path.startsWith('/planning'));
-	const chatList = $derived(path.startsWith('/chat'));
 	/** Planning fills list+detail columns (no third-column pane). */
 	const wideList = $derived(planningList);
 	const driveList = $derived(path.startsWith('/drive'));
@@ -321,7 +320,7 @@
 		ui.listFilter = id;
 	}}
 	onRefresh={() => refreshAllDrive()}
-	feedPadClass={tasksList ? 'tasks-pad' : ''}
+	feedPadClass={chatList ? '' : 'feed-pad'}
 	accountLabel={displayNameFromEmail()}
 >
 	{#snippet banners()}
