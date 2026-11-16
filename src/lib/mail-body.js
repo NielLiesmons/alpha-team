@@ -223,6 +223,28 @@ function stripQuotePrefix(line, depth) {
 	return s;
 }
 
+/**
+ * Soft-wrapped quote continuations often lose the leading `>` (clients reflow
+ * “> … avec” → next line “ses "burgüs".”). Keep those orphans inside the rail.
+ * @param {string} prevContent
+ * @param {string} currContent
+ */
+function looksLikeQuoteContinuation(prevContent, currContent) {
+	const curr = String(currContent ?? '');
+	const trimmed = curr.trim();
+	if (!trimmed) return false;
+	/* Lowercase / closing punctuation → mid-sentence wrap */
+	if (/^\p{Ll}/u.test(trimmed)) return true;
+	if (/^[)»”"“'’\]}]/u.test(trimmed)) return true;
+	const prevRaw = String(prevContent ?? '');
+	const prev = prevRaw.replace(/\s+$/u, '');
+	if (!prev) return false;
+	/* Previous line ends mid-clause or was format=flowed (trailing space) */
+	if (/\s$/u.test(prevRaw)) return true;
+	if (/[,;:–—(\[{«"“]$/u.test(prev)) return true;
+	return false;
+}
+
 /** @param {string} line */
 function emailFromLine(line) {
 	const m = String(line).match(EMAIL_RE);
@@ -266,8 +288,21 @@ export function parseMailSegments(text, fallbackEmail = '', opts = {}) {
 	};
 
 	for (const line of lines) {
-		const depth = quoteDepth(line);
+		let depth = quoteDepth(line);
 		let content = stripQuotePrefix(line, depth);
+
+		/*
+		 * Reflowed quote without `>` on the next physical line — stay in the
+		 * open quote segment so trailing words don’t jump out of the rail.
+		 */
+		if (
+			depth === 0 &&
+			bufDepth > 0 &&
+			buf.length > 0 &&
+			looksLikeQuoteContinuation(buf[buf.length - 1], content)
+		) {
+			depth = bufDepth;
+		}
 
 		if (REPLY_HEADER_PREFIX.test(content) || ATTRIBUTION_FROM.test(content)) {
 			const em = emailFromLine(content);
