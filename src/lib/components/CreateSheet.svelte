@@ -7,12 +7,11 @@
 		label = 'Create',
 		fullscreen = false,
 		dragDismiss = true,
-		showHandle = true,
 		onclose = () => {},
 		children
 	} = $props();
 </script>
 
-<CreateSheet {open} {label} {fullscreen} {dragDismiss} {showHandle} {onclose}
+<CreateSheet {open} {label} {fullscreen} {dragDismiss} {onclose}
 	>{@render children?.()}</CreateSheet
 >

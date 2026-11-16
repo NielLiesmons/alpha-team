@@ -23,6 +23,7 @@
 	} from '$lib/publications.svelte.js';
 	import {
 		findMailOrTip,
+		mailAuthorLabel,
 		mailCategoryFor,
 		mailComposeSeed,
 		markMailRead,
@@ -987,7 +988,7 @@
 				oninput={scheduleDraftSave}
 			></textarea>
 		</div>
-		<CommentThread type="task" entityId={task.id} />
+		<CommentThread type="task" entityId={task.id} onMore={toggleMoreMenu} />
 	{:else if project}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1125,7 +1126,7 @@
 				</section>
 			</div>
 		</div>
-		<CommentThread type="project" entityId={project.id} />
+		<CommentThread type="project" entityId={project.id} onMore={toggleMoreMenu} />
 	{:else if note}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1174,7 +1175,7 @@
 				</div>
 			{/key}
 		</div>
-		<CommentThread type="note" entityId={note.id} />
+		<CommentThread type="note" entityId={note.id} onMore={toggleMoreMenu} />
 	{:else if pubsHub}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1378,13 +1379,21 @@
 			</div>
 		</header>
 		<div class="body mail-thread-body">
-			<MailThreadFeed
-				{mailMsg}
-				{replyTo}
-				{menuOpen}
-				onMore={toggleMoreMenu}
-			/>
+			<MailThreadFeed {mailMsg} {replyTo} {menuOpen} onMore={toggleMoreMenu} />
 		</div>
+		<CommentThread
+			type="mail"
+			entityId={mailMsg.id}
+			tip={{
+				title: String(mailMsg.subject || '').trim() || '(no subject)',
+				subject: String(mailMsg.subject || '').trim() || '(no subject)',
+				from: String(mailMsg.from || '')
+					.trim()
+					.toLowerCase(),
+				from_name: mailAuthorLabel(mailMsg) || ''
+			}}
+			onMore={toggleMoreMenu}
+		/>
 	{:else if settingsSectionId}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
