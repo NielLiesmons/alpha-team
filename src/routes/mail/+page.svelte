@@ -422,11 +422,7 @@
 	.seg-btn.on {
 		color: var(--fg);
 		background:
-			linear-gradient(
-					color-mix(in srgb, var(--bg) 78%, var(--glass-fill)),
-					color-mix(in srgb, var(--bg) 78%, var(--glass-fill))
-				)
-				padding-box,
+			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));

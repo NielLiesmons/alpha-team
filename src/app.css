@@ -94,16 +94,16 @@
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 
 	--surface: #161616;
-	/* Small chrome (buttons): slight lift + shine border */
+	/* Small chrome (buttons): same tint, translucent so backdrop-blur reads */
 	--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--bg));
-	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+	--glass: color-mix(in srgb, var(--glass-fill) 46%, transparent);
 	/* Large surfaces (modals / sheets): quiet dark lift — not bright */
 	--glass-panel: color-mix(
 		in srgb,
 		color-mix(in srgb, var(--fg) 5%, var(--bg)) 92%,
 		transparent
 	);
-	--glass-blur: 22px;
+	--glass-blur: 28px;
 	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
 	/* Soft specular stroke — CTAs + top-bar chrome (tweak for more/less glass) */
 	--glass-shine: linear-gradient(
@@ -176,13 +176,13 @@
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--surface: #161616;
 	--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--bg));
-	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+	--glass: color-mix(in srgb, var(--glass-fill) 46%, transparent);
 	--glass-panel: color-mix(
 		in srgb,
 		color-mix(in srgb, var(--fg) 5%, var(--bg)) 92%,
 		transparent
 	);
-	--glass-blur: 22px;
+	--glass-blur: 28px;
 	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
 	--popover: var(--glass-panel);
 	--modal-bg: var(--glass-panel);
@@ -226,9 +226,9 @@
 	--float-trigger-on: color-mix(in srgb, #000000 8%, transparent);
 	--surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
 	--glass-fill: color-mix(in srgb, var(--fg) 4%, var(--bg));
-	--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+	--glass: color-mix(in srgb, var(--glass-fill) 48%, transparent);
 	--glass-panel: color-mix(in srgb, var(--bg) 66%, transparent);
-	--glass-blur: 22px;
+	--glass-blur: 28px;
 	--glass-border: color-mix(in srgb, var(--fg) 10%, transparent);
 	--glass-shine: linear-gradient(
 		135deg,
@@ -269,7 +269,7 @@
 	:root,
 	:root[data-theme='dark'] {
 		--glass-fill: color-mix(in srgb, var(--fg) 6%, var(--shell));
-		--glass: color-mix(in srgb, var(--glass-fill) 86%, transparent);
+		--glass: color-mix(in srgb, var(--glass-fill) 46%, transparent);
 		--glass-panel: color-mix(
 			in srgb,
 			color-mix(in srgb, var(--fg) 5.5%, var(--shell)) 92%,
@@ -284,7 +284,7 @@
 
 	:root[data-theme='light'] {
 		--glass-fill: color-mix(in srgb, var(--fg) 5%, var(--shell));
-		--glass: color-mix(in srgb, var(--glass-fill) 88%, transparent);
+		--glass: color-mix(in srgb, var(--glass-fill) 48%, transparent);
 		--glass-panel: color-mix(in srgb, var(--shell) 66%, transparent);
 		--float-panel-bg: color-mix(in srgb, #000000 7%, transparent);
 		--float-trigger-on: color-mix(in srgb, #000000 7%, transparent);
