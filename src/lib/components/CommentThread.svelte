@@ -10,8 +10,13 @@
 	import Voice from './icons/Voice.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ComposerSuggest from './ComposerSuggest.svelte';
+	import NavIcon from '@alpha/ui/NavIcon.svelte';
+	import ProfilePicStack from './ProfilePicStack.svelte';
+	import ProjectBox from './ProjectBox.svelte';
+	import TaskBox from './TaskBox.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
+	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
 		chatUi,
 		commentsByKey,
@@ -29,11 +34,21 @@
 	 * @type {{
 	 *   type: 'task' | 'note' | 'project' | 'mail',
 	 *   entityId: string,
-	 *   tip?: { title?: string, subject?: string, from?: string, from_name?: string },
+	 *   tip?: {
+	 *     title?: string,
+	 *     subject?: string,
+	 *     from?: string,
+	 *     from_name?: string,
+	 *     status?: string,
+	 *     projectState?: string,
+	 *     projectIcon?: string
+	 *   },
 	 *   onMore?: (e: MouseEvent) => void
 	 * }}
 	 */
 	let { type, entityId, tip = undefined, onMore = undefined } = $props();
+
+	const TIP_ICON = 19;
 
 	let open = $state(false);
 	let draft = $state('');
@@ -237,6 +252,41 @@
 	});
 
 	const pillExpanded = $derived(Boolean(replyPreview) || fieldTall);
+
+	const tipKind = $derived(
+		type === 'task'
+			? t('nav.tasks')
+			: type === 'project'
+				? t('nav.projects')
+				: type === 'note'
+					? t('nav.notes')
+					: t('nav.mail')
+	);
+	const tipTitle = $derived(
+		String(tip?.title || tip?.subject || '').trim() || t('comments.title')
+	);
+
+	/** Latest commentators first, max 3 for the FAB stack. */
+	const commentatorProfiles = $derived.by(() => {
+		/** @type {Map<string, { name: string, email: string, pictureUrl: string | null }>} */
+		const seen = new Map();
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const msg = messages[i];
+			const email = String(msg?.author || '')
+				.trim()
+				.toLowerCase();
+			if (!email || seen.has(email)) continue;
+			const p = asPerson(email);
+			const name = p?.name || displayNameFromEmail(email);
+			seen.set(email, {
+				email,
+				name,
+				pictureUrl: pictureUrlFor(email)
+			});
+			if (seen.size >= 3) break;
+		}
+		return [...seen.values()];
+	});
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -244,8 +294,8 @@
 {#if !open}
 	<button type="button" class="chat-pill" aria-label={t('comments.title')} onclick={openSheet}>
 		<svg
-			width="16"
-			height="16"
+			width="18"
+			height="18"
 			viewBox="0 0 18 19"
 			fill="none"
 			stroke="currentColor"
@@ -258,7 +308,13 @@
 				d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
 			/>
 		</svg>
-		<span class="count">{messages.length}</span>
+		{#if commentatorProfiles.length}
+			<span class="pill-stack">
+				<ProfilePicStack profiles={commentatorProfiles} size="xxs" />
+			</span>
+		{:else}
+			<span class="count">0</span>
+		{/if}
 	</button>
 {/if}
 
@@ -274,7 +330,27 @@
 	<div class="wrap" role="dialog" aria-modal="true" aria-label={t('comments.title')}>
 		<div class="sheet grow-in" transition:fly={{ y: 48, duration: 240, easing: cubicOut }}>
 			<div class="sheet-top">
-				<span class="sheet-title">{t('comments.title')}</span>
+				<div class="sheet-tip" aria-hidden="false">
+					{#if type === 'task'}
+						<span class="tip-box" aria-hidden="true">
+							<TaskBox state={tip?.status || 'open'} size={TIP_ICON} />
+						</span>
+					{:else if type === 'project'}
+						<span class="tip-box" aria-hidden="true">
+							<ProjectBox
+								state={tip?.projectState || 'active'}
+								icon={tip?.projectIcon}
+								size={TIP_ICON}
+							/>
+						</span>
+					{:else}
+						<span class="tip-glyph" aria-hidden="true">
+							<NavIcon name={type === 'mail' ? 'mail' : 'notes'} size={TIP_ICON} />
+						</span>
+					{/if}
+					<span class="tip-kind">{tipKind}</span>
+					<span class="tip-title">{tipTitle}</span>
+				</div>
 				{#if onMore}
 					<div class="sheet-actions">
 						<ChromeActionButton
@@ -393,7 +469,7 @@
 {/if}
 
 <style>
-	/* Inset inside the detail column — glass stroke like mail reply / chrome pills */
+	/* Match mobile top-bar chrome hit (44px); stack replaces numeric count */
 	.chat-pill {
 		position: absolute;
 		right: 20px;
@@ -401,9 +477,9 @@
 		z-index: 6;
 		display: inline-flex;
 		align-items: center;
-		gap: 0.35rem;
-		height: 36px;
-		padding: 0 0.75rem;
+		gap: calc(0.35rem + 2px);
+		height: 44px;
+		padding: 0 12px 0 14px;
 		border-radius: 999px;
 		border: 1px solid transparent;
 		background:
@@ -438,6 +514,13 @@
 		font-weight: 600;
 		color: inherit;
 		font-variant-numeric: normal;
+	}
+
+	.pill-stack {
+		display: inline-flex;
+		align-items: center;
+		line-height: 0;
+		opacity: 0.92;
 	}
 
 	.overlay {
@@ -489,7 +572,10 @@
 		height: 44px;
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		justify-content: flex-start;
+		gap: 8px;
+		padding: 0 52px 0 12px;
+		box-sizing: border-box;
 		pointer-events: none;
 		background: linear-gradient(
 			to bottom,
@@ -499,12 +585,42 @@
 		);
 	}
 
-	.sheet-title {
+	.sheet-tip {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		flex: 1;
+		height: 28px;
+		pointer-events: none;
+	}
+
+	.tip-box,
+	.tip-glyph {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		line-height: 0;
+		color: var(--fg-66);
+	}
+
+	.tip-kind {
+		flex-shrink: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--fg-66);
+	}
+
+	.tip-title {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 550;
-		letter-spacing: 0.01em;
-		color: var(--fg-66);
+		color: var(--fg);
 	}
 
 	.sheet-actions {

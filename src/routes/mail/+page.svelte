@@ -445,7 +445,7 @@
 	}
 
 	.err {
-		color: var(--accent);
+		color: var(--fg-66);
 	}
 
 	.empty {
@@ -602,7 +602,7 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 999px;
-		background: var(--accent);
+		background: var(--fg);
 		flex-shrink: 0;
 	}
 

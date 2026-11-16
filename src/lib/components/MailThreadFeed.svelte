@@ -168,6 +168,16 @@
 										<span class="mail-panel-domain">{domain}</span>
 									{/if}
 								</span>
+								{#if m._pending}
+									<span class="mail-panel-status" aria-label={t('mail.sending')}>
+										<span class="status-dot" aria-hidden="true"></span>
+										{t('mail.sending')}
+									</span>
+								{:else if m._sendError}
+									<span class="mail-panel-status err" title={m._sendError}>{t('mail.sendFailed')}</span>
+								{:else}
+									<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
+								{/if}
 							</div>
 							<div class="mail-panel-row2">
 								<p class="mail-panel-to">
@@ -176,87 +186,63 @@
 								</p>
 							</div>
 						</div>
-						<div class="mail-panel-trail">
-							{#if m._pending}
-								<span class="mail-panel-status" aria-label={t('mail.sending')}>
-									<span class="status-dot" aria-hidden="true"></span>
-									{t('mail.sending')}
-								</span>
-							{:else if m._sendError}
-								<span class="mail-panel-status err" title={m._sendError}>{t('mail.sendFailed')}</span>
-							{:else}
-								<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
-							{/if}
-							<div class="mail-reply-pill" role="group" aria-label={t('mail.reply')}>
+						<div class="mail-reply-pill" role="group" aria-label={t('mail.reply')}>
+							<button
+								type="button"
+								class="corner-btn corner-main"
+								aria-label={msgReplyAll ? t('mail.replyAll') : t('mail.reply')}
+								onclick={() => composeAction(m, msgReplyAll ? 'replyAll' : 'reply')}
+							>
+								{#if msgReplyAll}
+									<ReplyAll size={14} />
+								{:else}
+									<Reply size={14} />
+								{/if}
+							</button>
+							<span class="corner-divider" aria-hidden="true"></span>
+							<button
+								type="button"
+								class="corner-btn corner-more"
+								aria-label={t('common.more')}
+								aria-expanded={menuFor}
+								aria-haspopup="menu"
+								onclick={() => toggleReplyMenu(quoteId)}
+							>
+								<MoreDots size={14} />
+							</button>
+							{#if menuFor}
 								<button
 									type="button"
-									class="corner-btn corner-main"
-									aria-label={msgReplyAll ? t('mail.replyAll') : t('mail.reply')}
-									onclick={() => composeAction(m, msgReplyAll ? 'replyAll' : 'reply')}
-								>
-									{#if msgReplyAll}
-										<ReplyAll size={13} />
-									{:else}
-										<Reply size={13} />
-									{/if}
-								</button>
-								<span class="corner-divider" aria-hidden="true"></span>
-								<button
-									type="button"
-									class="corner-btn corner-more"
-									aria-label={t('common.more')}
-									aria-expanded={menuFor}
-									aria-haspopup="menu"
-									onclick={() => toggleReplyMenu(quoteId)}
-								>
-									<MoreDots size={10} />
-								</button>
-								{#if menuFor}
+									class="corner-scrim"
+									aria-label={t('common.close')}
+									onclick={() => (replyMenuId = '')}
+								></button>
+								<div class="corner-menu" role="menu">
+									<button type="button" role="menuitem" onclick={() => composeAction(m, 'reply')}>
+										<Reply size={14} />
+										<span>{t('mail.reply')}</span>
+									</button>
+									<button type="button" role="menuitem" onclick={() => composeAction(m, 'replyAll')}>
+										<ReplyAll size={14} />
+										<span>{t('mail.replyAll')}</span>
+									</button>
+									<button type="button" role="menuitem" onclick={() => composeAction(m, 'forward')}>
+										<Forward size={14} />
+										<span>{t('mail.forward')}</span>
+									</button>
 									<button
 										type="button"
-										class="corner-scrim"
-										aria-label={t('common.close')}
-										onclick={() => (replyMenuId = '')}
-									></button>
-									<div class="corner-menu" role="menu">
-										<button
-											type="button"
-											role="menuitem"
-											onclick={() => composeAction(m, 'reply')}
-										>
-											<Reply size={14} />
-											<span>{t('mail.reply')}</span>
-										</button>
-										<button
-											type="button"
-											role="menuitem"
-											onclick={() => composeAction(m, 'replyAll')}
-										>
-											<ReplyAll size={14} />
-											<span>{t('mail.replyAll')}</span>
-										</button>
-										<button
-											type="button"
-											role="menuitem"
-											onclick={() => composeAction(m, 'forward')}
-										>
-											<Forward size={14} />
-											<span>{t('mail.forward')}</span>
-										</button>
-										<button
-											type="button"
-											role="menuitem"
-											onclick={() => {
-												replyMenuId = '';
-												onMore();
-											}}
-										>
-											<MoreDots size={14} />
-											<span>{t('common.more')}</span>
-										</button>
-									</div>
-								{/if}
-							</div>
+										role="menuitem"
+										onclick={() => {
+											replyMenuId = '';
+											onMore();
+										}}
+									>
+										<MoreDots size={14} />
+										<span>{t('common.more')}</span>
+									</button>
+								</div>
+							{/if}
 						</div>
 					</header>
 					<div class="mail-panel-rule" aria-hidden="true"></div>
@@ -339,7 +325,7 @@
 		position: relative;
 		display: block;
 		padding: 0;
-		margin: 0 0 18px;
+		margin: 0 0 12px;
 		border-radius: 14px;
 		background: var(--mail-panel-bg, color-mix(in srgb, var(--fg) 4.5%, transparent));
 		border: 0;
@@ -418,27 +404,17 @@
 		padding-top: 1px;
 	}
 
-	.mail-panel-trail {
-		flex-shrink: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		justify-content: center;
-		gap: 6px;
-		min-width: 0;
-		align-self: center;
-	}
-
 	.mail-panel-when,
 	.mail-panel-status {
 		margin: 0;
-		padding: 0;
+		padding: 0 0 0 8px;
 		font-size: 11px;
 		font-weight: 500;
 		line-height: 1.25;
 		color: var(--fg-33);
 		white-space: nowrap;
 		text-align: right;
+		flex-shrink: 0;
 	}
 
 	.mail-panel-status {
@@ -469,13 +445,14 @@
 		}
 	}
 
-	/* Reply + ⋯ — quiet fill; sits flush right of the profile header row */
+	/* Reply + ⋯ — same row / height as the 36px profile pic */
 	.mail-reply-pill {
 		position: relative;
 		z-index: 2;
 		display: inline-flex;
 		align-items: stretch;
-		height: 24px;
+		align-self: center;
+		height: 36px;
 		padding: 0;
 		box-sizing: border-box;
 		border: 0;
@@ -499,12 +476,12 @@
 	}
 
 	.corner-main {
-		width: 28px;
+		width: 36px;
 		border-radius: 9999px 0 0 9999px;
 	}
 
 	.corner-more {
-		width: 22px;
+		width: 36px;
 		border-radius: 0 9999px 9999px 0;
 	}
 
@@ -602,11 +579,11 @@
 	}
 
 	.mail-panel-content {
-		padding: 12px 14px 14px;
+		padding: 12px 14px 10px;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 4px;
 		align-items: flex-start;
 		max-height: none;
 		overflow: visible;
@@ -617,8 +594,8 @@
 		align-items: center;
 		gap: 10px;
 		width: 100%;
-		min-height: 28px;
-		margin-top: 2px;
+		min-height: 0;
+		margin-top: 0;
 	}
 
 	.mail-prose {
@@ -697,12 +674,12 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		height: 28px;
-		padding: 0 12px;
+		height: 18px;
+		padding: 0 8px;
 		margin: 0;
 		border: 0;
 		border-radius: 999px;
-		background: color-mix(in srgb, var(--fg) 8%, transparent);
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
 		color: var(--fg-33);
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
@@ -710,20 +687,19 @@
 	}
 
 	.quote-toggle:hover {
-		background: color-mix(in srgb, var(--fg) 12%, transparent);
 		color: var(--fg-66);
 	}
 
 	.quote-dots {
 		display: inline-flex;
 		align-items: center;
-		gap: 3.5px;
+		gap: 2.5px;
 		line-height: 0;
 	}
 
 	.quote-dots span {
-		width: 3.5px;
-		height: 3.5px;
+		width: 2.5px;
+		height: 2.5px;
 		border-radius: 999px;
 		background: currentColor;
 	}
@@ -736,9 +712,9 @@
 		min-height: 44px;
 		margin: 4px 0 0;
 		padding: 0 14px;
-		border: 0;
+		border: 1px solid var(--fg-8);
 		border-radius: 14px;
-		background: var(--mail-panel-bg, color-mix(in srgb, var(--fg) 4.5%, transparent));
+		background: color-mix(in srgb, var(--fg) 2.5%, transparent);
 		color: var(--fg-33);
 		font: inherit;
 		font-size: 14px;
@@ -750,8 +726,9 @@
 	}
 
 	.mail-reply-field:hover {
-		color: var(--fg-66);
-		background: color-mix(in srgb, var(--fg) 6.5%, transparent);
+		/* No hover wash — field chrome stays quiet */
+		color: var(--fg-33);
+		background: color-mix(in srgb, var(--fg) 2.5%, transparent);
 	}
 
 	.reply-field-icon {

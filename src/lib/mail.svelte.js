@@ -464,24 +464,68 @@ export function refreshMailForStubOnce(id) {
 	void refreshMail().catch(() => {});
 }
 
+/**
+ * Pending / failed optimistic messages that must survive a folder refresh.
+ * @returns {{ threadId: string, msgs: any[] }[]}
+ */
+function snapshotOptimisticMail() {
+	/** @type {{ threadId: string, msgs: any[] }[]} */
+	const out = [];
+	for (const t of mailMessages) {
+		const tid = String(t.threadId || t.id || '');
+		const msgs = threadMessages(t).filter(
+			(m) => m?._pending || m?._sendError || String(m?.id || '').startsWith('pending:')
+		);
+		if (msgs.length) out.push({ threadId: tid, msgs });
+	}
+	return out;
+}
+
+/**
+ * @param {{ threadId: string, msgs: any[] }[]} snaps
+ */
+function reapplyOptimisticMail(snaps) {
+	for (const snap of snaps) {
+		for (const msg of snap.msgs) {
+			const serverHas = mailMessages.some((t) => {
+				const msgs = threadMessages(t);
+				return msgs.some(
+					(m) =>
+						String(m.id) === String(msg.id) ||
+						(msg._serverId && String(m.id) === String(msg._serverId))
+				);
+			});
+			if (serverHas) continue;
+			upsertMailMessage({
+				...msg,
+				threadId: snap.threadId || msg.threadId
+			});
+		}
+	}
+}
+
 export async function refreshMail() {
 	const me = mailActorEmail();
 	const pw = me ? getMailboxPassword(me) : '';
 	const folder = mailView.folder;
 	const hadLocal = mailMessages.length > 0;
+	const pendingSnap = snapshotOptimisticMail();
+	const keepError = mailUi.error;
 	const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
 	if (offline && hadLocal) {
 		mailUi.loading = false;
 		return;
 	}
 	mailUi.loading = mailMessages.length === 0;
-	mailUi.error = null;
+	/* Don't clear a fresh send error — that caused an accent flash then wipe. */
+	if (!keepError) mailUi.error = null;
 	try {
 		if (me && pw) {
 			const list = await listJmapFolder(me, pw, folder, 80);
 			mailMessages.length = 0;
 			mailMessages.push(...list);
 			for (const m of list) rememberMailTip(m);
+			reapplyOptimisticMail(pendingSnap);
 			reapplyUnreadOverrides();
 			return;
 		}
@@ -491,6 +535,7 @@ export async function refreshMail() {
 			const locals = mailMessages.filter((m) => m._local);
 			mailMessages.splice(0, mailMessages.length, ...locals);
 			for (const m of locals) rememberMailTip(m);
+			reapplyOptimisticMail(pendingSnap);
 			reapplyUnreadOverrides();
 			if (me && !pw) {
 				mailUi.error =
@@ -502,6 +547,7 @@ export async function refreshMail() {
 		mailMessages.length = 0;
 		mailMessages.push(...list);
 		for (const m of list) rememberMailTip(m);
+		reapplyOptimisticMail(pendingSnap);
 		reapplyUnreadOverrides();
 		if (me && !pw) {
 			mailUi.error =
@@ -538,26 +584,34 @@ function upsertMailMessage(msg, replaceId = '') {
 
 	if (threadIdx >= 0) {
 		const thread = mailMessages[threadIdx];
+		const stableThreadId = String(thread.threadId || thread.id || threadKey);
 		const msgs = Array.isArray(thread.messages) ? [...thread.messages] : threadMessages(thread);
 		const without = msgs.filter(
 			(m) => String(m.id) !== pendingKey && String(m.id) !== String(msg.id)
 		);
-		without.push(msg);
+		without.push({ ...msg, threadId: stableThreadId });
 		without.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
 		const latest = without[without.length - 1] || msg;
-		const nextId = thread.id === pendingKey ? threadKey : thread.id;
+		/* Never rewrite the open thread's list id to a pending/server create id. */
+		const nextId =
+			String(thread.id).startsWith('pending:') && !String(stableThreadId).startsWith('pending:')
+				? stableThreadId
+				: thread.id;
 		mailMessages[threadIdx] = {
 			...thread,
-			...latest,
+			subject: latest.subject ?? thread.subject,
+			body: latest.body ?? thread.body,
+			from: thread.from,
+			from_name: thread.from_name,
+			created_at: latest.created_at || thread.created_at,
 			id: nextId,
-			threadId: threadKey,
+			threadId: stableThreadId,
 			messages: without,
 			_pending: without.some((m) => m._pending),
-			_sendError: msg._sendError || undefined
+			_sendError: without.find((m) => m._sendError)?._sendError || undefined
 		};
 		rememberMailTip(mailMessages[threadIdx]);
 		if (pendingKey && typeof window !== 'undefined') {
-			/* Keep detail open when pending id swaps to server id. */
 			import('./workspace.svelte.js').then(({ ui }) => {
 				if (ui.selection?.kind === 'mail' && String(ui.selection.id) === pendingKey) {
 					ui.selection = { kind: 'mail', id: String(nextId) };
@@ -659,13 +713,16 @@ export function sendMail(input) {
 			upsertMailMessage(
 				{
 					...created,
-					threadId: created.threadId || threadId,
+					/* Keep the open conversation id so the card stays in-thread. */
+					threadId,
 					_pending: false,
+					_serverId: created.id,
 					_scheduled: Boolean(created._scheduled || scheduled),
 					_scheduledAt: created._scheduledAt || optimistic._scheduledAt
 				},
 				pendingId
 			);
+			mailUi.error = null;
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			mailUi.error = msg;
@@ -856,8 +913,10 @@ export function mailComposeSeed(thread, mode) {
 		.trim();
 
 	const threadId = String(thread?.threadId || thread?.id || last?.threadId || '');
-	const inReplyTo =
-		String(last?._jmap?.messageId || last?.messageId || last?.id || '').trim() || '';
+	const rawMid = last?.messageId || last?._jmap?.messageId || '';
+	const inReplyTo = Array.isArray(rawMid)
+		? String(rawMid[0] || '').trim()
+		: String(rawMid || '').trim();
 
 	if (mode === 'forward') {
 		const who = mailAuthorLabel(last) || from || '';

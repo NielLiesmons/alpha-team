@@ -243,11 +243,85 @@ export function toUiMessage(email) {
 		body: bodyFromEmail(email),
 		created_at: created,
 		transport: 'jmap',
+		messageId: normalizeMessageId(email.messageId),
 		read_by: email.keywords?.$seen ? [fromNorm] : [],
 		_jmap: email,
 		_unread: !email.keywords?.$seen,
 		_flagged: Boolean(email.keywords?.$flagged)
 	};
+}
+
+/**
+ * JMAP messageId may be string or string[].
+ * @param {unknown} raw
+ */
+function normalizeMessageId(raw) {
+	if (Array.isArray(raw)) {
+		for (const item of raw) {
+			const s = String(item || '').trim();
+			if (s) return s.includes('<') ? s : `<${s}>`;
+		}
+		return '';
+	}
+	const s = String(raw || '').trim();
+	if (!s) return '';
+	return s.includes('<') ? s : `<${s}>`;
+}
+
+/**
+ * Only real RFC Message-IDs belong in In-Reply-To (never raw JMAP Email ids).
+ * @param {string} value
+ */
+function asReplyMessageId(value) {
+	const s = String(value || '').trim();
+	if (!s || s.startsWith('pending:')) return '';
+	if (/^<[^>]+>$/.test(s)) return s;
+	/* Bare ids that look like message-ids (contain @) */
+	if (s.includes('@') && !s.includes(' ')) return `<${s.replace(/^<|>$/g, '')}>`;
+	return '';
+}
+
+/**
+ * Resolve Identity id for the From address (Stalwart usually requires it).
+ * @param {string} apiUrl
+ * @param {string} email
+ * @param {string} password
+ * @param {string} accountId
+ * @param {string} fromEmail
+ */
+/** @type {Map<string, { id: string, at: number }>} */
+const identityCache = new Map();
+
+async function identityIdFor(apiUrl, email, password, accountId, fromEmail) {
+	const want = String(fromEmail || '')
+		.trim()
+		.toLowerCase();
+	const cacheKey = `${accountId}|${want}`;
+	const cached = identityCache.get(cacheKey);
+	if (cached && Date.now() - cached.at < MAILBOX_TTL_MS) return cached.id;
+	try {
+		const res = await jmapCall(
+			apiUrl,
+			email,
+			password,
+			[['Identity/get', { accountId, ids: null }, '0']],
+			['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail', 'urn:ietf:params:jmap:submission']
+		);
+		const list = firstResult(res.methodResponses, 'Identity/get')?.list || [];
+		const hit =
+			list.find((i) => String(i?.email || '').toLowerCase() === want) ||
+			list.find((i) =>
+				(Array.isArray(i?.replyTo) ? i.replyTo : []).some(
+					(a) => String(a?.email || '').toLowerCase() === want
+				)
+			) ||
+			list[0];
+		const id = hit?.id ? String(hit.id) : '';
+		if (id) identityCache.set(cacheKey, { id, at: Date.now() });
+		return id;
+	} catch {
+		return '';
+	}
 }
 
 /**
@@ -342,7 +416,8 @@ const EMAIL_PROPS = [
 	'mailboxIds',
 	'textBody',
 	'htmlBody',
-	'bodyValues'
+	'bodyValues',
+	'messageId'
 ];
 
 /**
@@ -486,7 +561,10 @@ export async function sendJmapMail(email, password, input) {
 	const fromName = String(input.fromName || '').trim();
 	const looksHtml = /<[a-z][\s\S]*>/i.test(body);
 
-	const { draftsId, sentId } = await draftsAndSentIds(apiUrl, email, password, accountId);
+	const [{ draftsId, sentId }, identityId] = await Promise.all([
+		draftsAndSentIds(apiUrl, email, password, accountId),
+		identityIdFor(apiUrl, email, password, accountId, fromEmail)
+	]);
 	const mailboxIds = {};
 	if (draftsId) mailboxIds[draftsId] = true;
 	else if (sentId) mailboxIds[sentId] = true;
@@ -499,14 +577,15 @@ export async function sendJmapMail(email, password, input) {
 		from: [{ email: fromEmail, ...(fromName ? { name: fromName } : {}) }],
 		to: to.map((e) => ({ email: e })),
 		subject,
-		bodyValues: { body: { value: body, charset: 'utf-8' } },
+		bodyValues: { body: { value: body || ' ', charset: 'utf-8' } },
 		...(looksHtml
 			? { htmlBody: [{ partId: 'body', type: 'text/html' }] }
 			: { textBody: [{ partId: 'body', type: 'text/plain' }] })
 	};
-	if (input.inReplyTo) {
-		draft['header:In-Reply-To:asText'] = String(input.inReplyTo);
-		draft['header:References:asText'] = String(input.inReplyTo);
+	const replyMid = asReplyMessageId(input.inReplyTo || '');
+	if (replyMid) {
+		draft['header:In-Reply-To:asText'] = replyMid;
+		draft['header:References:asText'] = replyMid;
 	}
 
 	const scheduleAt = input.scheduleAt ? String(input.scheduleAt) : '';
@@ -523,7 +602,10 @@ export async function sendJmapMail(email, password, input) {
 			['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail']
 		);
 		const created = firstResult(res.methodResponses, 'Email/set')?.created?.draft;
-		if (!created?.id) throw new Error('JMAP could not create scheduled draft');
+		if (!created?.id) {
+			const not = firstResult(res.methodResponses, 'Email/set')?.notCreated?.draft;
+			throw new Error(not?.description || not?.type || 'JMAP could not create scheduled draft');
+		}
 		const ui = toUiMessage({
 			...draft,
 			id: created.id,
@@ -534,6 +616,16 @@ export async function sendJmapMail(email, password, input) {
 		});
 		return { ...ui, _scheduled: true, _scheduledAt: new Date(scheduleMs).toISOString() };
 	}
+
+	/** @type {Record<string, any>} */
+	const submissionCreate = {
+		emailId: '#draft',
+		envelope: {
+			mailFrom: { email: fromEmail },
+			rcptTo: to.map((e) => ({ email: e }))
+		}
+	};
+	if (identityId) submissionCreate.identityId = identityId;
 
 	/** @type {Record<string, any> | undefined} */
 	let onSuccessUpdateEmail;
@@ -548,7 +640,7 @@ export async function sendJmapMail(email, password, input) {
 		};
 	}
 
-	/* One JMAP request: create draft + submit (session/mailboxes usually cached). */
+	/* Create draft + submit in one request (session/mailboxes/identity usually cached). */
 	const res = await jmapCall(
 		apiUrl,
 		email,
@@ -559,15 +651,7 @@ export async function sendJmapMail(email, password, input) {
 				'EmailSubmission/set',
 				{
 					accountId,
-					create: {
-						send: {
-							emailId: '#draft',
-							envelope: {
-								mailFrom: { email: fromEmail },
-								rcptTo: to.map((e) => ({ email: e }))
-							}
-						}
-					},
+					create: { send: submissionCreate },
 					...(onSuccessUpdateEmail ? { onSuccessUpdateEmail } : {})
 				},
 				'1'
@@ -586,6 +670,9 @@ export async function sendJmapMail(email, password, input) {
 	if (sub?.notCreated?.send) {
 		const fail = sub.notCreated.send;
 		throw new Error(fail?.description || fail?.type || 'JMAP submission failed');
+	}
+	if (!sub?.created?.send) {
+		throw new Error('JMAP submission returned no result');
 	}
 
 	return toUiMessage({

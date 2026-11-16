@@ -117,8 +117,8 @@
 		color-mix(in srgb, var(--fg) 8%, transparent) 55%,
 		color-mix(in srgb, var(--fg) 28%, transparent) 100%
 	);
-	/* Chat / comment bottom bars — same visual as prior glass@72% in dark */
-	--composer-bg: color-mix(in srgb, var(--glass) 72%, transparent);
+	/* Chat / comment bottom bars — lighter solid-ish lift so composers stand out from panels */
+	--composer-bg: color-mix(in srgb, var(--fg) 10%, var(--bg));
 	/* Nav selected pill — dark = glass lift; light overrides to a darker wash */
 	--nav-selected: var(--glass);
 	/* Comms feed canvas (chat/mail); defaults to page bg outside light feeds */
@@ -197,7 +197,7 @@
 	);
 	--glass-blur: 22px;
 	--glass-border: color-mix(in srgb, var(--fg) 12%, transparent);
-	--composer-bg: color-mix(in srgb, var(--glass) 72%, transparent);
+	--composer-bg: color-mix(in srgb, var(--fg) 10%, var(--bg));
 	--nav-selected: var(--glass);
 	--feed-bg: var(--bg);
 	--bubble-bg: color-mix(in srgb, var(--fg) 12%, transparent);
@@ -316,7 +316,7 @@
 			color-mix(in srgb, var(--fg) 5.5%, var(--shell)) 92%,
 			transparent
 		);
-		--composer-bg: color-mix(in srgb, var(--glass) 72%, transparent);
+		--composer-bg: color-mix(in srgb, var(--fg) 10%, var(--bg));
 		/* Float panels sit on shell — slightly stronger frost than desktop workspace */
 		--float-panel-bg: color-mix(in srgb, #ffffff 11%, transparent);
 		--float-trigger-on: color-mix(in srgb, #ffffff 11%, transparent);

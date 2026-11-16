@@ -47,7 +47,8 @@
 	import CommentThread from './CommentThread.svelte';
 	import FilesFolderDetail from './FilesFolderDetail.svelte';
 	import FormDetail from './FormDetail.svelte';
-	import PublicationsHub from './PublicationsHub.svelte';
+	import PublicationEditor from './PublicationEditor.svelte';
+	import WebsiteActivity from './WebsiteActivity.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById, loadComments } from '$lib/chat.svelte.js';
 	import {
@@ -226,7 +227,8 @@
 			: null
 	);
 	const welcomeSelected = $derived(selection?.kind === 'welcome');
-	const pubsHub = $derived(selection?.kind === 'pubs');
+	const pubsHub = $derived(selection?.kind === 'pubs' && selection?.id === 'hub');
+	const pubsActivity = $derived(selection?.kind === 'pubs' && selection?.id === 'activity');
 	const mailMsg = $derived(selection?.kind === 'mail' ? findMailOrTip(selection.id) : null);
 	const settingsSectionId = $derived(
 		selection?.kind === 'settings' ? String(selection.id || '') : ''
@@ -386,6 +388,7 @@
 			return t('pub.blog');
 		}
 		if (welcomeSelected) return t('detail.welcome');
+		if (pubsActivity) return t('web.activityTitle');
 		if (pubsHub) return t('nav.publications');
 		if (mailMsg) return t('nav.mail');
 		if (chatChannel) return chatChannel.title || t('chat.channel');
@@ -413,6 +416,7 @@
 		if (newsletter?.subject) return newsletter.subject;
 		if (pubPost?.title) return pubPost.title;
 		if (welcomeSelected) return t('detail.welcome');
+		if (pubsActivity) return t('web.activityTitle');
 		if (pubsHub) return t('nav.publications');
 		if (mailMsg) {
 			const msgs = threadMessages(mailMsg);
@@ -442,6 +446,7 @@
 				pubPost ||
 				welcomeSelected ||
 				pubsHub ||
+				pubsActivity ||
 				mailMsg ||
 				chatChannel ||
 				fileEntry ||
@@ -1000,7 +1005,12 @@
 				oninput={scheduleDraftSave}
 			></textarea>
 		</div>
-		<CommentThread type="task" entityId={task.id} onMore={toggleMoreMenu} />
+		<CommentThread
+			type="task"
+			entityId={task.id}
+			tip={{ title: String(task.title || '').trim() || t('nav.tasks'), status: task.status }}
+			onMore={toggleMoreMenu}
+		/>
 	{:else if project}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1138,7 +1148,16 @@
 				</section>
 			</div>
 		</div>
-		<CommentThread type="project" entityId={project.id} onMore={toggleMoreMenu} />
+		<CommentThread
+			type="project"
+			entityId={project.id}
+			tip={{
+				title: String(project.title || project.name || '').trim() || t('nav.projects'),
+				projectState: project.status || 'active',
+				projectIcon: project.icon
+			}}
+			onMore={toggleMoreMenu}
+		/>
 	{:else if note}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1187,7 +1206,32 @@
 				</div>
 			{/key}
 		</div>
-		<CommentThread type="note" entityId={note.id} onMore={toggleMoreMenu} />
+		<CommentThread
+			type="note"
+			entityId={note.id}
+			tip={{ title: String(note.title || '').trim() || t('nav.notes') }}
+			onMore={toggleMoreMenu}
+		/>
+	{:else if pubsActivity}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{t('web.activityTitle')}</span>
+			</div>
+		</header>
+		<div class="body">
+			<WebsiteActivity />
+		</div>
 	{:else if pubsHub}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1206,7 +1250,7 @@
 			</div>
 		</header>
 		<div class="body">
-			<PublicationsHub filterKind={$page.url.searchParams.get('kind')} />
+			<p class="hint-pad">{t('web.pubsPreview')}</p>
 		</div>
 	{:else if welcomeSelected}
 		<header class="detail-top desktop-head">
@@ -1243,64 +1287,7 @@
 			<h2 class="pub-title">{mailSettings.welcome.subject_fr || 'Welcome'}</h2>
 			<pre class="pub-body">{mailSettings.welcome.body_fr}</pre>
 		</div>
-	{:else if newsletter}
-		<header class="detail-top desktop-head">
-			<div class="detail-top-start">
-				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
-					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M10 3.5 5.5 8 10 12.5"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-				</button>
-				<span class="detail-top-label">{t('detail.newsletter')}</span>
-			</div>
-			<div class="detail-top-actions">
-				{#if newsletter.status === 'draft' || newsletter.status === 'failed'}
-					<button
-						type="button"
-						class="send-chip"
-						disabled={sendBusy}
-						onclick={sendSelectedNewsletter}
-					>
-						{sendBusy ? t('common.sending') : t('common.send')}
-					</button>
-				{:else if newsletter.post_slug}
-					<button
-						type="button"
-						class="send-chip"
-						onclick={() => openComposer('newsletter', newsletter.id)}
-					>
-						{t('detail.editSite')}
-					</button>
-				{/if}
-				{#if showMoreMenu}
-					<button
-						type="button"
-						class="icon-hit more-desktop"
-						aria-label={t('common.more')}
-						aria-expanded={menuOpen}
-						onclick={toggleMoreMenu}
-					>
-						<MoreDots size={15} />
-					</button>
-				{/if}
-			</div>
-		</header>
-		<div class="body">
-			<p class="pub-kicker">
-				{newsletter.status}{#if newsletter.sent_count}
-					· {t('pub.sentCount', { n: newsletter.sent_count })}{/if}{#if newsletter.post_slug}
-					· {t('pub.onSite')}{/if}
-			</p>
-			<h2 class="pub-title">{newsletter.subject}</h2>
-			<pre class="pub-body">{newsletter.body}</pre>
-		</div>
-	{:else if pubPost}
+	{:else if newsletter || pubPost}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
 				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
@@ -1317,13 +1304,6 @@
 				<span class="detail-top-label">{typeLabel}</span>
 			</div>
 			<div class="detail-top-actions">
-				<button
-					type="button"
-					class="send-chip"
-					onclick={() => openComposer('newsletter', `post:${pubPost.slug}`)}
-				>
-					{t('common.edit')}
-				</button>
 				{#if showMoreMenu}
 					<button
 						type="button"
@@ -1337,16 +1317,11 @@
 				{/if}
 			</div>
 		</header>
-		<div class="body">
-			<p class="pub-kicker">
-				{pubPost.kind || 'blog'}{#if pubPost.updated_at}
-					· {t('pub.edited')}{/if}{#if pubPost.slug}
-					· /{pubPost.slug}{/if}
-			</p>
-			<h2 class="pub-title">{pubPost.title}</h2>
-			{#if pubPost.summary}
-				<pre class="pub-body">{pubPost.summary}</pre>
-			{/if}
+		<div class="body editor-body">
+			<PublicationEditor
+				campaignId={newsletter?.id || null}
+				postSlug={pubPost?.slug || (pubPostSlug || null)}
+			/>
 		</div>
 	{:else if mailMsg}
 		{@const thread = threadMessages(mailMsg)}
@@ -2275,6 +2250,19 @@
 		/* Match Task/Note column chrome; list scrolls inside PlayerDetail */
 		overflow: hidden;
 		width: 100%;
+	}
+
+	.body.editor-body {
+		overflow: hidden;
+		padding: 48px 0 0;
+	}
+
+	.hint-pad {
+		margin: 24px 16px;
+		font-size: 13px;
+		line-height: 1.45;
+		color: var(--fg-33);
+		text-align: center;
 	}
 
 	.body.settings-section-body {

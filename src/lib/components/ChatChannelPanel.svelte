@@ -1151,7 +1151,7 @@
 		padding: 0;
 		border: 0;
 		border-radius: 999px;
-		background: var(--composer-bg, color-mix(in srgb, var(--glass) 72%, transparent));
+		background: var(--composer-bg, color-mix(in srgb, var(--fg) 10%, var(--bg)));
 		color: var(--fg-33);
 		cursor: pointer;
 		backdrop-filter: blur(var(--glass-blur));
