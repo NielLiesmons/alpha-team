@@ -1,7 +1,7 @@
 <script>
 	import { onMount, tick, untrack } from 'svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
-	import folderUrl from '@alpha/ui/icons/folder.svg';
+	import folderUrl from '@alpha/ui/icons/folder.png';
 	import { listEntries, uploadFile } from '$lib/drive/entities.js';
 	import { childrenOf } from '$lib/drive/tree.js';
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';

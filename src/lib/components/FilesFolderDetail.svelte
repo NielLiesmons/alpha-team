@@ -3,7 +3,7 @@
 	 * Detail-column browser for a Files folder (3rd column / deeper page).
 	 * Top bar shows type "Folder"; hero carries the name + summary.
 	 */
-	import folderUrl from '@alpha/ui/icons/folder.svg';
+	import folderUrl from '@alpha/ui/icons/folder.png';
 	import {
 		fileDisplayTitle,
 		fileTypeColors,

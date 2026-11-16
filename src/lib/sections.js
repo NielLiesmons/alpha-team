@@ -64,7 +64,7 @@ export function syncSpaceFromHost() {
 export const primaryNav = [
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
-	{ href: '/drive', label: 'Files', icon: 'drive', createKind: 'file' },
+	{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
 	{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
 	{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
@@ -92,7 +92,7 @@ export const mobileNav = [
 	{ href: '/tasks', label: 'Tasks', icon: 'tasks' },
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
-	{ href: '/drive', label: 'Files', icon: 'drive', createKind: 'file' },
+	{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
 	{ href: '/settings', label: 'Settings', icon: 'settings' }
 ];
 
