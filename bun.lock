@@ -12,6 +12,7 @@
         "@tiptap/extension-placeholder": "^3.32.0",
         "@tiptap/pm": "^3.32.0",
         "@tiptap/starter-kit": "^3.32.0",
+        "email-reply-parser": "^3.0.0",
         "qrcode": "^1.5.4",
       },
       "devDependencies": {
@@ -521,6 +522,8 @@
     "ejs": ["ejs@3.1.10", "", { "dependencies": { "jake": "^10.8.5" }, "bin": { "ejs": "bin/cli.js" } }, "sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.459", "", {}, "sha512-4SC9HHSFjO/liAhifpdOL5hG9b4BP7/5G3y3UPZVO8trlAXr1CaUEEJL0gWK3kOcYcZrOA5rkwG45Gra/lTIgg=="],
+
+    "email-reply-parser": ["email-reply-parser@3.0.0", "", {}, "sha512-6IM3HCu5PaxhYMW6e2eVdBtoavxTBGtcZjljcpJD1KqatSAu2icqtlPJdHwU8XysEPS4I7JBNPA0LppJMkxu9A=="],
 
     "emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 
