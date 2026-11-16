@@ -329,14 +329,13 @@
 	{/snippet}
 
 	{#snippet sidebarLead()}
-		<button type="button" class="pfp-btn" aria-label={t('nav.settings')} onclick={() => go('/settings')}>
-			<ProfilePic
-				name={displayNameFromEmail()}
-				email={actor.email}
-				pictureUrl={pictureUrlFor(actor.email)}
-				size={32}
-			/>
-		</button>
+		<!-- Size 36: 8px smaller than the 44px round chrome; 4px pad lives on .account-pill -->
+		<ProfilePic
+			name={displayNameFromEmail()}
+			email={actor.email}
+			pictureUrl={pictureUrlFor(actor.email)}
+			size={36}
+		/>
 	{/snippet}
 
 	{#snippet listTitleSlot()}
@@ -399,22 +398,6 @@
 </UiShell>
 
 <style>
-	.pfp-btn {
-		border: 0;
-		padding: 0;
-		background: transparent;
-		border-radius: 999px;
-		cursor: pointer;
-		display: grid;
-		place-items: center;
-		flex-shrink: 0;
-		transition: opacity 0.15s ease;
-	}
-
-	.pfp-btn:hover {
-		opacity: 0.85;
-	}
-
 	/* Planning zoom chrome rendered into UiShell list actions */
 	.zoom-seg {
 		display: inline-flex;
