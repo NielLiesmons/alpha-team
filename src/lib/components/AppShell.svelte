@@ -329,12 +329,12 @@
 	{/snippet}
 
 	{#snippet sidebarLead()}
-		<!-- Size 36: 8px smaller than the 44px round chrome; 4px pad lives on .account-pill -->
+		<!-- 34px: 10px smaller than the 44px round chrome; pad lives on .account-pill -->
 		<ProfilePic
 			name={displayNameFromEmail()}
 			email={actor.email}
 			pictureUrl={pictureUrlFor(actor.email)}
-			size={36}
+			size={34}
 		/>
 	{/snippet}
 
