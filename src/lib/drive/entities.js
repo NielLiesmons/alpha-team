@@ -2219,7 +2219,7 @@ async function listCommentIdsFromDir(session, dir, type, entityId) {
  *   body: string,
  *   author: string,
  *   kind?: 'comment' | 'chat' | 'reaction' | 'event',
- *   ref?: { type: string, id: string, action?: string } | null,
+ *   ref?: { type: string, id: string, action?: string, title?: string, subject?: string, from?: string, from_name?: string, seq?: number } | null,
  *   reaction?: string,
  *   reply_to?: string | null,
  *   channel_id?: string,
@@ -2256,7 +2256,10 @@ export async function createChatMessage(session, input, opts = {}) {
 						...(input.ref.title ? { title: String(input.ref.title) } : {}),
 						...(input.ref.subject ? { subject: String(input.ref.subject) } : {}),
 						...(input.ref.from ? { from: String(input.ref.from) } : {}),
-						...(input.ref.from_name ? { from_name: String(input.ref.from_name) } : {})
+						...(input.ref.from_name ? { from_name: String(input.ref.from_name) } : {}),
+						...(typeof input.ref.seq === 'number' && Number.isFinite(input.ref.seq)
+							? { seq: Math.max(0, Math.floor(input.ref.seq)) }
+							: {})
 					}
 				}
 			: {}),

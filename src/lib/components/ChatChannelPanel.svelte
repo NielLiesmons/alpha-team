@@ -184,14 +184,20 @@
 
 	/**
 	 * True when the entity has comments older / outside the feed panel bubbles.
+	 * Prefer `ref.seq` on the first bubble (instant, no comments fetch).
 	 * @param {string | null | undefined} refKey
 	 * @param {any[]} bubbles
 	 */
 	function hasPriorComments(refKey, bubbles) {
+		const first = bubbles?.[0];
+		const seq = first?.ref?.seq;
+		if (typeof seq === 'number' && Number.isFinite(seq)) return seq > 0;
+
+		/* Legacy messages without seq — fall back to loaded comment thread. */
 		if (!refKey) return false;
 		commentsByKey; /* reactive */
 		const all = visibleChatMessages(commentsByKey[refKey] ?? []).filter(
-			(m) => m?.kind !== 'event'
+			(m) => m?.kind !== 'event' && m?.kind !== 'reaction'
 		);
 		if (all.length === 0) return false;
 		const shown = new Set((bubbles || []).map((m) => String(m.id)));
@@ -1058,7 +1064,7 @@
 	.pub-tip {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 10px;
 		min-width: 0;
 		width: 100%;
 		height: 22px;

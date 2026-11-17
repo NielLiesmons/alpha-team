@@ -414,9 +414,10 @@
 			style:height={sheetHeight ? `${sheetHeight}px` : undefined}
 			transition:fly={{ y: 48, duration: 240, easing: cubicOut }}
 		>
+			<!-- Absolute top chrome: drag grip + fade so bubbles scroll under (like old tip bar). -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
-				class="sheet-resize"
+				class="sheet-top"
 				role="separator"
 				aria-orientation="horizontal"
 				aria-label={t('comments.resize')}
@@ -636,23 +637,32 @@
 		user-select: none;
 	}
 
-	.sheet-resize {
-		flex-shrink: 0;
+	.sheet-top {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 0;
+		z-index: 5;
+		height: 36px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		height: 28px;
-		padding: 6px 0 2px;
+		box-sizing: border-box;
 		cursor: ns-resize;
 		touch-action: none;
 		-webkit-user-select: none;
 		user-select: none;
 		color: var(--fg-33);
-		box-sizing: border-box;
+		background: linear-gradient(
+			to bottom,
+			var(--modal-bg, var(--glass-panel)) 0%,
+			color-mix(in srgb, var(--modal-bg, var(--glass-panel)) 80%, transparent) 55%,
+			transparent 100%
+		);
 	}
 
-	.sheet-resize:hover,
-	.sheet.resizing .sheet-resize {
+	.sheet-top:hover,
+	.sheet.resizing .sheet-top {
 		color: var(--fg-66);
 	}
 
@@ -669,7 +679,7 @@
 		min-height: 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
-		padding: 4px 10px calc(72px + env(safe-area-inset-bottom, 0px));
+		padding: 36px 10px calc(72px + env(safe-area-inset-bottom, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -830,8 +840,8 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 
+	/* Match chat: inactive +/mic keep full chrome (no washed-out disabled look). */
 	.side-btn:disabled {
-		opacity: 0.55;
 		cursor: default;
 	}
 

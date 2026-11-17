@@ -301,6 +301,35 @@ export async function refreshChatFeed() {
  * @param {'task' | 'note' | 'project' | 'mail'} type
  * @param {string} entityId
  */
+/**
+ * Stamp 0-based `ref.seq` on comment leaves (oldest → newest) and mirror onto the feed.
+ * @param {any[]} list
+ */
+function stampCommentSeq(list) {
+	const comments = (Array.isArray(list) ? list : [])
+		.filter((m) => m && m.kind !== 'event' && m.kind !== 'reaction')
+		.slice()
+		.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+	/** @type {Map<string, number>} */
+	const byId = new Map();
+	comments.forEach((m, i) => {
+		byId.set(String(m.id), i);
+		if (m.ref && typeof m.ref === 'object') {
+			m.ref = { ...m.ref, seq: i };
+		}
+	});
+	if (byId.size) {
+		for (let i = 0; i < chatFeed.length; i++) {
+			const m = chatFeed[i];
+			const seq = byId.get(String(m?.id));
+			if (seq == null || !m?.ref) continue;
+			if (m.ref.seq === seq) continue;
+			chatFeed[i] = { ...m, ref: { ...m.ref, seq } };
+		}
+	}
+	return list;
+}
+
 export async function loadComments(type, entityId) {
 	const session = activeSession();
 	const key = commentKey(type, entityId);
@@ -310,6 +339,7 @@ export async function loadComments(type, entityId) {
 	}
 	try {
 		const list = await listComments(session, type, entityId);
+		stampCommentSeq(list);
 		commentsByKey[key] = list;
 		return list;
 	} catch (e) {
@@ -609,6 +639,45 @@ export async function postChatMessage(input) {
 	const kind = input.kind || (input.ref ? 'comment' : 'chat');
 	const channelId = String(input.channel_id || chatUi.activeChannelId || 'general');
 	const localId = `local-${crypto.randomUUID()}`;
+
+	/** 0-based comment index on the entity — feed uses this for instant “view more”. */
+	let refWithSeq = input.ref ? { ...input.ref } : null;
+	if (
+		refWithSeq &&
+		!isEvent &&
+		!isReaction &&
+		(refWithSeq.type === 'task' ||
+			refWithSeq.type === 'note' ||
+			refWithSeq.type === 'project' ||
+			refWithSeq.type === 'mail')
+	) {
+		if (typeof refWithSeq.seq !== 'number') {
+			const ck = commentKey(/** @type {any} */ (refWithSeq.type), refWithSeq.id);
+			const existing = (commentsByKey[ck] ?? []).filter(
+				(m) => m?.kind !== 'event' && m?.kind !== 'reaction'
+			);
+			let maxSeq = -1;
+			for (const m of existing) {
+				if (typeof m?.ref?.seq === 'number') maxSeq = Math.max(maxSeq, m.ref.seq);
+			}
+			for (const m of chatFeed) {
+				if (
+					m?.kind === 'event' ||
+					m?.kind === 'reaction' ||
+					m?.ref?.type !== refWithSeq.type ||
+					m?.ref?.id !== refWithSeq.id
+				) {
+					continue;
+				}
+				if (typeof m.ref?.seq === 'number') maxSeq = Math.max(maxSeq, m.ref.seq);
+			}
+			refWithSeq = {
+				...refWithSeq,
+				seq: maxSeq >= 0 ? maxSeq + 1 : existing.length
+			};
+		}
+	}
+
 	const optimistic = {
 		schema: 'alpha.chat_message/1',
 		id: localId,
@@ -619,7 +688,7 @@ export async function postChatMessage(input) {
 		channel_id: channelId,
 		delivery: 'sending',
 		read_by: [],
-		...(input.ref ? { ref: input.ref } : {}),
+		...(refWithSeq ? { ref: refWithSeq } : {}),
 		...(input.reaction ? { reaction: input.reaction } : {}),
 		...(input.reply_to ? { reply_to: input.reply_to } : {}),
 		...(Array.isArray(input.attachments) && input.attachments.length
@@ -736,7 +805,7 @@ export async function postChatMessage(input) {
 					author,
 					kind,
 					channel_id: channelId,
-					ref: input.ref ?? null,
+					ref: refWithSeq ?? null,
 					reply_to: input.reply_to ?? null,
 					delivery: 'sent',
 					...(input.reaction ? { reaction: input.reaction } : {}),
