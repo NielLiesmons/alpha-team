@@ -21,6 +21,7 @@
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { getAttachmentObjectUrl } from '$lib/drive/media-cache.js';
 	import { inferMediaKind } from '$lib/drive/media-kind.js';
+	import { swipeLeftReply } from '$lib/swipe-left-reply.js';
 
 	const REACTION_PFP_MAX = 3;
 	/** @type {Record<string, string>} path → object URL for remote attachments */
@@ -250,6 +251,7 @@
 	class:stack-last={stackLast}
 	class:stack-mid={!stackFirst && !stackLast}
 	data-chat-bubble={msg.id}
+	use:swipeLeftReply={{ onReply: handleReply }}
 >
 	{#if threaded || !isMine}
 		<div class="avatar-wrap" class:hidden-slot={!stackLast}>
@@ -552,6 +554,11 @@
 		align-items: flex-end;
 		width: 100%;
 		position: relative;
+		touch-action: pan-y;
+	}
+
+	.card.swipe-replying {
+		z-index: 3;
 	}
 
 	.card.stack-mid,

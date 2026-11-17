@@ -360,6 +360,28 @@
 		lastNavHref = href;
 	});
 
+	/** Re-push alphaNavTrap so the next Android back opens nav instead of exiting. */
+	function rearmNavTrap() {
+		if (typeof window === 'undefined' || typeof history === 'undefined') return;
+		if (!isMobileShell()) return;
+		if (detailOpen()) return;
+		if (history.state?.alphaNav || history.state?.alphaNavTrap) return;
+		const path = window.location.pathname;
+		ignoreNavPop = true;
+		const base = {
+			...(history.state || {}),
+			alphaShell: true,
+			alphaPath: path
+		};
+		if (!(history.state?.alphaShell && history.state?.alphaPath === path)) {
+			history.replaceState(base, '');
+		}
+		history.pushState({ ...base, alphaNavTrap: true }, '');
+		queueMicrotask(() => {
+			ignoreNavPop = false;
+		});
+	}
+
 	/* Arm one same-URL history entry so Android back can open the nav. */
 	$effect(() => {
 		if (typeof window === 'undefined') return;
@@ -367,7 +389,9 @@
 		activeHref;
 		const path = window.location.pathname;
 		navArmedPath = path;
-		if (history.state?.alphaPath === path && history.state?.alphaShell) return;
+		/* Already have an open-nav or trap entry on this path — don't stack more. */
+		if (history.state?.alphaNav) return;
+		if (history.state?.alphaNavTrap && history.state?.alphaPath === path) return;
 		ignoreNavPop = true;
 		const base = {
 			...(history.state || {}),
@@ -392,6 +416,7 @@
 				navClosePending = false;
 				mobileNavOpen = false;
 				menuDrag = null;
+				rearmNavTrap();
 				return;
 			}
 			if (ignoreNavPop) return;
@@ -421,6 +446,8 @@
 			if (mobileNavOpen) {
 				mobileNavOpen = false;
 				menuDrag = null;
+				/* Trap was consumed — re-arm so the next back opens nav again. */
+				rearmNavTrap();
 				return;
 			}
 			/* Same-URL back on a main list page opens the nav instead of leaving. */
