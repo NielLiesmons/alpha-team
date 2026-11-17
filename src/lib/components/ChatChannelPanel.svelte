@@ -1044,15 +1044,15 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		/* Horizontal: flush with bubble column (feed already pads 24/14). */
-		padding: 2px 0 4px;
-		border-radius: 0;
-		background: transparent;
-		border: 0;
+		/* Keep wash; tighter tip chrome than before (no extra tip pad). */
+		padding: 8px 8px 10px;
+		border-radius: var(--radius-16);
+		background: color-mix(in srgb, var(--fg) 5%, transparent);
+		border: 1px solid color-mix(in srgb, var(--fg) 6%, transparent);
 	}
 
 	.pub-panel.tip-only {
-		padding: 2px 0;
+		padding: 6px 8px;
 	}
 
 	.pub-tip {
@@ -1139,8 +1139,8 @@
 		justify-content: flex-end;
 		align-items: center;
 		padding: 0;
-		/* Pill → first bubble = non-grouped stack gap (10px). */
-		margin: 0 0 10px;
+		/* Same 6px under the pill as above (tip → pill). */
+		margin: 0 0 6px;
 	}
 
 	.view-more-row:not(.mine) {

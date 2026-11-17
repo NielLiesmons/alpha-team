@@ -674,6 +674,7 @@ export default {
 	'comments.thread': 'Draad',
 	'comments.empty': 'Nog geen reacties',
 	'comments.viewMore': 'Meer reacties bekijken',
+	'comments.resize': 'Reacties vergroten of verkleinen',
 	'comments.replyTo': 'Antwoord aan {name}',
 	'comments.cancelReply': 'Antwoord annuleren',
 	'meta.status': 'Status',

@@ -672,6 +672,7 @@ export default {
 	'comments.thread': 'Thread',
 	'comments.empty': 'No comments yet',
 	'comments.viewMore': 'View more comments',
+	'comments.resize': 'Resize comments',
 	'comments.replyTo': 'Reply to {name}',
 	'comments.cancelReply': 'Cancel reply',
 	'meta.status': 'Status',

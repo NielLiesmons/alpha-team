@@ -7,14 +7,11 @@
 	import { fade, fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import AlphaLogo from './icons/AlphaLogo.svelte';
+	import Drag from './icons/Drag.svelte';
 	import Voice from './icons/Voice.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ComposerSuggest from './ComposerSuggest.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
-	import ProjectBox from './ProjectBox.svelte';
-	import TaskBox from './TaskBox.svelte';
-	import TipTypeIcon from './TipTypeIcon.svelte';
-	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
@@ -47,9 +44,9 @@
 	 *   onMore?: (e: MouseEvent) => void
 	 * }}
 	 */
-	let { type, entityId, tip = undefined, onMore = undefined } = $props();
+	let { type, entityId, tip = undefined, onMore: _onMore = undefined } = $props();
 
-	const TIP_ICON = 22;
+	const SHEET_MIN_H = 200;
 
 	let open = $state(false);
 	let draft = $state('');
@@ -60,12 +57,15 @@
 	let error = $state(null);
 	/** @type {HTMLDivElement | undefined} */
 	let listEl = $state();
+	/** @type {HTMLDivElement | undefined} */
+	let sheetEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
-	/** Briefly flash a jumped-to comment from chat “view more”. */
-	let highlightId = $state(/** @type {string | null} */ (null));
-	/** @type {ReturnType<typeof setTimeout> | null} */
-	let highlightTimer = null;
+	/** Explicit sheet height (px); 0 = CSS default until user resizes. */
+	let sheetHeight = $state(0);
+	let resizing = $state(false);
+	/** Skip bottom-snap once when opening from chat “view more”. */
+	let skipSnapOnce = $state(false);
 
 	const key = $derived(`${type}:${entityId}`);
 	const allMessages = $derived(commentsByKey[key] ?? []);
@@ -77,7 +77,6 @@
 	const byId = $derived(new Map(messages.map((m) => [m.id, m])));
 
 	const canSend = $derived(Boolean(draft.trim()));
-	const tipIconName = $derived(type === 'mail' ? 'mail' : type === 'note' ? 'notes' : 'chat');
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -86,6 +85,64 @@
 		if (typeof document === 'undefined') return true;
 		return document.documentElement.dataset.theme !== 'light';
 	});
+
+	function maxSheetHeight() {
+		if (typeof window === 'undefined') return 640;
+		return Math.round(window.innerHeight * 0.8);
+	}
+
+	function defaultSheetHeight() {
+		if (typeof window === 'undefined') return 480;
+		return Math.min(Math.round(window.innerHeight * 0.78), 640);
+	}
+
+	function clampSheetHeight(/** @type {number} */ h) {
+		return Math.min(maxSheetHeight(), Math.max(SHEET_MIN_H, Math.round(h)));
+	}
+
+	/**
+	 * @param {PointerEvent} e
+	 */
+	function onResizePointerDown(e) {
+		if (e.button != null && e.button !== 0) return;
+		e.preventDefault();
+		e.stopPropagation();
+		const startY = e.clientY;
+		const startH =
+			sheetHeight ||
+			sheetEl?.getBoundingClientRect().height ||
+			defaultSheetHeight();
+		resizing = true;
+		const target = /** @type {HTMLElement} */ (e.currentTarget);
+		try {
+			target.setPointerCapture(e.pointerId);
+		} catch {
+			/* ignore */
+		}
+
+		/** @param {PointerEvent} ev */
+		function onMove(ev) {
+			const dy = startY - ev.clientY;
+			sheetHeight = clampSheetHeight(startH + dy);
+		}
+
+		/** @param {PointerEvent} ev */
+		function onUp(ev) {
+			resizing = false;
+			try {
+				target.releasePointerCapture(ev.pointerId);
+			} catch {
+				/* ignore */
+			}
+			target.removeEventListener('pointermove', onMove);
+			target.removeEventListener('pointerup', onUp);
+			target.removeEventListener('pointercancel', onUp);
+		}
+
+		target.addEventListener('pointermove', onMove);
+		target.addEventListener('pointerup', onUp);
+		target.addEventListener('pointercancel', onUp);
+	}
 
 	$effect(() => {
 		const kind = type;
@@ -104,12 +161,14 @@
 
 	$effect(() => {
 		if (!open) return;
-		queueMicrotask(() => {
-			if (!highlightId) snapFeedToBottom(listEl);
-		});
+		if (skipSnapOnce) {
+			skipSnapOnce = false;
+			return;
+		}
+		queueMicrotask(() => snapFeedToBottom(listEl));
 	});
 
-	/** Consume chatUi.openCommentsFor → open sheet + optional scroll. */
+	/** Consume chatUi.openCommentsFor → open sheet + optional scroll (no highlight). */
 	$effect(() => {
 		const req = chatUi.openCommentsFor;
 		if (!req) return;
@@ -118,20 +177,15 @@
 			typeof req === 'string' ? null : req.scrollToId ? String(req.scrollToId) : null;
 		if (reqKey !== key) return;
 		chatUi.openCommentsFor = null;
+		if (scrollToId) skipSnapOnce = true;
 		open = true;
 		void (async () => {
 			await tick();
 			if (scrollToId) {
-				highlightId = scrollToId;
 				const el = listEl?.querySelector(`[data-comment-id="${CSS.escape(scrollToId)}"]`);
 				if (el instanceof HTMLElement) {
 					el.scrollIntoView({ block: 'center', behavior: 'smooth' });
 				}
-				if (highlightTimer != null) clearTimeout(highlightTimer);
-				highlightTimer = setTimeout(() => {
-					if (highlightId === scrollToId) highlightId = null;
-					highlightTimer = null;
-				}, 1600);
 			} else {
 				snapFeedToBottom(listEl);
 			}
@@ -291,19 +345,6 @@
 
 	const pillExpanded = $derived(Boolean(replyPreview) || fieldTall);
 
-	const tipKind = $derived(
-		type === 'task'
-			? t('nav.tasks')
-			: type === 'project'
-				? t('nav.projects')
-				: type === 'note'
-					? t('nav.notes')
-					: t('nav.mail')
-	);
-	const tipTitle = $derived(
-		String(tip?.title || tip?.subject || '').trim() || t('comments.title')
-	);
-
 	/** Latest commentators first, max 3 for the FAB stack. */
 	const commentatorProfiles = $derived.by(() => {
 		/** @type {Map<string, { name: string, email: string, pictureUrl: string | null }>} */
@@ -366,41 +407,27 @@
 	></div>
 
 	<div class="wrap" role="dialog" aria-modal="true" aria-label={t('comments.title')}>
-		<div class="sheet grow-in" transition:fly={{ y: 48, duration: 240, easing: cubicOut }}>
-			<div class="sheet-top">
-				<div class="sheet-tip" aria-hidden="false">
-					{#if type === 'task'}
-						<span class="tip-box" aria-hidden="true">
-							<TaskBox state={tip?.status || 'open'} size={TIP_ICON} />
-						</span>
-					{:else if type === 'project'}
-						<span class="tip-box" aria-hidden="true">
-							<ProjectBox
-								state={tip?.projectState || 'active'}
-								icon={tip?.projectIcon}
-								size={TIP_ICON}
-							/>
-						</span>
-					{:else}
-						<span class="tip-glyph" aria-hidden="true">
-							<TipTypeIcon name={tipIconName} size={TIP_ICON} />
-						</span>
-					{/if}
-					<span class="tip-kind">{tipKind}</span>
-					<span class="tip-title">{tipTitle}</span>
-				</div>
-				{#if onMore}
-					<div class="sheet-actions">
-						<ChromeActionButton
-							variant="more"
-							label={t('common.more')}
-							onclick={(e) => {
-								e.stopPropagation();
-								onMore(e);
-							}}
-						/>
-					</div>
-				{/if}
+		<div
+			class="sheet grow-in"
+			class:resizing
+			bind:this={sheetEl}
+			style:height={sheetHeight ? `${sheetHeight}px` : undefined}
+			transition:fly={{ y: 48, duration: 240, easing: cubicOut }}
+		>
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="sheet-resize"
+				role="separator"
+				aria-orientation="horizontal"
+				aria-label={t('comments.resize')}
+				aria-valuemin={SHEET_MIN_H}
+				aria-valuemax={maxSheetHeight()}
+				aria-valuenow={sheetHeight || defaultSheetHeight()}
+				onpointerdown={onResizePointerDown}
+			>
+				<span class="sheet-drag" aria-hidden="true">
+					<Drag size={18} />
+				</span>
 			</div>
 			<div class="list" bind:this={listEl}>
 				{#if loading && messages.length === 0}
@@ -409,11 +436,7 @@
 					<p class="hint">{t('comments.empty')}</p>
 				{:else}
 					{#each messages as msg (msg.id)}
-						<div
-							class="comment-anchor"
-							class:jump-flash={highlightId === msg.id}
-							data-comment-id={msg.id}
-						>
+						<div class="comment-anchor" data-comment-id={msg.id}>
 							<ChatFeedCard
 								{msg}
 								parent={parentOf(msg)}
@@ -438,7 +461,7 @@
 								<div
 									class="composer-quote"
 									role="group"
-									aria-label={t('comments.replyTo', { name: replyPreview.name })}
+									aria-label={t('chat.replyingTo', { name: replyPreview.name })}
 								>
 									<div
 										class="composer-quote-bar"
@@ -481,10 +504,8 @@
 									class="composer-input"
 									bind:value={draft}
 									rows="1"
-									placeholder={replyTo
-										? t('comments.replyTo', { name: '' }).replace(/\s+$/, '…')
-										: t('common.comment')}
-									aria-label={t('common.comment')}
+									placeholder={replyTo ? t('chat.reply') : t('chat.message')}
+									aria-label={t('chat.message')}
 									oninput={onInput}
 									onscroll={updateInputFade}
 								></textarea>
@@ -591,7 +612,9 @@
 		display: flex;
 		flex-direction: column;
 		width: 100%;
-		max-height: min(78svh, 640px);
+		height: min(78svh, 640px);
+		max-height: 80vh;
+		min-height: 200px;
 		border: 1px solid var(--glass-border);
 		border-bottom: none;
 		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
@@ -601,82 +624,44 @@
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		overflow: hidden;
 		transform-origin: bottom right;
+		box-sizing: border-box;
 	}
 
 	.sheet.grow-in {
 		transform-origin: 100% 100%;
 	}
 
-	.sheet-top {
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: 0;
-		z-index: 5;
-		height: 44px;
+	.sheet.resizing {
+		transition: none;
+		user-select: none;
+	}
+
+	.sheet-resize {
+		flex-shrink: 0;
 		display: flex;
 		align-items: center;
-		justify-content: flex-start;
-		gap: 8px;
-		padding: 0 52px 0 12px;
+		justify-content: center;
+		height: 28px;
+		padding: 6px 0 2px;
+		cursor: ns-resize;
+		touch-action: none;
+		-webkit-user-select: none;
+		user-select: none;
+		color: var(--fg-33);
 		box-sizing: border-box;
-		pointer-events: none;
-		background: linear-gradient(
-			to bottom,
-			var(--modal-bg, var(--glass-panel)) 0%,
-			color-mix(in srgb, var(--modal-bg, var(--glass-panel)) 80%, transparent) 55%,
-			transparent 100%
-		);
 	}
 
-	.sheet-tip {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		min-width: 0;
-		flex: 1;
-		height: 22px;
-		pointer-events: none;
+	.sheet-resize:hover,
+	.sheet.resizing .sheet-resize {
+		color: var(--fg-66);
 	}
 
-	.tip-box,
-	.tip-glyph {
+	.sheet-drag {
 		display: grid;
 		place-items: center;
-		flex-shrink: 0;
-		width: 22px;
-		height: 22px;
 		line-height: 0;
-		color: var(--fg-66);
-	}
-
-	.tip-kind {
-		flex-shrink: 0;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 12px;
-		font-weight: 600;
-		color: var(--fg-66);
-	}
-
-	.tip-title {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
-		font-weight: 550;
-		color: var(--fg);
-	}
-
-	.sheet-actions {
-		position: absolute;
-		right: 10px;
-		top: 50%;
-		transform: translateY(-50%);
-		pointer-events: auto;
-		display: flex;
-		align-items: center;
+		opacity: 0.85;
+		pointer-events: none;
 	}
 
 	.list {
@@ -684,7 +669,7 @@
 		min-height: 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
-		padding: 36px 10px calc(72px + env(safe-area-inset-bottom, 0px));
+		padding: 4px 10px calc(72px + env(safe-area-inset-bottom, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -692,22 +677,7 @@
 	}
 
 	.comment-anchor {
-		scroll-margin: 48px 0;
-	}
-
-	.comment-anchor.jump-flash :global(.bubble),
-	.comment-anchor.jump-flash {
-		animation: tip-jump-flash 1.4s ease-out;
-	}
-
-	@keyframes tip-jump-flash {
-		0%,
-		18% {
-			background: color-mix(in srgb, var(--fg) 10%, transparent);
-		}
-		100% {
-			background: transparent;
-		}
+		scroll-margin: 24px 0;
 	}
 
 	.hint {
@@ -953,15 +923,12 @@
 			margin: 0;
 			border-radius: 28px;
 			border-bottom: 1px solid var(--glass-border);
-			max-height: min(78svh, 680px);
-		}
-
-		.sheet-actions {
-			right: 12px;
+			height: min(78svh, 680px);
+			max-height: 80vh;
 		}
 	}
 
-	/* Mobile: Modal-like bottom sheet + scrim (never fullscreen, never drag handle) */
+	/* Mobile: Modal-like bottom sheet + scrim */
 	@media (max-width: 767px) {
 		.overlay {
 			background: var(--scrim);
@@ -974,10 +941,6 @@
 
 		.composer-dock {
 			padding: 4px 10px calc(10px + env(safe-area-inset-bottom, 0px));
-		}
-
-		.sheet-actions {
-			right: 8px;
 		}
 	}
 </style>
