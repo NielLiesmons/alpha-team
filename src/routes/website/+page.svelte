@@ -16,16 +16,23 @@
 	const path = $derived($page.url.pathname);
 
 	let visits7 = $state(/** @type {number | null} */ (null));
+	let uniques7 = $state(/** @type {number | null} */ (null));
 
 	onMount(() => {
 		void refreshPublications();
-		if (!getAdminToken()) return;
+		if (!getAdminToken()) {
+			visits7 = 0;
+			uniques7 = 0;
+			return;
+		}
 		void (async () => {
 			try {
 				const s = await fetchAnalyticsSummary(7);
 				visits7 = Number(s?.pageviews) || 0;
+				uniques7 = Number(s?.uniques) || 0;
 			} catch {
-				visits7 = null;
+				visits7 = 0;
+				uniques7 = 0;
 			}
 		})();
 	});
@@ -37,6 +44,8 @@
 		return String(posts[0]?.title || '').trim();
 	});
 
+	const commentCount = $derived(moderationComments.length);
+
 	/** @param {string} href */
 	function openSection(href) {
 		if (href === '/website/activity') {
@@ -47,25 +56,30 @@
 		goto(href);
 	}
 
-	/** @param {string} labelKey */
+	/**
+	 * Compact preview copy — metrics when known, never marketing blurbs.
+	 * @param {string} labelKey
+	 */
 	function previewFor(labelKey) {
 		if (labelKey === 'nav.activity') {
-			const parts = [];
-			if (visits7 != null) {
-				parts.push(
-					t('web.visitsPreview', { n: visits7.toLocaleString() })
-				);
-			}
-			const n = moderationComments.length;
-			if (n > 0) parts.push(t('web.commentsPreview', { n: String(n) }));
-			if (parts.length) return parts.join(' · ');
-			return t('web.activityPreview');
+			const v = visits7 == null ? '—' : visits7.toLocaleString();
+			const parts = [t('web.visitsPreview', { n: v })];
+			if (commentCount > 0) parts.push(t('web.commentsPreview', { n: String(commentCount) }));
+			return parts.join(' · ');
 		}
 		if (labelKey === 'nav.publications') {
 			return latestPubTitle || t('web.pubsPreview');
 		}
 		if (labelKey === 'nav.shop') return t('web.shopPreview');
 		if (labelKey === 'nav.content') return t('web.contentPreview');
+		return '';
+	}
+
+	/** @param {string} labelKey */
+	function metricFor(labelKey) {
+		if (labelKey === 'nav.activity' && visits7 != null) return visits7.toLocaleString();
+		if (labelKey === 'nav.activity' && uniques7 != null) return uniques7.toLocaleString();
+		if (labelKey === 'nav.publications') return publicPosts.length ? String(publicPosts.length) : '';
 		return '';
 	}
 
@@ -82,18 +96,22 @@
 	{#if websites.length === 0}
 		<p class="hint">{t('web.noSite')}</p>
 	{:else}
-		<div class="card-stack">
+		<div class="hub">
 			{#each websiteChildren as item (item.href)}
+				{@const metric = metricFor(item.labelKey)}
 				<button
 					type="button"
-					class="row"
+					class="section"
 					class:on={rowOn(item.href)}
 					onclick={() => openSection(item.href)}
 				>
-					<span class="row-main">
-						<span class="title">{t(item.labelKey)}</span>
+					<span class="section-main">
+						<span class="eyebrow">{t(item.labelKey)}</span>
 						<span class="preview">{previewFor(item.labelKey)}</span>
 					</span>
+					{#if metric}
+						<span class="metric" aria-hidden="true">{metric}</span>
+					{/if}
 				</button>
 			{/each}
 		</div>
@@ -112,21 +130,22 @@
 		box-sizing: border-box;
 	}
 
-	.card-stack {
+	.hub {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 4px 6px;
+		border-top: 1px solid var(--fg-8);
 	}
 
-	.row {
+	.section {
 		display: flex;
-		align-items: flex-start;
-		gap: 10px;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
 		width: 100%;
-		padding: 10px 12px;
+		padding: 16px 16px 18px;
 		border: 0;
-		border-radius: 12px;
+		border-bottom: 1px solid var(--fg-8);
+		border-radius: 0;
 		background: transparent;
 		color: inherit;
 		font: inherit;
@@ -135,34 +154,46 @@
 		box-sizing: border-box;
 	}
 
-	.row:hover,
-	.row.on {
+	.section:hover,
+	.section.on {
 		background: var(--fg-4);
 	}
 
-	.row-main {
+	.section-main {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		min-width: 0;
 		flex: 1;
 	}
 
-	.title {
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--fg);
-		line-height: 1.3;
+	.eyebrow {
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--fg-66);
 	}
 
 	.preview {
-		font-size: 12px;
+		font-size: 13px;
 		font-weight: 500;
-		color: var(--fg-66);
+		color: var(--fg);
 		line-height: 1.35;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.metric {
+		flex-shrink: 0;
+		font-size: 1.35rem;
+		font-weight: 700;
+		letter-spacing: -0.03em;
+		line-height: 1;
+		color: var(--fg);
+		font-variant-numeric: tabular-nums;
+		padding-right: 2px;
 	}
 
 	.hint {
