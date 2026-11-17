@@ -673,6 +673,7 @@ export default {
 	'comments.title': 'Reacties',
 	'comments.thread': 'Draad',
 	'comments.empty': 'Nog geen reacties',
+	'comments.viewMore': 'Meer reacties bekijken',
 	'comments.replyTo': 'Antwoord aan {name}',
 	'comments.cancelReply': 'Antwoord annuleren',
 	'meta.status': 'Status',

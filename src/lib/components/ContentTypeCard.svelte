@@ -4,7 +4,7 @@
 	 * Renders only: icon + type name + title (+ optional summary).
 	 * Packages never supply bubble JS/CSS — host chrome only.
 	 */
-	import NavIcon from './NavIcon.svelte';
+	import TipTypeIcon from './TipTypeIcon.svelte';
 
 	/**
 	 * @type {{
@@ -27,7 +27,7 @@
 {#if onclick}
 	<button type="button" class="ct-card" {onclick}>
 		<span class="ct-glyph" aria-hidden="true">
-			<NavIcon name={icon} size={19} />
+			<TipTypeIcon name={icon} size={19} />
 		</span>
 		{#if typeName}<span class="ct-kind">{typeName}</span>{/if}
 		<span class="ct-title">{title}</span>
@@ -36,7 +36,7 @@
 {:else}
 	<div class="ct-card" role="group">
 		<span class="ct-glyph" aria-hidden="true">
-			<NavIcon name={icon} size={19} />
+			<TipTypeIcon name={icon} size={19} />
 		</span>
 		{#if typeName}<span class="ct-kind">{typeName}</span>{/if}
 		<span class="ct-title">{title}</span>

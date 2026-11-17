@@ -10,10 +10,10 @@
 	import Voice from './icons/Voice.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ComposerSuggest from './ComposerSuggest.svelte';
-	import NavIcon from '@alpha/ui/NavIcon.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
 	import ProjectBox from './ProjectBox.svelte';
 	import TaskBox from './TaskBox.svelte';
+	import TipTypeIcon from './TipTypeIcon.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
@@ -29,6 +29,7 @@
 	import { snapFeedToBottom } from '$lib/feed-scroll.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
+	import { tick } from 'svelte';
 
 	/**
 	 * @type {{
@@ -61,6 +62,10 @@
 	let listEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
+	/** Briefly flash a jumped-to comment from chat “view more”. */
+	let highlightId = $state(/** @type {string | null} */ (null));
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let highlightTimer = null;
 
 	const key = $derived(`${type}:${entityId}`);
 	const allMessages = $derived(commentsByKey[key] ?? []);
@@ -72,6 +77,7 @@
 	const byId = $derived(new Map(messages.map((m) => [m.id, m])));
 
 	const canSend = $derived(Boolean(draft.trim()));
+	const tipIconName = $derived(type === 'mail' ? 'mail' : type === 'note' ? 'notes' : 'chat');
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -98,7 +104,39 @@
 
 	$effect(() => {
 		if (!open) return;
-		queueMicrotask(() => snapFeedToBottom(listEl));
+		queueMicrotask(() => {
+			if (!highlightId) snapFeedToBottom(listEl);
+		});
+	});
+
+	/** Consume chatUi.openCommentsFor → open sheet + optional scroll. */
+	$effect(() => {
+		const req = chatUi.openCommentsFor;
+		if (!req) return;
+		const reqKey = typeof req === 'string' ? req : req.key;
+		const scrollToId =
+			typeof req === 'string' ? null : req.scrollToId ? String(req.scrollToId) : null;
+		if (reqKey !== key) return;
+		chatUi.openCommentsFor = null;
+		open = true;
+		void (async () => {
+			await tick();
+			if (scrollToId) {
+				highlightId = scrollToId;
+				const el = listEl?.querySelector(`[data-comment-id="${CSS.escape(scrollToId)}"]`);
+				if (el instanceof HTMLElement) {
+					el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+				}
+				if (highlightTimer != null) clearTimeout(highlightTimer);
+				highlightTimer = setTimeout(() => {
+					if (highlightId === scrollToId) highlightId = null;
+					highlightTimer = null;
+				}, 1600);
+			} else {
+				snapFeedToBottom(listEl);
+			}
+			inputEl?.focus();
+		})();
 	});
 
 	function formatWhen(iso) {
@@ -345,7 +383,7 @@
 						</span>
 					{:else}
 						<span class="tip-glyph" aria-hidden="true">
-							<NavIcon name={type === 'mail' ? 'mail' : 'notes'} size={TIP_ICON} />
+							<TipTypeIcon name={tipIconName} size={TIP_ICON} />
 						</span>
 					{/if}
 					<span class="tip-kind">{tipKind}</span>
@@ -371,12 +409,18 @@
 					<p class="hint">{t('comments.empty')}</p>
 				{:else}
 					{#each messages as msg (msg.id)}
-						<ChatFeedCard
-							{msg}
-							parent={parentOf(msg)}
-							when={formatWhen(msg.created_at)}
-							onReply={() => startReply(msg)}
-						/>
+						<div
+							class="comment-anchor"
+							class:jump-flash={highlightId === msg.id}
+							data-comment-id={msg.id}
+						>
+							<ChatFeedCard
+								{msg}
+								parent={parentOf(msg)}
+								when={formatWhen(msg.created_at)}
+								onReply={() => startReply(msg)}
+							/>
+						</div>
 					{/each}
 				{/if}
 			</div>
@@ -643,6 +687,25 @@
 		flex-direction: column;
 		gap: 2px;
 		box-sizing: border-box;
+	}
+
+	.comment-anchor {
+		scroll-margin: 48px 0;
+	}
+
+	.comment-anchor.jump-flash :global(.bubble),
+	.comment-anchor.jump-flash {
+		animation: tip-jump-flash 1.4s ease-out;
+	}
+
+	@keyframes tip-jump-flash {
+		0%,
+		18% {
+			background: color-mix(in srgb, var(--fg) 10%, transparent);
+		}
+		100% {
+			background: transparent;
+		}
 	}
 
 	.hint {

@@ -8,10 +8,10 @@
 	import ComposerSuggest from '$lib/components/ComposerSuggest.svelte';
 	import EnterpriseBox from '$lib/components/EnterpriseBox.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
-	import NavIcon from '$lib/components/NavIcon.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
+	import TipTypeIcon from '$lib/components/TipTypeIcon.svelte';
 	import { activePerson, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
@@ -22,12 +22,15 @@
 		chatRefMeta,
 		chatProjectBoxProps,
 		chatStatusText,
+		commentsByKey,
 		findChatParent,
 		hydrateChatFeedFromCache,
 		isChatStatusEvent,
+		loadComments,
 		openChatRef,
 		postChatMessage,
 		refreshChatFeed,
+		requestOpenComments,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
 	import { mailTipCache } from '$lib/mail.svelte.js';
@@ -172,6 +175,46 @@
 		return (messages || []).filter((m) => m?.kind !== 'event');
 	}
 
+	/** Comment-thread kinds CommentThread can open. */
+	function commentableRefType(/** @type {string | undefined} */ type) {
+		return type === 'task' || type === 'note' || type === 'project' || type === 'mail'
+			? type
+			: null;
+	}
+
+	/**
+	 * True when the entity has comments older / outside the feed panel bubbles.
+	 * @param {string | null | undefined} refKey
+	 * @param {any[]} bubbles
+	 */
+	function hasPriorComments(refKey, bubbles) {
+		if (!refKey) return false;
+		commentsByKey; /* reactive */
+		const all = visibleChatMessages(commentsByKey[refKey] ?? []).filter(
+			(m) => m?.kind !== 'event'
+		);
+		if (all.length === 0) return false;
+		const shown = new Set((bubbles || []).map((m) => String(m.id)));
+		if (all.some((m) => !shown.has(String(m.id)))) return true;
+		if (!bubbles?.length) return all.length > 0;
+		const firstAt = String(bubbles[0]?.created_at || '');
+		return all.some((m) => String(m.created_at || '') < firstAt);
+	}
+
+	/**
+	 * Open entity detail + comment sheet; scroll to the first feed bubble (not expand inline).
+	 * @param {any} msg
+	 * @param {any[]} bubbles
+	 */
+	function viewMoreComments(msg, bubbles) {
+		const ref = msg?.ref;
+		const kind = commentableRefType(ref?.type);
+		if (!kind || !ref?.id) return;
+		const scrollToId = bubbles?.[0]?.id ? String(bubbles[0].id) : null;
+		openChatRef(msg);
+		requestOpenComments(kind, ref.id, scrollToId);
+	}
+
 	onMount(() => {
 		mountedChannel = channelId;
 		startChatTipPoll();
@@ -195,6 +238,24 @@
 			if (highlightTimer != null) clearTimeout(highlightTimer);
 			if (voiceTimer != null) clearInterval(voiceTimer);
 		};
+	});
+
+	/* Prefetch comment threads for tip panels so “view more” can appear. */
+	$effect(() => {
+		const keys = new Set();
+		for (const block of feedBlocks) {
+			if (block.type !== 'panel' || !block.refKey) continue;
+			const [type, id] = String(block.refKey).split(':');
+			if (!commentableRefType(type) || !id) continue;
+			keys.add(block.refKey);
+		}
+		for (const key of keys) {
+			const [type, id] = key.split(':');
+			if (commentsByKey[key] != null) continue;
+			void loadComments(/** @type {'task' | 'note' | 'project' | 'mail'} */ (type), id).catch(
+				() => {}
+			);
+		}
 	});
 
 	$effect(() => {
@@ -617,7 +678,7 @@
 										</span>
 									{:else}
 										<span class="pub-glyph" aria-hidden="true">
-											<NavIcon name={refMeta?.icon || 'chat'} size={19} />
+											<TipTypeIcon name={refMeta?.icon || 'chat'} size={19} />
 										</span>
 									{/if}
 									{#if refMeta}
@@ -644,7 +705,24 @@
 									{/if}
 								</button>
 								{#if bubbles.length}
+									{@const showViewMore =
+										Boolean(commentableRefType(block.messages[0]?.ref?.type)) &&
+										hasPriorComments(block.refKey, bubbles)}
 									<div class="pub-body">
+										{#if showViewMore}
+											<div class="view-more-row">
+												<button
+													type="button"
+													class="view-more-pill"
+													aria-label={t('comments.viewMore')}
+													onclick={() => viewMoreComments(block.messages[0], bubbles)}
+												>
+													<span class="view-more-dots" aria-hidden="true">
+														<span></span><span></span><span></span>
+													</span>
+												</button>
+											</div>
+										{/if}
 										{#each bubbles as msg (msg.id)}
 											{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
 											<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
@@ -1021,6 +1099,46 @@
 		display: grid;
 		place-items: center;
 		color: var(--fg-33);
+	}
+
+	.view-more-row {
+		display: flex;
+		justify-content: center;
+		padding: 2px 0 6px;
+	}
+
+	.view-more-pill {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 18px;
+		padding: 0 8px;
+		margin: 0;
+		border: 0;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--fg) 6%, transparent);
+		color: var(--fg-33);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		flex-shrink: 0;
+	}
+
+	.view-more-pill:hover {
+		color: var(--fg-66);
+	}
+
+	.view-more-dots {
+		display: inline-flex;
+		align-items: center;
+		gap: 2.5px;
+		line-height: 0;
+	}
+
+	.view-more-dots span {
+		width: 2.5px;
+		height: 2.5px;
+		border-radius: 999px;
+		background: currentColor;
 	}
 
 	.pub-kind,

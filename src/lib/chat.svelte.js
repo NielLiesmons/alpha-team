@@ -55,12 +55,26 @@ export const chatUi = $state({
 	/** Active chat id (list + detail). Default shared feed. */
 	activeChannelId: 'general',
 	/**
-	 * When set to `kind:id`, CommentThread on that entity opens its sheet once.
-	 * Used by chat feed “view more comments” navigation — not an inline expander.
-	 * @type {string | null}
+	 * When set, CommentThread on that entity opens its sheet once.
+	 * Used by chat feed “view more comments” — does not expand inline in the feed.
+	 * Shape: `{ key: 'mail:id', scrollToId?: string }` or legacy `'mail:id'` string.
+	 * @type {null | string | { key: string, scrollToId?: string | null }}
 	 */
 	openCommentsFor: null
 });
+
+/**
+ * Ask CommentThread for `kind:id` to open (and optionally scroll to a comment).
+ * @param {'task' | 'note' | 'project' | 'mail' | string} type
+ * @param {string} entityId
+ * @param {string | null} [scrollToId]
+ */
+export function requestOpenComments(type, entityId, scrollToId = null) {
+	const key = `${type}:${entityId}`;
+	chatUi.openCommentsFor = scrollToId
+		? { key, scrollToId: String(scrollToId) }
+		: { key, scrollToId: null };
+}
 
 /** Built-in shared feed (+ future DM/agent channels, Drive-backed later). */
 export const chatChannels = $state([
