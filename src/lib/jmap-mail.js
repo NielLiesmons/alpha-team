@@ -533,8 +533,25 @@ async function draftsAndSentIds(apiUrl, email, password, accountId) {
 }
 
 /**
+ * Rough HTML → plain for multipart/alternative (deliverability).
+ * @param {string} html
+ */
+function htmlToPlain(html) {
+	return String(html || '')
+		.replace(/<\s*br\s*\/?>/gi, '\n')
+		.replace(/<\/\s*p\s*>/gi, '\n\n')
+		.replace(/<[^>]+>/g, '')
+		.replace(/&nbsp;/gi, ' ')
+		.replace(/&amp;/gi, '&')
+		.replace(/&lt;/gi, '<')
+		.replace(/&gt;/gi, '>')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
+}
+
+/**
  * Send via Stalwart JMAP (Email/set draft + EmailSubmission/set).
- * Session + mailboxes + submit = 3 round-trips (not Drive putPaths).
+ * Exactly one EmailSubmission per call. Caller must dedupe.
  * @param {string} email
  * @param {string} password
  * @param {{
@@ -543,6 +560,8 @@ async function draftsAndSentIds(apiUrl, email, password, accountId) {
  *   body: string,
  *   fromName?: string,
  *   inReplyTo?: string,
+ *   references?: string,
+ *   messageId?: string,
  *   threadId?: string,
  *   scheduleAt?: string | null
  * }} input
@@ -560,6 +579,10 @@ export async function sendJmapMail(email, password, input) {
 		.toLowerCase();
 	const fromName = String(input.fromName || '').trim();
 	const looksHtml = /<[a-z][\s\S]*>/i.test(body);
+	const fromDomain = fromEmail.includes('@') ? fromEmail.slice(fromEmail.indexOf('@') + 1) : 'localhost';
+	const ourMessageId =
+		asReplyMessageId(input.messageId || '') ||
+		`<alpha.${crypto.randomUUID().replace(/-/g, '')}@${fromDomain}>`;
 
 	const [{ draftsId, sentId }, identityId] = await Promise.all([
 		draftsAndSentIds(apiUrl, email, password, accountId),
@@ -577,15 +600,27 @@ export async function sendJmapMail(email, password, input) {
 		from: [{ email: fromEmail, ...(fromName ? { name: fromName } : {}) }],
 		to: to.map((e) => ({ email: e })),
 		subject,
-		bodyValues: { body: { value: body || ' ', charset: 'utf-8' } },
-		...(looksHtml
-			? { htmlBody: [{ partId: 'body', type: 'text/html' }] }
-			: { textBody: [{ partId: 'body', type: 'text/plain' }] })
+		'header:Message-ID:asText': ourMessageId
 	};
+
+	if (looksHtml) {
+		const plain = htmlToPlain(body) || ' ';
+		draft.bodyValues = {
+			text: { value: plain, charset: 'utf-8' },
+			html: { value: body, charset: 'utf-8' }
+		};
+		draft.textBody = [{ partId: 'text', type: 'text/plain' }];
+		draft.htmlBody = [{ partId: 'html', type: 'text/html' }];
+	} else {
+		draft.bodyValues = { text: { value: body || ' ', charset: 'utf-8' } };
+		draft.textBody = [{ partId: 'text', type: 'text/plain' }];
+	}
+
 	const replyMid = asReplyMessageId(input.inReplyTo || '');
 	if (replyMid) {
 		draft['header:In-Reply-To:asText'] = replyMid;
-		draft['header:References:asText'] = replyMid;
+		const refs = asReplyMessageId(input.references || '') || replyMid;
+		draft['header:References:asText'] = refs.includes(replyMid) ? refs : `${refs} ${replyMid}`.trim();
 	}
 
 	const scheduleAt = input.scheduleAt ? String(input.scheduleAt) : '';
@@ -610,11 +645,12 @@ export async function sendJmapMail(email, password, input) {
 			...draft,
 			id: created.id,
 			threadId: input.threadId || created.threadId || created.id,
+			messageId: ourMessageId,
 			receivedAt: new Date(scheduleMs).toISOString(),
 			sentAt: new Date(scheduleMs).toISOString(),
 			keywords: { $draft: true, $seen: true }
 		});
-		return { ...ui, _scheduled: true, _scheduledAt: new Date(scheduleMs).toISOString() };
+		return { ...ui, messageId: ourMessageId, _scheduled: true, _scheduledAt: new Date(scheduleMs).toISOString() };
 	}
 
 	/** @type {Record<string, any>} */
@@ -640,7 +676,7 @@ export async function sendJmapMail(email, password, input) {
 		};
 	}
 
-	/* Create draft + submit in one request (session/mailboxes/identity usually cached). */
+	/* Exactly one create + one submit — never a second EmailSubmission. */
 	const res = await jmapCall(
 		apiUrl,
 		email,
@@ -675,14 +711,16 @@ export async function sendJmapMail(email, password, input) {
 		throw new Error('JMAP submission returned no result');
 	}
 
-	return toUiMessage({
+	const ui = toUiMessage({
 		...draft,
 		id: created.id,
-		threadId: input.threadId || created.threadId || created.id,
+		threadId: created.threadId || input.threadId || created.id,
+		messageId: ourMessageId,
 		receivedAt: new Date().toISOString(),
 		sentAt: new Date().toISOString(),
 		keywords: { $seen: true }
 	});
+	return { ...ui, messageId: ourMessageId };
 }
 
 /**

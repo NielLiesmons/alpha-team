@@ -287,15 +287,68 @@ export function mailThreadsForCurrentView() {
 }
 
 /**
+ * Collapse duplicate cards (same JMAP id / Message-ID / near-identical outbound).
+ * @param {any[]} msgs
+ */
+function dedupeMailMessages(msgs) {
+	/** @type {any[]} */
+	const out = [];
+	/** @type {Set<string>} */
+	const seenId = new Set();
+	/** @type {Set<string>} */
+	const seenMid = new Set();
+	/** @type {Map<string, number>} */
+	const seenFp = new Map();
+
+	const sorted = [...msgs].sort((a, b) => {
+		/* Prefer real server rows over pending overlays. */
+		const ap = a?._pending || String(a?.id || '').startsWith('pending:') ? 1 : 0;
+		const bp = b?._pending || String(b?.id || '').startsWith('pending:') ? 1 : 0;
+		if (ap !== bp) return ap - bp;
+		return String(a?.created_at || '').localeCompare(String(b?.created_at || ''));
+	});
+
+	for (const m of sorted) {
+		if (!m) continue;
+		const id = String(m.id || '');
+		const mid = String(m.messageId || m._jmap?.messageId || '')
+			.trim()
+			.toLowerCase();
+		const fp = [
+			normEmail(m.from),
+			String(m.subject || '')
+				.trim()
+				.toLowerCase(),
+			String(m.body || '')
+				.replace(/\s+/g, ' ')
+				.trim()
+				.slice(0, 280)
+		].join('|');
+		const t = Date.parse(String(m.created_at || '')) || 0;
+
+		if (id && seenId.has(id)) continue;
+		if (mid && seenMid.has(mid)) continue;
+		const prevT = seenFp.get(fp);
+		if (prevT != null && Math.abs(prevT - t) < 120_000) continue;
+
+		if (id) seenId.add(id);
+		if (mid) seenMid.add(mid);
+		if (fp.length > 8) seenFp.set(fp, t || Date.now());
+		out.push(m);
+	}
+
+	out.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+	return out;
+}
+
+/**
  * Messages in a thread, oldest → newest.
  * @param {any} thread
  */
 export function threadMessages(thread) {
 	if (!thread) return [];
 	if (Array.isArray(thread.messages) && thread.messages.length) {
-		return [...thread.messages].sort((a, b) =>
-			String(a.created_at || '').localeCompare(String(b.created_at || ''))
-		);
+		return dedupeMailMessages(thread.messages);
 	}
 	return [thread];
 }
@@ -465,7 +518,7 @@ export function refreshMailForStubOnce(id) {
 }
 
 /**
- * Pending / failed optimistic messages that must survive a folder refresh.
+ * Only in-flight sends survive refresh — never re-paint completed duplicates.
  * @returns {{ threadId: string, msgs: any[] }[]}
  */
 function snapshotOptimisticMail() {
@@ -473,8 +526,8 @@ function snapshotOptimisticMail() {
 	const out = [];
 	for (const t of mailMessages) {
 		const tid = String(t.threadId || t.id || '');
-		const msgs = threadMessages(t).filter(
-			(m) => m?._pending || m?._sendError || String(m?.id || '').startsWith('pending:')
+		const msgs = (Array.isArray(t.messages) ? t.messages : threadMessages(t)).filter(
+			(m) => m?._pending === true || String(m?.id || '').startsWith('pending:')
 		);
 		if (msgs.length) out.push({ threadId: tid, msgs });
 	}
@@ -487,79 +540,125 @@ function snapshotOptimisticMail() {
 function reapplyOptimisticMail(snaps) {
 	for (const snap of snaps) {
 		for (const msg of snap.msgs) {
+			if (!msg?._pending && !String(msg?.id || '').startsWith('pending:')) continue;
 			const serverHas = mailMessages.some((t) => {
-				const msgs = threadMessages(t);
-				return msgs.some(
-					(m) =>
-						String(m.id) === String(msg.id) ||
-						(msg._serverId && String(m.id) === String(msg._serverId))
-				);
+				const msgs = Array.isArray(t.messages) ? t.messages : threadMessages(t);
+				return msgs.some((m) => mailMsgSame(m, msg));
 			});
 			if (serverHas) continue;
 			upsertMailMessage({
 				...msg,
+				_pending: true,
 				threadId: snap.threadId || msg.threadId
 			});
 		}
 	}
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
+function mailMsgSame(a, b) {
+	if (!a || !b) return false;
+	if (String(a.id) === String(b.id)) return true;
+	if (b._serverId && String(a.id) === String(b._serverId)) return true;
+	const am = String(a.messageId || '').trim().toLowerCase();
+	const bm = String(b.messageId || '').trim().toLowerCase();
+	if (am && bm && am === bm) return true;
+	return false;
+}
+
+/** @type {Promise<void> | null} */
+let refreshMailInflight = null;
+let refreshMailQueued = false;
+
 export async function refreshMail() {
-	const me = mailActorEmail();
-	const pw = me ? getMailboxPassword(me) : '';
-	const folder = mailView.folder;
-	const hadLocal = mailMessages.length > 0;
-	const pendingSnap = snapshotOptimisticMail();
-	const keepError = mailUi.error;
-	const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-	if (offline && hadLocal) {
-		mailUi.loading = false;
+	/* Never clobber an in-flight send — that caused cards to flicker / duplicate. */
+	if (mailUi.sending) {
+		refreshMailQueued = true;
 		return;
 	}
-	mailUi.loading = mailMessages.length === 0;
-	/* Don't clear a fresh send error — that caused an accent flash then wipe. */
-	if (!keepError) mailUi.error = null;
-	try {
-		if (me && pw) {
-			const list = await listJmapFolder(me, pw, folder, 80);
+	if (refreshMailInflight) {
+		refreshMailQueued = true;
+		return refreshMailInflight;
+	}
+
+	refreshMailInflight = (async () => {
+		const me = mailActorEmail();
+		const pw = me ? getMailboxPassword(me) : '';
+		const folder = mailView.folder;
+		const hadLocal = mailMessages.length > 0;
+		const pendingSnap = snapshotOptimisticMail();
+		const keepError = mailUi.error;
+		const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+		if (offline && hadLocal) {
+			mailUi.loading = false;
+			return;
+		}
+		mailUi.loading = mailMessages.length === 0;
+		if (!keepError) mailUi.error = null;
+		try {
+			if (me && pw) {
+				const list = await listJmapFolder(me, pw, folder, 80);
+				if (mailUi.sending) {
+					refreshMailQueued = true;
+					return;
+				}
+				mailMessages.length = 0;
+				mailMessages.push(...list);
+				for (const m of list) rememberMailTip(m);
+				reapplyOptimisticMail(pendingSnap);
+				reapplyUnreadOverrides();
+				return;
+			}
+
+			const session = activeSession();
+			if (!session) {
+				const locals = mailMessages.filter((m) => m._local);
+				mailMessages.splice(0, mailMessages.length, ...locals);
+				for (const m of locals) rememberMailTip(m);
+				reapplyOptimisticMail(pendingSnap);
+				reapplyUnreadOverrides();
+				if (me && !pw) {
+					mailUi.error =
+						'Add your mailbox password in Settings → Mail (Stalwart) to load the real inbox.';
+				}
+				return;
+			}
+			const list = await listMailMessages(session, 200);
+			if (mailUi.sending) {
+				refreshMailQueued = true;
+				return;
+			}
 			mailMessages.length = 0;
 			mailMessages.push(...list);
 			for (const m of list) rememberMailTip(m);
 			reapplyOptimisticMail(pendingSnap);
 			reapplyUnreadOverrides();
-			return;
-		}
-
-		const session = activeSession();
-		if (!session) {
-			const locals = mailMessages.filter((m) => m._local);
-			mailMessages.splice(0, mailMessages.length, ...locals);
-			for (const m of locals) rememberMailTip(m);
-			reapplyOptimisticMail(pendingSnap);
-			reapplyUnreadOverrides();
 			if (me && !pw) {
 				mailUi.error =
-					'Add your mailbox password in Settings → Mail (Stalwart) to load the real inbox.';
+					'Showing Drive drafts only — add mailbox password in Settings to sync Stalwart.';
 			}
-			return;
+		} catch (e) {
+			if (!hadLocal) {
+				mailUi.error = e instanceof Error ? e.message : String(e);
+			}
+		} finally {
+			mailUi.loading = false;
 		}
-		const list = await listMailMessages(session, 200);
-		mailMessages.length = 0;
-		mailMessages.push(...list);
-		for (const m of list) rememberMailTip(m);
-		reapplyOptimisticMail(pendingSnap);
-		reapplyUnreadOverrides();
-		if (me && !pw) {
-			mailUi.error =
-				'Showing Drive drafts only — add mailbox password in Settings to sync Stalwart.';
-		}
-	} catch (e) {
-		/* Keep whatever was already painted — never wipe on network blips. */
-		if (!hadLocal) {
-			mailUi.error = e instanceof Error ? e.message : String(e);
-		}
+	})();
+
+	try {
+		await refreshMailInflight;
 	} finally {
-		mailUi.loading = false;
+		refreshMailInflight = null;
+		if (refreshMailQueued && !mailUi.sending) {
+			refreshMailQueued = false;
+			void refreshMail();
+		} else if (!mailUi.sending) {
+			refreshMailQueued = false;
+		}
 	}
 }
 
@@ -579,7 +678,12 @@ function upsertMailMessage(msg, replaceId = '') {
 		if (tid === threadKey) return true;
 		if (pendingKey && String(t.id) === pendingKey) return true;
 		const msgs = Array.isArray(t.messages) ? t.messages : [];
-		return msgs.some((m) => String(m.id) === pendingKey || String(m.id) === String(msg.id));
+		return msgs.some(
+			(m) =>
+				String(m.id) === pendingKey ||
+				String(m.id) === String(msg.id) ||
+				mailMsgSame(m, msg)
+		);
 	});
 
 	if (threadIdx >= 0) {
@@ -587,12 +691,14 @@ function upsertMailMessage(msg, replaceId = '') {
 		const stableThreadId = String(thread.threadId || thread.id || threadKey);
 		const msgs = Array.isArray(thread.messages) ? [...thread.messages] : threadMessages(thread);
 		const without = msgs.filter(
-			(m) => String(m.id) !== pendingKey && String(m.id) !== String(msg.id)
+			(m) =>
+				String(m.id) !== pendingKey &&
+				String(m.id) !== String(msg.id) &&
+				!mailMsgSame(m, msg)
 		);
 		without.push({ ...msg, threadId: stableThreadId });
-		without.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
-		const latest = without[without.length - 1] || msg;
-		/* Never rewrite the open thread's list id to a pending/server create id. */
+		const deduped = dedupeMailMessages(without);
+		const latest = deduped[deduped.length - 1] || msg;
 		const nextId =
 			String(thread.id).startsWith('pending:') && !String(stableThreadId).startsWith('pending:')
 				? stableThreadId
@@ -606,9 +712,9 @@ function upsertMailMessage(msg, replaceId = '') {
 			created_at: latest.created_at || thread.created_at,
 			id: nextId,
 			threadId: stableThreadId,
-			messages: without,
-			_pending: without.some((m) => m._pending),
-			_sendError: without.find((m) => m._sendError)?._sendError || undefined
+			messages: deduped,
+			_pending: deduped.some((m) => m._pending),
+			_sendError: deduped.find((m) => m._sendError)?._sendError || undefined
 		};
 		rememberMailTip(mailMessages[threadIdx]);
 		if (pendingKey && typeof window !== 'undefined') {
@@ -631,14 +737,40 @@ function upsertMailMessage(msg, replaceId = '') {
 	return row;
 }
 
+/** In-flight + recent send fingerprints — hard stop on double submit. */
+/** @type {Set<string>} */
+const sendInflight = new Set();
+/** @type {Map<string, number>} */
+const recentSendFp = new Map();
+const SEND_DEDUP_MS = 20_000;
+
+/**
+ * @param {{ to: string[], subject: string, body: string, threadId?: string }} input
+ */
+function sendFingerprint(input) {
+	return [
+		(input.to || []).map(normEmail).filter(Boolean).sort().join(','),
+		String(input.subject || '')
+			.trim()
+			.toLowerCase(),
+		String(input.body || '')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.slice(0, 400),
+		String(input.threadId || '')
+	].join('\n');
+}
+
 /**
  * Optimistic send: paint immediately, deliver via JMAP (or Drive fallback) in background.
+ * Guaranteed single network submission per fingerprint.
  * @param {{
  *   to: string[],
  *   subject: string,
  *   body: string,
  *   threadId?: string,
  *   inReplyTo?: string,
+ *   references?: string,
  *   scheduleAt?: string | null
  * }} input
  */
@@ -651,6 +783,19 @@ export function sendMail(input) {
 	const body = (input.body || '').trim();
 	if (!subject && !body) throw new Error('Write a subject or body');
 
+	const fp = sendFingerprint({ to, subject, body, threadId: input.threadId });
+	const recentAt = recentSendFp.get(fp) || 0;
+	if (sendInflight.has(fp) || Date.now() - recentAt < SEND_DEDUP_MS) {
+		/* Same send already in flight / just completed — do not submit again. */
+		const existing =
+			mailMessages.find((t) => String(t.threadId || t.id) === String(input.threadId || '')) ||
+			mailMessages[0];
+		if (!existing) throw new Error('Send already in progress');
+		return existing;
+	}
+	sendInflight.add(fp);
+	recentSendFp.set(fp, Date.now());
+
 	const pendingId = `pending:${crypto.randomUUID()}`;
 	const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 	const scheduleAt = input.scheduleAt ? String(input.scheduleAt) : '';
@@ -658,6 +803,10 @@ export function sendMail(input) {
 	const scheduled = Number.isFinite(scheduleMs) && scheduleMs > Date.now() + 5_000;
 	const threadId = String(input.threadId || pendingId);
 	const fromName = activePerson().name || '';
+	const fromDomain = normEmail(from).includes('@')
+		? normEmail(from).slice(normEmail(from).indexOf('@') + 1)
+		: 'localhost';
+	const messageId = `<alpha.${crypto.randomUUID().replace(/-/g, '')}@${fromDomain}>`;
 
 	const optimistic = {
 		schema: 'alpha.mail_message/1',
@@ -670,8 +819,10 @@ export function sendMail(input) {
 		body,
 		created_at: scheduled ? new Date(scheduleMs).toISOString() : now,
 		transport: 'jmap',
+		messageId,
 		read_by: [normEmail(from)],
 		_pending: true,
+		_sendFp: fp,
 		_scheduled: scheduled,
 		_scheduledAt: scheduled ? new Date(scheduleMs).toISOString() : undefined,
 		_unread: false
@@ -693,13 +844,22 @@ export function sendMail(input) {
 					body,
 					fromName,
 					inReplyTo: input.inReplyTo || '',
-					threadId: threadId === pendingId ? undefined : threadId,
+					references: input.references || input.inReplyTo || '',
+					messageId,
+					/* Let Stalwart assign the real thread id; we only force UI merge key. */
+					threadId: undefined,
 					scheduleAt: scheduled ? new Date(scheduleMs).toISOString() : null
 				});
 			} else {
 				const session = activeSession();
 				if (!session) {
-					created = { ...optimistic, id: crypto.randomUUID(), _pending: false, _local: true, transport: 'drive' };
+					created = {
+						...optimistic,
+						id: crypto.randomUUID(),
+						_pending: false,
+						_local: true,
+						transport: 'drive'
+					};
 				} else {
 					created = await createMailMessage(session, {
 						from,
@@ -707,16 +867,17 @@ export function sendMail(input) {
 						subject: subject || '(no subject)',
 						body
 					});
-					created = { ...created, threadId: created.threadId || threadId };
+					created = { ...created, threadId: created.threadId || threadId, messageId };
 				}
 			}
 			upsertMailMessage(
 				{
 					...created,
-					/* Keep the open conversation id so the card stays in-thread. */
 					threadId,
+					messageId: created.messageId || messageId,
 					_pending: false,
 					_serverId: created.id,
+					_sendFp: fp,
 					_scheduled: Boolean(created._scheduled || scheduled),
 					_scheduledAt: created._scheduledAt || optimistic._scheduledAt
 				},
@@ -726,9 +887,16 @@ export function sendMail(input) {
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			mailUi.error = msg;
+			/* Allow a conscious retry after failure. */
+			recentSendFp.delete(fp);
 			upsertMailMessage({ ...optimistic, _pending: false, _sendError: msg }, pendingId);
 		} finally {
+			sendInflight.delete(fp);
 			mailUi.sending = false;
+			if (refreshMailQueued) {
+				refreshMailQueued = false;
+				void refreshMail();
+			}
 		}
 	})();
 

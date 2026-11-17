@@ -218,11 +218,13 @@
 
 	/** @param {string | null} [at] */
 	function send(at = null) {
+		if (busy) return;
 		if (parseEmails(draft).length) commitDraftEmails();
 		const to = recipients;
 		const nextBody = plainBody ? body : '';
-		if (!to.length || busy) return;
+		if (!to.length) return;
 		if (!subject.trim() && !plainBody) return;
+		/* Lock before any await/close so a second click cannot submit twice. */
 		busy = true;
 		err = '';
 		try {
@@ -235,7 +237,7 @@
 				scheduleAt: at
 			});
 			closeComposer();
-			selectEntity('mail', msg.id);
+			selectEntity('mail', String(msg.threadId || msg.id));
 		} catch (e) {
 			err = e instanceof Error ? e.message : String(e);
 			busy = false;

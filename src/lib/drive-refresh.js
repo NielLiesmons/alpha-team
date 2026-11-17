@@ -60,10 +60,12 @@ export async function refreshBackgroundDrive() {
 
 	try {
 		const { chatUi } = await import('./chat.svelte.js');
-		/* Yield while a send is in flight — don't steal bandwidth from tip commit / ✓. */
-		for (let i = 0; i < 40 && chatUi.posting; i++) {
+		const { mailUi } = await import('./mail.svelte.js');
+		/* Yield while a send is in flight — don't steal bandwidth / thrash mail UI. */
+		for (let i = 0; i < 40 && (chatUi.posting || mailUi.sending); i++) {
 			await new Promise((r) => setTimeout(r, 50));
 		}
+		if (mailUi.sending) return;
 
 		let tip = '';
 		try {
