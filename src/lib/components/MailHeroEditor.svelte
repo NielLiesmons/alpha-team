@@ -214,7 +214,8 @@
 	.brand-name {
 		font-family: 'Ovo', Georgia, 'Times New Roman', serif;
 		font-size: 15px;
-		font-weight: 700;
+		font-weight: 400;
+		font-synthesis: none;
 		letter-spacing: -0.02em;
 		line-height: 1;
 		color: var(--mail-ink);
@@ -332,6 +333,7 @@
 		font-family: 'Ovo', Georgia, 'Times New Roman', serif;
 		font-size: 1.45rem;
 		font-weight: 400;
+		font-synthesis: none;
 		letter-spacing: -0.02em;
 		line-height: 1.2;
 	}
