@@ -1070,11 +1070,11 @@
 				}}
 			></textarea>
 
-			<div class="bento">
-				<section class="bento-panel">
-					<div class="bento-head">
+			<div class="detail-grid">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('tasks.title')}</span>
-						<span class="bento-count">{projectTasks.length}</span>
+						<span class="grid-count">{projectTasks.length}</span>
 						<button
 							type="button"
 							class="proj-add"
@@ -1103,10 +1103,10 @@
 					<button type="button" class="view-all-fab" onclick={() => viewAll('/tasks')}>{t('common.viewAll')}</button>
 				</section>
 
-				<section class="bento-panel">
-					<div class="bento-head">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('notes.title')}</span>
-						<span class="bento-count">{projectNotes.length}</span>
+						<span class="grid-count">{projectNotes.length}</span>
 						<button
 							type="button"
 							class="proj-add"
@@ -1134,10 +1134,10 @@
 					<button type="button" class="view-all-fab" onclick={() => viewAll('/notes')}>{t('common.viewAll')}</button>
 				</section>
 
-				<section class="bento-panel">
-					<div class="bento-head">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('drive.title')}</span>
-						<span class="bento-count">0</span>
+						<span class="grid-count">0</span>
 						<button type="button" class="proj-add" aria-label={t('projects.addFile')} disabled>
 							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -1680,11 +1680,11 @@
 				}}
 			></textarea>
 
-			<div class="bento">
-				<section class="bento-panel">
-					<div class="bento-head">
+			<div class="detail-grid">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('ent.views')}</span>
-						<span class="bento-count">{enterpriseViews.length}</span>
+						<span class="grid-count">{enterpriseViews.length}</span>
 						<button
 							type="button"
 							class="proj-add"
@@ -1714,10 +1714,10 @@
 					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>{t('common.viewAll')}</button>
 				</section>
 
-				<section class="bento-panel">
-					<div class="bento-head">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('ent.tables')}</span>
-						<span class="bento-count">{enterpriseTables.length}</span>
+						<span class="grid-count">{enterpriseTables.length}</span>
 						<button
 							type="button"
 							class="proj-add"
@@ -1747,10 +1747,10 @@
 					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>{t('common.viewAll')}</button>
 				</section>
 
-				<section class="bento-panel">
-					<div class="bento-head">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('ent.metrics')}</span>
-						<span class="bento-count">{enterpriseMetrics.length}</span>
+						<span class="grid-count">{enterpriseMetrics.length}</span>
 						<button
 							type="button"
 							class="proj-add"
@@ -1780,10 +1780,10 @@
 					<button type="button" class="view-all-fab" onclick={() => viewAll('/entreprises')}>{t('common.viewAll')}</button>
 				</section>
 
-				<section class="bento-panel">
-					<div class="bento-head">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('ent.projects')}</span>
-						<span class="bento-count">{enterpriseProjects.length}</span>
+						<span class="grid-count">{enterpriseProjects.length}</span>
 						<button
 							type="button"
 							class="proj-add"
@@ -1816,10 +1816,10 @@
 					<button type="button" class="view-all-fab" onclick={() => viewAll('/projects')}>{t('common.viewAll')}</button>
 				</section>
 
-				<section class="bento-panel">
-					<div class="bento-head">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('tasks.title')}</span>
-						<span class="bento-count">{enterpriseTasks.length}</span>
+						<span class="grid-count">{enterpriseTasks.length}</span>
 						<button
 							type="button"
 							class="proj-add"
@@ -1848,10 +1848,10 @@
 					<button type="button" class="view-all-fab" onclick={() => viewAll('/tasks')}>{t('common.viewAll')}</button>
 				</section>
 
-				<section class="bento-panel">
-					<div class="bento-head">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('notes.title')}</span>
-						<span class="bento-count">{enterpriseNotes.length}</span>
+						<span class="grid-count">{enterpriseNotes.length}</span>
 						<button
 							type="button"
 							class="proj-add"
@@ -1879,10 +1879,10 @@
 					<button type="button" class="view-all-fab" onclick={() => viewAll('/notes')}>{t('common.viewAll')}</button>
 				</section>
 
-				<section class="bento-panel">
-					<div class="bento-head">
+				<section class="grid-cell">
+					<div class="grid-head">
 						<span class="eyebrow-label-xs">{t('drive.title')}</span>
-						<span class="bento-count">0</span>
+						<span class="grid-count">0</span>
 						<button type="button" class="proj-add" aria-label={t('projects.addFile')} disabled>
 							<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 								<path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -2436,25 +2436,46 @@
 		margin: 0;
 	}
 
-	.bento {
+	/* Hairline border grid — full-bleed vs .body 24px; edge cells own outer pad. */
+	.detail-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 16px;
-		padding: 8px 0 0;
+		gap: 0;
+		margin: 12px -24px 0;
+		padding: 0;
+		border-top: 1px solid var(--fg-8);
 		box-sizing: border-box;
 	}
 
-	.bento-panel {
+	.grid-cell {
 		position: relative;
 		min-width: 0;
 		min-height: 168px;
-		padding: 16px;
-		border-radius: 18px;
-		background: var(--fg-4);
+		padding: 12px 14px 16px;
+		border-right: 1px solid var(--fg-8);
+		border-bottom: 1px solid var(--fg-8);
+		background: transparent;
+		border-radius: 0;
 		box-sizing: border-box;
 	}
 
-	/* Overlay FAB — floats on panel; clearance via last-row pad (no glass/stroke/hover). */
+	.grid-cell:nth-child(odd) {
+		padding-left: 24px;
+	}
+
+	.grid-cell:nth-child(even) {
+		padding-right: 24px;
+		border-right: 0;
+	}
+
+	/* Lone trailing cell spans full width */
+	.grid-cell:last-child:nth-child(odd) {
+		grid-column: 1 / -1;
+		padding-right: 24px;
+		border-right: 0;
+	}
+
+	/* Overlay FAB — floats on cell; clearance via last-row pad. */
 	.view-all-fab {
 		position: absolute;
 		right: 10px;
@@ -2473,6 +2494,10 @@
 		cursor: pointer;
 	}
 
+	.grid-cell:nth-child(even) .view-all-fab {
+		right: 18px;
+	}
+
 	.view-all-fab:hover,
 	.view-all-fab:focus-visible {
 		color: var(--fg-66);
@@ -2480,13 +2505,13 @@
 	}
 
 	/* Keep last list row / empty line clear of the View all FAB. */
-	.bento-panel .linked-list > li:last-child .linked-row,
-	.bento-panel > .muted.tight {
+	.grid-cell .linked-list > li:last-child .linked-row,
+	.grid-cell > .muted.tight {
 		padding-right: 5.75rem;
 		box-sizing: border-box;
 	}
 
-	.bento-head {
+	.grid-head {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -2502,7 +2527,7 @@
 		color: var(--fg-66);
 	}
 
-	.bento-count {
+	.grid-count {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 11px;
 		font-weight: 500;
@@ -2724,11 +2749,23 @@
 			padding-top: 10px;
 		}
 
-		.bento {
+		.detail-grid {
 			grid-template-columns: 1fr;
-			/* Body already has 14px side inset — don’t double-pad */
-			padding: 8px 0 0;
-			gap: 10px;
+			margin: 8px 0 0;
+			border-top: 1px solid var(--fg-8);
+		}
+
+		.grid-cell,
+		.grid-cell:nth-child(odd),
+		.grid-cell:nth-child(even) {
+			padding: 12px 0 14px;
+			border-right: 0;
+			border-bottom: 1px solid var(--fg-8);
+		}
+
+		.grid-cell:nth-child(even) .view-all-fab,
+		.view-all-fab {
+			right: 0;
 		}
 
 		.desktop-head,

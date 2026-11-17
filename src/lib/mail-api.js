@@ -184,6 +184,15 @@ export function fetchModerationComments() {
 	return api(`/v1/projects/${project()}/comments/moderation`);
 }
 
+/**
+ * First-party cookieless analytics summary (chart-ready series).
+ * @param {number} [days=30]
+ */
+export function fetchAnalyticsSummary(days = 30) {
+	const n = Math.max(1, Math.min(90, Number(days) || 30));
+	return api(`/v1/projects/${project()}/analytics/summary?days=${n}`);
+}
+
 /** @param {string} id */
 export function approveComment(id) {
 	return api(`/v1/projects/${project()}/comments/${encodeURIComponent(id)}/approve`, {

@@ -1,7 +1,11 @@
 <script>
 	/**
-	 * Visitor social activity — comments moderation (grayscale chrome).
+	 * 3rd-column Website Insights: visits chart, countries, comments.
+	 * Hairline sections; desktop edge cells own ~24px outer pad.
 	 */
+	import { onMount } from 'svelte';
+	import SiteCountryBars from '$lib/components/website/SiteCountryBars.svelte';
+	import SiteVisitsChart from '$lib/components/website/SiteVisitsChart.svelte';
 	import {
 		moderationComments,
 		persistApproveComment,
@@ -10,10 +14,46 @@
 		pubsUi,
 		refreshPublications
 	} from '$lib/publications.svelte.js';
-	import { getAdminToken } from '$lib/mail-api.js';
+	import { fetchAnalyticsSummary, getAdminToken } from '$lib/mail-api.js';
 	import { t } from '$lib/i18n.svelte.js';
 
 	let busy = $state('');
+	let days = $state(7);
+	let loading = $state(true);
+	/** @type {any} */
+	let summary = $state(null);
+	let analyticsError = $state('');
+
+	async function loadAnalytics() {
+		if (!getAdminToken()) {
+			summary = null;
+			loading = false;
+			return;
+		}
+		loading = true;
+		analyticsError = '';
+		try {
+			summary = await fetchAnalyticsSummary(days);
+		} catch (e) {
+			analyticsError = e instanceof Error ? e.message : String(e);
+			summary = null;
+		} finally {
+			loading = false;
+		}
+	}
+
+	onMount(() => {
+		void refreshPublications();
+	});
+
+	$effect(() => {
+		days;
+		void loadAnalytics();
+	});
+
+	const pageviewsTotal = $derived(Number(summary?.pageviews) || 0);
+	const series = $derived(Array.isArray(summary?.series) ? summary.series : []);
+	const countries = $derived(Array.isArray(summary?.countries) ? summary.countries : []);
 
 	/** @param {string} id */
 	async function approve(id) {
@@ -66,74 +106,180 @@
 	}
 </script>
 
-<div class="activity">
-	{#if !getAdminToken()}
-		<p class="hint">{t('pub.addToken')}</p>
-	{:else if pubsUi.error}
-		<p class="hint">
-			{pubsUi.error}
-			<button type="button" class="linkish" onclick={() => refreshPublications()}>{t('common.retry')}</button>
-		</p>
-	{:else if moderationComments.length === 0}
-		<p class="hint">{t('web.activityEmpty')}</p>
-	{:else}
-		<ul class="list">
-			{#each moderationComments as c (c.id)}
-				<li class="card">
-					<div class="head">
-						<span class="who">{c.author_display || c.author_email || '…'}</span>
-						<span class="when">{formatWhen(c.created_at)}</span>
-					</div>
-					<p class="body">{c.body}</p>
-					<div class="trail">
-						<span class="status">{c.status}{#if c.commenter_banned} · {t('pub.banned')}{/if}</span>
-						{#if c.post_slug}
-							<span class="slug">{c.post_slug}</span>
-						{/if}
-					</div>
-					<div class="acts">
-						{#if c.status === 'pending'}
+<div class="insights">
+	<section class="content-section visits">
+		<div class="section-head">
+			<div class="metric-block">
+				<span class="eyebrow">{t('web.visits')}</span>
+				<span class="metric">{pageviewsTotal.toLocaleString()}</span>
+			</div>
+			<div class="timeframes" role="group" aria-label={t('web.timeframe')}>
+				<button type="button" class="tf" class:on={days === 7} onclick={() => (days = 7)}>
+					{t('web.days7')}
+				</button>
+				<button type="button" class="tf" class:on={days === 30} onclick={() => (days = 30)}>
+					{t('web.days30')}
+				</button>
+			</div>
+		</div>
+		{#if !getAdminToken()}
+			<p class="hint">{t('pub.addToken')}</p>
+		{:else if analyticsError}
+			<p class="hint">{analyticsError}</p>
+		{:else if !loading && pageviewsTotal === 0}
+			<p class="hint">{t('web.noVisits')}</p>
+		{/if}
+		<SiteVisitsChart {series} {loading} />
+	</section>
+
+	<section class="content-section countries">
+		<div class="section-head">
+			<span class="eyebrow">{t('web.byCountry')}</span>
+		</div>
+		<SiteCountryBars rows={countries} {loading} emptyLabel={t('web.noCountries')} />
+	</section>
+
+	<section class="content-section comments">
+		<div class="section-head">
+			<span class="eyebrow">{t('web.comments')}</span>
+			<span class="count">{moderationComments.length}</span>
+		</div>
+		{#if !getAdminToken()}
+			<p class="hint">{t('pub.addToken')}</p>
+		{:else if pubsUi.error}
+			<p class="hint">
+				{pubsUi.error}
+				<button type="button" class="linkish" onclick={() => refreshPublications()}>{t('common.retry')}</button>
+			</p>
+		{:else if moderationComments.length === 0}
+			<p class="hint">{t('web.activityEmpty')}</p>
+		{:else}
+			<ul class="list">
+				{#each moderationComments as c (c.id)}
+					<li class="card">
+						<div class="head">
+							<span class="who">{c.author_display || c.author_name || c.author_email || '—'}</span>
+							<span class="when">{formatWhen(c.created_at)}</span>
+						</div>
+						<p class="body">{c.body}</p>
+						<div class="trail">
+							{#if c.post_slug}<span>{c.post_slug}</span>{/if}
+							{#if c.status}<span>{c.status}</span>{/if}
+						</div>
+						<div class="acts">
+							{#if c.status !== 'approved'}
+								<button
+									type="button"
+									class="pill"
+									disabled={busy === c.id}
+									onclick={() => void approve(c.id)}>{t('pub.approve')}</button
+								>
+							{/if}
 							<button
 								type="button"
 								class="pill"
 								disabled={busy === c.id}
-								onclick={() => void approve(c.id)}>{t('pub.approve')}</button
+								onclick={() => void reject(c.id)}>{t('pub.reject')}</button
 							>
-						{/if}
-						<button
-							type="button"
-							class="pill"
-							disabled={busy === c.id}
-							onclick={() => void reject(c.id)}>{t('pub.reject')}</button
-						>
-						<button
-							type="button"
-							class="pill"
-							disabled={busy === c.id}
-							onclick={() => void ban(c.id)}>{t('pub.banEmail')}</button
-						>
-					</div>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+							<button
+								type="button"
+								class="pill"
+								disabled={busy === c.id}
+								onclick={() => void ban(c.id)}>{t('pub.banEmail')}</button
+							>
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</section>
 </div>
 
 <style>
-	.activity {
+	.insights {
+		/* Full-bleed vs DetailColumn .body 24px sides — cells own outer pad (desktop). */
+		margin: 0 -24px;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 8px 14px 24px;
+	}
+
+	.content-section {
+		position: relative;
+		padding: 14px 24px 18px;
+		border-bottom: 1px solid var(--fg-8);
 		box-sizing: border-box;
 	}
 
+	.section-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 8px;
+	}
+
+	.metric-block {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.eyebrow {
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--fg-66);
+	}
+
+	.metric {
+		font-size: 1.75rem;
+		font-weight: 700;
+		letter-spacing: -0.03em;
+		line-height: 1.15;
+		color: var(--fg);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.count {
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--fg-33);
+		font-variant-numeric: tabular-nums;
+		padding-top: 2px;
+	}
+
+	.timeframes {
+		display: flex;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+
+	.tf {
+		height: 28px;
+		padding: 0 10px;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: var(--fg-33);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.tf.on,
+	.tf:hover {
+		background: var(--fg-8);
+		color: var(--fg);
+	}
+
 	.hint {
-		margin: 24px 0;
+		margin: 0 0 10px;
 		font-size: 13px;
 		line-height: 1.45;
 		color: var(--fg-33);
-		text-align: center;
 	}
 
 	.linkish {
@@ -153,7 +299,6 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
 	}
 
 	.card {
@@ -162,6 +307,10 @@
 		gap: 6px;
 		padding: 12px 0;
 		border-bottom: 1px solid var(--fg-8);
+	}
+
+	.card:last-child {
+		border-bottom: 0;
 	}
 
 	.head {
@@ -229,5 +378,15 @@
 	.pill:disabled {
 		opacity: 0.45;
 		cursor: default;
+	}
+
+	@media (max-width: 899px) {
+		.insights {
+			margin: 0;
+		}
+
+		.content-section {
+			padding: 12px 0 16px;
+		}
 	}
 </style>
