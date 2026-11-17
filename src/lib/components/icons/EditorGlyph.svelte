@@ -2,12 +2,31 @@
 	/**
 	 * Composer glyphs from the alpha-ui ue* formatting set.
 	 * Painted with currentColor so quiet chrome stays --fg-66.
-	 * @type {{ name?: 'list' | 'numbered' | 'code' | 'attach', size?: number }}
+	 * @type {{ name?: 'list' | 'numbered' | 'checklist' | 'code' | 'attach', size?: number }}
 	 */
 	let { name = 'list', size = 16 } = $props();
 </script>
 
-{#if name === 'numbered'}
+{#if name === 'checklist'}
+	<svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+		<rect
+			x="1.25"
+			y="1.25"
+			width="13.5"
+			height="13.5"
+			rx="3.25"
+			stroke="currentColor"
+			stroke-width="1.5"
+		/>
+		<path
+			d="M4.5 8.1 6.7 10.3 11.5 5.5"
+			stroke="currentColor"
+			stroke-width="1.6"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		/>
+	</svg>
+{:else if name === 'numbered'}
 	<svg width={size} height={Math.round((size * 18) / 19)} viewBox="0 0 19 18" fill="none" aria-hidden="true">
 		<path
 			fill="currentColor"

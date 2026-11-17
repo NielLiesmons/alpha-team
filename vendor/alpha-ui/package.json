@@ -32,6 +32,7 @@
 		"./FeedEntityPanel.svelte": "./src/lib/FeedEntityPanel.svelte",
 		"./ListTitleChrome.svelte": "./src/lib/ListTitleChrome.svelte",
 		"./NavIcon.svelte": "./src/lib/NavIcon.svelte",
+		"./nav-png.js": "./src/lib/nav-png.js",
 		"./icons/BaseIcon.svelte": "./src/lib/icons/BaseIcon.svelte",
 		"./icons/Pen.svelte": "./src/lib/icons/Pen.svelte",
 		"./icons/Trash.svelte": "./src/lib/icons/Trash.svelte",

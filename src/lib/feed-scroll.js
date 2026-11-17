@@ -13,7 +13,7 @@ export const FEED_NEAR_BOTTOM_PX = 64;
  * CSS bottom padding feeds should use so the last item clears the composer.
  * Keep chat `.messages` and mail `.mail-feed` in sync with this.
  */
-export const FEED_BOTTOM_PAD_CSS = 'calc(72px + env(safe-area-inset-bottom, 0px))';
+export const FEED_BOTTOM_PAD_CSS = 'calc(120px + env(safe-area-inset-bottom, 0px))';
 
 /** @param {HTMLElement} el */
 export function feedMaxScrollTop(el) {

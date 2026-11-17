@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * @deprecated Replaced by publications list + WebsiteActivity + PublicationEditor.
+	 * @deprecated Replaced by publications list + WebsiteActivity + NewsletterCreate sheet.
 	 * Kept as a no-op export so older imports fail loudly if revived.
 	 */
 </script>

@@ -102,6 +102,15 @@
 				{ id: 'unread', label: t('filter.unread') }
 			];
 		}
+		if (path.startsWith('/publications')) {
+			return [
+				{ id: 'all', label: t('filter.all') },
+				{ id: 'blog', label: t('filter.blog') },
+				{ id: 'post', label: t('filter.posts') },
+				{ id: 'event', label: t('filter.events') },
+				{ id: 'draft', label: t('filter.drafts') }
+			];
+		}
 		return null;
 	});
 

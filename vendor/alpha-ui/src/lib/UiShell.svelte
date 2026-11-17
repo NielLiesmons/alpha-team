@@ -644,7 +644,7 @@
 							queueMicrotask(() => searchInputEl?.focus());
 						}}
 					>
-						<Search size={16} />
+						<Search size={13} />
 					</button>
 				{/if}
 				{#if createMenuItems.length}
@@ -1213,8 +1213,12 @@
 
 	.top-search:hover,
 	.top-plus:hover {
-		color: var(--fg);
 		transform: scale(1.06);
+	}
+
+	.top-search:active,
+	.top-plus:active {
+		transform: scale(0.96);
 	}
 
 	.icon-wrap.png,
@@ -1328,7 +1332,7 @@
 
 	.nav-block.expanded {
 		border-radius: 22px;
-		padding-bottom: 6px;
+		padding-bottom: 4px;
 	}
 
 	.nav-row {
@@ -1411,18 +1415,19 @@
 	.nav-sub {
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
-		padding: 0 6px 2px;
+		gap: 0;
+		padding: 0 0 2px;
 	}
 
+	/* Left pad = nav-item pad (10) + icon (18) + gap (10) so labels line up with Mail. */
 	.nav-sub-item {
 		display: block;
 		width: 100%;
-		padding: 7px 10px 7px 36px;
+		padding: 3px 10px 3px 38px;
 		border: 0;
-		border-radius: 999px;
+		border-radius: 0;
 		background: transparent;
-		color: var(--white66);
+		color: var(--white33, var(--fg-33));
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
@@ -1432,12 +1437,10 @@
 	}
 
 	.nav-sub-item:hover {
-		background: var(--fg-4);
-		color: var(--white);
+		color: var(--white66, var(--fg-66));
 	}
 
 	.nav-sub-item.active {
-		background: var(--fg-4);
 		color: var(--white);
 	}
 
@@ -1583,10 +1586,25 @@
 		overflow: hidden;
 	}
 
-	/* Chat uses the same 2nd-column width as Notes / Mail / Tasks / … */
+	/* Chat: equal 2nd + 3rd columns (wider feed than φ list elsewhere) */
 	.list-col.chat {
 		flex-basis: var(--list);
 		width: var(--list);
+	}
+
+	@media (min-width: 768px) {
+		.shell.list-chat .list-col.chat {
+			flex: 1 1 0;
+			width: auto;
+			min-width: 0;
+		}
+
+		/* DetailColumn root shares the remaining half */
+		.shell.list-chat :global(.detail) {
+			flex: 1 1 0;
+			width: auto;
+			min-width: 0;
+		}
 	}
 
 	.list-col.wide {

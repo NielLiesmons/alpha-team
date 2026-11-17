@@ -9,6 +9,8 @@
 	import Link from '@tiptap/extension-link';
 	import Image from '@tiptap/extension-image';
 	import Placeholder from '@tiptap/extension-placeholder';
+	import TaskList from '@tiptap/extension-task-list';
+	import TaskItem from '@tiptap/extension-task-item';
 	import {
 		clipboardHtmlIsRich,
 		looksLikeMarkdown,
@@ -152,6 +154,12 @@
 			run: (ed) => ed.chain().focus().toggleOrderedList().run()
 		},
 		{
+			id: 'task',
+			label: 'Task list',
+			group: 'Lists',
+			run: (ed) => ed.chain().focus().toggleTaskList().run()
+		},
+		{
 			id: 'quote',
 			label: 'Block quote',
 			group: 'Turn into',
@@ -235,6 +243,10 @@
 			extensions: [
 				StarterKit.configure({
 					heading: { levels: [1, 2, 3] }
+				}),
+				TaskList,
+				TaskItem.configure({
+					nested: true
 				}),
 				Link.configure({
 					openOnClick: true,
@@ -474,6 +486,28 @@
 	.note-editor :global(.note-prose ol) {
 		margin: 0 0 0.65em;
 		padding-left: 1.25rem;
+	}
+
+	.note-editor :global(.note-prose ul[data-type='taskList']) {
+		list-style: none;
+		padding-left: 0;
+	}
+
+	.note-editor :global(.note-prose ul[data-type='taskList'] li) {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+	}
+
+	.note-editor :global(.note-prose ul[data-type='taskList'] li > label) {
+		display: inline-flex;
+		margin-top: 0.2em;
+		flex-shrink: 0;
+	}
+
+	.note-editor :global(.note-prose ul[data-type='taskList'] li > div) {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.note-editor :global(.note-prose code) {

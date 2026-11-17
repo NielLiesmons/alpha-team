@@ -1,57 +1,42 @@
 <script>
 	/**
-	 * Compact editor tools for create sheets — square tools with FloatPanel
-	 * menus for headings / lists (same surface as the project selector).
-	 * Glyphs: alpha-ui camera + ue* formatting icons.
+	 * Compact editor tools for create sheets.
+	 * Order: style (block) → lists → camera → code → attach.
 	 */
 	import DropdownMenu from './DropdownMenu.svelte';
 	import Camera from './icons/Camera.svelte';
 	import EditorGlyph from './icons/EditorGlyph.svelte';
 	import { t } from '$lib/i18n.svelte.js';
+
 	/** @type {{
 	 *   editor?: import('@tiptap/core').Editor | null,
 	 *   onMedia?: () => void
 	 * }} */
 	let { editor = null, onMedia } = $props();
 
-	let headingOpen = $state(false);
+	let styleOpen = $state(false);
 	let listOpen = $state(false);
 	/** @type {HTMLButtonElement | null} */
-	let headingBtn = $state(null);
+	let styleBtn = $state(null);
 	/** @type {HTMLButtonElement | null} */
 	let listBtn = $state(null);
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput = $state();
 
-	const headingItems = $derived.by(() => {
-		void editor;
-		return [
-			{
-				id: 'h1',
-				label: t('fmt.heading1'),
-				onclick: () => editor?.chain().focus().toggleHeading({ level: 1 }).run()
-			},
-			{
-				id: 'h2',
-				label: t('fmt.heading2'),
-				onclick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run()
-			},
-			{
-				id: 'h3',
-				label: t('fmt.heading3'),
-				onclick: () => editor?.chain().focus().toggleHeading({ level: 3 }).run()
-			}
-		];
-	});
-
-	function toggleHeading() {
+	function toggleStyle() {
 		listOpen = false;
-		headingOpen = !headingOpen;
+		styleOpen = !styleOpen;
 	}
 
 	function toggleList() {
-		headingOpen = false;
+		styleOpen = false;
 		listOpen = !listOpen;
+	}
+
+	/** @param {() => void} run */
+	function runStyle(run) {
+		run();
+		styleOpen = false;
 	}
 
 	/** @param {() => void} run */
@@ -78,17 +63,17 @@
 
 <div class="tools" role="toolbar" aria-label={t('fmt.formatting')}>
 	<button
-		bind:this={headingBtn}
+		bind:this={styleBtn}
 		type="button"
 		class="tool wide"
-		class:on={headingOpen}
-		aria-label={t('fmt.headings')}
-		aria-expanded={headingOpen}
+		class:on={styleOpen}
+		aria-label={t('fmt.styles')}
+		aria-expanded={styleOpen}
 		aria-haspopup="menu"
 		disabled={!editor}
-		onclick={toggleHeading}
+		onclick={toggleStyle}
 	>
-		<span class="h-mark">H</span>
+		<span class="style-mark">Aa</span>
 		<svg class="chev" width="10" height="6" viewBox="0 0 14 8" fill="none" aria-hidden="true">
 			<path
 				d="M12.7 0.7 6.71 6.69 0.7 0.7"
@@ -140,7 +125,22 @@
 		disabled={!editor}
 		onclick={() => editor?.chain().focus().toggleCodeBlock().run()}
 	>
-		<EditorGlyph name="code" size={16} />
+		<svg class="code-chev" width="18" height="14" viewBox="0 0 18 14" fill="none" aria-hidden="true">
+			<path
+				d="M5.5 1.75 1.25 7 5.5 12.25"
+				stroke="currentColor"
+				stroke-width="1.7"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+			<path
+				d="M12.5 1.75 16.75 7 12.5 12.25"
+				stroke="currentColor"
+				stroke-width="1.7"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		</svg>
 	</button>
 
 	<button
@@ -157,13 +157,74 @@
 </div>
 
 <DropdownMenu
-	open={headingOpen}
-	anchor={headingBtn}
+	open={styleOpen}
+	anchor={styleBtn}
 	placement="above"
-	width={200}
-	onclose={() => (headingOpen = false)}
-	items={headingItems}
-/>
+	width={260}
+	onclose={() => (styleOpen = false)}
+>
+	<div class="dropdown-list style-menu" role="menu">
+		<button
+			type="button"
+			class="dropdown-item style-opt"
+			role="menuitem"
+			onclick={() => runStyle(() => editor?.chain().focus().toggleHeading({ level: 1 }).run())}
+		>
+			<span class="style-preview h1">{t('fmt.heading1')}</span>
+		</button>
+		<button
+			type="button"
+			class="dropdown-item style-opt"
+			role="menuitem"
+			onclick={() => runStyle(() => editor?.chain().focus().toggleHeading({ level: 2 }).run())}
+		>
+			<span class="style-preview h2">{t('fmt.heading2')}</span>
+		</button>
+		<button
+			type="button"
+			class="dropdown-item style-opt"
+			role="menuitem"
+			onclick={() => runStyle(() => editor?.chain().focus().toggleHeading({ level: 3 }).run())}
+		>
+			<span class="style-preview h3">{t('fmt.heading3')}</span>
+		</button>
+		<button
+			type="button"
+			class="dropdown-item style-opt"
+			role="menuitem"
+			onclick={() => runStyle(() => editor?.chain().focus().setParagraph().run())}
+		>
+			<span class="style-preview p">{t('fmt.paragraph')}</span>
+		</button>
+		<button
+			type="button"
+			class="dropdown-item style-opt"
+			role="menuitem"
+			onclick={() => runStyle(() => editor?.chain().focus().toggleBlockquote().run())}
+		>
+			<span class="style-preview quote">{t('fmt.quote')}</span>
+		</button>
+		<div class="style-sep" role="separator"></div>
+		<button
+			type="button"
+			class="dropdown-item inline-opt"
+			role="menuitem"
+			onclick={() => runStyle(() => editor?.chain().focus().toggleBold().run())}
+		>
+			<span class="inline-mark bold">B</span>
+			<span>{t('fmt.bold')}</span>
+		</button>
+		<button
+			type="button"
+			class="dropdown-item inline-opt"
+			role="menuitem"
+			onclick={() => runStyle(() => editor?.chain().focus().toggleItalic().run())}
+		>
+			<span class="inline-mark italic">I</span>
+			<span>{t('fmt.italic')}</span>
+		</button>
+	</div>
+</DropdownMenu>
 
 <DropdownMenu
 	open={listOpen}
@@ -195,9 +256,10 @@
 			type="button"
 			class="dropdown-item"
 			role="menuitem"
-			onclick={() => runList(() => editor?.chain().focus().toggleBlockquote().run())}
+			onclick={() => runList(() => editor?.chain().focus().toggleTaskList().run())}
 		>
-			{t('fmt.quote')}
+			<EditorGlyph name="checklist" size={16} />
+			<span>{t('fmt.taskList')}</span>
 		</button>
 	</div>
 </DropdownMenu>
@@ -223,7 +285,7 @@
 		border: 0;
 		border-radius: 10px;
 		background: var(--fg-8);
-		color: var(--fg-33);
+		color: var(--fg-66);
 		cursor: pointer;
 	}
 
@@ -235,8 +297,8 @@
 
 	.tool:hover:not(:disabled),
 	.tool.on {
-		color: var(--fg-66);
-		background: var(--float-trigger-on);
+		color: var(--fg);
+		background: var(--float-trigger-on, var(--fg-8));
 	}
 
 	.tool:disabled {
@@ -244,11 +306,11 @@
 		cursor: default;
 	}
 
-	.h-mark {
+	.style-mark {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: 650;
-		letter-spacing: -0.04em;
+		letter-spacing: -0.03em;
 		line-height: 1;
 	}
 
@@ -256,5 +318,85 @@
 		opacity: 0.7;
 		padding-top: 1px;
 		box-sizing: content-box;
+	}
+
+	.code-chev {
+		display: block;
+	}
+
+	.style-menu {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 4px;
+	}
+
+	.style-opt {
+		justify-content: flex-start;
+		min-height: 40px;
+		padding: 8px 12px;
+	}
+
+	.style-preview {
+		display: block;
+		width: 100%;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		letter-spacing: -0.02em;
+		line-height: 1.2;
+		color: var(--fg);
+		text-align: left;
+	}
+
+	.style-preview.h1 {
+		font-size: 1.45rem;
+		font-weight: 700;
+	}
+
+	.style-preview.h2 {
+		font-size: 1.2rem;
+		font-weight: 700;
+	}
+
+	.style-preview.h3 {
+		font-size: 1.05rem;
+		font-weight: 700;
+	}
+
+	.style-preview.p {
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.style-preview.quote {
+		font-size: 14px;
+		font-weight: 500;
+		font-style: italic;
+		color: var(--fg-66);
+		border-left: 2px solid var(--fg-16, var(--fg-8));
+		padding-left: 10px;
+	}
+
+	.style-sep {
+		height: 1px;
+		margin: 4px 8px;
+		background: var(--fg-8);
+	}
+
+	.inline-opt {
+		gap: 10px;
+	}
+
+	.inline-mark {
+		width: 18px;
+		text-align: center;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 14px;
+		font-weight: 700;
+		color: var(--fg);
+	}
+
+	.inline-mark.italic {
+		font-style: italic;
+		font-weight: 600;
 	}
 </style>

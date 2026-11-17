@@ -53,7 +53,13 @@ export const chatUi = $state({
 	 */
 	settled: false,
 	/** Active chat id (list + detail). Default shared feed. */
-	activeChannelId: 'general'
+	activeChannelId: 'general',
+	/**
+	 * When set to `kind:id`, CommentThread on that entity opens its sheet once.
+	 * Used by chat feed “view more comments” navigation — not an inline expander.
+	 * @type {string | null}
+	 */
+	openCommentsFor: null
 });
 
 /** Built-in shared feed (+ future DM/agent channels, Drive-backed later). */

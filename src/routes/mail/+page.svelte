@@ -382,7 +382,7 @@
 		min-height: 0;
 	}
 
-	/* Quiet recessed track; selected chip = glass stroke leaning toward --bg */
+	/* Quiet recessed track; height matches mobile top-bar chrome (44px round / title pill). */
 	.category-seg {
 		display: grid;
 		grid-auto-flow: column;
@@ -390,7 +390,8 @@
 		align-items: center;
 		gap: 2px;
 		margin: 0 10px 10px;
-		padding: 4px;
+		height: 44px;
+		padding: 6px;
 		border-radius: 999px;
 		border: 0;
 		background: color-mix(in srgb, var(--fg) 4%, transparent);
@@ -411,7 +412,7 @@
 		font: inherit;
 		font-size: 12px;
 		font-weight: 600;
-		height: 30px;
+		height: 28px;
 		padding: 0 8px;
 		border-radius: 999px;
 		cursor: pointer;

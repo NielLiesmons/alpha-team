@@ -1,9 +1,8 @@
 <script>
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
-	import Pen from '$lib/components/icons/Pen.svelte';
-	import Trash from '$lib/components/icons/Trash.svelte';
+	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
+	import MoreDots from '$lib/components/icons/MoreDots.svelte';
 	import {
 		buildPubsFeed,
 		campaigns,
@@ -13,16 +12,21 @@
 		refreshPublications
 	} from '$lib/publications.svelte.js';
 	import { getAdminToken } from '$lib/mail-api.js';
-	import { clearSelection, selectEntity, ui } from '$lib/workspace.svelte.js';
+	import { clearSelection, openComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 
 	let actionBusy = $state(false);
+	let menuOpen = $state(false);
+	/** @type {HTMLElement | null} */
+	let menuAnchor = $state(null);
+	/** @type {ReturnType<typeof buildPubsFeed>[number] | null} */
+	let menuItem = $state(null);
 
 	onMount(() => {
 		void refreshPublications();
 	});
 
-	const kindFilter = $derived($page.url.searchParams.get('kind') || 'all');
+	const kindFilter = $derived(ui.listFilter || 'all');
 	const feed = $derived(buildPubsFeed());
 
 	const filtered = $derived.by(() => {
@@ -75,6 +79,26 @@
 	}
 
 	/** @param {ReturnType<typeof buildPubsFeed>[number]} item */
+	function editItem(item) {
+		const id = selectionId(item);
+		if (id) openComposer('newsletter', id);
+	}
+
+	/** @param {MouseEvent} e @param {ReturnType<typeof buildPubsFeed>[number]} item */
+	function openRowMenu(e, item) {
+		e.preventDefault();
+		e.stopPropagation();
+		menuAnchor = /** @type {HTMLElement} */ (e.currentTarget);
+		menuItem = item;
+		menuOpen = true;
+	}
+
+	function closeRowMenu() {
+		menuOpen = false;
+		menuItem = null;
+	}
+
+	/** @param {ReturnType<typeof buildPubsFeed>[number]} item */
 	async function deleteItem(item) {
 		const label = item.title || t('common.untitled');
 		if (!confirm(t('pub.deleteConfirm', { label }))) return;
@@ -98,6 +122,31 @@
 			actionBusy = false;
 		}
 	}
+
+	const menuItems = $derived.by(() => {
+		const item = menuItem;
+		if (!item) return [];
+		return [
+			{
+				id: 'edit',
+				label: t('common.edit'),
+				onclick: () => {
+					closeRowMenu();
+					editItem(item);
+				}
+			},
+			{
+				id: 'delete',
+				label: t('common.delete'),
+				danger: true,
+				disabled: actionBusy,
+				onclick: () => {
+					closeRowMenu();
+					void deleteItem(item);
+				}
+			}
+		];
+	});
 </script>
 
 <svelte:head><title>{t('nav.publications')}</title></svelte:head>
@@ -116,60 +165,34 @@
 		<FeedSkeleton rows={5} />
 	{/if}
 
-	<div class="filters" role="tablist" aria-label={t('filter.all')}>
-		{#each [
-			{ id: 'all', label: t('pub.all') },
-			{ id: 'blog', label: t('pub.blog') },
-			{ id: 'post', label: t('pub.posts') },
-			{ id: 'event', label: t('pub.events') },
-			{ id: 'draft', label: t('pub.drafts') }
-		] as f (f.id)}
-			<a
-				class="chip"
-				class:on={kindFilter === f.id}
-				href={`/publications?kind=${f.id}`}
-			>
-				{f.label}
-			</a>
-		{/each}
-	</div>
-
 	<div class="card-stack">
 		{#each filtered as item (item.key)}
-			<div class="row-wrap" class:on={isOn(item)}>
-				<button type="button" class="row" onclick={() => openItem(item)}>
-					<span class="title-row">
+			{@const cover = item.imageUrl || ''}
+			<div class="card" class:on={isOn(item)}>
+				<button type="button" class="card-main" onclick={() => openItem(item)}>
+					<span
+						class="cover"
+						class:empty={!cover}
+						style:--cover={cover ? `url(${cover})` : 'none'}
+						aria-hidden="true"
+					></span>
+					<span class="copy">
 						<span class="title">{item.title}</span>
-						<span class="meta"
-							>{bucketLabel(item.bucket)}{#if item.status && item.source === 'campaign'}
-								· {item.status}{/if}{#if item.when}
-								· {formatWhen(item.when)}{/if}</span
+						<span class="snippet"
+							>{#if item.preview}{item.preview}{:else}{bucketLabel(item.bucket)}{#if item.when}
+									· {formatWhen(item.when)}{/if}{/if}</span
 						>
 					</span>
-					{#if item.preview}
-						<span class="preview">{item.preview}</span>
-					{/if}
 				</button>
-				<div class="row-actions">
-					<button
-						type="button"
-						class="icon-pill"
-						aria-label={t('common.edit')}
-						disabled={actionBusy}
-						onclick={() => openItem(item)}
-					>
-						<Pen size={14} />
-					</button>
-					<button
-						type="button"
-						class="icon-pill"
-						aria-label={t('common.delete')}
-						disabled={actionBusy}
-						onclick={() => void deleteItem(item)}
-					>
-						<Trash size={14} />
-					</button>
-				</div>
+				<button
+					type="button"
+					class="more"
+					aria-label={t('common.more')}
+					aria-expanded={menuOpen && menuItem?.key === item.key}
+					onclick={(e) => openRowMenu(e, item)}
+				>
+					<MoreDots size={14} />
+				</button>
 			</div>
 		{/each}
 
@@ -178,6 +201,16 @@
 		{/if}
 	</div>
 </div>
+
+<DropdownMenu
+	open={menuOpen}
+	anchor={menuAnchor}
+	placement="below"
+	align="end"
+	width={180}
+	items={menuItems}
+	onclose={closeRowMenu}
+/>
 
 <style>
 	.feed {
@@ -212,28 +245,6 @@
 		text-decoration: underline;
 	}
 
-	.filters {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		padding: 4px 12px 8px;
-	}
-
-	.chip {
-		padding: 5px 10px;
-		border-radius: 999px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		font-size: 12px;
-		font-weight: 600;
-		text-decoration: none;
-	}
-
-	.chip.on {
-		background: var(--fg-4);
-		color: var(--fg);
-	}
-
 	.empty {
 		padding: 16px;
 		font-size: 13px;
@@ -245,111 +256,106 @@
 	.card-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 10px;
 		padding: 0 6px;
 		box-sizing: border-box;
 	}
 
-	.row-wrap {
+	.card {
+		position: relative;
 		display: flex;
-		align-items: stretch;
-		gap: 2px;
-		border-radius: 12px;
+		flex-direction: column;
+		border-radius: 14px;
+		overflow: hidden;
+		background: transparent;
 	}
 
-	.row-wrap:hover,
-	.row-wrap.on {
+	.card:hover,
+	.card.on {
 		background: var(--fg-4);
 	}
 
-	.row {
+	.card-main {
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		gap: 4px;
-		flex: 1;
-		min-width: 0;
-		padding: 10px 12px;
+		gap: 0;
+		width: 100%;
+		padding: 0;
 		border: 0;
-		border-radius: 12px;
 		background: transparent;
 		color: inherit;
+		font: inherit;
 		text-align: left;
 		cursor: pointer;
+	}
+
+	.cover {
+		display: block;
+		aspect-ratio: 1.91 / 1;
+		min-height: 120px;
+		width: 100%;
+		background:
+			var(--cover) center / cover no-repeat,
+			radial-gradient(120% 80% at 30% 20%, var(--fg-8), transparent 55%),
+			linear-gradient(160deg, var(--fg-4), var(--fg-8));
+	}
+
+	.cover.empty {
+		background:
+			radial-gradient(120% 80% at 30% 20%, var(--fg-8), transparent 55%),
+			linear-gradient(160deg, var(--fg-4), var(--fg-8));
+	}
+
+	.copy {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 10px 12px 12px;
 		box-sizing: border-box;
 	}
 
-	.row-actions {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		gap: 4px;
-		padding: 6px 8px 6px 0;
-		opacity: 0;
+	.title {
+		font-size: 14px;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--fg);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		padding-right: 36px;
 	}
 
-	.row-wrap:hover .row-actions,
-	.row-wrap.on .row-actions {
-		opacity: 1;
+	.snippet {
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 1.35;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		padding-right: 36px;
 	}
 
-	.icon-pill {
+	.more {
+		position: absolute;
+		top: 8px;
+		right: 8px;
 		width: 28px;
 		height: 28px;
 		display: grid;
 		place-items: center;
 		border: 0;
 		border-radius: 999px;
-		background: var(--fg-8);
+		background: color-mix(in srgb, var(--bg) 72%, transparent);
 		color: var(--fg-66);
 		cursor: pointer;
 		padding: 0;
+		z-index: 1;
 	}
 
-	.icon-pill:hover:not(:disabled) {
+	.more:hover {
 		color: var(--fg);
-	}
-
-	.icon-pill:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-
-	.title-row {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		min-width: 0;
-	}
-
-	.title {
-		flex: 1;
-		min-width: 0;
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--fg);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.meta {
-		flex-shrink: 0;
-		padding-right: 2px;
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--fg-33);
-	}
-
-	.preview {
-		display: block;
-		font-size: 13px;
-		line-height: 1.35;
-		color: var(--fg-66);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		background: color-mix(in srgb, var(--bg) 88%, transparent);
 	}
 </style>

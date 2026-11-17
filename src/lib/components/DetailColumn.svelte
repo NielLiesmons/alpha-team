@@ -47,7 +47,6 @@
 	import CommentThread from './CommentThread.svelte';
 	import FilesFolderDetail from './FilesFolderDetail.svelte';
 	import FormDetail from './FormDetail.svelte';
-	import PublicationEditor from './PublicationEditor.svelte';
 	import WebsiteActivity from './WebsiteActivity.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById, loadComments } from '$lib/chat.svelte.js';
@@ -611,6 +610,7 @@
 		if (!selection) return;
 		if (selection.kind === 'newsletter' || selection.kind === 'welcome') {
 			openComposer(selection.kind, selection.id);
+			return;
 		}
 	}
 
@@ -1304,6 +1304,7 @@
 				<span class="detail-top-label">{typeLabel}</span>
 			</div>
 			<div class="detail-top-actions">
+				<button type="button" class="send-chip" onclick={editCurrent}>{t('common.edit')}</button>
 				{#if showMoreMenu}
 					<button
 						type="button"
@@ -1317,11 +1318,32 @@
 				{/if}
 			</div>
 		</header>
-		<div class="body editor-body">
-			<PublicationEditor
-				campaignId={newsletter?.id || null}
-				postSlug={pubPost?.slug || (pubPostSlug || null)}
-			/>
+		<div class="body">
+			{#if newsletter}
+				<p class="pub-kicker">
+					{newsletter.status}{#if newsletter.sent_count}
+						· {t('pub.sentCount', { n: newsletter.sent_count })}{/if}{#if newsletter.post_slug}
+						· {t('pub.onSite')}{/if}
+				</p>
+				<h2 class="pub-title">{newsletter.subject}</h2>
+				{#if newsletter.description}
+					<p class="pub-summary">{newsletter.description}</p>
+				{/if}
+				{#if newsletter.image_url}
+					<img class="pub-cover" src={newsletter.image_url} alt="" />
+				{/if}
+				<pre class="pub-body">{newsletter.body}</pre>
+			{:else if pubPost}
+				<p class="pub-kicker">
+					{pubPost.kind || 'blog'}{#if pubPost.updated_at}
+						· {t('pub.edited')}{/if}{#if pubPost.slug}
+						· /{pubPost.slug}{/if}
+				</p>
+				<h2 class="pub-title">{pubPost.title}</h2>
+				{#if pubPost.summary}
+					<pre class="pub-body">{pubPost.summary}</pre>
+				{/if}
+			{/if}
 		</div>
 	{:else if mailMsg}
 		{@const thread = threadMessages(mailMsg)}
@@ -1897,6 +1919,23 @@
 		font-weight: 650;
 		line-height: 1.25;
 		color: var(--fg);
+	}
+
+	.pub-summary {
+		margin: 0 0 12px;
+		font-size: 14px;
+		line-height: 1.4;
+		color: var(--fg-66);
+	}
+
+	.pub-cover {
+		display: block;
+		width: 100%;
+		max-height: 220px;
+		object-fit: cover;
+		border-radius: 12px;
+		margin: 0 0 14px;
+		background: var(--fg-8);
 	}
 
 	.pub-body {

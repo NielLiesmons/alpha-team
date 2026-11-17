@@ -144,7 +144,7 @@
 	--shell-col-sum: calc(1 + var(--phi) + var(--phi) * var(--phi));
 	--side: clamp(210px, calc(100vw / var(--shell-col-sum)), 280px);
 	--list: calc(var(--side) * var(--phi));
-	/* Chat shares the standard 2nd-column width */
+	/* Chat equalizes 2nd/3rd columns in UiShell (.list-chat); token kept for callers */
 	--list-chat: var(--list);
 	--radius-16: 16px;
 	--radius-hero: 32px;

@@ -1,19 +1,16 @@
 <script>
 	/**
-	 * Mail compose preview — matches alpha-api `render_letter_html`:
-	 * top bar (logo+name · Open Online), hero image, title + description + byline.
+	 * Letter compose chrome: brand bar + hero image + title/description.
+	 * Compose mode: top-right is publisher attribution picker (not Open Online).
 	 */
 	import Camera from './icons/Camera.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 
-	/** @type {{
+	/**
+	 * @type {{
 	 *   brand?: string,
 	 *   logoUrl?: string,
-	 *   eyebrow?: string,
-	 *   letterNumber?: number | null,
-	 *   readCta?: string,
-	 *   readUrl?: string,
 	 *   accent?: string,
 	 *   pageBg?: string,
 	 *   ink?: string,
@@ -22,18 +19,17 @@
 	 *   imageUrl?: string | null,
 	 *   publisherName?: string,
 	 *   publisherEmail?: string,
-	 *   publishedAt?: string | null,
+	 *   publisherOpen?: boolean,
 	 *   onTitle?: (v: string) => void,
 	 *   onDescription?: (v: string) => void,
-	 *   onImage?: (dataUrl: string) => void
-	 * }} */
+	 *   onImage?: (dataUrl: string) => void,
+	 *   onPublisherToggle?: () => void,
+	 *   publisherMenu?: import('svelte').Snippet
+	 * }}
+	 */
 	let {
 		brand = 'Space',
 		logoUrl = '',
-		eyebrow: _eyebrow = 'Letter',
-		letterNumber: _letterNumber = null,
-		readCta = 'Open Online',
-		readUrl = '',
 		accent = '#dd8f87',
 		pageBg = '#f7f3f1',
 		ink = '#160b0f',
@@ -42,25 +38,18 @@
 		imageUrl = null,
 		publisherName = '',
 		publisherEmail = '',
-		publishedAt = null,
+		publisherOpen = false,
 		onTitle,
 		onDescription,
-		onImage
+		onImage,
+		onPublisherToggle,
+		publisherMenu
 	} = $props();
-
-	const bylineWhen = $derived.by(() => {
-		if (!publishedAt) return '';
-		const d = new Date(publishedAt);
-		if (Number.isNaN(d.getTime())) return '';
-		return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-	});
 
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput = $state();
 
 	/**
-	 * Resize/compress before upload — raw phone photos blow Axum's body limit
-	 * and are useless as email data: URLs anyway.
 	 * @param {File} file
 	 * @returns {Promise<string>}
 	 */
@@ -125,35 +114,35 @@
 			{/if}
 			<span class="brand-name">{brand}</span>
 		</span>
-		{#if readUrl}
-			<a class="stroke-pill read-cta" href={readUrl} target="_blank" rel="noopener noreferrer">
-				{readCta}
-				<svg class="cta-arrow" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+		<div class="publisher-wrap">
+			<button
+				type="button"
+				class="publisher-btn"
+				aria-label="Publishing as"
+				aria-expanded={publisherOpen}
+				onclick={() => onPublisherToggle?.()}
+			>
+				<ProfilePic
+					name={publisherName || 'Publisher'}
+					email={publisherEmail}
+					pictureUrl={pictureUrlFor(publisherEmail)}
+					size={22}
+				/>
+				<span class="publisher-name">{publisherName || publisherEmail || '…'}</span>
+				<svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 					<path
-						d="M6 9.25V2.75M6 2.75 3.25 5.5M6 2.75 8.75 5.5"
-						fill="none"
+						d="M4 6.5 8 10.5 12 6.5"
 						stroke="currentColor"
-						stroke-width="1.55"
+						stroke-width="1.6"
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					/>
 				</svg>
-			</a>
-		{:else}
-			<span class="stroke-pill read-cta static">
-				{readCta}
-				<svg class="cta-arrow" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-					<path
-						d="M6 9.25V2.75M6 2.75 3.25 5.5M6 2.75 8.75 5.5"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.55"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-			</span>
-		{/if}
+			</button>
+			{#if publisherOpen && publisherMenu}
+				{@render publisherMenu()}
+			{/if}
+		</div>
 	</div>
 
 	<button
@@ -183,22 +172,6 @@
 			value={description}
 			oninput={(e) => onDescription?.(e.currentTarget.value)}
 		></textarea>
-		{#if publisherName}
-			<div class="byline">
-				<span class="byline-left">
-					<ProfilePic
-						name={publisherName}
-						email={publisherEmail}
-						pictureUrl={pictureUrlFor(publisherEmail)}
-						size={20}
-					/>
-					<span class="byline-name">{publisherName}</span>
-				</span>
-				{#if bylineWhen}
-					<time class="byline-when" datetime={String(publishedAt)}>{bylineWhen}</time>
-				{/if}
-			</div>
-		{/if}
 	</div>
 
 	<input bind:this={fileInput} type="file" accept="image/*" hidden onchange={onFile} />
@@ -250,42 +223,47 @@
 		text-overflow: ellipsis;
 	}
 
-	.stroke-pill {
+	.publisher-wrap {
+		position: relative;
+		flex-shrink: 0;
+	}
+
+	.publisher-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 5px;
-		padding: 6px 11px;
+		gap: 8px;
+		height: 30px;
+		padding: 0 10px 0 4px;
+		border: 0;
 		border-radius: 999px;
-		background: transparent;
+		background: color-mix(in srgb, var(--mail-ink) 6%, transparent);
 		color: var(--mail-ink);
 		font-family: Inter, Helvetica, Arial, sans-serif;
-		font-size: 11px;
+		font-size: 12px;
 		font-weight: 600;
-		line-height: 1.2;
-		text-decoration: none;
+		cursor: pointer;
+		max-width: 200px;
+	}
+
+	.publisher-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		white-space: nowrap;
-		border: 1px solid color-mix(in srgb, var(--mail-ink) 22%, transparent);
-		box-sizing: border-box;
-		flex-shrink: 0;
 	}
 
-	.read-cta.static {
-		opacity: 0.92;
-		pointer-events: none;
-	}
-
-	.cta-arrow {
-		display: block;
+	.chev {
 		flex-shrink: 0;
+		opacity: 0.55;
 	}
 
 	.hero-frame {
 		--hero-photo: none;
 		position: relative;
 		isolation: isolate;
-		/* Empty upload: ~half the golden-ratio height (φ ≈ 1.618 → ~3.24) */
-		aspect-ratio: 3.236 / 1;
+		aspect-ratio: 1.618 / 1;
 		width: 100%;
+		min-height: 140px;
 		margin: 0;
 		padding: 0;
 		border: 0;
@@ -318,12 +296,18 @@
 		z-index: 1;
 		display: grid;
 		place-items: center;
-		color: color-mix(in srgb, var(--mail-ink) 38%, transparent);
+		width: 56px;
+		height: 56px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--mail-page-bg) 72%, transparent);
+		color: color-mix(in srgb, var(--mail-ink) 55%, transparent);
 		pointer-events: none;
+		box-sizing: border-box;
 	}
 
 	.hero-frame.has-image .camera-affordance {
-		color: color-mix(in srgb, #fff 55%, transparent);
+		background: color-mix(in srgb, #000 28%, transparent);
+		color: color-mix(in srgb, #fff 78%, transparent);
 		filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.28));
 	}
 
@@ -332,40 +316,6 @@
 		flex-direction: column;
 		gap: 4px;
 		padding: 0 2px;
-	}
-
-	.byline {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
-		margin-top: 6px;
-	}
-
-	.byline-left {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		min-width: 0;
-	}
-
-	.byline-name {
-		font-family: Inter, Helvetica, Arial, sans-serif;
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--mail-ink);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.byline-when {
-		flex-shrink: 0;
-		font-family: Inter, Helvetica, Arial, sans-serif;
-		font-size: 12px;
-		font-weight: 500;
-		color: color-mix(in srgb, var(--mail-ink) 55%, transparent);
-		padding-right: 2px;
 	}
 
 	.hero-title,

@@ -865,8 +865,8 @@
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		/* Clear detail-top; bottom pad matches mail — see feed-scroll.js */
-		padding: 56px 24px calc(72px + env(safe-area-inset-bottom, 0px));
+		/* Clear detail-top; bottom pad clears floating composer — see feed-scroll.js */
+		padding: 56px 24px calc(120px + env(safe-area-inset-bottom, 0px));
 	}
 
 	.feed-body {
@@ -1249,7 +1249,7 @@
 	@media (max-width: 767px) {
 		.messages {
 			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
-				calc(72px + env(safe-area-inset-bottom, 0px));
+				calc(120px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.composer-fade {
