@@ -43,6 +43,7 @@
 	import { renderInlineLinks } from '$lib/note-text.js';
 	import { accountingBrowse } from '$lib/accounting.svelte.js';
 	import AccountingDetail from './AccountingDetail.svelte';
+	import ChatActivity from './ChatActivity.svelte';
 	import ChatChannelPanel from './ChatChannelPanel.svelte';
 	import CommentThread from './CommentThread.svelte';
 	import FilesFolderDetail from './FilesFolderDetail.svelte';
@@ -123,7 +124,14 @@
 	}
 
 	const selection = $derived(ui.selection);
-	const chatChannelId = $derived(selection?.kind === 'chat' ? String(selection.id) : null);
+	const chatNotifsOpen = $derived(
+		selection?.kind === 'chat' && String(selection.id) === 'notifications'
+	);
+	const chatChannelId = $derived(
+		selection?.kind === 'chat' && String(selection.id) !== 'notifications'
+			? String(selection.id)
+			: null
+	);
 	const filePath = $derived(selection?.kind === 'file' ? String(selection.id) : '');
 	const fileEntry = $derived.by(() => {
 		if (!filePath) return null;
@@ -390,6 +398,7 @@
 		if (pubsActivity) return t('web.activityTitle');
 		if (pubsHub) return t('nav.publications');
 		if (mailMsg) return t('nav.mail');
+		if (chatNotifsOpen) return t('chat.activityTitle');
 		if (chatChannel) return chatChannel.title || t('chat.channel');
 		if (fileEntry?.isFolder) return t('drive.folder');
 		if (fileEntry) return t('drive.file');
@@ -421,6 +430,7 @@
 			const msgs = threadMessages(mailMsg);
 			return msgs[0]?.subject || mailMsg.subject || t('common.noSubject');
 		}
+		if (chatNotifsOpen) return t('chat.activityTitle');
 		if (chatChannel) return chatChannel.title || t('chat.general');
 		if (fileEntry) return fileTitle;
 		if (settingsSectionId) return settingsTitles[settingsSectionId] || t('nav.settings');
@@ -448,6 +458,7 @@
 				pubsActivity ||
 				mailMsg ||
 				chatChannel ||
+				chatNotifsOpen ||
 				fileEntry ||
 				settingsSectionId
 		)
@@ -478,8 +489,8 @@
 			};
 		if (path.startsWith('/chat'))
 			return {
-				title: t('chat.noChatSelected'),
-				body: t('chat.pickChat')
+				title: t('chat.activityTitle'),
+				body: t('chat.activitySub')
 			};
 		if (path.startsWith('/drive'))
 			return {
@@ -1427,6 +1438,27 @@
 				profileEmail={settingsSectionId === 'profile' ? settingsUi.profileTargetEmail : ''}
 			/>
 		</div>
+	{:else if chatNotifsOpen}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{t('chat.activityTitle')}</span>
+			</div>
+			<div class="detail-top-actions"></div>
+		</header>
+		<div class="body chat-activity-body">
+			<ChatActivity embedded />
+		</div>
 	{:else if chatChannel}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
@@ -1895,6 +1927,8 @@
 		</div>
 	{/if}
 	</PullToRefresh>
+{:else if $page.url.pathname.startsWith('/chat')}
+	<ChatActivity />
 {:else}
 	<div class="empty desktop-empty">
 		<p class="empty-title">{emptyCopy.title}</p>

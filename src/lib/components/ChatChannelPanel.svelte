@@ -35,6 +35,7 @@
 	} from '$lib/chat.svelte.js';
 	import { mailTipCache } from '$lib/mail.svelte.js';
 	import { startChatTipPoll, stopChatTipPoll } from '$lib/chat-sync.svelte.js';
+	import { ui } from '$lib/workspace.svelte.js';
 	import { chatStackFlags } from '$lib/chat-stack.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
@@ -154,6 +155,14 @@
 	const TIP_ICON = 22;
 	const TIP_PFP = 20;
 	const TIP_PFP_MAX = 4;
+
+	/** Narrow φ list width when a deeper entity page is open from chat. */
+	const compact = $derived.by(() => {
+		const sel = ui.selection;
+		if (!sel) return false;
+		if (sel.kind === 'chat' && String(sel.id) === 'notifications') return false;
+		return true;
+	});
 
 	/** Unique authors for tip-row pfps (events + comments). */
 	function tipAuthors(/** @type {any[]} */ messages) {
@@ -614,7 +623,7 @@
 	}
 </script>
 
-<div class="chat">
+<div class="chat" class:compact>
 	<div class="feed messages" bind:this={messagesEl} onscroll={measureScroll}>
 		<div class="feed-body" bind:this={feedBodyEl}>
 			{#if driveSession.error}
@@ -965,6 +974,18 @@
 		box-sizing: border-box;
 		/* Clear detail-top; bottom pad clears floating composer — see feed-scroll.js */
 		padding: 56px 24px calc(120px + env(safe-area-inset-bottom, 0px));
+		transition: padding 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+	}
+
+	/* Match other 2nd-column gutters (Tasks/Notes ~6–10px) when chat is compacted */
+	.chat.compact .messages {
+		padding-left: 10px;
+		padding-right: 10px;
+	}
+
+	.chat.compact .composer-dock {
+		padding-left: 10px;
+		padding-right: 10px;
 	}
 
 	.feed-body {
@@ -1400,6 +1421,7 @@
 		box-sizing: border-box;
 		pointer-events: none;
 		background: transparent;
+		transition: padding 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 	}
 
 	.composer-dock > * {

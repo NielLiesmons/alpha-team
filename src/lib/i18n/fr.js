@@ -331,6 +331,13 @@ export default {
 	'chat.pickChat': 'Choisissez une discussion dans la liste.',
 	'chat.general': 'Chat',
 	'chat.emojiNameHint': 'nom (pour :nom:)',
+	'chat.activityTitle': 'Pour vous',
+	'chat.activitySub': 'Réactions, réponses et tâches qui vous concernent.',
+	'chat.activityEmpty': 'Rien pour vous pour le moment.',
+	'chat.activityReaction': 'a réagi',
+	'chat.activityReply': 'a répondu',
+	'chat.activityAssigned': 'vous a assigné',
+	'chat.activityOpen': 'Notifications',
 
 	/* ── tasks ────────────────────────────────────────── */
 	'tasks.title': 'Tâches',

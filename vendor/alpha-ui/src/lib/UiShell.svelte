@@ -51,6 +51,7 @@
 	 *   counts?: Record<string, number>,
 	 *   wideList?: boolean,
 	 *   listSize?: 'default' | 'chat',
+	 *   listCompact?: boolean,
 	 *   commsFeed?: boolean,
 	 *   syncing?: boolean,
 	 *   searchEnabled?: boolean,
@@ -89,6 +90,8 @@
 		wideList = false,
 		/** Wider list column (Chat feed on desktop). */
 		listSize = 'default',
+		/** Chat: shrink feed to φ `--list` when a deeper detail page is open. */
+		listCompact = false,
 		/** Chat/mail: slightly recessed feed canvas in light mode. */
 		commsFeed = false,
 		syncing = false,
@@ -582,6 +585,7 @@
 	class:nav-dragging={menuDrag != null}
 	class:detail-covering={detailCovering}
 	class:list-chat={listSize === 'chat'}
+	class:chat-compact={listSize === 'chat' && listCompact}
 	class:comms-feed={commsFeed}
 	bind:this={shellEl}
 	style="--menu-progress: {menuProgress}"
@@ -1586,24 +1590,35 @@
 		overflow: hidden;
 	}
 
-	/* Chat: equal 2nd + 3rd columns (wider feed than φ list elsewhere) */
+	/* Chat: wide fixed feed by default; compact → φ `--list` when detail opens */
 	.list-col.chat {
-		flex-basis: var(--list);
-		width: var(--list);
+		flex-basis: var(--list-chat, var(--list));
+		width: var(--list-chat, var(--list));
+		transition:
+			flex-basis 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+			width 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+			min-width 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 	}
 
 	@media (min-width: 768px) {
-		.shell.list-chat .list-col.chat {
-			flex: 1 1 0;
-			width: auto;
-			min-width: 0;
+		.shell.list-chat:not(.chat-compact) .list-col.chat {
+			flex: 0 0 var(--list-chat, clamp(360px, 42vw, 520px));
+			width: var(--list-chat, clamp(360px, 42vw, 520px));
+			min-width: 320px;
 		}
 
-		/* DetailColumn root shares the remaining half */
+		.shell.list-chat.chat-compact .list-col.chat {
+			flex: 0 0 var(--list);
+			width: var(--list);
+			min-width: 280px;
+		}
+
+		/* Detail takes remaining space (notifications synopsis or entity page) */
 		.shell.list-chat :global(.detail) {
 			flex: 1 1 0;
 			width: auto;
 			min-width: 0;
+			transition: flex-basis 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 		}
 	}
 

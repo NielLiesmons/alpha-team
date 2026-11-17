@@ -1,7 +1,7 @@
 <script>
 	/**
 	 * Content-type glyph for tip rows.
-	 * Outer square matches TaskBox; PNG art is clearly smaller inside.
+	 * Outer square matches TaskBox; PNG fills that square.
 	 */
 	import NavIcon from '@alpha/ui/NavIcon.svelte';
 	import { navPngUrl } from '@alpha/ui/nav-png.js';
@@ -10,16 +10,14 @@
 	let { name = 'chat', size = 22 } = $props();
 
 	const png = $derived(navPngUrl(name));
-	/** Fixed small glyph inside TaskBox-sized square (22 → 12). */
-	const art = 12;
 </script>
 
 <span class="tip-icon" style:width="{size}px" style:height="{size}px">
 	{#if png}
-		<img class="tip-png" src={png} alt="" width="12" height="12" />
+		<img class="tip-png" src={png} alt="" width={size} height={size} />
 	{:else}
 		<span class="tip-svg">
-			<NavIcon {name} size={art} />
+			<NavIcon {name} size={size} />
 		</span>
 	{/if}
 </span>
@@ -35,10 +33,8 @@
 
 	.tip-png {
 		display: block;
-		width: 12px !important;
-		height: 12px !important;
-		max-width: 12px !important;
-		max-height: 12px !important;
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
 		opacity: 0.92;
 	}

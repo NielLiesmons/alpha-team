@@ -10,6 +10,7 @@
 	} from '$lib/sections.js';
 	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+	import { activityUnreadCount } from '$lib/chat-activity.svelte.js';
 	import {
 		enterprises,
 		forceClearSelection,
@@ -17,9 +18,11 @@
 		notes,
 		openComposer,
 		projects,
+		selectEntity,
 		tasks,
 		ui
 	} from '$lib/workspace.svelte.js';
+	import Bell from './icons/Bell.svelte';
 	import { onMount } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
@@ -64,6 +67,32 @@
 	const chatList = $derived(path.startsWith('/chat'));
 	const mailList = $derived(path.startsWith('/mail'));
 	const commsFeed = $derived(chatList || mailList);
+	/** Entity detail from chat tips — not the notifications synopsis. */
+	const chatCompact = $derived.by(() => {
+		if (!chatList || !ui.selection) return false;
+		if (ui.selection.kind === 'chat' && ui.selection.id === 'notifications') return false;
+		return true;
+	});
+	const chatNotifCount = $derived.by(() => {
+		if (!chatList) return 0;
+		return activityUnreadCount();
+	});
+
+	function openChatActivity() {
+		if (
+			ui.selection?.kind === 'chat' &&
+			ui.selection.id === 'notifications'
+		) {
+			forceClearSelection();
+			return;
+		}
+		/* Desktop: clear entity so the synopsis fills the 3rd col. Mobile: open as detail. */
+		if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+			forceClearSelection();
+			return;
+		}
+		selectEntity('chat', 'notifications');
+	}
 
 	const filterOptions = $derived.by(() => {
 		locale.value;
@@ -384,6 +413,7 @@
 	{counts}
 	{wideList}
 	listSize={chatList ? 'chat' : 'default'}
+	listCompact={chatCompact}
 	{commsFeed}
 	syncing={syncUi.active}
 	filterOptions={customChrome ? null : filterOptions}
@@ -448,6 +478,21 @@
 					</svg>
 				</button>
 			{/if}
+		{:else if chatList}
+			<button
+				type="button"
+				class="chrome-btn chat-bell"
+				class:on={ui.selection?.kind === 'chat' && ui.selection.id === 'notifications'}
+				aria-label={t('chat.activityOpen')}
+				onclick={openChatActivity}
+			>
+				<Bell size={16} />
+				{#if chatNotifCount > 0}
+					<span class="bell-badge" aria-hidden="true"
+						>{chatNotifCount > 9 ? '9+' : chatNotifCount}</span
+					>
+				{/if}
+			</button>
 		{/if}
 	{/snippet}
 
@@ -530,6 +575,33 @@
 		box-sizing: border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
+	}
+
+	.chat-bell {
+		position: relative;
+	}
+
+	.bell-badge {
+		position: absolute;
+		top: -5px;
+		right: -5px;
+		z-index: 1;
+		min-width: 16px;
+		height: 16px;
+		padding: 0 4px;
+		border-radius: 999px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		box-sizing: border-box;
+		background: var(--gradient-accent-1);
+		color: #fff;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 10px;
+		font-weight: 700;
+		line-height: 1;
+		pointer-events: none;
+		box-shadow: 0 0 0 1.5px var(--bg, #0a0a0a);
 	}
 
 	.chrome-ico {

@@ -1,11 +1,10 @@
 <script>
 	/**
 	 * FAB → chronological comment feed (same bubble language as chat panels).
-	 * Desktop: floating bottom-right sheet (FAB inset). Mobile: Modal-style bottom sheet.
-	 * Reply quotes in the composer — no nested modals.
+	 * Morphs from the floating comments pill (bottom-right inset). No scrim —
+	 * content behind stays scrollable. Close via chevron, drag-under-min,
+	 * swipe-right, or Android/browser back.
 	 */
-	import { fade, fly } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
 	import AlphaLogo from './icons/AlphaLogo.svelte';
 	import Drag from './icons/Drag.svelte';
 	import Voice from './icons/Voice.svelte';
@@ -24,6 +23,7 @@
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { snapFeedToBottom } from '$lib/feed-scroll.js';
+	import { isMobileNav } from '$lib/nav-stack.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
 	import { tick } from 'svelte';
@@ -47,8 +47,15 @@
 	let { type, entityId, tip = undefined, onMore: _onMore = undefined } = $props();
 
 	const SHEET_MIN_H = 200;
+	const CLOSE_UNDER_MIN = 48;
+	const MORPH_MS = 320;
 
-	let open = $state(false);
+	/** @type {'fab' | 'opening' | 'open' | 'closing'} */
+	let phase = $state('fab');
+	const sheetVisible = $derived(phase !== 'fab');
+	/** Fully expanded metrics — `opening` still uses FAB box for one frame. */
+	const expanded = $derived(phase === 'open');
+
 	let draft = $state('');
 	/** @type {any | null} */
 	let replyTo = $state(null);
@@ -58,7 +65,7 @@
 	/** @type {HTMLDivElement | undefined} */
 	let listEl = $state();
 	/** @type {HTMLDivElement | undefined} */
-	let sheetEl = $state();
+	let panelEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
 	/** Explicit sheet height (px); 0 = CSS default until user resizes. */
@@ -66,6 +73,12 @@
 	let resizing = $state(false);
 	/** Skip bottom-snap once when opening from chat “view more”. */
 	let skipSnapOnce = $state(false);
+	/** Own history entry while open (mobile back). */
+	let pushedHistory = $state(false);
+	let ignorePop = $state(false);
+	/** Horizontal dismiss drag (0 = open, 1 = fully off to the right). */
+	let swipeProg = $state(0);
+	let swiping = $state(false);
 
 	const key = $derived(`${type}:${entityId}`);
 	const allMessages = $derived(commentsByKey[key] ?? []);
@@ -100,6 +113,29 @@
 		return Math.min(maxSheetHeight(), Math.max(SHEET_MIN_H, Math.round(h)));
 	}
 
+	function pushCommentsHistory() {
+		if (!isMobileNav() || typeof history === 'undefined' || pushedHistory) return;
+		ignorePop = true;
+		history.pushState({ ...(history.state || {}), alphaComments: key }, '');
+		pushedHistory = true;
+		queueMicrotask(() => {
+			ignorePop = false;
+		});
+	}
+
+	function popCommentsHistory() {
+		if (!pushedHistory || typeof history === 'undefined') {
+			pushedHistory = false;
+			return;
+		}
+		ignorePop = true;
+		pushedHistory = false;
+		history.back();
+		queueMicrotask(() => {
+			ignorePop = false;
+		});
+	}
+
 	/**
 	 * @param {PointerEvent} e
 	 */
@@ -110,7 +146,7 @@
 		const startY = e.clientY;
 		const startH =
 			sheetHeight ||
-			sheetEl?.getBoundingClientRect().height ||
+			panelEl?.getBoundingClientRect().height ||
 			defaultSheetHeight();
 		resizing = true;
 		const target = /** @type {HTMLElement} */ (e.currentTarget);
@@ -123,7 +159,9 @@
 		/** @param {PointerEvent} ev */
 		function onMove(ev) {
 			const dy = startY - ev.clientY;
-			sheetHeight = clampSheetHeight(startH + dy);
+			const next = Math.round(startH + dy);
+			/* Allow undershoot so drag-under-min can dismiss. */
+			sheetHeight = Math.min(maxSheetHeight(), Math.max(96, next));
 		}
 
 		/** @param {PointerEvent} ev */
@@ -137,6 +175,12 @@
 			target.removeEventListener('pointermove', onMove);
 			target.removeEventListener('pointerup', onUp);
 			target.removeEventListener('pointercancel', onUp);
+			if (sheetHeight < SHEET_MIN_H - CLOSE_UNDER_MIN) {
+				sheetHeight = 0;
+				closeSheet();
+				return;
+			}
+			sheetHeight = clampSheetHeight(sheetHeight);
 		}
 
 		target.addEventListener('pointermove', onMove);
@@ -160,7 +204,7 @@
 	});
 
 	$effect(() => {
-		if (!open) return;
+		if (phase !== 'open') return;
 		if (skipSnapOnce) {
 			skipSnapOnce = false;
 			return;
@@ -178,8 +222,7 @@
 		if (reqKey !== key) return;
 		chatUi.openCommentsFor = null;
 		if (scrollToId) skipSnapOnce = true;
-		open = true;
-		void (async () => {
+		void openSheet().then(async () => {
 			await tick();
 			if (scrollToId) {
 				const el = listEl?.querySelector(`[data-comment-id="${CSS.escape(scrollToId)}"]`);
@@ -190,7 +233,110 @@
 				snapFeedToBottom(listEl);
 			}
 			inputEl?.focus();
-		})();
+		});
+	});
+
+	/* Android / browser back closes the sheet. */
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		/** @param {PopStateEvent} _e */
+		function onPop(_e) {
+			if (ignorePop) return;
+			if (phase === 'fab' || phase === 'closing') return;
+			pushedHistory = false;
+			void finishClose();
+		}
+		window.addEventListener('popstate', onPop);
+		return () => window.removeEventListener('popstate', onPop);
+	});
+
+	/* Swipe-right to dismiss (mobile menu / detail swipe language). */
+	$effect(() => {
+		const el = panelEl;
+		if (!el || typeof window === 'undefined' || !sheetVisible) return;
+
+		const CLAIM = 10;
+		const CLOSE_AT = 0.28;
+
+		let startX = 0;
+		let startY = 0;
+		let tracking = false;
+		let claimed = false;
+
+		function span() {
+			return Math.min(360, window.innerWidth * 0.55);
+		}
+
+		/** @param {TouchEvent} e */
+		function onStart(e) {
+			if (!isMobileNav() || e.touches.length !== 1) return;
+			const t = e.target;
+			if (
+				t instanceof Element &&
+				t.closest(
+					'input, textarea, select, [contenteditable="true"], [data-no-comment-swipe], .top-btn.drag'
+				)
+			) {
+				return;
+			}
+			const touch = e.touches[0];
+			startX = touch.clientX;
+			startY = touch.clientY;
+			tracking = true;
+			claimed = false;
+			swiping = false;
+			swipeProg = 0;
+		}
+
+		/** @param {TouchEvent} e */
+		function onMove(e) {
+			if (!tracking || e.touches.length !== 1) return;
+			const touch = e.touches[0];
+			const dx = touch.clientX - startX;
+			const dy = touch.clientY - startY;
+			if (!claimed) {
+				if (Math.abs(dx) < CLAIM && Math.abs(dy) < CLAIM) return;
+				if (Math.abs(dy) >= Math.abs(dx) * 0.85 || dx < 0) {
+					tracking = false;
+					swipeProg = 0;
+					swiping = false;
+					return;
+				}
+				claimed = true;
+				swiping = true;
+			}
+			e.preventDefault();
+			swipeProg = Math.max(0, Math.min(1, dx / span()));
+		}
+
+		function onEnd() {
+			if (!tracking) return;
+			const p = swipeProg;
+			const wasClaimed = claimed;
+			tracking = false;
+			claimed = false;
+			swiping = false;
+			if (!wasClaimed) {
+				swipeProg = 0;
+				return;
+			}
+			if (p > CLOSE_AT) {
+				void closeSheet();
+			} else {
+				swipeProg = 0;
+			}
+		}
+
+		el.addEventListener('touchstart', onStart, { passive: true });
+		el.addEventListener('touchmove', onMove, { passive: false });
+		el.addEventListener('touchend', onEnd);
+		el.addEventListener('touchcancel', onEnd);
+		return () => {
+			el.removeEventListener('touchstart', onStart);
+			el.removeEventListener('touchmove', onMove);
+			el.removeEventListener('touchend', onEnd);
+			el.removeEventListener('touchcancel', onEnd);
+		};
 	});
 
 	function formatWhen(iso) {
@@ -210,19 +356,41 @@
 		return byId.get(msg.reply_to) ?? null;
 	}
 
-	function openSheet() {
-		open = true;
-		queueMicrotask(() => {
-			snapFeedToBottom(listEl);
-			inputEl?.focus();
+	async function openSheet() {
+		if (phase === 'open' || phase === 'opening') return;
+		swipeProg = 0;
+		phase = 'opening';
+		pushCommentsHistory();
+		await tick();
+		/* Two frames: paint FAB-sized sheet host, then expand left/up. */
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				phase = 'open';
+				if (!sheetHeight) sheetHeight = defaultSheetHeight();
+				queueMicrotask(() => {
+					snapFeedToBottom(listEl);
+					inputEl?.focus();
+				});
+			});
 		});
 	}
 
-	function closeSheet() {
-		open = false;
+	async function finishClose() {
+		phase = 'closing';
+		swipeProg = 0;
 		replyTo = null;
 		draft = '';
 		error = null;
+		await new Promise((r) => setTimeout(r, MORPH_MS));
+		phase = 'fab';
+		sheetHeight = 0;
+		resizing = false;
+	}
+
+	async function closeSheet() {
+		if (phase === 'fab' || phase === 'closing') return;
+		popCommentsHistory();
+		await finishClose();
 	}
 
 	/** @param {any} msg */
@@ -270,16 +438,16 @@
 
 	/** @param {KeyboardEvent} e */
 	function onKey(e) {
-		if (e.key === 'Escape' && open) {
+		if (e.key === 'Escape' && sheetVisible) {
 			e.preventDefault();
 			if (replyTo) {
 				clearReply();
 				return;
 			}
-			closeSheet();
+			void closeSheet();
 			return;
 		}
-		if (e.key === 'Enter' && !e.shiftKey && open) {
+		if (e.key === 'Enter' && !e.shiftKey && phase === 'open') {
 			e.preventDefault();
 			void send();
 		}
@@ -366,60 +534,82 @@
 		}
 		return [...seen.values()];
 	});
+
+	const panelStyle = $derived.by(() => {
+		/** @type {string} */
+		let s = '';
+		if (phase === 'open' && sheetHeight) s += `height:${sheetHeight}px;`;
+		if (swipeProg > 0) {
+			const pct = Math.round(swipeProg * 1000) / 10;
+			s += `transform:translate3d(${pct}%,0,0);`;
+		}
+		return s || undefined;
+	});
 </script>
 
 <svelte:window onkeydown={onKey} />
 
-{#if !open}
-	<button type="button" class="chat-pill" aria-label={t('comments.title')} onclick={openSheet}>
-		<svg
-			width="18"
-			height="18"
-			viewBox="0 0 18 19"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.5"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			aria-hidden="true"
-		>
-			<path
-				d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
-			/>
-		</svg>
-		{#if commentatorProfiles.length}
-			<span class="pill-stack">
-				<ProfilePicStack profiles={commentatorProfiles} size="xxs" />
-			</span>
-		{:else}
-			<span class="count">0</span>
-		{/if}
-	</button>
-{/if}
-
-{#if open}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div
-		class="overlay"
-		transition:fade={{ duration: 160 }}
-		onclick={closeSheet}
-		role="presentation"
-	></div>
-
-	<div class="wrap" role="dialog" aria-modal="true" aria-label={t('comments.title')}>
-		<div
-			class="sheet grow-in"
-			class:resizing
-			bind:this={sheetEl}
-			style:height={sheetHeight ? `${sheetHeight}px` : undefined}
-			transition:fly={{ y: 48, duration: 240, easing: cubicOut }}
-		>
-			<!-- Absolute top chrome: drag grip + fade so bubbles scroll under (like old tip bar). -->
+<div
+	class="panel"
+	class:fab={phase === 'fab' || phase === 'closing' || phase === 'opening'}
+	class:expanded
+	class:opening={phase === 'opening'}
+	class:closing={phase === 'closing'}
+	class:resizing
+	class:swiping
+	bind:this={panelEl}
+	style={panelStyle}
+	role={sheetVisible ? 'dialog' : undefined}
+	aria-modal={sheetVisible ? 'false' : undefined}
+	aria-label={sheetVisible ? t('comments.title') : undefined}
+>
+	{#if phase === 'fab'}
+		<button type="button" class="chat-pill" aria-label={t('comments.title')} onclick={() => void openSheet()}>
+			<svg
+				width="18"
+				height="18"
+				viewBox="0 0 18 19"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.5"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
+				<path
+					d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
+				/>
+			</svg>
+			{#if commentatorProfiles.length}
+				<span class="pill-stack">
+					<ProfilePicStack profiles={commentatorProfiles} size="xxs" />
+				</span>
+			{:else}
+				<span class="count">0</span>
+			{/if}
+		</button>
+	{:else}
+		<div class="sheet-top" aria-hidden="false">
+			<button
+				type="button"
+				class="top-btn close"
+				aria-label={t('common.close')}
+				onclick={() => void closeSheet()}
+			>
+				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+					<path
+						d="M6.5 3.5 12 9l-5.5 5.5"
+						stroke="currentColor"
+						stroke-width="1.7"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</button>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div
-				class="sheet-top"
-				role="separator"
-				aria-orientation="horizontal"
+			<button
+				type="button"
+				class="top-btn drag"
 				aria-label={t('comments.resize')}
 				aria-valuemin={SHEET_MIN_H}
 				aria-valuemax={maxSheetHeight()}
@@ -427,9 +617,12 @@
 				onpointerdown={onResizePointerDown}
 			>
 				<span class="sheet-drag" aria-hidden="true">
-					<Drag size={18} />
+					<Drag size={16} />
 				</span>
-			</div>
+			</button>
+		</div>
+
+		<div class="sheet-body">
 			<div class="list" bind:this={listEl}>
 				{#if loading && messages.length === 0}
 					<p class="hint">{t('common.loading')}</p>
@@ -531,31 +724,109 @@
 				</div>
 			</div>
 		</div>
-	</div>
-{/if}
+	{/if}
+</div>
 
 <style>
-	/* Match mobile top-bar chrome hit (44px); stack replaces numeric count */
-	.chat-pill {
+	/*
+	 * Single host morphs FAB ↔ sheet from bottom-right (same inset as the old pill).
+	 * No scrim — pointer-events only on the panel itself so detail scrolls behind.
+	 */
+	.panel {
+		--fab-right: 20px;
+		--fab-bottom: max(20px, env(safe-area-inset-bottom));
 		position: absolute;
-		right: 20px;
-		bottom: max(20px, env(safe-area-inset-bottom));
+		right: var(--fab-right);
+		bottom: var(--fab-bottom);
 		z-index: 6;
-		display: inline-flex;
-		align-items: center;
-		gap: calc(0.35rem + 2px);
-		height: 44px;
-		padding: 0 12px 0 14px;
-		border-radius: 999px;
+		display: flex;
+		flex-direction: column;
+		box-sizing: border-box;
+		transform-origin: bottom right;
+		overflow: hidden;
 		border: 1px solid transparent;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
 		color: var(--fg-66);
-		cursor: pointer;
 		box-shadow: 0 4px 16px var(--shadow);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
+		transition:
+			width 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+			height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+			max-height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+			border-radius 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+			box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+			background 0.24s ease,
+			color 0.24s ease;
+	}
+
+	.panel.fab {
+		width: max-content;
+		min-width: 5.5rem;
+		height: 44px;
+		border-radius: 999px;
+		min-height: 44px;
+		max-height: 44px;
+	}
+
+	.panel.opening {
+		/* Hold FAB box one frame, then `.expanded` grows left/up from bottom-right. */
+		width: 7.25rem;
+		pointer-events: none;
+	}
+
+	.panel.opening .sheet-body,
+	.panel.opening .sheet-top {
+		opacity: 0;
+	}
+
+	.panel.expanded {
+		width: min(420px, calc(100% - 40px));
+		height: min(78svh, 680px);
+		max-height: 80vh;
+		min-height: 200px;
+		border-radius: 28px;
+		border-color: var(--glass-border);
+		background: var(--modal-bg, var(--glass-panel));
+		box-shadow: 0 16px 48px var(--shadow-strong, rgba(0, 0, 0, 0.28));
+		color: var(--fg);
+	}
+
+	.panel.resizing,
+	.panel.swiping {
+		transition: none;
+	}
+
+	.panel.closing {
+		width: 7.25rem;
+		height: 44px !important;
+		min-height: 44px;
+		max-height: 44px;
+		border-radius: 999px;
+		pointer-events: none;
+		opacity: 0.92;
+	}
+
+	.panel.closing .sheet-body,
+	.panel.closing .sheet-top {
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.12s ease;
+	}
+
+	.chat-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: calc(0.35rem + 2px);
+		height: 44px;
+		padding: 0 12px 0 14px;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-style: normal;
@@ -565,13 +836,6 @@
 
 	.chat-pill:hover {
 		color: var(--fg);
-		background:
-			linear-gradient(
-					color-mix(in srgb, var(--fg) 6%, var(--glass)),
-					color-mix(in srgb, var(--fg) 6%, var(--glass))
-				)
-				padding-box,
-			var(--glass-shine) border-box;
 	}
 
 	.chat-pill .count {
@@ -589,89 +853,72 @@
 		opacity: 0.92;
 	}
 
-	.overlay {
-		position: fixed;
-		inset: 0;
-		z-index: 70;
-		background: transparent;
-	}
-
-	.wrap {
-		position: fixed;
-		z-index: 72;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		display: flex;
-		justify-content: stretch;
-		pointer-events: none;
-	}
-
-	.sheet {
-		position: relative;
-		pointer-events: auto;
-		display: flex;
-		flex-direction: column;
-		width: 100%;
-		height: min(78svh, 640px);
-		max-height: 80vh;
-		min-height: 200px;
-		border: 1px solid var(--glass-border);
-		border-bottom: none;
-		border-radius: var(--radius-hero) var(--radius-hero) 0 0;
-		background: var(--modal-bg, var(--glass-panel));
-		box-shadow: 0 16px 48px var(--shadow-strong, rgba(0, 0, 0, 0.28));
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		overflow: hidden;
-		transform-origin: bottom right;
-		box-sizing: border-box;
-	}
-
-	.sheet.grow-in {
-		transform-origin: 100% 100%;
-	}
-
-	.sheet.resizing {
-		transition: none;
-		user-select: none;
-	}
-
 	.sheet-top {
 		position: absolute;
 		left: 0;
 		right: 0;
 		top: 0;
 		z-index: 5;
-		height: 36px;
+		height: 44px;
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		justify-content: space-between;
+		padding: 6px 10px;
 		box-sizing: border-box;
-		cursor: ns-resize;
-		touch-action: none;
-		-webkit-user-select: none;
-		user-select: none;
-		color: var(--fg-33);
+		pointer-events: none;
 		background: linear-gradient(
 			to bottom,
 			var(--modal-bg, var(--glass-panel)) 0%,
 			color-mix(in srgb, var(--modal-bg, var(--glass-panel)) 80%, transparent) 55%,
 			transparent 100%
 		);
+		transition: opacity 0.2s ease;
 	}
 
-	.sheet-top:hover,
-	.sheet.resizing .sheet-top {
+	.top-btn {
+		pointer-events: auto;
+		width: 32px;
+		height: 32px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8);
 		color: var(--fg-66);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		line-height: 0;
+	}
+
+	.top-btn:hover {
+		color: var(--fg);
+		background: color-mix(in srgb, var(--fg) 12%, transparent);
+	}
+
+	.top-btn.drag {
+		cursor: ns-resize;
+		touch-action: none;
+		-webkit-user-select: none;
+		user-select: none;
 	}
 
 	.sheet-drag {
 		display: grid;
 		place-items: center;
 		line-height: 0;
-		opacity: 0.85;
+		opacity: 0.9;
 		pointer-events: none;
+	}
+
+	.sheet-body {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		opacity: 1;
+		transition: opacity 0.18s ease 0.06s;
 	}
 
 	.list {
@@ -679,7 +926,7 @@
 		min-height: 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
-		padding: 36px 10px calc(72px + env(safe-area-inset-bottom, 0px));
+		padding: 44px 10px calc(72px + env(safe-area-inset-bottom, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -840,7 +1087,6 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 
-	/* Match chat: inactive +/mic keep full chrome (no washed-out disabled look). */
 	.side-btn:disabled {
 		cursor: default;
 	}
@@ -920,33 +1166,31 @@
 		color: var(--fg-33);
 	}
 
-	/* Desktop: floating card with FAB inset + full rounded corners */
-	@media (min-width: 768px) {
-		.wrap {
-			justify-content: flex-end;
-			padding: 0 20px max(20px, env(safe-area-inset-bottom));
-		}
-
-		.sheet {
-			width: min(560px, calc(100vw - 40px));
-			max-width: 560px;
-			margin: 0;
-			border-radius: 28px;
-			border-bottom: 1px solid var(--glass-border);
-			height: min(78svh, 680px);
-			max-height: 80vh;
-		}
-	}
-
-	/* Mobile: Modal-like bottom sheet + scrim */
 	@media (max-width: 767px) {
-		.overlay {
-			background: var(--scrim);
+		.panel {
+			--fab-right: 14px;
+			--fab-bottom: max(14px, env(safe-area-inset-bottom));
 		}
 
-		.chat-pill {
-			right: 14px;
-			bottom: max(14px, env(safe-area-inset-bottom));
+		.panel.expanded {
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			width: 100%;
+			max-width: none;
+			border-radius: var(--radius-hero) var(--radius-hero) 0 0;
+			border-bottom: none;
+			height: min(78svh, 640px);
+			z-index: 72;
+		}
+
+		.panel.closing {
+			position: fixed;
+			right: var(--fab-right);
+			left: auto;
+			bottom: var(--fab-bottom);
+			width: 7.5rem;
 		}
 
 		.composer-dock {

@@ -331,6 +331,13 @@ export default {
 	'chat.pickChat': 'Kies een chat uit de lijst.',
 	'chat.general': 'Chat',
 	'chat.emojiNameHint': 'naam (voor :naam:)',
+	'chat.activityTitle': 'Voor jou',
+	'chat.activitySub': 'Reacties, antwoorden en taken die voor jou zijn.',
+	'chat.activityEmpty': 'Nog niets voor jou.',
+	'chat.activityReaction': 'reageerde',
+	'chat.activityReply': 'antwoordde',
+	'chat.activityAssigned': 'wees je toe',
+	'chat.activityOpen': 'Meldingen',
 
 	/* ── tasks ────────────────────────────────────────── */
 	'tasks.title': 'Taken',
