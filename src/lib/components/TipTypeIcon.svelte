@@ -7,25 +7,40 @@
 	import NavIcon from '@alpha/ui/NavIcon.svelte';
 	import { navPngUrl } from '@alpha/ui/nav-png.js';
 
-	/** @type {{ name?: string, size?: number }} */
-	let { name = 'chat', size = 19 } = $props();
+	/**
+	 * `size` = outer square (match TaskBox). PNG draws slightly smaller inside.
+	 * @type {{ name?: string, size?: number }}
+	 */
+	let { name = 'chat', size = 22 } = $props();
 
 	const png = $derived(navPngUrl(name));
+	/** Art inset so filled PNG doesn’t fill the whole TaskBox-sized square. */
+	const art = $derived(Math.max(12, Math.round(size * 0.72)));
 </script>
 
-{#if png}
-	<img class="tip-png" src={png} alt="" width={size} height={size} />
-{:else}
-	<NavIcon {name} {size} />
-{/if}
+<span class="tip-icon" style:width="{size}px" style:height="{size}px">
+	{#if png}
+		<img class="tip-png" src={png} alt="" width={art} height={art} />
+	{:else}
+		<NavIcon {name} size={art} />
+	{/if}
+</span>
 
 <style>
+	.tip-icon {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		line-height: 0;
+	}
+
 	.tip-png {
 		display: block;
-		width: 100%;
-		height: 100%;
+		width: auto;
+		height: auto;
+		max-width: 100%;
+		max-height: 100%;
 		object-fit: contain;
-		/* Match quiet chrome — filled art reads at full ink */
 		opacity: 0.92;
 	}
 </style>

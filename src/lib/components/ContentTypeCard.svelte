@@ -27,7 +27,7 @@
 {#if onclick}
 	<button type="button" class="ct-card" {onclick}>
 		<span class="ct-glyph" aria-hidden="true">
-			<TipTypeIcon name={icon} size={19} />
+			<TipTypeIcon name={icon} size={22} />
 		</span>
 		{#if typeName}<span class="ct-kind">{typeName}</span>{/if}
 		<span class="ct-title">{title}</span>
@@ -36,7 +36,7 @@
 {:else}
 	<div class="ct-card" role="group">
 		<span class="ct-glyph" aria-hidden="true">
-			<TipTypeIcon name={icon} size={19} />
+			<TipTypeIcon name={icon} size={22} />
 		</span>
 		{#if typeName}<span class="ct-kind">{typeName}</span>{/if}
 		<span class="ct-title">{title}</span>

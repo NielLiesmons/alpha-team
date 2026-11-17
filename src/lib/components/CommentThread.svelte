@@ -49,7 +49,7 @@
 	 */
 	let { type, entityId, tip = undefined, onMore = undefined } = $props();
 
-	const TIP_ICON = 19;
+	const TIP_ICON = 22;
 
 	let open = $state(false);
 	let draft = $state('');
@@ -632,10 +632,10 @@
 	.sheet-tip {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 		min-width: 0;
 		flex: 1;
-		height: 28px;
+		height: 22px;
 		pointer-events: none;
 	}
 
@@ -644,6 +644,8 @@
 		display: grid;
 		place-items: center;
 		flex-shrink: 0;
+		width: 22px;
+		height: 22px;
 		line-height: 0;
 		color: var(--fg-66);
 	}

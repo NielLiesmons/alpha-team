@@ -678,7 +678,7 @@
 										</span>
 									{:else}
 										<span class="pub-glyph" aria-hidden="true">
-											<TipTypeIcon name={refMeta?.icon || 'chat'} size={19} />
+											<TipTypeIcon name={refMeta?.icon || 'chat'} size={TIP_ICON} />
 										</span>
 									{/if}
 									{#if refMeta}
@@ -708,9 +708,19 @@
 									{@const showViewMore =
 										Boolean(commentableRefType(block.messages[0]?.ref?.type)) &&
 										hasPriorComments(block.refKey, bubbles)}
-									<div class="pub-body">
+									{@const firstBubble = bubbles[0]}
+									{@const firstMine = (() => {
+										const me = String(activePerson().email || '')
+											.trim()
+											.toLowerCase();
+										const author = String(firstBubble?.author || '')
+											.trim()
+											.toLowerCase();
+										return Boolean(me && author && me === author);
+									})()}
+									<div class="pub-body" class:has-view-more={showViewMore}>
 										{#if showViewMore}
-											<div class="view-more-row">
+											<div class="view-more-row" class:mine={firstMine}>
 												<button
 													type="button"
 													class="view-more-pill"
@@ -723,9 +733,13 @@
 												</button>
 											</div>
 										{/if}
-										{#each bubbles as msg (msg.id)}
+										{#each bubbles as msg, bi (msg.id)}
 											{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
-											<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
+											<div
+												class="bubble-anchor"
+												class:jump-flash={highlightId === msg.id}
+												class:panel-first={bi === 0}
+											>
 												<ChatFeedCard
 													{msg}
 													parent={findChatParent(msg.reply_to)}
@@ -1029,27 +1043,28 @@
 	.pub-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 8px 8px 10px;
-		border-radius: var(--radius-16);
-		background: color-mix(in srgb, var(--fg) 5%, transparent);
-		border: 1px solid color-mix(in srgb, var(--fg) 6%, transparent);
+		gap: 0;
+		/* Horizontal: flush with bubble column (feed already pads 24/14). */
+		padding: 2px 0 4px;
+		border-radius: 0;
+		background: transparent;
+		border: 0;
 	}
 
 	.pub-panel.tip-only {
-		padding: 6px 8px;
+		padding: 2px 0;
 	}
 
 	.pub-tip {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 		min-width: 0;
 		width: 100%;
-		height: 28px;
-		padding: 0 4px;
+		height: 22px;
+		padding: 0;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 0;
 		background: transparent;
 		color: inherit;
 		font: inherit;
@@ -1101,10 +1116,37 @@
 		color: var(--fg-33);
 	}
 
+	/* Tip → body: 10px (non-grouped bubble gap); with view-more: tip→pill ≤6px. */
+	.pub-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		margin-top: 10px;
+	}
+
+	.pub-body.has-view-more {
+		margin-top: 6px;
+	}
+
+	/* Kill ChatFeedCard stack-first top margin so tip/pill spacing is exact. */
+	.pub-body > .bubble-anchor.panel-first :global(.card.stack-first),
+	.pub-body > .bubble-anchor.panel-first :global(.card) {
+		margin-top: 0;
+	}
+
 	.view-more-row {
 		display: flex;
-		justify-content: center;
-		padding: 2px 0 6px;
+		justify-content: flex-end;
+		align-items: center;
+		padding: 0;
+		/* Pill → first bubble = non-grouped stack gap (10px). */
+		margin: 0 0 10px;
+	}
+
+	.view-more-row:not(.mine) {
+		justify-content: flex-start;
+		/* Align with bubble start, not pfp: avatar 34 + card gap 6. */
+		padding-left: 40px;
 	}
 
 	.view-more-pill {
@@ -1158,12 +1200,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.pub-body {
-		display: flex;
-		flex-direction: column;
-		gap: 0;
 	}
 
 	.presence-row {
