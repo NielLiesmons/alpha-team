@@ -6,7 +6,7 @@
 	/**
 	 * Bottom sheet on small screens, floating sheet on desktop.
 	 * Bley modal shell: --modal-bg + hairline (same as public site).
-	 * Mobile: drag-down dismiss gesture only — never a visual drag handle.
+	 * Mobile: drag down to dismiss.
 	 */
 	let {
 		open = $bindable(false),

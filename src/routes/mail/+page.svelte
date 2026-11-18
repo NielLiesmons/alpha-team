@@ -6,6 +6,7 @@
 	import PriorityBox from '$lib/components/PriorityBox.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
+	import SegmentedControl from '@alpha/ui/SegmentedControl.svelte';
 	import TaskFieldPicker from '$lib/components/TaskFieldPicker.svelte';
 	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
@@ -47,7 +48,6 @@
 		ui
 	} from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
-	import UnreadMark from '@alpha/ui/UnreadMark.svelte';
 
 	/** @param {any} thread */
 	function seedBodyFromThread(thread) {
@@ -131,6 +131,14 @@
 			forceClearSelection();
 		}
 	}
+
+	const categoryOptions = $derived(
+		MAIL_CATEGORIES.map((c) => ({
+			value: c,
+			label: mailCategoryLabel(c),
+			badge: mailUnreadCountForCategory(c)
+		}))
+	);
 
 	const menuItems = $derived.by(() => {
 		const thread = menuThread;
@@ -243,21 +251,13 @@
 >
 
 <div class="feed mail">
-	<div class="category-seg" role="group" aria-label={t('mail.category')}>
-		{#each MAIL_CATEGORIES as c (c)}
-			{@const unread = mailUnreadCountForCategory(c)}
-			<button
-				type="button"
-				class="seg-btn"
-				class:on={mailView.category === c}
-				onclick={() => setMailCategory(c)}
-			>
-				<span class="seg-label">{mailCategoryLabel(c)}</span>
-				{#if unread > 0}
-					<UnreadMark count={unread} size={6} />
-				{/if}
-			</button>
-		{/each}
+	<div class="category-seg">
+		<SegmentedControl
+			options={categoryOptions}
+			value={mailView.category}
+			label={t('mail.category')}
+			onchange={(next) => setMailCategory(/** @type {typeof MAIL_CATEGORIES[number]} */ (next))}
+		/>
 	</div>
 
 	{#if driveSession.error}
@@ -449,71 +449,8 @@
 		min-height: 0;
 	}
 
-	/* Quiet recessed track — equal inset so selected pill can sit taller. */
 	.category-seg {
-		display: grid;
-		grid-auto-flow: column;
-		grid-auto-columns: 1fr;
-		align-items: stretch;
-		gap: 2px;
 		margin: 0 10px 10px;
-		height: auto;
-		min-height: 40px;
-		padding: 3px;
-		border-radius: 999px;
-		border: 0;
-		background: color-mix(in srgb, var(--fg) 4%, transparent);
-		overflow-x: auto;
-		scrollbar-width: none;
-		box-sizing: border-box;
-	}
-
-	.category-seg::-webkit-scrollbar {
-		display: none;
-	}
-
-	.seg-btn {
-		appearance: none;
-		border: 1px solid transparent;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 12px;
-		font-weight: 600;
-		min-height: 34px;
-		height: 100%;
-		padding: 0 8px;
-		border-radius: 999px;
-		cursor: pointer;
-		white-space: nowrap;
-		box-sizing: border-box;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 5px;
-		transition:
-			background 0.15s ease,
-			color 0.15s ease;
-	}
-
-	.seg-label {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.seg-btn:hover {
-		color: var(--fg);
-	}
-
-	.seg-btn.on {
-		color: var(--fg);
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		box-shadow: none;
 	}
 
 	.banner {

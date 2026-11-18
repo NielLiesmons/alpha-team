@@ -693,7 +693,7 @@
 							queueMicrotask(() => searchInputEl?.focus());
 						}}
 					>
-						<Search size={13} />
+						<Search size={16} />
 					</button>
 				{/if}
 				{#if createMenuItems.length}
@@ -1268,12 +1268,8 @@
 
 	.top-search:hover,
 	.top-plus:hover {
+		color: var(--fg);
 		transform: scale(1.06);
-	}
-
-	.top-search:active,
-	.top-plus:active {
-		transform: scale(0.96);
 	}
 
 	.icon-wrap.png,
@@ -1387,7 +1383,7 @@
 
 	.nav-block.expanded {
 		border-radius: 22px;
-		padding-bottom: 4px;
+		padding-bottom: 6px;
 	}
 
 	.nav-row {
@@ -1470,19 +1466,18 @@
 	.nav-sub {
 		display: flex;
 		flex-direction: column;
-		gap: 0;
-		padding: 0 0 2px;
+		gap: 1px;
+		padding: 0 6px 2px;
 	}
 
-	/* Left pad = nav-item pad (10) + icon (18) + gap (10) so labels line up with Mail. */
 	.nav-sub-item {
 		display: block;
 		width: 100%;
-		padding: 3px 10px 3px 38px;
+		padding: 7px 10px 7px 36px;
 		border: 0;
-		border-radius: 0;
+		border-radius: 999px;
 		background: transparent;
-		color: var(--white33, var(--fg-33));
+		color: var(--white66);
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
@@ -1492,10 +1487,12 @@
 	}
 
 	.nav-sub-item:hover {
-		color: var(--white66, var(--fg-66));
+		background: var(--fg-4);
+		color: var(--white);
 	}
 
 	.nav-sub-item.active {
+		background: var(--fg-4);
 		color: var(--white);
 	}
 
@@ -1670,7 +1667,6 @@
 				min-width 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 		}
 
-		/* Detail takes remaining space (notifications synopsis or entity page) */
 		.shell.list-chat :global(.detail) {
 			flex: 1 1 0;
 			width: auto;

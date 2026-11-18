@@ -26,6 +26,7 @@
 	import { isMobileNav } from '$lib/nav-stack.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
+	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import { tick } from 'svelte';
 
 	/**
@@ -70,6 +71,8 @@
 	let inputEl = $state();
 	/** Explicit sheet height (px); 0 = CSS default until user resizes. */
 	let sheetHeight = $state(0);
+	/** Collapsed FAB width (px) — opening/closing morph back to this, not a fixed rem. */
+	let fabWidth = $state(0);
 	let resizing = $state(false);
 	/** Skip bottom-snap once when opening from chat “view more”. */
 	let skipSnapOnce = $state(false);
@@ -356,9 +359,15 @@
 		return byId.get(msg.reply_to) ?? null;
 	}
 
+	function measureFabWidth() {
+		const w = panelEl?.getBoundingClientRect().width;
+		if (w && w > 0) fabWidth = Math.round(w);
+	}
+
 	async function openSheet() {
 		if (phase === 'open' || phase === 'opening') return;
 		swipeProg = 0;
+		measureFabWidth();
 		phase = 'opening';
 		pushCommentsHistory();
 		await tick();
@@ -539,12 +548,17 @@
 		/** @type {string} */
 		let s = '';
 		if (phase === 'open' && sheetHeight) s += `height:${sheetHeight}px;`;
+		if ((phase === 'opening' || phase === 'closing') && fabWidth > 0) {
+			s += `width:${fabWidth}px;`;
+		}
 		if (swipeProg > 0) {
 			const pct = Math.round(swipeProg * 1000) / 10;
 			s += `transform:translate3d(${pct}%,0,0);`;
 		}
 		return s || undefined;
 	});
+
+	const fabCountLabel = $derived(String(messages.length));
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -580,20 +594,20 @@
 					d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
 				/>
 			</svg>
-			{#if commentatorProfiles.length}
-				<span class="pill-stack">
-					<ProfilePicStack profiles={commentatorProfiles} size="xxs" />
-				</span>
-			{:else}
-				<span class="count">0</span>
-			{/if}
+			<span class="pill-stack">
+				<ProfilePicStack
+					profiles={commentatorProfiles}
+					size="xxs"
+					text={fabCountLabel}
+				/>
+			</span>
 		</button>
 	{:else}
 		<div class="sheet-top" aria-hidden="false">
-			<button
-				type="button"
+			<ChromeActionButton
+				variant="icon"
+				label={t('common.close')}
 				class="top-btn close"
-				aria-label={t('common.close')}
 				onclick={() => void closeSheet()}
 			>
 				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -605,22 +619,19 @@
 						stroke-linejoin="round"
 					/>
 				</svg>
-			</button>
+			</ChromeActionButton>
 			<p class="sheet-title">{t('comments.title')}</p>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<button
-				type="button"
+			<ChromeActionButton
+				variant="icon"
+				label={t('comments.resize')}
 				class="top-btn drag"
-				aria-label={t('comments.resize')}
-				aria-valuemin={SHEET_MIN_H}
-				aria-valuemax={maxSheetHeight()}
-				aria-valuenow={sheetHeight || defaultSheetHeight()}
 				onpointerdown={onResizePointerDown}
 			>
 				<span class="sheet-drag" aria-hidden="true">
 					<Drag size={16} />
 				</span>
-			</button>
+			</ChromeActionButton>
 		</div>
 
 		<div class="sheet-body">
@@ -769,16 +780,15 @@
 	}
 
 	.panel.fab {
+		/* Hug chat icon + ProfilePicStack — no min-width padding glitch. */
 		width: max-content;
-		min-width: 5.5rem;
 		height: 44px;
 		min-height: 44px;
 		max-height: 44px;
 	}
 
 	.panel.opening {
-		/* Hold FAB box one frame, then `.expanded` grows left/up from bottom-right. */
-		width: 7.25rem;
+		/* Width comes from measured fabWidth inline style. */
 		pointer-events: none;
 	}
 
@@ -804,7 +814,7 @@
 	}
 
 	.panel.closing {
-		width: 7.25rem;
+		/* Width comes from measured fabWidth inline style — no rem jump. */
 		height: 44px !important;
 		min-height: 44px;
 		max-height: 44px;
@@ -824,7 +834,8 @@
 		align-items: center;
 		gap: calc(0.35rem + 2px);
 		height: 44px;
-		padding: 0 12px 0 14px;
+		width: max-content;
+		padding: 0 10px 0 12px;
 		border: 0;
 		border-radius: var(--comments-radius);
 		background: transparent;
@@ -839,14 +850,6 @@
 
 	.chat-pill:hover {
 		color: var(--fg);
-	}
-
-	.chat-pill .count {
-		font-family: inherit;
-		font-size: 13px;
-		font-weight: 600;
-		color: inherit;
-		font-variant-numeric: normal;
 	}
 
 	.pill-stack {
@@ -864,7 +867,7 @@
 		z-index: 5;
 		height: 44px;
 		display: grid;
-		grid-template-columns: 32px 1fr 32px;
+		grid-template-columns: 28px 1fr 28px;
 		align-items: center;
 		gap: 8px;
 		padding: 6px 10px;
@@ -895,28 +898,12 @@
 		pointer-events: none;
 	}
 
-	.top-btn {
+	/* ChromeActionButton hosts — enable hit + drag resize. */
+	.sheet-top :global(.chrome-btn) {
 		pointer-events: auto;
-		width: 32px;
-		height: 32px;
-		display: grid;
-		place-items: center;
-		padding: 0;
-		border: 0;
-		border-radius: 999px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		cursor: pointer;
-		-webkit-tap-highlight-color: transparent;
-		line-height: 0;
 	}
 
-	.top-btn:hover {
-		color: var(--fg);
-		background: color-mix(in srgb, var(--fg) 12%, transparent);
-	}
-
-	.top-btn.drag {
+	.sheet-top :global(.chrome-btn.drag) {
 		cursor: ns-resize;
 		touch-action: none;
 		-webkit-user-select: none;
@@ -1210,7 +1197,12 @@
 			right: var(--fab-right);
 			left: auto;
 			bottom: var(--fab-bottom);
-			width: 7.5rem;
+		}
+
+		.sheet-top {
+			height: 56px;
+			grid-template-columns: 44px 1fr 44px;
+			padding: 6px 12px;
 		}
 
 		.composer-dock {

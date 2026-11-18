@@ -125,17 +125,25 @@
 	.pill {
 		display: flex;
 		align-items: center;
-		padding: 0 12px 0 16px;
-		background: var(--white8);
+		justify-content: center;
+		padding: 0 8px;
+		background: var(--white8, var(--fg-8, color-mix(in srgb, var(--fg, var(--ink)) 8%, transparent)));
 		border-radius: 9999px;
 		min-width: 0;
 		overflow: hidden;
+		box-sizing: border-box;
+	}
+
+	/* Overlap into the last avatar when stack is present. */
+	.pics + .pill {
+		padding: 0 10px 0 14px;
 	}
 
 	.pill span {
 		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--white66);
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		color: var(--white66, var(--fg-66, color-mix(in srgb, var(--fg, var(--ink)) 66%, transparent)));
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
