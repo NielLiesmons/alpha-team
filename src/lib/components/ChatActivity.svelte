@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * Chat notifications list — same density as Notes feed rows.
-	 * Lives in the detail column; do NOT inherit shell --feed-pad (that’s for list-col).
+	 * Chat notifications — Notes-density rows in the detail column.
+	 * Body chrome is zeroed; only card-stack gutters (6px) + top clear for detail-top.
 	 */
 	import At from './icons/At.svelte';
 	import Reply from './icons/Reply.svelte';
@@ -82,55 +82,49 @@
 	{#if items.length === 0}
 		<p class="empty">{t('chat.activityEmpty')}</p>
 	{:else}
-		<ul class="list card-stack">
+		<div class="card-stack">
 			{#each items as item (item.id)}
 				{@const who = person(item)}
-				<li>
-					<button type="button" class="row" onclick={() => openItem(item)}>
-						<span class="pfp" aria-hidden="true">
-							<ProfilePic
-								name={who.name}
-								email={who.email}
-								pictureUrl={pictureUrlFor(who.email)}
-								size={32}
-							/>
+				<button type="button" class="row" onclick={() => openItem(item)}>
+					<span class="pfp" aria-hidden="true">
+						<ProfilePic
+							name={who.name}
+							email={who.email}
+							pictureUrl={pictureUrlFor(who.email)}
+							size={32}
+						/>
+					</span>
+					<span class="copy">
+						<span class="line1">
+							<span
+								class="who"
+								style:color={profileNameCss(who.email, who.name, isDark)}
+								>{who.name}</span
+							>
+							<span class="verb">{verb(item)}</span>
 						</span>
-						<span class="copy">
-							<span class="line1">
-								<span
-									class="who"
-									style:color={profileNameCss(who.email, who.name, isDark)}
-									>{who.name}</span
-								>
-								<span class="verb">{verb(item)}</span>
+						<span class="line2">
+							<span class="kind" class:emoji-kind={item.kind === 'reaction'} aria-hidden="true">
+								{#if item.kind === 'reaction'}
+									<span class="emoji">{item.emoji || '❤️'}</span>
+								{:else if item.kind === 'reply'}
+									<Reply size={12} />
+								{:else if item.kind === 'assigned'}
+									<TaskBox state={item.taskStatus || 'open'} size={12} />
+								{:else}
+									<At size={12} />
+								{/if}
 							</span>
-							<span class="line2">
-								<span class="kind" class:emoji-kind={item.kind === 'reaction'} aria-hidden="true">
-									{#if item.kind === 'reaction'}
-										<span class="emoji">{item.emoji || '❤️'}</span>
-									{:else if item.kind === 'reply'}
-										<Reply size={12} />
-									{:else if item.kind === 'assigned'}
-										<TaskBox state={item.taskStatus || 'open'} size={12} />
-									{:else}
-										<At size={12} />
-									{/if}
-								</span>
-								<span class="preview">{preview(item)}</span>
-							</span>
+							<span class="preview">{preview(item)}</span>
 						</span>
-					</button>
-				</li>
+					</span>
+				</button>
 			{/each}
-		</ul>
+		</div>
 	{/if}
 </div>
 
 <style>
-	/*
-	 * Explicit pads — do not use shell --feed-pad-* (list-col only).
-	 * Top clears floating detail-top / mobile bar; sides are card-stack 6px only.
-	 */
 	.activity {
 		display: flex;
 		flex-direction: column;
@@ -139,7 +133,8 @@
 		box-sizing: border-box;
 		width: 100%;
 		margin: 0;
-		padding: 48px 0 28px;
+		/* Clear floating detail-top control row only — no entity 24px sides */
+		padding: 48px 0 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
 	}
@@ -152,15 +147,14 @@
 		text-align: center;
 	}
 
-	.list {
-		list-style: none;
-		margin: 0;
-		padding: 4px 6px 10px;
+	/* Same as Notes / Tasks */
+	.card-stack {
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		width: 100%;
+		padding: 6px;
 		box-sizing: border-box;
+		width: 100%;
 	}
 
 	.row {
@@ -168,7 +162,7 @@
 		align-items: flex-start;
 		gap: 10px;
 		width: 100%;
-		padding: 8px 8px;
+		padding: calc(0.85rem - 4px) calc(0.9rem - 2px);
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -206,6 +200,7 @@
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 14px;
+		font-weight: 600;
 		line-height: 1.15;
 		overflow: hidden;
 		white-space: nowrap;
@@ -270,9 +265,8 @@
 
 	@media (max-width: 767px) {
 		.activity {
-			/* Clear ChromeMobileBar (88px) + safe area — not shell list feed-pad */
 			padding: calc(88px + env(safe-area-inset-top, 0px)) 0
-				calc(24px + env(safe-area-inset-bottom, 0px));
+				calc(16px + env(safe-area-inset-bottom, 0px));
 		}
 	}
 </style>

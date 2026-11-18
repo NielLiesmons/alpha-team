@@ -2851,7 +2851,7 @@
 
 	/* Same gutters as list-top — not entity detail 24px. */
 	:global(.detail .detail-top.notifs-top) {
-		padding: 0 10px 0 16px;
+		padding: 0 10px 0 16px !important;
 	}
 
 	@media (min-width: 768px) {

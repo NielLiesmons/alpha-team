@@ -298,7 +298,6 @@
 		if (!root || !dock) return;
 		return attachComposerClearPad(root, dock, {
 			scroller,
-			minPx: 160,
 			isPinned: () => pinBottom,
 			isLocked: () => snapLock > 0
 		});
@@ -996,11 +995,8 @@
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		/*
-		 * Own pads — do not use class "feed" (app.css list feed-pad would crush
-		 * padding-bottom to 36px and bury the last bubble under the composer).
-		 */
-		padding: 56px 24px var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px))) !important;
+		/* No class "feed" — app.css list feed-pad would crush bottom to 36px. */
+		padding: 56px 24px var(--composer-clear, calc(120px + env(safe-area-inset-bottom, 0px)));
 	}
 
 	/* Match other 2nd-column gutters when chat is compacted (after a detail open). */
@@ -1320,7 +1316,7 @@
 	.scroll-fabs {
 		position: absolute;
 		right: 24px;
-		/* Sit just above the live composer dock */
+		/* Above composer dock: pad 10 + pill 47 + gap 10 — grows via --composer-clear */
 		bottom: var(--composer-clear, calc(67px + env(safe-area-inset-bottom, 0px)));
 		z-index: 8;
 		display: flex;
@@ -1424,7 +1420,7 @@
 		line-height: 1;
 	}
 
-	/* Soft veil behind composer — three-stop: solid edge → ~80% at bar mid → clear */
+	/* Soft veil behind composer — fixed band (not tied to clear pad). */
 	.composer-fade {
 		position: absolute;
 		left: 0;
@@ -1432,7 +1428,7 @@
 		bottom: 0;
 		/* Above shell list-bottom-fade (z5) when that chrome is present elsewhere */
 		z-index: 6;
-		height: var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px)));
+		height: calc(88px + env(safe-area-inset-bottom, 0px));
 		pointer-events: none;
 		background: linear-gradient(
 			to top,
@@ -1464,11 +1460,11 @@
 	@media (max-width: 767px) {
 		.messages {
 			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
-				var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px)));
+				var(--composer-clear, calc(120px + env(safe-area-inset-bottom, 0px)));
 		}
 
 		.composer-fade {
-			height: var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px)));
+			height: calc(88px + env(safe-area-inset-bottom, 0px));
 			background: linear-gradient(
 				to top,
 				var(--shell, var(--bg)) 0%,
