@@ -15,13 +15,11 @@ export const FEED_NEAR_BOTTOM_PX = 64;
  */
 export const FEED_BOTTOM_PAD_CSS = 'calc(120px + env(safe-area-inset-bottom, 0px))';
 
-/** Breathing room above the composer pill — not a huge empty band. */
-const COMPOSER_CLEAR_GAP_PX = 12;
-
 /**
  * Keep a floating composer from covering the last feed rows.
- * Sets `--composer-clear` = live dock height + gap (grows with quote / tall draft).
- * @param {HTMLElement} root — chat root that owns `--composer-clear`
+ * `--composer-dock-h` = live dock height (FAB sits dock + 12px).
+ * `--composer-clear` = dock height (feed pad flush to dock top; grows with quote).
+ * @param {HTMLElement} root — chat root that owns the CSS vars
  * @param {HTMLElement} dock — `.composer-dock`
  * @param {{
  *   scroller?: HTMLElement | null,
@@ -31,8 +29,10 @@ const COMPOSER_CLEAR_GAP_PX = 12;
  */
 export function attachComposerClearPad(root, dock, opts = {}) {
 	const apply = () => {
-		const h = Math.ceil(dock.getBoundingClientRect().height) + COMPOSER_CLEAR_GAP_PX;
-		root.style.setProperty('--composer-clear', `${Math.max(0, h)}px`);
+		const dockH = Math.max(0, Math.ceil(dock.getBoundingClientRect().height));
+		root.style.setProperty('--composer-dock-h', `${dockH}px`);
+		/* Feed clear = dock height — was +12/16 and sat visibly too high */
+		root.style.setProperty('--composer-clear', `${dockH}px`);
 		if (opts.isLocked?.()) return;
 		if (opts.isPinned?.() && opts.scroller) snapFeedToBottom(opts.scroller);
 	};
@@ -41,6 +41,7 @@ export function attachComposerClearPad(root, dock, opts = {}) {
 	apply();
 	return () => {
 		ro.disconnect();
+		root.style.removeProperty('--composer-dock-h');
 		root.style.removeProperty('--composer-clear');
 	};
 }

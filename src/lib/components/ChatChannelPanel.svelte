@@ -647,7 +647,8 @@
 </script>
 
 <div class="chat" class:compact class:was-compact={wasCompact} bind:this={chatRootEl}>
-	<div class="messages" bind:this={messagesEl} onscroll={measureScroll}>
+	<!-- class "feed" required for list-top chrome scroll fade; app.css excludes .messages from feed-pad -->
+	<div class="feed messages" bind:this={messagesEl} onscroll={measureScroll}>
 		<div class="feed-body" bind:this={feedBodyEl}>
 			{#if driveSession.error}
 				<p class="banner"><span class="err">{driveSession.error}</span></p>
@@ -1316,8 +1317,8 @@
 	.scroll-fabs {
 		position: absolute;
 		right: 24px;
-		/* Above composer dock: pad 10 + pill 47 + gap 10 — grows via --composer-clear */
-		bottom: var(--composer-clear, calc(67px + env(safe-area-inset-bottom, 0px)));
+		/* 12px above live dock top (tracks quote height via --composer-dock-h) */
+		bottom: calc(var(--composer-dock-h, 67px) + 12px);
 		z-index: 8;
 		display: flex;
 		flex-direction: column;

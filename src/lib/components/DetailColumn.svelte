@@ -892,7 +892,7 @@
 <aside
 	class="detail"
 	class:open={panelOpen}
-	class:empty={!renderBody}
+	class:vacant={!renderBody}
 	class:dragging={detailDrag != null}
 	aria-label="Detail"
 	bind:this={detailRoot}
@@ -2011,7 +2011,7 @@
 		</div>
 	</div>
 {:else}
-	<div class="empty desktop-empty">
+	<div class="empty-state desktop-empty">
 		<p class="empty-title">{emptyCopy.title}</p>
 		<p class="empty-body">{emptyCopy.body}</p>
 	</div>
@@ -2806,7 +2806,8 @@
 		white-space: pre-wrap;
 	}
 
-	.empty {
+	/* Placeholder only — never put this on aside.detail (was colliding with vacant). */
+	.empty-state {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
@@ -2908,7 +2909,7 @@
 		}
 
 		/* Keep off-screen panel in the layer tree (no display:none — that kills slide) */
-		.detail.empty {
+		.detail.vacant {
 			display: flex;
 		}
 

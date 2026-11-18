@@ -78,7 +78,8 @@
 	}
 </script>
 
-<div class="activity" class:embedded>
+<!-- class "feed" so detail-top chrome scroll fade can find this scroller -->
+<div class="activity feed" class:embedded>
 	{#if items.length === 0}
 		<p class="empty">{t('chat.activityEmpty')}</p>
 	{:else}
