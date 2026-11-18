@@ -316,18 +316,6 @@
 				<ArrowRight size={14} strokeWidth={1.45} />
 				<span>{t('mail.forward')}</span>
 			</button>
-			<button
-				type="button"
-				class="dropdown-item"
-				role="menuitem"
-				onclick={() => {
-					closeReplyMenu();
-					onMore();
-				}}
-			>
-				<MoreDots size={14} />
-				<span>{t('common.more')}</span>
-			</button>
 		</div>
 	{/if}
 </DropdownMenu>
@@ -405,7 +393,8 @@
 		gap: 10px;
 		min-width: 0;
 		/* 1px less vertical pad offsets the +2px name→To gap so head height stays put */
-		padding: 11px 6px 9px 14px;
+		/* Right inset keeps ⋯ + timestamp as a pair, slightly off the edge */
+		padding: 11px 8px 9px 14px;
 		box-sizing: border-box;
 	}
 
@@ -506,7 +495,8 @@
 	.mail-panel-when,
 	.mail-panel-status {
 		margin: 0;
-		padding: 0 2px 0 0;
+		/* +2px vs dots optical edge (⋯ glyph sits inside its box) */
+		padding: 0 4px 0 0;
 		font-size: 11px;
 		font-weight: 500;
 		line-height: 1.25;
@@ -520,17 +510,18 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
+		color: var(--accent-2, var(--fg-33));
 	}
 
 	.mail-panel-status.err {
-		color: var(--fg-66);
+		color: var(--accent-3, var(--fg-66));
 	}
 
 	.status-dot {
 		width: 6px;
 		height: 6px;
 		border-radius: 999px;
-		background: var(--fg-33);
+		background: var(--accent-2, var(--fg-33));
 		animation: mail-pending-pulse 1s ease-in-out infinite;
 	}
 

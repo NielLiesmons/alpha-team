@@ -442,7 +442,7 @@
 		<button type="button" class="dock-pill" onclick={() => (footerOpen = true)}>
 			{t('web.footerEdit')}
 		</button>
-		<span class="status-pill">{statusPill}</span>
+		<span class="status-pill" class:is-progress={busy || saveState === 'saving'}>{statusPill}</span>
 		<div class="publish-split" class:is-disabled={!canPublish}>
 			<button type="button" class="publish-main" disabled={!canPublish} onclick={publishNow}>
 				{primaryLabel}
@@ -651,6 +651,10 @@
 
 	.status-pill {
 		justify-self: center;
+	}
+
+	.status-pill.is-progress {
+		color: var(--accent-2, var(--fg-66));
 	}
 
 	.publish-split {

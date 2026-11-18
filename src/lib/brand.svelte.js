@@ -1,5 +1,5 @@
 /**
- * Admin brand — Zapstore accent pair is hardcoded in @alpha/ui tokens.
+ * Admin brand — Zapstore three-accent set is hardcoded in @alpha/ui tokens.
  * This module clears legacy localStorage accent overrides so old Space
  * color picks do not tint poles / accents anymore.
  */
@@ -34,7 +34,7 @@ export function applyBrand() {
 
 /** @param {Partial<Brand>} _patch ignored — accents are locked */
 export function setBrand(_patch) {
-	/* no-op: Admin uses Zapstore blurple/gold only for now */
+	/* no-op: Admin uses Zapstore blurple / gold / rouge */
 }
 
 export function initBrand() {

@@ -12,6 +12,7 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 
 - Accent is a **whisper** for checks, sparse marks, focus — **not** selected cards, section rows, FABs, body text, or primary CTAs.
 - Never paint selected Settings cards / list rows with accent border or accent wash. Use grayscale fill (`--fg-4` / `--fg-8`).
+- Alpha default / Admin / Niel: **three** accents — `--accent-1` blurple (success/checks), `--accent-2` gold (in-progress / Sending… / Publishing…), `--accent-3` rouge (urgency marks + destructive icons). Customer sites may still derive companions from one brand accent.
 
 ## Feed / list rows (2nd column)
 
@@ -43,8 +44,9 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 
 ## Destructive
 
-- Disconnect, Delete, cancel-danger: **grayscale only** (muted text + quiet fill).
-- Never use `--destructive` rose, `--accent-2`, or `--accent-3` for these.
+- Settings Disconnect / cancel-danger chrome: **grayscale only** (muted text + quiet fill).
+- Delete / trash / urgency icons + marks: use `--accent-3` / `--destructive` (rouge).
+- In-progress indicators (task boxes, Sending…, Publishing…): `--accent-2` (gold) — never rouge.
 
 ## Settings profiles
 

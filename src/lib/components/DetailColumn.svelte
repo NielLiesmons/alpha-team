@@ -9,7 +9,13 @@
 	import DropdownMenu from './DropdownMenu.svelte';
 	import FloatPanel from './FloatPanel.svelte';
 	import TaskFieldPicker from './TaskFieldPicker.svelte';
+	import ArrowRight from './icons/ArrowRight.svelte';
+	import Junk from './icons/Junk.svelte';
+	import MailUnread from './icons/MailUnread.svelte';
 	import Pen from './icons/Pen.svelte';
+	import Reply from './icons/Reply.svelte';
+	import ReplyAll from './icons/ReplyAll.svelte';
+	import Share from './icons/Share.svelte';
 	import Trash from './icons/Trash.svelte';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { locale, t } from '$lib/i18n.svelte.js';
@@ -927,19 +933,24 @@
 			<div class="dropdown-list" role="menu">
 				{#if mailMsg}
 					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('reply')}>
-						{t('mail.reply')}
+						<Reply size={14} />
+						<span>{t('mail.reply')}</span>
 					</button>
 					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('replyAll')}>
-						{t('mail.replyAll')}
+						<ReplyAll size={14} />
+						<span>{t('mail.replyAll')}</span>
 					</button>
 					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('forward')}>
-						{t('mail.forward')}
+						<ArrowRight size={14} strokeWidth={1.45} />
+						<span>{t('mail.forward')}</span>
 					</button>
 					<button type="button" class="dropdown-item" role="menuitem" onclick={mailMarkUnread}>
-						{t('mail.markUnread')}
+						<MailUnread size={14} />
+						<span>{t('mail.markUnread')}</span>
 					</button>
 					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailMove('junk')}>
-						{t('mail.moveToJunk')}
+						<Junk size={14} />
+						<span>{t('mail.moveToJunk')}</span>
 					</button>
 					<button
 						type="button"
@@ -948,24 +959,25 @@
 						onclick={() => mailMove('trash')}
 					>
 						<Trash size={15} />
-						{t('mail.moveToTrash')}
+						<span>{t('mail.moveToTrash')}</span>
 					</button>
 				{:else}
 					{#if canShare}
 						<button type="button" class="dropdown-item" role="menuitem" onclick={() => void shareCurrent()}>
-							{fileEntry ? t('drive.copyPath') : t('common.share')}
+							<Share size={14} />
+							<span>{fileEntry ? t('drive.copyPath') : t('common.share')}</span>
 						</button>
 					{/if}
 					{#if canComposerEdit}
 						<button type="button" class="dropdown-item" role="menuitem" onclick={editCurrent}>
 							<Pen size={13} />
-							{t('common.edit')}
+							<span>{t('common.edit')}</span>
 						</button>
 					{/if}
 					{#if canDelete}
 						<button type="button" class="dropdown-item danger" role="menuitem" onclick={deleteCurrent}>
 							<Trash size={15} />
-							{t('common.delete')}
+							<span>{t('common.delete')}</span>
 						</button>
 					{/if}
 				{/if}
