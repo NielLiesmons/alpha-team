@@ -76,7 +76,7 @@ export const seenTick = cursorsTick;
  * @returns {ChatActivityItem[]}
  */
 export function activityForMe() {
-	cursorsTick.value; /* subscribe */
+	/* Do not subscribe to cursorsTick here — list shape is feed/tasks only. */
 	chatFeed.length;
 	tasks.length;
 	const me = meEmail();

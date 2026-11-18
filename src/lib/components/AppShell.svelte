@@ -34,7 +34,7 @@
 	import At from './icons/At.svelte';
 	import Heart from './icons/Heart.svelte';
 	import Reply from './icons/Reply.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
@@ -298,27 +298,54 @@
 	});
 
 	/**
-	 * Advance section cursors while the feed is open (and when its list grows).
-	 * Depend on list length only — not cursorsTick — to avoid a mark→tick loop.
+	 * Advance section cursors on enter / when new items arrive while viewing.
+	 * `untrack` is mandatory: markCursorsSeen reads personCursors; without it the
+	 * effect re-subscribes to those writes and tip-thrashes the Drive forever.
 	 */
+	let cursorSection = /** @type {string} */ ('');
 	$effect(() => {
 		const p = path;
+		/** @type {'chat' | 'notes' | 'tasks' | null} */
+		let section = null;
+		let len = 0;
 		if (p.startsWith('/chat')) {
-			chatFeed.length;
-			markCursorsSeen('chat');
+			section = 'chat';
+			len = chatFeed.length;
 		} else if (p.startsWith('/notes')) {
-			notes.length;
-			markCursorsSeen('notes');
+			section = 'notes';
+			len = notes.length;
 		} else if (p.startsWith('/tasks')) {
-			tasks.length;
-			markCursorsSeen('tasks');
+			section = 'tasks';
+			len = tasks.length;
 		}
+		if (!section) {
+			cursorSection = '';
+			return;
+		}
+		void len; /* subscribe to list growth */
+		const entered = cursorSection !== p;
+		cursorSection = p;
+		untrack(() => {
+			if (entered) {
+				markCursorsSeen(section);
+				return;
+			}
+			const pending =
+				section === 'chat'
+					? newChatCount()
+					: section === 'notes'
+						? newNotesCount()
+						: newTasksCount();
+			if (pending > 0) markCursorsSeen(section);
+		});
 	});
 
 	$effect(() => {
 		const email = actor.email;
 		if (!email) return;
-		void loadPersonCursors();
+		untrack(() => {
+			void loadPersonCursors();
+		});
 	});
 
 	const createKind = $derived(

@@ -2,8 +2,9 @@
  * Per-person “seen” cursors on Drive — cross-device new / targeted-unread badges.
  * Leaf: meta/cursors/{emailSlug}.json (alpha.person_cursors/1).
  *
- * Counts are derived client-side from lists already in memory; only the cursor
- * leaf is written (one tip update, debounced).
+ * Local state updates are cheap; Drive persists are debounced and skipped when
+ * nothing changed. Callers that run inside `$effect` must wrap writes in
+ * `untrack()` so cursor reads do not re-subscribe the effect (infinite tip loop).
  */
 import { activePerson } from './actor.svelte.js';
 import { chatFeed } from './chat.svelte.js';
@@ -13,6 +14,8 @@ import { notes, tasks } from './workspace.svelte.js';
 
 const LOCAL_ACTIVITY_KEY = 'alpha.chatActivity.seenAt';
 const LOCAL_CURSORS_KEY = 'alpha.personCursors.v1';
+/** Coalesce tip writes — never stampede /v1/tip while browsing. */
+const PERSIST_MS = 4000;
 
 /** @typedef {'activity' | 'chat' | 'notes' | 'tasks'} CursorKey */
 
@@ -38,6 +41,10 @@ export const cursorsTick = $state({ value: 0 });
 let persistTimer = null;
 let persistInFlight = false;
 let persistQueued = false;
+/** @type {Record<string, number> | null} */
+let lastPersisted = null;
+let loadGen = 0;
+let loadInFlightEmail = '';
 
 /** @param {string} email */
 export function emailSlug(email) {
@@ -72,9 +79,19 @@ function meEmail() {
 		.toLowerCase();
 }
 
-/** @param {string} key */
+/** @param {string} email */
 function localCacheKey(email) {
 	return `${LOCAL_CURSORS_KEY}:${emailSlug(email)}`;
+}
+
+/** @param {Record<string, number>} a @param {Record<string, number>} b */
+function sameValues(a, b) {
+	return (
+		(a.activity_seen_at || 0) === (b.activity_seen_at || 0) &&
+		(a.chat_seen_at || 0) === (b.chat_seen_at || 0) &&
+		(a.notes_seen_at || 0) === (b.notes_seen_at || 0) &&
+		(a.tasks_seen_at || 0) === (b.tasks_seen_at || 0)
+	);
 }
 
 /** @param {string} email @param {Record<string, number>} values */
@@ -106,7 +123,6 @@ function readLocalCache(email) {
 	}
 }
 
-/** Legacy activity-only localStorage from chat-activity.svelte.js */
 function readLegacyActivitySeen() {
 	if (typeof localStorage === 'undefined') return 0;
 	try {
@@ -119,20 +135,35 @@ function readLegacyActivitySeen() {
 /**
  * @param {Record<string, number>} next
  * @param {string} email
+ * @returns {boolean} whether state changed
  */
 function applyLocal(next, email) {
+	const values = {
+		activity_seen_at: Number(next.activity_seen_at) || 0,
+		chat_seen_at: Number(next.chat_seen_at) || 0,
+		notes_seen_at: Number(next.notes_seen_at) || 0,
+		tasks_seen_at: Number(next.tasks_seen_at) || 0
+	};
+	if (
+		personCursors.ready &&
+		personCursors.email === email &&
+		sameValues(personCursors.values, values)
+	) {
+		return false;
+	}
 	personCursors.email = email;
-	personCursors.values = { ...EMPTY, ...next };
+	personCursors.values = values;
 	personCursors.ready = true;
 	cursorsTick.value += 1;
-	writeLocalCache(email, personCursors.values);
-	if (typeof localStorage !== 'undefined' && next.activity_seen_at > 0) {
+	writeLocalCache(email, values);
+	if (typeof localStorage !== 'undefined' && values.activity_seen_at > 0) {
 		try {
-			localStorage.setItem(LOCAL_ACTIVITY_KEY, String(next.activity_seen_at));
+			localStorage.setItem(LOCAL_ACTIVITY_KEY, String(values.activity_seen_at));
 		} catch {
 			/* ignore */
 		}
 	}
+	return true;
 }
 
 /** @param {CursorKey} key */
@@ -159,64 +190,70 @@ export function readCursor(key) {
 export async function loadPersonCursors(session = activeSession()) {
 	const email = meEmail();
 	if (!email) {
-		personCursors.ready = false;
-		personCursors.email = '';
-		personCursors.values = { ...EMPTY };
-		cursorsTick.value += 1;
+		if (personCursors.ready || personCursors.email) {
+			personCursors.ready = false;
+			personCursors.email = '';
+			personCursors.values = { ...EMPTY };
+			cursorsTick.value += 1;
+		}
 		return;
 	}
 
-	const cached = readLocalCache(email);
-	const legacyActivity = readLegacyActivitySeen();
-	if (cached) {
-		if (legacyActivity > (cached.activity_seen_at || 0)) {
-			cached.activity_seen_at = legacyActivity;
-		}
-		applyLocal(cached, email);
-	}
-
-	if (!session) return;
+	/* Skip duplicate concurrent loads for the same person. */
+	if (loadInFlightEmail === email) return;
+	const gen = ++loadGen;
+	loadInFlightEmail = email;
 
 	try {
-		const bytes = await getPath(session, cursorsPath(email));
-		const doc = JSON.parse(new TextDecoder().decode(bytes));
-		const fromDrive = {
-			activity_seen_at: parseMs(doc.activity_seen_at),
-			chat_seen_at: parseMs(doc.chat_seen_at),
-			notes_seen_at: parseMs(doc.notes_seen_at),
-			tasks_seen_at: parseMs(doc.tasks_seen_at)
-		};
-		/* Prefer the newer of Drive vs local (multi-device race). */
-		const merged = {
-			activity_seen_at: Math.max(
-				fromDrive.activity_seen_at,
-				cached?.activity_seen_at || 0,
-				legacyActivity
-			),
-			chat_seen_at: Math.max(fromDrive.chat_seen_at, cached?.chat_seen_at || 0),
-			notes_seen_at: Math.max(fromDrive.notes_seen_at, cached?.notes_seen_at || 0),
-			tasks_seen_at: Math.max(fromDrive.tasks_seen_at, cached?.tasks_seen_at || 0)
-		};
-		applyLocal(merged, email);
-		if (
-			merged.activity_seen_at !== fromDrive.activity_seen_at ||
-			merged.chat_seen_at !== fromDrive.chat_seen_at ||
-			merged.notes_seen_at !== fromDrive.notes_seen_at ||
-			merged.tasks_seen_at !== fromDrive.tasks_seen_at
-		) {
-			schedulePersistCursors();
+		const cached = readLocalCache(email);
+		const legacyActivity = readLegacyActivitySeen();
+		if (cached) {
+			if (legacyActivity > (cached.activity_seen_at || 0)) {
+				cached.activity_seen_at = legacyActivity;
+			}
+			applyLocal(cached, email);
 		}
-	} catch {
-		/* Missing leaf — seed so historical inventory does not flood badges. */
-		const now = Date.now();
-		const seeded = {
-			activity_seen_at: Math.max(cached?.activity_seen_at || 0, legacyActivity) || now,
-			chat_seen_at: cached?.chat_seen_at || now,
-			notes_seen_at: cached?.notes_seen_at || now,
-			tasks_seen_at: cached?.tasks_seen_at || now
-		};
-		applyLocal(seeded, email);
-		schedulePersistCursors();
+
+		if (!session) return;
+		if (gen !== loadGen) return;
+
+		try {
+			const bytes = await getPath(session, cursorsPath(email));
+			if (gen !== loadGen) return;
+			const doc = JSON.parse(new TextDecoder().decode(bytes));
+			const fromDrive = {
+				activity_seen_at: parseMs(doc.activity_seen_at),
+				chat_seen_at: parseMs(doc.chat_seen_at),
+				notes_seen_at: parseMs(doc.notes_seen_at),
+				tasks_seen_at: parseMs(doc.tasks_seen_at)
+			};
+			const merged = {
+				activity_seen_at: Math.max(
+					fromDrive.activity_seen_at,
+					cached?.activity_seen_at || 0,
+					legacyActivity
+				),
+				chat_seen_at: Math.max(fromDrive.chat_seen_at, cached?.chat_seen_at || 0),
+				notes_seen_at: Math.max(fromDrive.notes_seen_at, cached?.notes_seen_at || 0),
+				tasks_seen_at: Math.max(fromDrive.tasks_seen_at, cached?.tasks_seen_at || 0)
+			};
+			applyLocal(merged, email);
+			if (!sameValues(merged, fromDrive)) schedulePersistCursors();
+		} catch {
+			if (gen !== loadGen) return;
+			const now = Date.now();
+			const seeded = {
+				activity_seen_at: Math.max(cached?.activity_seen_at || 0, legacyActivity) || now,
+				chat_seen_at: cached?.chat_seen_at || now,
+				notes_seen_at: cached?.notes_seen_at || now,
+				tasks_seen_at: cached?.tasks_seen_at || now
+			};
+			const changed = applyLocal(seeded, email);
+			/* Only create the leaf when we had nothing on Drive yet. */
+			if (changed || !cached) schedulePersistCursors();
+		}
+	} finally {
+		if (loadInFlightEmail === email) loadInFlightEmail = '';
 	}
 }
 
@@ -224,12 +261,13 @@ async function flushPersist() {
 	const session = activeSession();
 	const email = meEmail();
 	if (!session || !email || personCursors.email !== email) return;
+	const values = { ...personCursors.values };
+	if (lastPersisted && sameValues(lastPersisted, values)) return;
 	if (persistInFlight) {
 		persistQueued = true;
 		return;
 	}
 	persistInFlight = true;
-	const values = { ...personCursors.values };
 	const doc = {
 		schema: 'alpha.person_cursors/1',
 		email,
@@ -241,6 +279,7 @@ async function flushPersist() {
 	};
 	try {
 		await putPath(session, cursorsPath(email), 'blob', JSON.stringify(doc, null, 2));
+		lastPersisted = values;
 	} catch {
 		/* Offline — local cache still holds the cursor. */
 	} finally {
@@ -253,7 +292,7 @@ async function flushPersist() {
 }
 
 /** @param {number} [delayMs] */
-export function schedulePersistCursors(delayMs = 400) {
+export function schedulePersistCursors(delayMs = PERSIST_MS) {
 	if (persistTimer) clearTimeout(persistTimer);
 	persistTimer = setTimeout(() => {
 		persistTimer = null;
@@ -284,7 +323,7 @@ export function markCursorsSeen(keys, at = Date.now()) {
 		}
 	}
 	if (!changed) return;
-	applyLocal(next, email);
+	if (!applyLocal(next, email)) return;
 	schedulePersistCursors();
 }
 
@@ -295,14 +334,15 @@ export function markActivitySeen() {
 /** Messages from others that are not targeted replies/reactions on my tips. */
 export function newChatCount() {
 	cursorsTick.value;
-	chatFeed.length;
+	const len = chatFeed.length;
 	const me = meEmail();
-	if (!me || !personCursors.ready) return 0;
-	const seen = readCursor('chat');
+	if (!me || !personCursors.ready || len === 0) return 0;
+	const seen = Number(personCursors.values.chat_seen_at || 0) || 0;
 
 	/** @type {Set<string>} */
 	const myMsgIds = new Set();
-	for (const m of chatFeed) {
+	for (let i = 0; i < len; i++) {
+		const m = chatFeed[i];
 		if (!m?.id) continue;
 		if (m.kind === 'reaction' || m.kind === 'event') continue;
 		if (String(m.author || '').trim().toLowerCase() !== me) continue;
@@ -310,8 +350,10 @@ export function newChatCount() {
 	}
 
 	let n = 0;
-	for (const m of chatFeed) {
+	for (let i = 0; i < len; i++) {
+		const m = chatFeed[i];
 		if (!m?.id || String(m.id).startsWith('local-')) continue;
+		if (m.kind === 'reaction') continue;
 		const author = String(m.author || '')
 			.trim()
 			.toLowerCase();
@@ -320,16 +362,13 @@ export function newChatCount() {
 		if (!at || at <= seen) continue;
 
 		const replyTo = String(m.reply_to || '');
-		if (m.kind === 'reaction' && replyTo && myMsgIds.has(replyTo)) continue;
 		if (
-			(m.kind === 'comment' || m.kind === 'chat' || !m.kind) &&
 			replyTo &&
-			myMsgIds.has(replyTo)
+			myMsgIds.has(replyTo) &&
+			(m.kind === 'comment' || m.kind === 'chat' || !m.kind)
 		) {
 			continue;
 		}
-		/* Count chat / comment / event tips; skip reactions on others. */
-		if (m.kind === 'reaction') continue;
 		n += 1;
 	}
 	return n;
@@ -337,12 +376,13 @@ export function newChatCount() {
 
 export function newNotesCount() {
 	cursorsTick.value;
-	notes.length;
+	const len = notes.length;
 	const me = meEmail();
-	if (!me || !personCursors.ready) return 0;
-	const seen = readCursor('notes');
+	if (!me || !personCursors.ready || len === 0) return 0;
+	const seen = Number(personCursors.values.notes_seen_at || 0) || 0;
 	let n = 0;
-	for (const note of notes) {
+	for (let i = 0; i < len; i++) {
+		const note = notes[i];
 		const author = String(note.author || '')
 			.trim()
 			.toLowerCase();
@@ -355,12 +395,13 @@ export function newNotesCount() {
 
 export function newTasksCount() {
 	cursorsTick.value;
-	tasks.length;
+	const len = tasks.length;
 	const me = meEmail();
-	if (!me || !personCursors.ready) return 0;
-	const seen = readCursor('tasks');
+	if (!me || !personCursors.ready || len === 0) return 0;
+	const seen = Number(personCursors.values.tasks_seen_at || 0) || 0;
 	let n = 0;
-	for (const task of tasks) {
+	for (let i = 0; i < len; i++) {
+		const task = tasks[i];
 		const author = String(task.author || '')
 			.trim()
 			.toLowerCase();
