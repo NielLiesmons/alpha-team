@@ -648,7 +648,7 @@
 </script>
 
 <div class="chat" class:compact class:was-compact={wasCompact} bind:this={chatRootEl}>
-	<div class="feed messages" bind:this={messagesEl} onscroll={measureScroll}>
+	<div class="messages" bind:this={messagesEl} onscroll={measureScroll}>
 		<div class="feed-body" bind:this={feedBodyEl}>
 			{#if driveSession.error}
 				<p class="banner"><span class="err">{driveSession.error}</span></p>
@@ -996,8 +996,11 @@
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		/* Clear detail-top; --composer-clear tracks live dock overlap (quote / tall draft). */
-		padding: 56px 24px var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px)));
+		/*
+		 * Own pads — do not use class "feed" (app.css list feed-pad would crush
+		 * padding-bottom to 36px and bury the last bubble under the composer).
+		 */
+		padding: 56px 24px var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px))) !important;
 	}
 
 	/* Match other 2nd-column gutters when chat is compacted (after a detail open). */

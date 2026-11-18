@@ -933,10 +933,11 @@ table.data tr.selected td {
 }
 
 /* List column scrollport — pad so rows clear then pass under floating list-top.
-   Structure: .list-col > .ptr > .pane-inner > .feed|.fill */
-.list-col:has(.feed) .feed,
+   Structure: .list-col > .ptr > .pane-inner > .feed|.fill
+   Exclude chat `.messages` — it owns composer clearance via --composer-clear. */
+.list-col:has(.feed) .feed:not(.messages),
 .list-col:has(.fill) .fill,
-.pane:has(.feed) .feed,
+.pane:has(.feed) .feed:not(.messages),
 .pane:has(.fill) .fill {
 	flex: 1;
 	min-height: 0;
@@ -964,9 +965,9 @@ table.data tr.selected td {
 }
 
 @media (max-width: 767px) {
-	.list-col:has(.feed) .feed,
+	.list-col:has(.feed) .feed:not(.messages),
 	.list-col:has(.fill) .fill,
-	.pane:has(.feed) .feed,
+	.pane:has(.feed) .feed:not(.messages),
 	.pane:has(.fill) .fill {
 		padding-top: var(--feed-pad-top, calc(60px + env(safe-area-inset-top, 0px)));
 		padding-bottom: var(--feed-pad-bottom, calc(28px + env(safe-area-inset-bottom, 0px)));
