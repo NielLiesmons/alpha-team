@@ -2444,10 +2444,11 @@
 
 	/* Notifications = list feed in the 3rd col — same zero inset as chat-channel. */
 	.body.chat-activity-body {
-		overflow: auto;
+		overflow: hidden;
 		width: 100%;
 		box-sizing: border-box;
-		padding: 0;
+		padding: 0 !important;
+		margin: 0;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
@@ -2955,7 +2956,8 @@
 		}
 
 		.body.chat-activity-body {
-			padding: 0;
+			padding: 0 !important;
+			overflow: hidden;
 		}
 
 		:global(.detail .detail-top.notifs-top) {

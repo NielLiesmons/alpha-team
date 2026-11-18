@@ -1,6 +1,7 @@
 <script>
 	/**
 	 * Chat notifications list — same density as Notes feed rows.
+	 * Lives in the detail column; do NOT inherit shell --feed-pad (that’s for list-col).
 	 */
 	import At from './icons/At.svelte';
 	import Reply from './icons/Reply.svelte';
@@ -77,7 +78,7 @@
 	}
 </script>
 
-<div class="activity feed" class:embedded>
+<div class="activity" class:embedded>
 	{#if items.length === 0}
 		<p class="empty">{t('chat.activityEmpty')}</p>
 	{:else}
@@ -85,7 +86,7 @@
 			{#each items as item (item.id)}
 				{@const who = person(item)}
 				<li>
-					<button type="button" class="card" onclick={() => openItem(item)}>
+					<button type="button" class="row" onclick={() => openItem(item)}>
 						<span class="pfp" aria-hidden="true">
 							<ProfilePic
 								name={who.name}
@@ -126,6 +127,10 @@
 </div>
 
 <style>
+	/*
+	 * Explicit pads — do not use shell --feed-pad-* (list-col only).
+	 * Top clears floating detail-top / mobile bar; sides are card-stack 6px only.
+	 */
 	.activity {
 		display: flex;
 		flex-direction: column;
@@ -133,8 +138,8 @@
 		flex: 1;
 		box-sizing: border-box;
 		width: 100%;
-		/* Same as list-column feed pad under floating chrome */
-		padding: var(--feed-pad-top, 48px) 0 var(--feed-pad-bottom, 36px);
+		margin: 0;
+		padding: 48px 0 28px;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
 	}
@@ -150,7 +155,7 @@
 	.list {
 		list-style: none;
 		margin: 0;
-		padding: 6px;
+		padding: 4px 6px 10px;
 		display: flex;
 		flex-direction: column;
 		gap: 0;
@@ -158,12 +163,12 @@
 		box-sizing: border-box;
 	}
 
-	.card {
+	.row {
 		display: flex;
 		align-items: flex-start;
 		gap: 10px;
 		width: 100%;
-		padding: 8px 10px;
+		padding: 8px 8px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -174,7 +179,7 @@
 		box-sizing: border-box;
 	}
 
-	.card:hover {
+	.row:hover {
 		background: var(--fg-4);
 	}
 
@@ -265,8 +270,9 @@
 
 	@media (max-width: 767px) {
 		.activity {
-			padding-top: var(--feed-pad-top, calc(60px + env(safe-area-inset-top, 0px)));
-			padding-bottom: var(--feed-pad-bottom, calc(28px + env(safe-area-inset-bottom, 0px)));
+			/* Clear ChromeMobileBar (88px) + safe area — not shell list feed-pad */
+			padding: calc(88px + env(safe-area-inset-top, 0px)) 0
+				calc(24px + env(safe-area-inset-bottom, 0px));
 		}
 	}
 </style>

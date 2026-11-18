@@ -298,6 +298,7 @@
 		if (!root || !dock) return;
 		return attachComposerClearPad(root, dock, {
 			scroller,
+			minPx: 160,
 			isPinned: () => pinBottom,
 			isLocked: () => snapLock > 0
 		});
@@ -995,8 +996,8 @@
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		/* Clear detail-top; --composer-clear tracks live dock height (quote / tall draft). */
-		padding: 56px 24px var(--composer-clear, calc(120px + env(safe-area-inset-bottom, 0px)));
+		/* Clear detail-top; --composer-clear tracks live dock overlap (quote / tall draft). */
+		padding: 56px 24px var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px)));
 	}
 
 	/* Match other 2nd-column gutters when chat is compacted (after a detail open). */
@@ -1428,7 +1429,7 @@
 		bottom: 0;
 		/* Above shell list-bottom-fade (z5) when that chrome is present elsewhere */
 		z-index: 6;
-		height: var(--composer-clear, calc(88px + env(safe-area-inset-bottom, 0px)));
+		height: var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px)));
 		pointer-events: none;
 		background: linear-gradient(
 			to top,
@@ -1460,11 +1461,11 @@
 	@media (max-width: 767px) {
 		.messages {
 			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
-				var(--composer-clear, calc(120px + env(safe-area-inset-bottom, 0px)));
+				var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px)));
 		}
 
 		.composer-fade {
-			height: var(--composer-clear, calc(88px + env(safe-area-inset-bottom, 0px)));
+			height: var(--composer-clear, calc(160px + env(safe-area-inset-bottom, 0px)));
 			background: linear-gradient(
 				to top,
 				var(--shell, var(--bg)) 0%,

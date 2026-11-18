@@ -13,11 +13,15 @@ export const FEED_NEAR_BOTTOM_PX = 64;
  * Fallback CSS bottom padding when the composer dock isn't measured yet.
  * Prefer `attachComposerClearPad` so quote / attach / tall drafts grow the clear.
  */
-export const FEED_BOTTOM_PAD_CSS = 'calc(120px + env(safe-area-inset-bottom, 0px))';
+export const FEED_BOTTOM_PAD_CSS = 'calc(160px + env(safe-area-inset-bottom, 0px))';
+
+/** Extra air above the composer pill so the last bubble isn’t kissing the dock. */
+const COMPOSER_CLEAR_GAP_PX = 20;
 
 /**
  * Keep a floating composer from covering the last feed rows.
- * Sets `--composer-clear` on `root` from the dock's live height (quote, attach, tall text).
+ * Sets `--composer-clear` on `root` from the live overlap of scroller ↔ dock
+ * (quote / attach / tall text). Never shrinks below the CSS fallback floor.
  * @param {HTMLElement} root — chat / sheet root that owns `--composer-clear`
  * @param {HTMLElement} dock — `.composer-dock`
  * @param {{
@@ -28,15 +32,24 @@ export const FEED_BOTTOM_PAD_CSS = 'calc(120px + env(safe-area-inset-bottom, 0px
  * }} [opts]
  */
 export function attachComposerClearPad(root, dock, opts = {}) {
-	const minPx = opts.minPx ?? 0;
+	const minPx = opts.minPx ?? 160;
 	const apply = () => {
-		const h = Math.max(minPx, Math.ceil(dock.getBoundingClientRect().height));
-		root.style.setProperty('--composer-clear', `${h}px`);
+		const dockBox = dock.getBoundingClientRect();
+		let clear = Math.ceil(dockBox.height) + COMPOSER_CLEAR_GAP_PX;
+		const scroller = opts.scroller;
+		if (scroller) {
+			const feedBox = scroller.getBoundingClientRect();
+			/* How far the dock intrudes into the feed viewport from the bottom. */
+			clear = Math.max(clear, Math.ceil(feedBox.bottom - dockBox.top) + COMPOSER_CLEAR_GAP_PX);
+		}
+		clear = Math.max(minPx, clear);
+		root.style.setProperty('--composer-clear', `${clear}px`);
 		if (opts.isLocked?.()) return;
-		if (opts.isPinned?.() && opts.scroller) snapFeedToBottom(opts.scroller);
+		if (opts.isPinned?.() && scroller) snapFeedToBottom(scroller);
 	};
 	const ro = new ResizeObserver(apply);
 	ro.observe(dock);
+	if (opts.scroller) ro.observe(opts.scroller);
 	apply();
 	return () => {
 		ro.disconnect();
