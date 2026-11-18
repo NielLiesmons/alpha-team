@@ -35,9 +35,11 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 
 ## Modals / sheets
 
-- **Never** show a visual drag handle / grabber pill on any Modal, CreateSheet, comment panel, or bottom sheet — not on mobile, not on desktop.
-- Mobile sheets may still support drag-down-to-dismiss as a gesture; the chrome itself stays clean (title / actions only).
-- Comment / chat entity panels: FAB inset inside the detail column (`~20px`); open panel matches Modal glass (`--modal-bg` / `--glass-panel`, `--scrim` on mobile). Desktop floating card keeps **full** rounded corners (incl. bottom). Composer chrome matches Chat (`ChatComposer` + quote bar).
+- **Never** show a visual drag handle / grabber pill on Modal, CreateSheet, or generic bottom sheets — not on mobile, not on desktop.
+- **Exception — comment panels:** Always show top chrome: close chevron (left) + centered “Comments” title + `Drag` grabber (right) for resize / drag-under-min dismiss. Same pattern in Admin `CommentThread` and public `CommentSection`.
+- Comment FAB ↔ panel morph: use a **fixed** `--comments-radius` (~22px = half of 44px FAB height) on both collapsed and expanded states so only width/height animate — never transition `border-radius`.
+- Mobile sheets may still support drag-down-to-dismiss as a gesture; Modal/CreateSheet chrome itself stays clean (title / actions only).
+- Comment / chat entity panels: FAB inset inside the detail column (`~20px`); open panel matches Modal glass (`--modal-bg` / `--glass-panel`). Desktop floating card keeps **full** rounded corners (incl. bottom). Composer chrome matches Chat (`ChatComposer` + quote bar).
 
 ## Destructive
 

@@ -606,6 +606,7 @@
 					/>
 				</svg>
 			</button>
+			<p class="sheet-title">{t('comments.title')}</p>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<button
 				type="button"
@@ -733,6 +734,11 @@
 	 * No scrim — pointer-events only on the panel itself so detail scrolls behind.
 	 */
 	.panel {
+		/*
+		 * Fixed radius for FAB ↔ sheet morph: 22px = half of 44px FAB height,
+		 * so the collapsed host already reads as a pill. Only width/height animate.
+		 */
+		--comments-radius: 22px;
 		--fab-right: 20px;
 		--fab-bottom: max(20px, env(safe-area-inset-bottom));
 		position: absolute;
@@ -745,6 +751,7 @@
 		transform-origin: bottom right;
 		overflow: hidden;
 		border: 1px solid transparent;
+		border-radius: var(--comments-radius);
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -756,7 +763,6 @@
 			width 0.32s cubic-bezier(0.22, 1, 0.36, 1),
 			height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
 			max-height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-			border-radius 0.32s cubic-bezier(0.22, 1, 0.36, 1),
 			box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
 			background 0.24s ease,
 			color 0.24s ease;
@@ -766,7 +772,6 @@
 		width: max-content;
 		min-width: 5.5rem;
 		height: 44px;
-		border-radius: 999px;
 		min-height: 44px;
 		max-height: 44px;
 	}
@@ -787,7 +792,6 @@
 		height: min(78svh, 680px);
 		max-height: 80vh;
 		min-height: 200px;
-		border-radius: 28px;
 		border-color: var(--glass-border);
 		background: var(--modal-bg, var(--glass-panel));
 		box-shadow: 0 16px 48px var(--shadow-strong, rgba(0, 0, 0, 0.28));
@@ -804,7 +808,6 @@
 		height: 44px !important;
 		min-height: 44px;
 		max-height: 44px;
-		border-radius: 999px;
 		pointer-events: none;
 		opacity: 0.92;
 	}
@@ -823,7 +826,7 @@
 		height: 44px;
 		padding: 0 12px 0 14px;
 		border: 0;
-		border-radius: 999px;
+		border-radius: var(--comments-radius);
 		background: transparent;
 		color: inherit;
 		cursor: pointer;
@@ -860,9 +863,10 @@
 		top: 0;
 		z-index: 5;
 		height: 44px;
-		display: flex;
+		display: grid;
+		grid-template-columns: 32px 1fr 32px;
 		align-items: center;
-		justify-content: space-between;
+		gap: 8px;
 		padding: 6px 10px;
 		box-sizing: border-box;
 		pointer-events: none;
@@ -873,6 +877,22 @@
 			transparent 100%
 		);
 		transition: opacity 0.2s ease;
+	}
+
+	.sheet-title {
+		margin: 0;
+		min-width: 0;
+		text-align: center;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 14px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		line-height: 1.2;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		pointer-events: none;
 	}
 
 	.top-btn {
@@ -1179,7 +1199,7 @@
 			bottom: 0;
 			width: 100%;
 			max-width: none;
-			border-radius: var(--radius-hero) var(--radius-hero) 0 0;
+			/* Keep --comments-radius on all corners so morph never retargets radius. */
 			border-bottom: none;
 			height: min(78svh, 640px);
 			z-index: 72;
