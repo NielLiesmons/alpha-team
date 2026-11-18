@@ -73,7 +73,6 @@
 	import PullToRefresh from './PullToRefresh.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import ChromeMobileBar from '@alpha/ui/ChromeMobileBar.svelte';
-	import Adjust from './icons/Adjust.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
@@ -405,7 +404,7 @@
 		if (pubsActivity) return t('web.activityTitle');
 		if (pubsHub) return t('nav.publications');
 		if (mailMsg) return t('mail.thread');
-		if (chatNotifsOpen) return t('chat.activityTitle');
+		if (chatNotifsOpen) return t('chat.activityOpen');
 		if (chatChannel) return chatChannel.title || t('chat.channel');
 		if (fileEntry?.isFolder) return t('drive.folder');
 		if (fileEntry) return t('drive.file');
@@ -435,7 +434,7 @@
 		if (pubsHub) return t('nav.publications');
 		/* Subject lives big in the thread body — chrome stays generic. */
 		if (mailMsg) return t('mail.thread');
-		if (chatNotifsOpen) return t('chat.activityTitle');
+		if (chatNotifsOpen) return t('chat.activityOpen');
 		if (chatChannel) return chatChannel.title || t('chat.general');
 		if (fileEntry) return fileTitle;
 		if (settingsSectionId) return settingsTitles[settingsSectionId] || t('nav.settings');
@@ -494,7 +493,7 @@
 			};
 		if (path.startsWith('/chat'))
 			return {
-				title: t('chat.activityTitle'),
+				title: t('chat.activityOpen'),
 				body: t('chat.activitySub')
 			};
 		if (path.startsWith('/drive'))
@@ -737,8 +736,11 @@
 	/** Keep body mounted through the mobile slide-out so the panel doesn’t blank mid-transition. */
 	let renderBody = $state(false);
 	let panelOpen = $state(false);
-	/** For-you activity filter (Chat 3rd column). */
+	/** Notifications filter (Chat 3rd column) — same chrome filter pattern as list pages. */
 	let activityFilter = $state(/** @type {'all' | 'reaction' | 'reply' | 'assigned'} */ ('all'));
+	let activityFilterOpen = $state(false);
+	/** @type {HTMLButtonElement | undefined} */
+	let activityFilterBtn = $state();
 
 	const activityFilterOptions = $derived.by(() => {
 		locale.value;
@@ -750,10 +752,7 @@
 			{ id: 'assigned', label: t('chat.activityFilterAssigned') }
 		];
 	});
-
-	function openPushPrefs() {
-		selectEntity('settings', 'notifications');
-	}
+	const activityFilterActive = $derived(activityFilter !== 'all');
 	/** 0..1 while edge-swiping back; null when idle. Drives list underlay in UiShell. */
 	let detailDrag = $state(/** @type {number | null} */ (null));
 
@@ -1485,7 +1484,7 @@
 			/>
 		</div>
 	{:else if chatNotifsOpen}
-		<header class="detail-top desktop-head">
+		<header class="detail-top desktop-head notifs-top">
 			<div class="detail-top-start">
 				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -1498,26 +1497,52 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">{t('chat.activityTitle')}</span>
+				<span class="detail-top-label">{t('chat.activityOpen')}</span>
 			</div>
 			<div class="detail-top-actions">
-				<div class="activity-filter" role="group" aria-label={t('chat.activityFilter')}>
-					{#each activityFilterOptions as opt (opt.id)}
-						<button
-							type="button"
-							class:on={activityFilter === opt.id}
-							onclick={() => (activityFilter = opt.id)}>{opt.label}</button
-						>
-					{/each}
+				<div class="notif-filter-wrap">
+					<button
+						bind:this={activityFilterBtn}
+						type="button"
+						class="notif-filter-btn"
+						class:on={activityFilterActive || activityFilterOpen}
+						aria-label={t('chat.activityFilter')}
+						aria-expanded={activityFilterOpen}
+						aria-haspopup="listbox"
+						onclick={() => (activityFilterOpen = !activityFilterOpen)}
+					>
+						<svg class="notif-filter-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M2.5 4h11M4.5 8h7M6.5 12h3"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
+					<FloatPanel
+						open={activityFilterOpen}
+						anchor={activityFilterBtn}
+						placement="below"
+						align="end"
+						width={180}
+						maxHeight={280}
+						onclose={() => (activityFilterOpen = false)}
+					>
+						<div class="notif-filter-menu" role="listbox">
+							{#each activityFilterOptions as opt (opt.id)}
+								<button
+									type="button"
+									class:on={activityFilter === opt.id}
+									onclick={() => {
+										activityFilter = opt.id;
+										activityFilterOpen = false;
+									}}>{opt.label}</button
+								>
+							{/each}
+						</div>
+					</FloatPanel>
 				</div>
-				<button
-					type="button"
-					class="icon-hit"
-					aria-label={t('chat.activityPushPrefs')}
-					onclick={openPushPrefs}
-				>
-					<Adjust size={15} />
-				</button>
 			</div>
 		</header>
 		<div class="body chat-activity-body">
@@ -1995,28 +2020,54 @@
 	{/key}
 {:else if $page.url.pathname.startsWith('/chat')}
 	<div class="detail-page chat-home">
-		<header class="detail-top desktop-head">
+		<header class="detail-top desktop-head notifs-top">
 			<div class="detail-top-start">
-				<span class="detail-top-label">{t('chat.activityTitle')}</span>
+				<span class="detail-top-label">{t('chat.activityOpen')}</span>
 			</div>
 			<div class="detail-top-actions">
-				<div class="activity-filter" role="group" aria-label={t('chat.activityFilter')}>
-					{#each activityFilterOptions as opt (opt.id)}
-						<button
-							type="button"
-							class:on={activityFilter === opt.id}
-							onclick={() => (activityFilter = opt.id)}>{opt.label}</button
-						>
-					{/each}
+				<div class="notif-filter-wrap">
+					<button
+						bind:this={activityFilterBtn}
+						type="button"
+						class="notif-filter-btn"
+						class:on={activityFilterActive || activityFilterOpen}
+						aria-label={t('chat.activityFilter')}
+						aria-expanded={activityFilterOpen}
+						aria-haspopup="listbox"
+						onclick={() => (activityFilterOpen = !activityFilterOpen)}
+					>
+						<svg class="notif-filter-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M2.5 4h11M4.5 8h7M6.5 12h3"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
+					<FloatPanel
+						open={activityFilterOpen}
+						anchor={activityFilterBtn}
+						placement="below"
+						align="end"
+						width={180}
+						maxHeight={280}
+						onclose={() => (activityFilterOpen = false)}
+					>
+						<div class="notif-filter-menu" role="listbox">
+							{#each activityFilterOptions as opt (opt.id)}
+								<button
+									type="button"
+									class:on={activityFilter === opt.id}
+									onclick={() => {
+										activityFilter = opt.id;
+										activityFilterOpen = false;
+									}}>{opt.label}</button
+								>
+							{/each}
+						</div>
+					</FloatPanel>
 				</div>
-				<button
-					type="button"
-					class="icon-hit"
-					aria-label={t('chat.activityPushPrefs')}
-					onclick={openPushPrefs}
-				>
-					<Adjust size={15} />
-				</button>
 			</div>
 		</header>
 		<div class="body chat-activity-body">
@@ -2850,49 +2901,85 @@
 		width: 100%;
 	}
 
+	/* Match list-top gutters (16/10), not entity detail 24px inset. */
+	:global(.detail .detail-top.notifs-top) {
+		padding: 0 10px 0 16px;
+	}
+
 	.body.chat-activity-body {
 		overflow: auto;
 		width: 100%;
 		box-sizing: border-box;
-		/* Match chat channel / list density — no 56×24 hug padding. */
-		padding: 8px 4px 20px;
+		/* Clear absolute chrome like feed-pad-top; side gutters match .card-stack. */
+		padding: 48px 6px 20px;
 	}
 
-	.activity-filter {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
+	.notif-filter-wrap {
+		position: relative;
+		flex-shrink: 0;
+	}
+
+	.notif-filter-btn {
+		width: 28px;
 		height: 28px;
-		padding: 2px;
-		box-sizing: border-box;
-		border: 1px solid transparent;
-		border-radius: 10px;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		pointer-events: auto;
-	}
-
-	.activity-filter button {
-		height: 100%;
-		padding: 0 9px;
+		margin: 0;
+		padding: 0;
 		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--fg-33);
-		font: inherit;
-		font-size: 11px;
-		font-weight: 600;
+		border-radius: 999px;
+		display: grid;
+		place-items: center;
+		background: var(--fg-8);
+		color: var(--fg-66);
 		cursor: pointer;
-		line-height: 1;
-		white-space: nowrap;
+		box-sizing: border-box;
+		-webkit-tap-highlight-color: transparent;
+		transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease;
 	}
 
-	.activity-filter button.on {
-		background: var(--fg-8);
+	.notif-filter-btn:hover,
+	.notif-filter-btn.on,
+	.notif-filter-btn[aria-expanded='true'] {
+		transform: scale(1.06);
 		color: var(--fg);
+	}
+
+	.notif-filter-btn:active {
+		transform: scale(0.96);
+	}
+
+	.notif-filter-ico {
+		display: block;
+	}
+
+	.notif-filter-menu {
+		display: flex;
+		flex-direction: column;
+		padding: 4px 0;
+	}
+
+	.notif-filter-menu button {
+		display: block;
+		width: 100%;
+		padding: 8px 12px;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 0.9375rem;
+		font-weight: 500;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.notif-filter-menu button:hover,
+	.notif-filter-menu button.on {
+		background: var(--fg-4);
+		color: var(--fg);
+	}
+
+	.notif-filter-menu button.on {
+		font-weight: 600;
 	}
 
 	@media (min-width: 768px) {
@@ -2997,8 +3084,12 @@
 		}
 
 		.body.chat-activity-body {
-			padding: calc(8px + env(safe-area-inset-top, 0px)) 4px
+			padding: calc(56px + env(safe-area-inset-top, 0px)) 6px
 				calc(20px + env(safe-area-inset-bottom, 0px));
+		}
+
+		:global(.detail .detail-top.notifs-top) {
+			padding: 0 14px;
 		}
 	}
 </style>

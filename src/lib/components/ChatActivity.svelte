@@ -95,7 +95,7 @@
 								size={36}
 							/>
 						</span>
-						<span class="body">
+						<span class="copy">
 							<span class="line1">
 								<span
 									class="who"
@@ -105,7 +105,7 @@
 								<span class="verb">{verb(item)}</span>
 							</span>
 							<span class="line2">
-								<span class="kind" aria-hidden="true">
+								<span class="kind" class:emoji-kind={item.kind === 'reaction'} aria-hidden="true">
 									{#if item.kind === 'reaction'}
 										<span class="emoji">{item.emoji || '❤️'}</span>
 									{:else if item.kind === 'reply'}
@@ -159,7 +159,7 @@
 		align-items: flex-start;
 		gap: 10px;
 		width: 100%;
-		padding: 10px 12px;
+		padding: 8px 10px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -179,13 +179,12 @@
 		line-height: 0;
 	}
 
-	.body {
+	.copy {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
-		padding-top: 1px;
+		gap: 1px;
 	}
 
 	.line1 {
@@ -194,7 +193,7 @@
 		gap: 5px;
 		min-width: 0;
 		font-size: 13px;
-		line-height: 1.35;
+		line-height: 1.3;
 		overflow: hidden;
 		white-space: nowrap;
 	}
@@ -215,8 +214,9 @@
 	.line2 {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		min-width: 0;
+		min-height: 16px;
 	}
 
 	.kind {
@@ -229,9 +229,14 @@
 		line-height: 0;
 	}
 
+	.kind.emoji-kind {
+		color: inherit;
+	}
+
 	.emoji {
 		font-size: 14px;
 		line-height: 1;
+		opacity: 1;
 	}
 
 	.preview {
