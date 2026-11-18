@@ -3,10 +3,11 @@
 	 * Mail thread panels only — private chat lives in CommentThread (FAB panel),
 	 * same pattern as Tasks / Notes / Projects.
 	 */
-	import Forward from './icons/Forward.svelte';
+	import ArrowRight from './icons/ArrowRight.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
 	import Reply from './icons/Reply.svelte';
 	import ReplyAll from './icons/ReplyAll.svelte';
+	import DropdownMenu from './DropdownMenu.svelte';
 	import MailRichBody from './MailRichBody.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
@@ -57,6 +58,9 @@
 	let quoteOpen = $state({});
 	/** Which message’s reply/forward menu is open. */
 	let replyMenuId = $state('');
+	/** @type {HTMLElement | null} */
+	let replyMenuAnchor = $state(null);
+	const menuMail = $derived(mails.find((m) => String(m?.id || '') === replyMenuId) || null);
 
 	$effect(() => {
 		const id = threadId;
@@ -67,6 +71,8 @@
 		if (id === loadedThreadId) return;
 		loadedThreadId = id;
 		quoteOpen = {};
+		replyMenuId = '';
+		replyMenuAnchor = null;
 		queueMicrotask(() => {
 			const el = feedEl;
 			if (el) el.scrollTop = 0;
@@ -109,7 +115,7 @@
 	 * @param {'reply' | 'replyAll' | 'forward'} mode
 	 */
 	function composeAction(m, mode) {
-		replyMenuId = '';
+		closeReplyMenu();
 		openComposer(
 			'mail',
 			`act:${mode}:${m.id}`,
@@ -136,9 +142,23 @@
 		composeAction(lastMail, useReplyAll ? 'replyAll' : 'reply');
 	}
 
-	/** @param {string} id */
-	function toggleReplyMenu(id) {
-		replyMenuId = replyMenuId === id ? '' : id;
+	/**
+	 * @param {string} id
+	 * @param {HTMLElement | null} anchor
+	 */
+	function toggleReplyMenu(id, anchor) {
+		if (replyMenuId === id) {
+			replyMenuId = '';
+			replyMenuAnchor = null;
+			return;
+		}
+		replyMenuId = id;
+		replyMenuAnchor = anchor;
+	}
+
+	function closeReplyMenu() {
+		replyMenuId = '';
+		replyMenuAnchor = null;
 	}
 </script>
 
@@ -196,7 +216,7 @@
 								aria-label={t('common.more')}
 								aria-expanded={menuFor}
 								aria-haspopup="menu"
-								onclick={() => toggleReplyMenu(quoteId)}
+								onclick={(e) => toggleReplyMenu(quoteId, e.currentTarget)}
 							>
 								<span class="mail-more-icon" aria-hidden="true">
 									<MoreDots size={14} />
@@ -212,47 +232,6 @@
 									<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
 								{/if}
 							</button>
-							{#if menuFor}
-								<button
-									type="button"
-									class="corner-scrim"
-									aria-label={t('common.close')}
-									onclick={() => (replyMenuId = '')}
-								></button>
-								<div class="corner-menu" role="menu">
-									<button type="button" role="menuitem" onclick={() => composeAction(m, 'reply')}>
-										<Reply size={14} />
-										<span>{t('mail.reply')}</span>
-									</button>
-									<button
-										type="button"
-										role="menuitem"
-										onclick={() => composeAction(m, 'replyAll')}
-									>
-										<ReplyAll size={14} />
-										<span>{t('mail.replyAll')}</span>
-									</button>
-									<button
-										type="button"
-										role="menuitem"
-										onclick={() => composeAction(m, 'forward')}
-									>
-										<Forward size={14} />
-										<span>{t('mail.forward')}</span>
-									</button>
-									<button
-										type="button"
-										role="menuitem"
-										onclick={() => {
-											replyMenuId = '';
-											onMore();
-										}}
-									>
-										<MoreDots size={14} />
-										<span>{t('common.more')}</span>
-									</button>
-								</div>
-							{/if}
 						</div>
 					</header>
 					<div class="mail-panel-rule" aria-hidden="true"></div>
@@ -303,6 +282,55 @@
 		</div>
 	</div>
 </div>
+
+<DropdownMenu
+	open={Boolean(menuMail)}
+	anchor={replyMenuAnchor}
+	placement="below"
+	align="end"
+	width={188}
+	onclose={closeReplyMenu}
+>
+	{#if menuMail}
+		{@const m = menuMail}
+		<div class="dropdown-list" role="menu">
+			<button type="button" class="dropdown-item" role="menuitem" onclick={() => composeAction(m, 'reply')}>
+				<Reply size={14} />
+				<span>{t('mail.reply')}</span>
+			</button>
+			<button
+				type="button"
+				class="dropdown-item"
+				role="menuitem"
+				onclick={() => composeAction(m, 'replyAll')}
+			>
+				<ReplyAll size={14} />
+				<span>{t('mail.replyAll')}</span>
+			</button>
+			<button
+				type="button"
+				class="dropdown-item"
+				role="menuitem"
+				onclick={() => composeAction(m, 'forward')}
+			>
+				<ArrowRight size={14} strokeWidth={1.45} />
+				<span>{t('mail.forward')}</span>
+			</button>
+			<button
+				type="button"
+				class="dropdown-item"
+				role="menuitem"
+				onclick={() => {
+					closeReplyMenu();
+					onMore();
+				}}
+			>
+				<MoreDots size={14} />
+				<span>{t('common.more')}</span>
+			</button>
+		</div>
+	{/if}
+</DropdownMenu>
 
 <style>
 	.mail-thread-shell {
@@ -376,7 +404,8 @@
 		align-items: stretch;
 		gap: 10px;
 		min-width: 0;
-		padding: 12px 8px 10px 14px;
+		/* 1px less vertical pad offsets the +2px name→To gap so head height stays put */
+		padding: 11px 6px 9px 14px;
 		box-sizing: border-box;
 	}
 
@@ -385,7 +414,7 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 5px;
 		justify-content: center;
 		padding-right: 4px;
 	}
@@ -446,10 +475,10 @@
 		flex-direction: column;
 		align-items: flex-end;
 		justify-content: space-between;
-		gap: 4px;
+		gap: 6px;
 		min-width: 44px;
 		margin: 0;
-		padding: 0 2px 0 10px;
+		padding: 0 0 0 10px;
 		border: 0;
 		border-radius: 0;
 		background: transparent;
@@ -477,7 +506,7 @@
 	.mail-panel-when,
 	.mail-panel-status {
 		margin: 0;
-		padding: 0;
+		padding: 0 2px 0 0;
 		font-size: 11px;
 		font-weight: 500;
 		line-height: 1.25;
@@ -513,59 +542,6 @@
 		50% {
 			opacity: 1;
 		}
-	}
-
-	.corner-scrim {
-		position: fixed;
-		inset: 0;
-		z-index: 40;
-		margin: 0;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		cursor: default;
-	}
-
-	.corner-menu {
-		position: absolute;
-		right: 0;
-		top: calc(100% + 6px);
-		z-index: 50;
-		min-width: 168px;
-		padding: 0;
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		background: var(--glass);
-		overflow: hidden;
-		box-shadow: 0 8px 28px var(--shadow);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-	}
-
-	.corner-menu button {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		padding: 8px 12px;
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.corner-menu button:not(:last-child) {
-		border-bottom: 0.33px solid var(--fg-8);
-	}
-
-	.corner-menu button:hover {
-		background: var(--fg-4);
-		color: var(--fg);
 	}
 
 	.mail-panel-to {

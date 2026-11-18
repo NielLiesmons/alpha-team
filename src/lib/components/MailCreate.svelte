@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import CreateSheet from './CreateSheet.svelte';
 	import EditorToolbar from './EditorToolbar.svelte';
+	import FloatPanel from './FloatPanel.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import PrimaryButton from './PrimaryButton.svelte';
 	import ProfilePic from './ProfilePic.svelte';
@@ -38,11 +39,16 @@
 	let scheduleOpen = $state(false);
 	/** @type {string} */
 	let scheduleLocal = $state('');
+	/** @type {HTMLButtonElement | null} */
+	let scheduleBtn = $state(null);
 
 	const open = $derived(ui.composer?.kind === 'mail');
 	const editorKey = $derived(open ? String(ui.composer?.id ?? 'new') : 'closed');
 	const plainBody = $derived(plainMailBody(body));
 	const query = $derived(draft.trim());
+	const sendDisabled = $derived(
+		busy || recipients.length === 0 || (!subject.trim() && !plainBody)
+	);
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -358,11 +364,16 @@
 
 	<div class="post-action-row">
 		<EditorToolbar editor={tipTap} />
-		<div class="send-split" role="group" aria-label={t('mail.send')}>
+		<div
+			class="send-split"
+			class:is-disabled={sendDisabled}
+			role="group"
+			aria-label={t('mail.send')}
+		>
 			<PrimaryButton
 				size="sheet"
 				class="send-main"
-				disabled={busy || recipients.length === 0 || (!subject.trim() && !plainBody)}
+				disabled={sendDisabled}
 				onclick={() => send(null)}
 			>
 				{t('mail.send')}
@@ -371,51 +382,55 @@
 			<button
 				type="button"
 				class="send-schedule"
+				bind:this={scheduleBtn}
 				aria-label={t('mail.sendLater')}
 				aria-expanded={scheduleOpen}
-				disabled={busy || recipients.length === 0 || (!subject.trim() && !plainBody)}
+				disabled={sendDisabled}
 				onclick={() => (scheduleOpen = !scheduleOpen)}
 			>
 				<span class="send-chevron" aria-hidden="true">
-					<svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+					<svg width="16" height="16" viewBox="0 0 12 12" fill="none">
 						<path
 							d="M3 4.5 6 7.5 9 4.5"
 							stroke="currentColor"
-							stroke-width="1.25"
+							stroke-width="1.2"
 							stroke-linecap="round"
 							stroke-linejoin="round"
 						/>
 					</svg>
 				</span>
 			</button>
-			{#if scheduleOpen}
-				<button
-					type="button"
-					class="schedule-scrim"
-					aria-label={t('common.close')}
-					onclick={() => (scheduleOpen = false)}
-				></button>
-				<div class="schedule-pop" role="dialog" aria-label={t('mail.sendLater')}>
-					<label class="schedule-label" for="mail-schedule-at">{t('mail.scheduleAt')}</label>
-					<input
-						id="mail-schedule-at"
-						class="schedule-input"
-						type="datetime-local"
-						bind:value={scheduleLocal}
-					/>
-					<button
-						type="button"
-						class="schedule-confirm"
-						disabled={!scheduleLocal}
-						onclick={confirmSchedule}
-					>
-						{t('mail.scheduleSend')}
-					</button>
-				</div>
-			{/if}
 		</div>
 	</div>
 </CreateSheet>
+
+<FloatPanel
+	open={scheduleOpen}
+	anchor={scheduleBtn}
+	placement="above"
+	align="end"
+	width={240}
+	maxHeight={220}
+	onclose={() => (scheduleOpen = false)}
+>
+	<div class="schedule-panel">
+		<label class="schedule-label" for="mail-schedule-at">{t('mail.scheduleAt')}</label>
+		<input
+			id="mail-schedule-at"
+			class="schedule-input"
+			type="datetime-local"
+			bind:value={scheduleLocal}
+		/>
+		<button
+			type="button"
+			class="schedule-confirm"
+			disabled={!scheduleLocal}
+			onclick={confirmSchedule}
+		>
+			{t('mail.scheduleSend')}
+		</button>
+	</div>
+</FloatPanel>
 
 <style>
 	.recipients-row {
@@ -533,6 +548,11 @@
 		box-sizing: border-box;
 	}
 
+	/* Whole split fades like a normal PrimaryButton — avoid double-dimming children. */
+	.send-split.is-disabled {
+		opacity: 0.5;
+	}
+
 	.send-split :global(.send-main.alpha-btn.sheet) {
 		margin-left: 0;
 		border-radius: 9999px 0 0 9999px;
@@ -545,6 +565,11 @@
 		height: 100%;
 		min-height: 0;
 		transform: none;
+	}
+
+	.send-split.is-disabled :global(.send-main.alpha-btn.sheet:disabled),
+	.send-split.is-disabled :global(.send-main.alpha-btn.sheet.disabled) {
+		opacity: 1;
 	}
 
 	.send-split :global(.send-main.alpha-btn.sheet:hover:not(:disabled)),
@@ -586,7 +611,7 @@
 	}
 
 	.send-schedule:disabled {
-		opacity: 0.45;
+		opacity: 1;
 		cursor: default;
 	}
 
@@ -594,33 +619,12 @@
 		background: color-mix(in srgb, var(--fg) 6%, transparent);
 	}
 
-	.schedule-scrim {
-		position: fixed;
-		inset: 0;
-		z-index: 40;
-		margin: 0;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		cursor: default;
-	}
-
-	.schedule-pop {
-		position: absolute;
-		right: 0;
-		bottom: calc(100% + 8px);
-		z-index: 50;
+	.schedule-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		min-width: 220px;
+		gap: 10px;
 		padding: 12px;
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		background: var(--glass);
-		box-shadow: 0 8px 28px var(--shadow);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+		box-sizing: border-box;
 	}
 
 	.schedule-label {

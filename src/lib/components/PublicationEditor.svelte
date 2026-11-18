@@ -6,6 +6,7 @@
 	import MailHeroEditor from './MailHeroEditor.svelte';
 	import NoteEditor from './NoteEditor.svelte';
 	import EditorToolbar from './EditorToolbar.svelte';
+	import FloatPanel from './FloatPanel.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import PublicationFooterEdit from './PublicationFooterEdit.svelte';
 	import {
@@ -42,6 +43,8 @@
 	let footerOpen = $state(false);
 	let scheduleOpen = $state(false);
 	let scheduleLocal = $state('');
+	/** @type {HTMLButtonElement | null} */
+	let scheduleBtn = $state(null);
 	let publisherOpen = $state(false);
 	/** @type {import('@tiptap/core').Editor | null} */
 	let tipTap = $state(null);
@@ -440,7 +443,7 @@
 			{t('web.footerEdit')}
 		</button>
 		<span class="status-pill">{statusPill}</span>
-		<div class="publish-split">
+		<div class="publish-split" class:is-disabled={!canPublish}>
 			<button type="button" class="publish-main" disabled={!canPublish} onclick={publishNow}>
 				{primaryLabel}
 			</button>
@@ -448,36 +451,46 @@
 			<button
 				type="button"
 				class="publish-chevron"
+				bind:this={scheduleBtn}
 				disabled={!canPublish || Boolean(postSlug) || editingCampaign?.status === 'sent'}
 				aria-label={t('web.schedule')}
 				aria-expanded={scheduleOpen}
 				onclick={() => (scheduleOpen = !scheduleOpen)}
 			>
-				<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 					<path
 						d="M4 6.5 8 10.5 12 6.5"
 						stroke="currentColor"
-						stroke-width="1.6"
+						stroke-width="1.25"
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					/>
 				</svg>
 			</button>
-			{#if scheduleOpen}
-				<div class="schedule-menu" role="dialog" aria-label={t('web.scheduleTitle')}>
-					<button type="button" class="schedule-opt" onclick={publishNow}>{t('web.publishNow')}</button>
-					<label class="schedule-label">
-						{t('web.schedule')}
-						<input type="datetime-local" bind:value={scheduleLocal} />
-					</label>
-					<button type="button" class="schedule-opt primary" onclick={() => void confirmSchedule()}
-						>{t('web.scheduleTitle')}</button
-					>
-				</div>
-			{/if}
 		</div>
 	</div>
 </div>
+
+<FloatPanel
+	open={scheduleOpen}
+	anchor={scheduleBtn}
+	placement="above"
+	align="end"
+	width={240}
+	maxHeight={260}
+	onclose={() => (scheduleOpen = false)}
+>
+	<div class="schedule-panel">
+		<button type="button" class="schedule-opt" onclick={publishNow}>{t('web.publishNow')}</button>
+		<label class="schedule-label">
+			{t('web.schedule')}
+			<input type="datetime-local" bind:value={scheduleLocal} />
+		</label>
+		<button type="button" class="schedule-opt primary" onclick={() => void confirmSchedule()}
+			>{t('web.scheduleTitle')}</button
+		>
+	</div>
+</FloatPanel>
 
 <PublicationFooterEdit open={footerOpen} onclose={() => (footerOpen = false)} />
 
@@ -646,9 +659,13 @@
 		align-items: stretch;
 		height: 40px;
 		border-radius: 12px;
-		overflow: hidden;
+		overflow: visible;
 		background: var(--button-primary-bg, var(--ink));
 		color: var(--button-primary-fg, var(--bg));
+	}
+
+	.publish-split.is-disabled {
+		opacity: 0.5;
 	}
 
 	.publish-main {
@@ -678,26 +695,19 @@
 		cursor: pointer;
 	}
 
-	.publish-main:disabled,
+	.publish-split.is-disabled .publish-main:disabled,
+	.publish-split.is-disabled .publish-chevron:disabled,
 	.publish-chevron:disabled {
-		opacity: 0.45;
+		opacity: 1;
 		cursor: default;
 	}
 
-	.schedule-menu {
-		position: absolute;
-		right: 0;
-		bottom: calc(100% + 8px);
-		min-width: 220px;
-		padding: 8px;
-		border-radius: 12px;
-		background: var(--modal-bg, var(--bg));
-		color: var(--fg);
-		box-shadow: var(--shadow-2, 0 8px 24px color-mix(in srgb, var(--ink) 16%, transparent));
+	.schedule-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
-		z-index: 6;
+		gap: 8px;
+		padding: 10px;
+		box-sizing: border-box;
 	}
 
 	.schedule-opt {
