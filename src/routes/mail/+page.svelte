@@ -451,9 +451,9 @@
 		min-height: 0;
 	}
 
-	/* Inbox triage only — stroked SegmentedControl; extra top inset above the track. */
+	/* Inbox triage only — stroked SegmentedControl; light top inset (not 10px). */
 	.category-seg {
-		margin: 10px 10px 10px;
+		margin: 4px 10px 10px;
 	}
 
 	.banner {
