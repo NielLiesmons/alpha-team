@@ -60,7 +60,7 @@ export const FIRST_PARTY_CONTENT_TYPES = [
 		id: 'alpha.tasks',
 		version: '0.1.0',
 		title: 'Tasks',
-		entity_schema: 'alpha.task/3',
+		entity_schema: 'alpha.task/4',
 		drive_root: 'tasks/',
 		first_party: true,
 		open: { mode: 'native', native_route: '/tasks?id={id}' },

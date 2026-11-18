@@ -10,6 +10,7 @@
 	import DropdownMenu from './DropdownMenu.svelte';
 	import MailRichBody from './MailRichBody.svelte';
 	import ProfilePic from './ProfilePic.svelte';
+	import TaskCard from './TaskCard.svelte';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { loadComments } from '$lib/chat.svelte.js';
@@ -25,7 +26,13 @@
 	} from '$lib/mail.svelte.js';
 	import { mailView } from '$lib/mail-view.svelte.js';
 	import { swipeLeftReply } from '$lib/swipe-left-reply.js';
-	import { openComposer } from '$lib/workspace.svelte.js';
+	import {
+		moments,
+		openComposer,
+		selectEntity,
+		taskByMailThreadId,
+		ui
+	} from '$lib/workspace.svelte.js';
 
 	/**
 	 * @type {{
@@ -44,6 +51,27 @@
 	const threadTitle = $derived(
 		String(firstMail?.subject || mailMsg?.subject || '').trim() || t('common.noSubject')
 	);
+	const linkedTask = $derived(taskByMailThreadId(threadId));
+	const linkedMomentAssignees = $derived.by(() => {
+		const taskId = linkedTask?.id;
+		if (!taskId) return /** @type {string[]} */ ([]);
+		moments.length;
+		/** @type {string[]} */
+		const out = [];
+		const seen = new Set();
+		for (const m of moments) {
+			if (m.task_id !== taskId || m.status === 'canceled') continue;
+			for (const raw of m.assignees || []) {
+				const e = String(raw || '')
+					.trim()
+					.toLowerCase();
+				if (!e || seen.has(e)) continue;
+				seen.add(e);
+				out.push(e);
+			}
+		}
+		return out;
+	});
 	const lastMail = $derived(mails[mails.length - 1] || mailMsg);
 	const useReplyAll = $derived(preferReplyAll(lastMail, me));
 	const replyName = $derived(
@@ -166,6 +194,21 @@
 	<div class="feed mail-feed" bind:this={feedEl}>
 		<div class="feed-body">
 			<h1 class="mail-thread-title">{threadTitle}</h1>
+			{#if linkedTask}
+				<div class="mail-linked-task">
+					<TaskCard
+						id={linkedTask.id}
+						title={linkedTask.title}
+						status={linkedTask.status}
+						priority={linkedTask.priority}
+						author={linkedTask.author}
+						assignees={linkedTask.assignees ?? []}
+						momentAssignees={linkedMomentAssignees}
+						onclick={() => selectEntity('task', linkedTask.id)}
+						selected={ui.selection?.kind === 'task' && ui.selection.id === linkedTask.id}
+					/>
+				</div>
+			{/if}
 			{#each mails as m (m.id)}
 				{@const fromEmail = String(m.from || '').toLowerCase()}
 				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
@@ -356,6 +399,13 @@
 		line-height: 1.15;
 		color: var(--fg);
 		overflow-wrap: anywhere;
+	}
+
+	.mail-linked-task {
+		margin: -6px 0 14px;
+		padding: 0;
+		border-radius: 12px;
+		background: var(--fg-4);
 	}
 
 	.mail-panel {

@@ -6,6 +6,7 @@
 	import PriorityBox from '$lib/components/PriorityBox.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
+	import TaskFieldPicker from '$lib/components/TaskFieldPicker.svelte';
 	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { appBoot } from '$lib/boot.svelte.js';
@@ -37,9 +38,39 @@
 		mailView,
 		setMailCategory
 	} from '$lib/mail-view.svelte.js';
-	import { forceClearSelection, openComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
+	import {
+		forceClearSelection,
+		openComposer,
+		openMailTaskComposer,
+		selectEntity,
+		taskByMailThreadId,
+		ui
+	} from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import UnreadMark from '@alpha/ui/UnreadMark.svelte';
+
+	/** @param {any} thread */
+	function seedBodyFromThread(thread) {
+		const latest = mailLatestMessage(thread) || thread;
+		const text = mailPreview(latest) || String(latest?.body || '');
+		return String(text)
+			.replace(/<[^>]+>/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.slice(0, 2000);
+	}
+
+	/** @param {MouseEvent} e @param {any} thread */
+	function openTaskFromMailCard(e, thread) {
+		e.preventDefault();
+		e.stopPropagation();
+		openMailTaskComposer({
+			id: thread.id,
+			subject: thread.subject,
+			body: seedBodyFromThread(thread),
+			flagged: Boolean(thread._flagged)
+		});
+	}
 
 	$effect(() => {
 		mailView.folder;
@@ -277,7 +308,7 @@
 				{@const commenters = commentProfiles(comments)}
 				{@const hasComments = comments.length > 0}
 				{@const convo = threadParticipantProfiles(thread)}
-				{@const flagged = Boolean(thread._flagged)}
+				{@const linkedTask = taskByMailThreadId(thread.id)}
 				<button
 					type="button"
 					class="row"
@@ -318,9 +349,37 @@
 						<span class="meta">
 							<span class="author">{author}</span>
 							<span class="meta-trail">
-								{#if flagged}
-									<span class="priority-hit" aria-label={t('mail.flagged')}>
-										<PriorityBox priority="urgent" size={16} />
+								{#if linkedTask}
+									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
+										<TaskFieldPicker
+											taskId={linkedTask.id}
+											field="status"
+											value={linkedTask.status || 'open'}
+											size={16}
+										/>
+									</span>
+									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
+										<TaskFieldPicker
+											taskId={linkedTask.id}
+											field="priority"
+											value={linkedTask.priority || 'none'}
+											size={16}
+											align="right"
+										/>
+									</span>
+								{:else}
+									<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+									<span
+										class="priority-hit"
+										role="button"
+										tabindex="0"
+										aria-label={t('mail.addTask')}
+										onclick={(e) => openTaskFromMailCard(e, thread)}
+										onkeydown={(e) =>
+											(e.key === 'Enter' || e.key === ' ') &&
+											(e.preventDefault(), openTaskFromMailCard(e, thread))}
+									>
+										<PriorityBox priority="none" size={16} />
 									</span>
 								{/if}
 								{#if unread}
@@ -611,12 +670,20 @@
 		padding-right: 2px;
 	}
 
-	.priority-hit {
+	.priority-hit,
+	.task-hit {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
 		line-height: 0;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.unread-dot {

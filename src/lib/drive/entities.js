@@ -217,7 +217,7 @@ export async function listProjects(session) {
 }
 
 /**
- * Normalize legacy task/1–2 → task/3 shape (deadline_at; no start/end bars).
+ * Normalize legacy task/1–3 → task/4 shape (deadline_at; optional mail_thread_id).
  * @param {any} raw
  */
 export function normalizeTask(raw) {
@@ -234,7 +234,7 @@ export function normalizeTask(raw) {
 		recurring: 'planned'
 	};
 	if (statusMap[t.status]) t.status = statusMap[t.status];
-	t.schema = 'alpha.task/3';
+	t.schema = 'alpha.task/4';
 	t.labels = Array.isArray(t.labels) ? t.labels : [];
 	t.priority = t.priority ?? 'none';
 	t.depends_on = Array.isArray(t.depends_on) ? t.depends_on : [];
@@ -243,6 +243,11 @@ export function normalizeTask(raw) {
 	delete t.due_at;
 	delete t.start_at;
 	delete t.end_at;
+	const mailThread =
+		typeof t.mail_thread_id === 'string' && t.mail_thread_id.trim()
+			? t.mail_thread_id.trim()
+			: null;
+	t.mail_thread_id = mailThread;
 	if (typeof t.author === 'string') t.author = t.author.trim().toLowerCase();
 	else if (t.author && typeof t.author === 'object') {
 		t.author = String(t.author.email || t.author.pubkey || '')
@@ -255,7 +260,7 @@ export function normalizeTask(raw) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {{ title: string, project_ids?: string[], description?: string, status?: string, priority?: string, labels?: string[], deadline_at?: string | null, author?: string }} input
+ * @param {{ title: string, project_ids?: string[], description?: string, status?: string, priority?: string, labels?: string[], deadline_at?: string | null, author?: string, mail_thread_id?: string | null, depends_on?: string[] }} input
  */
 export async function createTask(session, input) {
 	const id = newId();
@@ -264,8 +269,12 @@ export async function createTask(session, input) {
 		typeof input.author === 'string' && input.author.trim()
 			? input.author.trim().toLowerCase()
 			: undefined;
+	const mailThread =
+		typeof input.mail_thread_id === 'string' && input.mail_thread_id.trim()
+			? input.mail_thread_id.trim()
+			: null;
 	const task = {
-		schema: 'alpha.task/3',
+		schema: 'alpha.task/4',
 		id,
 		project_ids: input.project_ids ?? [],
 		title: input.title,
@@ -275,6 +284,7 @@ export async function createTask(session, input) {
 		labels: input.labels ?? [],
 		deadline_at: input.deadline_at ?? null,
 		depends_on: Array.isArray(input.depends_on) ? input.depends_on : [],
+		mail_thread_id: mailThread,
 		...(author ? { author } : {}),
 		created_at: created,
 		updated_at: created
@@ -1135,6 +1145,10 @@ export function toUiTask(t, projectList) {
 	const authorEmail =
 		typeof t.author === 'string' ? t.author : t.author?.email || t.author?.pubkey || '';
 	const deadline = t.deadline_at ?? t.due_at ?? null;
+	const mailThread =
+		typeof t.mail_thread_id === 'string' && t.mail_thread_id.trim()
+			? t.mail_thread_id.trim()
+			: null;
 	return {
 		id: t.id,
 		title: t.title,
@@ -1149,6 +1163,7 @@ export function toUiTask(t, projectList) {
 		project_ids: t.project_ids ?? [],
 		deadline_at: deadline,
 		depends_on: Array.isArray(t.depends_on) ? t.depends_on : [],
+		mail_thread_id: mailThread,
 		author: authorEmail || null,
 		assignees: [],
 		commenters: [],
@@ -1165,8 +1180,14 @@ export function fromUiTask(ui) {
 		typeof ui.author === 'string'
 			? ui.author
 			: ui.author?.email || ui._drive?.author || undefined;
+	const mailThread =
+		typeof ui.mail_thread_id === 'string' && ui.mail_thread_id.trim()
+			? ui.mail_thread_id.trim()
+			: typeof ui._drive?.mail_thread_id === 'string' && ui._drive.mail_thread_id.trim()
+				? ui._drive.mail_thread_id.trim()
+				: null;
 	return {
-		schema: 'alpha.task/3',
+		schema: 'alpha.task/4',
 		id: ui.id,
 		project_ids: ui.project_ids ?? (ui.targets ?? []).map((t) => t.id),
 		title: ui.title,
@@ -1176,6 +1197,7 @@ export function fromUiTask(ui) {
 		labels: ui.labels ?? [],
 		deadline_at: ui.deadline_at ?? ui._drive?.deadline_at ?? ui._drive?.due_at ?? null,
 		depends_on: ui.depends_on ?? ui._drive?.depends_on ?? [],
+		mail_thread_id: mailThread,
 		...(author ? { author: String(author).toLowerCase() } : {}),
 		created_at: ui._drive?.created_at ?? nowRfc3339(),
 		updated_at: nowRfc3339()

@@ -69,6 +69,8 @@
 	let projectIds = $state([]);
 	/** @type {{ email?: string, name?: string }[]} */
 	let assignees = $state([]);
+	/** @type {string | null} */
+	let mailThreadId = $state(null);
 	/** @type {null | 'schedule' | 'projects' | 'labels'} */
 	let bottomMenu = $state(null);
 	/** @type {HTMLButtonElement | undefined} */
@@ -100,21 +102,36 @@
 	const editing = $derived(ui.composer?.kind === 'task' ? tasks.find((item) => item.id === ui.composer.id) : null);
 	const open = $derived(ui.composer?.kind === 'task');
 
+	const mailContextTitle = $derived(
+		mailThreadId
+			? String(editing?.title || title || ui.composer?.title || '').trim()
+			: ''
+	);
+
 	$effect(() => {
 		if (!open) {
 			saving = false;
 			return;
 		}
-		title = editing?.title ?? '';
-		body = editing?.body ?? '';
-		status = editing?.status ?? ui.composer?.status ?? 'open';
-		priority = editing?.priority ?? 'none';
+		const seed = ui.composer || {};
+		title = editing?.title ?? (typeof seed.title === 'string' ? seed.title : '') ?? '';
+		body = editing?.body ?? (typeof seed.body === 'string' ? seed.body : '') ?? '';
+		status = editing?.status ?? seed.status ?? 'open';
+		priority =
+			editing?.priority ??
+			(typeof seed.priority === 'string' ? seed.priority : 'none') ??
+			'none';
 		labels = [...(editing?.labels ?? [])];
 		projectIds = [
 			...(editing?.project_ids ??
-				(Array.isArray(ui.composer?.project_ids) ? ui.composer.project_ids : []))
+				(Array.isArray(seed.project_ids) ? seed.project_ids : []))
 		];
 		assignees = [...(editing?.assignees ?? [])];
+		mailThreadId =
+			editing?.mail_thread_id ??
+			editing?._drive?.mail_thread_id ??
+			(typeof seed.mail_thread_id === 'string' ? seed.mail_thread_id : null) ??
+			null;
 		deadlineDate = toDateInput(editing?.deadline_at);
 		/* One-off window only — recurring / many moments live on Planning. */
 		const linked = editing
@@ -195,6 +212,7 @@
 			project_ids: projectIds,
 			deadline_at: fromDateInput(deadlineDate),
 			depends_on: editing?.depends_on ?? [],
+			mail_thread_id: mailThreadId,
 			author: editing?.author,
 			assignees,
 			commenters: editing?.commenters ?? [],
@@ -273,6 +291,10 @@
 			</button>
 		</div>
 	</div>
+
+	{#if mailThreadId}
+		<p class="mail-from-line">{t('tasks.fromMail', { subject: mailContextTitle || '…' })}</p>
+	{/if}
 
 	<div class="post-form-divider"></div>
 
@@ -549,6 +571,18 @@
 		padding: 12px 16px 10px;
 		position: relative;
 		z-index: 2;
+	}
+
+	.mail-from-line {
+		margin: 0;
+		padding: 0 16px 8px;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-33);
+		line-height: 1.3;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.status-wrapper,

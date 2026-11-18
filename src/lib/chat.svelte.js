@@ -25,7 +25,7 @@ import { getContentType, resolveContentTypeCard } from './content-types/index.js
 
 /** Chat ref.type → entity schema / package lookup */
 const REF_TYPE_SCHEMA = {
-	task: 'alpha.task/3',
+	task: 'alpha.task/4',
 	note: 'alpha.note/1',
 	project: 'alpha.project/1',
 	mail: 'alpha.mail_message/1',
@@ -952,7 +952,7 @@ export function chatRefMeta(msg) {
 
 	if (ref.type === 'task') {
 		const t = tasks.find((x) => x.id === ref.id);
-		const card = resolveContentTypeCard(t ? { ...t, schema: 'alpha.task/3' } : null, {
+		const card = resolveContentTypeCard(t ? { ...t, schema: 'alpha.task/4' } : null, {
 			packageId: 'alpha.tasks'
 		});
 		return {

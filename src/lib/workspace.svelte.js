@@ -140,6 +140,44 @@ export function openComposer(kind, id, status, seed = {}) {
 }
 
 /**
+ * O(1) after O(n) scan — tasks already in memory from workspace load.
+ * @param {string | null | undefined} threadId
+ * @returns {any | null}
+ */
+export function taskByMailThreadId(threadId) {
+	const id = String(threadId || '').trim();
+	if (!id) return null;
+	/* Touch tasks.length so callers re-run when the list mutates. */
+	tasks.length;
+	for (const t of tasks) {
+		const mid = String(t?.mail_thread_id || t?._drive?.mail_thread_id || '').trim();
+		if (mid && mid === id) return t;
+	}
+	return null;
+}
+
+/**
+ * Open TaskCreate for a mail thread — edit existing linked task, or seed a new one.
+ * @param {{ id: string, subject?: string, body?: string, flagged?: boolean }} thread
+ */
+export function openMailTaskComposer(thread) {
+	const threadId = String(thread?.id || '').trim();
+	if (!threadId) return;
+	const existing = taskByMailThreadId(threadId);
+	if (existing?.id) {
+		openComposer('task', existing.id);
+		return;
+	}
+	const title = String(thread.subject || '').trim();
+	openComposer('task', undefined, 'open', {
+		title: title || undefined,
+		body: String(thread.body || '').trim() || undefined,
+		mail_thread_id: threadId,
+		priority: thread.flagged ? 'urgent' : 'none'
+	});
+}
+
+/**
  * Delete a Drive entity and drop it from local workspace state.
  * @param {'task' | 'project' | 'note' | 'enterprise'} kind
  * @param {string} id
@@ -685,6 +723,7 @@ export async function saveTask(draft, isNew) {
 			targets: draft.targets ?? [],
 			project_ids: draft.project_ids ?? [],
 			deadline_at: draft.deadline_at ?? null,
+			mail_thread_id: draft.mail_thread_id ?? null,
 			_pending: !canPush
 		};
 		tasks.unshift(optimistic);
@@ -706,6 +745,7 @@ export async function saveTask(draft, isNew) {
 				labels: draft.labels,
 				project_ids: draft.project_ids ?? [],
 				deadline_at: draft.deadline_at ?? null,
+				mail_thread_id: draft.mail_thread_id ?? null,
 				author
 			});
 			await syncTaskScheduleMoment(session, created.id, draft._schedule, draft.assignees ?? []);
@@ -714,7 +754,8 @@ export async function saveTask(draft, isNew) {
 				...toUiTask(created, plist),
 				author,
 				assignees: draft.assignees ?? [],
-				commenters: draft.commenters ?? []
+				commenters: draft.commenters ?? [],
+				mail_thread_id: created.mail_thread_id ?? draft.mail_thread_id ?? null
 			};
 			const idx = tasks.findIndex((t) => t.id === tempId);
 			const confirmed = mergeConfirmed(optimistic, uiTask);
