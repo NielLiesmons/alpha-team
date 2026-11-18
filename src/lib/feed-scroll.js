@@ -10,10 +10,39 @@ import { tick } from 'svelte';
 export const FEED_NEAR_BOTTOM_PX = 64;
 
 /**
- * CSS bottom padding feeds should use so the last item clears the composer.
- * Keep chat `.messages` and mail `.mail-feed` in sync with this.
+ * Fallback CSS bottom padding when the composer dock isn't measured yet.
+ * Prefer `attachComposerClearPad` so quote / attach / tall drafts grow the clear.
  */
 export const FEED_BOTTOM_PAD_CSS = 'calc(120px + env(safe-area-inset-bottom, 0px))';
+
+/**
+ * Keep a floating composer from covering the last feed rows.
+ * Sets `--composer-clear` on `root` from the dock's live height (quote, attach, tall text).
+ * @param {HTMLElement} root — chat / sheet root that owns `--composer-clear`
+ * @param {HTMLElement} dock — `.composer-dock`
+ * @param {{
+ *   scroller?: HTMLElement | null,
+ *   isPinned?: () => boolean,
+ *   isLocked?: () => boolean,
+ *   minPx?: number
+ * }} [opts]
+ */
+export function attachComposerClearPad(root, dock, opts = {}) {
+	const minPx = opts.minPx ?? 0;
+	const apply = () => {
+		const h = Math.max(minPx, Math.ceil(dock.getBoundingClientRect().height));
+		root.style.setProperty('--composer-clear', `${h}px`);
+		if (opts.isLocked?.()) return;
+		if (opts.isPinned?.() && opts.scroller) snapFeedToBottom(opts.scroller);
+	};
+	const ro = new ResizeObserver(apply);
+	ro.observe(dock);
+	apply();
+	return () => {
+		ro.disconnect();
+		root.style.removeProperty('--composer-clear');
+	};
+}
 
 /** @param {HTMLElement} el */
 export function feedMaxScrollTop(el) {

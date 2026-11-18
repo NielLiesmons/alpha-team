@@ -44,6 +44,7 @@
 	import { putMediaBlob } from '$lib/drive/media.js';
 	import { inferMediaKind, mimeFromNameAndType } from '$lib/drive/media-kind.js';
 	import {
+		attachComposerClearPad,
 		attachFeedPinResize,
 		isFeedNearBottom,
 		snapFeedToBottomSoon
@@ -60,9 +61,13 @@
 	/** @type {any | null} */
 	let replyTo = $state(null);
 	/** @type {HTMLDivElement | undefined} */
+	let chatRootEl = $state();
+	/** @type {HTMLDivElement | undefined} */
 	let messagesEl = $state();
 	/** @type {HTMLDivElement | undefined} */
 	let feedBodyEl = $state();
+	/** @type {HTMLDivElement | undefined} */
+	let composerDockEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
 	/** @type {HTMLInputElement | undefined} */
@@ -283,6 +288,19 @@
 		const body = feedBodyEl;
 		if (!scroller || !body) return;
 		return attachFeedPinResize(scroller, body, () => pinBottom, () => snapLock > 0);
+	});
+
+	/* Grow feed bottom pad with composer height (quote / attach / tall draft). */
+	$effect(() => {
+		const root = chatRootEl;
+		const dock = composerDockEl;
+		const scroller = messagesEl;
+		if (!root || !dock) return;
+		return attachComposerClearPad(root, dock, {
+			scroller,
+			isPinned: () => pinBottom,
+			isLocked: () => snapLock > 0
+		});
 	});
 
 	$effect(() => {
@@ -628,7 +646,7 @@
 	}
 </script>
 
-<div class="chat" class:compact class:was-compact={wasCompact}>
+<div class="chat" class:compact class:was-compact={wasCompact} bind:this={chatRootEl}>
 	<div class="feed messages" bind:this={messagesEl} onscroll={measureScroll}>
 		<div class="feed-body" bind:this={feedBodyEl}>
 			{#if driveSession.error}
@@ -838,7 +856,7 @@
 	{/if}
 
 	<div class="composer-fade" aria-hidden="true"></div>
-	<div class="composer-dock">
+	<div class="composer-dock" bind:this={composerDockEl}>
 		<!-- Suggest sits outside the pill so overflow:hidden / shine mask cannot clip it -->
 		<div class="composer-stack">
 			<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
@@ -977,8 +995,8 @@
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		/* Clear detail-top; bottom pad clears floating composer — see feed-scroll.js */
-		padding: 56px 24px calc(120px + env(safe-area-inset-bottom, 0px));
+		/* Clear detail-top; --composer-clear tracks live dock height (quote / tall draft). */
+		padding: 56px 24px var(--composer-clear, calc(120px + env(safe-area-inset-bottom, 0px)));
 	}
 
 	/* Match other 2nd-column gutters when chat is compacted (after a detail open). */
@@ -1298,8 +1316,8 @@
 	.scroll-fabs {
 		position: absolute;
 		right: 24px;
-		/* Above composer dock: pad 10 + pill 47 + gap 10 */
-		bottom: calc(67px + env(safe-area-inset-bottom, 0px));
+		/* Sit just above the live composer dock */
+		bottom: var(--composer-clear, calc(67px + env(safe-area-inset-bottom, 0px)));
 		z-index: 8;
 		display: flex;
 		flex-direction: column;
@@ -1410,7 +1428,7 @@
 		bottom: 0;
 		/* Above shell list-bottom-fade (z5) when that chrome is present elsewhere */
 		z-index: 6;
-		height: calc(88px + env(safe-area-inset-bottom, 0px));
+		height: var(--composer-clear, calc(88px + env(safe-area-inset-bottom, 0px)));
 		pointer-events: none;
 		background: linear-gradient(
 			to top,
@@ -1442,11 +1460,11 @@
 	@media (max-width: 767px) {
 		.messages {
 			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
-				calc(120px + env(safe-area-inset-bottom, 0px));
+				var(--composer-clear, calc(120px + env(safe-area-inset-bottom, 0px)));
 		}
 
 		.composer-fade {
-			height: calc(88px + env(safe-area-inset-bottom, 0px));
+			height: var(--composer-clear, calc(88px + env(safe-area-inset-bottom, 0px)));
 			background: linear-gradient(
 				to top,
 				var(--shell, var(--bg)) 0%,

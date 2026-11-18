@@ -1,7 +1,6 @@
 <script>
 	/**
-	 * Chat 3rd-column synopsis — activity aimed at me.
-	 * Row: pfp | name (profile color) + verb | preview with kind glyph.
+	 * Chat notifications list — same density as Notes feed rows.
 	 */
 	import At from './icons/At.svelte';
 	import Reply from './icons/Reply.svelte';
@@ -78,11 +77,11 @@
 	}
 </script>
 
-<div class="activity" class:embedded>
+<div class="activity feed" class:embedded>
 	{#if items.length === 0}
 		<p class="empty">{t('chat.activityEmpty')}</p>
 	{:else}
-		<ul class="list">
+		<ul class="list card-stack">
 			{#each items as item (item.id)}
 				{@const who = person(item)}
 				<li>
@@ -92,7 +91,7 @@
 								name={who.name}
 								email={who.email}
 								pictureUrl={pictureUrlFor(who.email)}
-								size={36}
+								size={32}
 							/>
 						</span>
 						<span class="copy">
@@ -109,11 +108,11 @@
 									{#if item.kind === 'reaction'}
 										<span class="emoji">{item.emoji || '❤️'}</span>
 									{:else if item.kind === 'reply'}
-										<Reply size={14} />
+										<Reply size={12} />
 									{:else if item.kind === 'assigned'}
-										<TaskBox state={item.taskStatus || 'open'} size={15} />
+										<TaskBox state={item.taskStatus || 'open'} size={12} />
 									{:else}
-										<At size={14} />
+										<At size={12} />
 									{/if}
 								</span>
 								<span class="preview">{preview(item)}</span>
@@ -133,12 +132,16 @@
 		min-height: 0;
 		flex: 1;
 		box-sizing: border-box;
-		padding: 0;
 		width: 100%;
+		/* Same as list-column feed pad under floating chrome */
+		padding: var(--feed-pad-top, 48px) 0 var(--feed-pad-bottom, 36px);
+		overflow: auto;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	.empty {
 		margin: 28px 0;
+		padding: 0 16px;
 		font-size: 14px;
 		color: var(--fg-33);
 		text-align: center;
@@ -147,11 +150,12 @@
 	.list {
 		list-style: none;
 		margin: 0;
-		padding: 0;
+		padding: 6px;
 		display: flex;
 		flex-direction: column;
 		gap: 0;
 		width: 100%;
+		box-sizing: border-box;
 	}
 
 	.card {
@@ -177,6 +181,7 @@
 	.pfp {
 		flex-shrink: 0;
 		line-height: 0;
+		margin-top: 1px;
 	}
 
 	.copy {
@@ -185,6 +190,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
+		justify-content: center;
+		min-height: 32px;
 	}
 
 	.line1 {
@@ -192,8 +199,9 @@
 		align-items: baseline;
 		gap: 5px;
 		min-width: 0;
-		font-size: 13px;
-		line-height: 1.3;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 14px;
+		line-height: 1.15;
 		overflow: hidden;
 		white-space: nowrap;
 	}
@@ -214,39 +222,51 @@
 	.line2 {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 0;
 		min-width: 0;
-		min-height: 16px;
+		line-height: 1.15;
 	}
 
 	.kind {
-		flex-shrink: 0;
-		width: 16px;
-		height: 16px;
-		display: grid;
-		place-items: center;
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		color: var(--fg-33);
 		line-height: 0;
+		width: 14px;
+		margin-right: 4px;
 	}
 
 	.kind.emoji-kind {
 		color: inherit;
+		width: auto;
+		margin-right: 3px;
 	}
 
 	.emoji {
-		font-size: 14px;
+		display: block;
+		font-size: 12px;
 		line-height: 1;
-		opacity: 1;
 	}
 
 	.preview {
+		flex: 1;
 		min-width: 0;
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
-		line-height: 1.3;
+		line-height: 1.15;
 		color: var(--fg-66);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	@media (max-width: 767px) {
+		.activity {
+			padding-top: var(--feed-pad-top, calc(60px + env(safe-area-inset-top, 0px)));
+			padding-bottom: var(--feed-pad-bottom, calc(28px + env(safe-area-inset-bottom, 0px)));
+		}
 	}
 </style>
