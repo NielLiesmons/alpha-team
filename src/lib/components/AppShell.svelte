@@ -15,12 +15,17 @@
 		activityUnreadCount
 	} from '$lib/chat-activity.svelte.js';
 	import {
-		enterprises,
+		loadPersonCursors,
+		markCursorsSeen,
+		newChatCount,
+		newNotesCount,
+		newTasksCount
+	} from '$lib/person-cursors.svelte.js';
+	import { chatFeed } from '$lib/chat.svelte.js';
+	import {
 		forceClearSelection,
-		ledgerEntries,
 		notes,
 		openComposer,
-		projects,
 		selectEntity,
 		tasks,
 		ui
@@ -281,15 +286,39 @@
 			: first;
 	});
 
+	/** Muted nav totals = “new since last visit” (not inventory size). */
 	const counts = $derived({
-		tasks: tasks.length,
-		projects: projects.length,
-		notes: notes.length,
-		enterprises: enterprises.length,
-		ledger: ledgerEntries.length
+		chat: newChatCount(),
+		tasks: newTasksCount(),
+		notes: newNotesCount()
 	});
+	/** Accent = targeted-at-you notifications. */
 	const unreadCounts = $derived({
 		chat: activityUnreadCount()
+	});
+
+	/**
+	 * Advance section cursors while the feed is open (and when its list grows).
+	 * Depend on list length only — not cursorsTick — to avoid a mark→tick loop.
+	 */
+	$effect(() => {
+		const p = path;
+		if (p.startsWith('/chat')) {
+			chatFeed.length;
+			markCursorsSeen('chat');
+		} else if (p.startsWith('/notes')) {
+			notes.length;
+			markCursorsSeen('notes');
+		} else if (p.startsWith('/tasks')) {
+			tasks.length;
+			markCursorsSeen('tasks');
+		}
+	});
+
+	$effect(() => {
+		const email = actor.email;
+		if (!email) return;
+		void loadPersonCursors();
 	});
 
 	const createKind = $derived(

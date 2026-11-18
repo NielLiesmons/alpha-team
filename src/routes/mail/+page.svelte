@@ -3,7 +3,6 @@
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import Reply from '$lib/components/icons/Reply.svelte';
 	import ReplyAll from '$lib/components/icons/ReplyAll.svelte';
-	import PriorityBox from '$lib/components/PriorityBox.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
 	import SegmentedControl from '@alpha/ui/SegmentedControl.svelte';
@@ -42,7 +41,6 @@
 	import {
 		forceClearSelection,
 		openComposer,
-		openMailTaskComposer,
 		selectEntity,
 		taskByMailThreadId,
 		ui
@@ -56,29 +54,6 @@
 			badge: mailUnreadCountForCategory(c)
 		}))
 	);
-
-	/** @param {any} thread */
-	function seedBodyFromThread(thread) {
-		const latest = mailLatestMessage(thread) || thread;
-		const text = mailPreview(latest) || String(latest?.body || '');
-		return String(text)
-			.replace(/<[^>]+>/g, ' ')
-			.replace(/\s+/g, ' ')
-			.trim()
-			.slice(0, 2000);
-	}
-
-	/** @param {MouseEvent} e @param {any} thread */
-	function openTaskFromMailCard(e, thread) {
-		e.preventDefault();
-		e.stopPropagation();
-		openMailTaskComposer({
-			id: thread.id,
-			subject: thread.subject,
-			body: seedBodyFromThread(thread),
-			flagged: Boolean(thread._flagged)
-		});
-	}
 
 	$effect(() => {
 		mailView.folder;
@@ -369,20 +344,6 @@
 											align="right"
 										/>
 									</span>
-								{:else}
-									<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-									<span
-										class="priority-hit"
-										role="button"
-										tabindex="0"
-										aria-label={t('mail.addTask')}
-										onclick={(e) => openTaskFromMailCard(e, thread)}
-										onkeydown={(e) =>
-											(e.key === 'Enter' || e.key === ' ') &&
-											(e.preventDefault(), openTaskFromMailCard(e, thread))}
-									>
-										<PriorityBox priority="none" size={16} />
-									</span>
 								{/if}
 								{#if unread}
 									<span class="unread-dot" aria-label={t('mail.unread')}></span>
@@ -610,7 +571,6 @@
 		padding-right: 2px;
 	}
 
-	.priority-hit,
 	.task-hit {
 		display: inline-flex;
 		align-items: center;

@@ -1039,13 +1039,15 @@
 					placeholder={t('common.untitled')}
 					oninput={scheduleDraftSave}
 				/>
-				<TaskFieldPicker
-					taskId={task.id}
-					field="priority"
-					value={task.priority ?? 'none'}
-					size={22}
-					align="right"
-				/>
+				<span class="title-priority">
+					<TaskFieldPicker
+						taskId={task.id}
+						field="priority"
+						value={task.priority ?? 'none'}
+						size={26}
+						align="right"
+					/>
+				</span>
 			</div>
 			<DetailMetaPills entity={task} kind="task" />
 			<textarea
@@ -2377,11 +2379,20 @@
 		/* Match TaskCreate: status | title | priority — side inset from .body */
 		padding-left: 0;
 		padding-right: 0;
+		align-items: center;
 	}
 
 	.task-title-row .title {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.task-title-row .title-priority {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		line-height: 0;
 	}
 
 	.title {

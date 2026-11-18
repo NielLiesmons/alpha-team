@@ -1142,6 +1142,7 @@ export async function addTracksToPlaylist(session, playlist, trackIds) {
 export function toUiTask(t, projectList) {
 	const byId = new Map(projectList.map((p) => [p.id, p]));
 	const createdMs = t.created_at ? Date.parse(t.created_at) : 0;
+	const updatedMs = t.updated_at ? Date.parse(t.updated_at) : createdMs;
 	const authorEmail =
 		typeof t.author === 'string' ? t.author : t.author?.email || t.author?.pubkey || '';
 	const deadline = t.deadline_at ?? t.due_at ?? null;
@@ -1168,6 +1169,7 @@ export function toUiTask(t, projectList) {
 		assignees: [],
 		commenters: [],
 		createdAt: Number.isFinite(createdMs) ? createdMs : 0,
+		updatedAt: Number.isFinite(updatedMs) ? updatedMs : Number.isFinite(createdMs) ? createdMs : 0,
 		_drive: t
 	};
 }

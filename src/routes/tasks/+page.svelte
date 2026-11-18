@@ -154,13 +154,19 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		margin: 0 6px;
+		margin: 0 10px 0 16px;
 		padding: 6px 10px 6px 13px;
 		border: 0;
 		border-radius: 10px;
 		background: var(--fg-4);
 		width: auto;
 		box-sizing: border-box;
+	}
+
+	@media (max-width: 767px) {
+		.task-group-header {
+			margin: 0 14px;
+		}
 	}
 
 	.card-stack {

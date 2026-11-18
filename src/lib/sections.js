@@ -10,7 +10,7 @@ import { parentDomain } from './space-host.js';
  *   label: string,
  *   icon?: string,
  *   faviconUrl?: string,
- *   countKey?: 'tasks' | 'projects' | 'notes' | 'enterprises' | 'ledger',
+ *   countKey?: 'chat' | 'tasks' | 'projects' | 'notes' | 'enterprises' | 'ledger',
  *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'file',
  *   children?: NavItem[],
  *   active?: boolean

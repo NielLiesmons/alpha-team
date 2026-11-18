@@ -220,7 +220,7 @@
 							taskId={linkedTask.id}
 							field="priority"
 							value={linkedTask.priority || 'none'}
-							size={22}
+							size={26}
 							align="right"
 						/>
 					</span>
@@ -232,7 +232,7 @@
 						onclick={promoteToTask}
 					>
 						<span class="inactive-priority">
-							<PriorityBox priority="none" size={22} />
+							<PriorityBox priority="none" size={26} />
 						</span>
 					</button>
 				{/if}
@@ -420,7 +420,7 @@
 
 	.mail-thread-title-row {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		gap: 10px;
 		margin: 0 0 16px;
 		padding: 0 2px;
@@ -433,7 +433,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		margin-top: 6px;
+		align-self: center;
 		line-height: 0;
 	}
 

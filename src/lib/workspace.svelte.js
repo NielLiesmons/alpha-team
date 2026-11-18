@@ -44,6 +44,7 @@ import { activeSession, driveSession } from './drive/session.svelte.js';
 import { getLastAppliedTip, setLastAppliedTip } from './drive/tip-gate.js';
 import { getTip } from './drive/client.js';
 import { loadWorkspaceLeaves } from './drive/workspace-load.js';
+import { loadPersonCursors } from './person-cursors.svelte.js';
 import { idbGet, idbSet, workspaceCacheKey } from './local-db.js';
 import { popDetailLayer, pushDetailLayer } from './nav-stack.js';
 import { beginSync, endSync, setSyncRatio } from './sync-progress.svelte.js';
@@ -421,7 +422,8 @@ export async function refreshFromDrive(opts = {}) {
 				}
 			}),
 			ensureDefaultAccounts(session),
-			ensureMembers(session).then(() => hydrateAvatarUrls())
+			ensureMembers(session).then(() => hydrateAvatarUrls()),
+			loadPersonCursors(session)
 		]);
 		const plist = buckets.project;
 		replaceArray(

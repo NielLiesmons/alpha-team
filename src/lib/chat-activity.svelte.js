@@ -1,12 +1,18 @@
 /**
  * User-targeted chat activity — reactions / replies on my messages, tasks assigned to me.
  * Powers the Chat 3rd-column synopsis + top-bar unread mark.
+ *
+ * Seen cursor lives in person-cursors (Drive + local) for cross-device badges.
  */
 import { activePerson } from './actor.svelte.js';
 import { chatFeed } from './chat.svelte.js';
+import {
+	cursorsTick,
+	markActivitySeen as markCursorActivitySeen,
+	readCursor
+} from './person-cursors.svelte.js';
 import { tasks } from './workspace.svelte.js';
 
-const SEEN_KEY = 'alpha.chatActivity.seenAt';
 const DONE = new Set(['closed', 'canceled']);
 
 /** @returns {string} */
@@ -38,27 +44,16 @@ function clip(text, max = 96) {
 
 /** @returns {number} */
 export function readActivitySeenAt() {
-	if (typeof localStorage === 'undefined') return 0;
-	try {
-		const n = Number(localStorage.getItem(SEEN_KEY) || 0);
-		return Number.isFinite(n) ? n : 0;
-	} catch {
-		return 0;
-	}
+	cursorsTick.value;
+	return readCursor('activity');
 }
 
 export function markActivitySeen() {
-	if (typeof localStorage === 'undefined') return;
-	try {
-		localStorage.setItem(SEEN_KEY, String(Date.now()));
-	} catch {
-		/* ignore */
-	}
-	seenTick.value += 1;
+	markCursorActivitySeen();
 }
 
-/** Reactive bump when seen timestamp changes. */
-export const seenTick = $state({ value: 0 });
+/** Reactive bump when seen timestamp changes (alias for cursorsTick). */
+export const seenTick = cursorsTick;
 
 /**
  * @typedef {{
@@ -81,7 +76,7 @@ export const seenTick = $state({ value: 0 });
  * @returns {ChatActivityItem[]}
  */
 export function activityForMe() {
-	seenTick.value; /* subscribe */
+	cursorsTick.value; /* subscribe */
 	chatFeed.length;
 	tasks.length;
 	const me = meEmail();
@@ -155,7 +150,12 @@ export function activityForMe() {
 		if (!emails.includes(me)) continue;
 		const st = String(task.status || 'open');
 		if (DONE.has(st)) continue;
-		const at = Number(task.updatedAt || task.createdAt || 0) || 0;
+		const driveUpdated = task._drive?.updated_at ? Date.parse(String(task._drive.updated_at)) : 0;
+		const at =
+			Number(task.updatedAt || 0) ||
+			(Number.isFinite(driveUpdated) ? driveUpdated : 0) ||
+			Number(task.createdAt || 0) ||
+			0;
 		items.push({
 			id: `assigned:${task.id}`,
 			kind: 'assigned',

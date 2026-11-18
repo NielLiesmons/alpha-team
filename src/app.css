@@ -561,12 +561,20 @@ h2 {
 	align-items: center;
 	gap: 10px;
 	width: auto;
-	margin: 0 6px;
+	/* Match UiShell .list-top gutters: 16/10 desktop, 14/14 mobile. */
+	margin: 0 10px 0 16px;
 	padding: 6px 10px 6px 13px;
 	border: 0;
 	border-radius: 10px;
 	background: var(--fg-4);
 	box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+	.task-group-header,
+	.group-header {
+		margin: 0 14px;
+	}
 }
 
 .btn.small {
