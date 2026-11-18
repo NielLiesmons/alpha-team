@@ -2995,5 +2995,10 @@
 			padding-top: 0;
 			padding-bottom: 0;
 		}
+
+		.body.chat-activity-body {
+			padding: calc(8px + env(safe-area-inset-top, 0px)) 4px
+				calc(20px + env(safe-area-inset-bottom, 0px));
+		}
 	}
 </style>
