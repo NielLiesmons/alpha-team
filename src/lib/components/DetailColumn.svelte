@@ -32,8 +32,6 @@
 		mailAuthorLabel,
 		mailCategoryFor,
 		mailComposeSeed,
-		mailLatestMessage,
-		mailPreview,
 		markMailRead,
 		markMailUnread,
 		moveMailThreadLocal,
@@ -94,7 +92,6 @@
 		metrics,
 		notes,
 		openComposer,
-		openMailTaskComposer,
 		patchEnterprise,
 		patchProject,
 		patchTask,
@@ -102,28 +99,10 @@
 		salesLines,
 		saveNote,
 		selectEntity,
-		taskByMailThreadId,
 		tasks,
 		ui
 	} from '$lib/workspace.svelte.js';
 	const BENTO_PREVIEW = 5;
-
-	/** @param {any} thread */
-	function openMailAsTask(thread) {
-		if (!thread?.id) return;
-		const latest = mailLatestMessage(thread) || thread;
-		const body = String(mailPreview(latest) || '')
-			.replace(/<[^>]+>/g, ' ')
-			.replace(/\s+/g, ' ')
-			.trim()
-			.slice(0, 2000);
-		openMailTaskComposer({
-			id: thread.id,
-			subject: thread.subject,
-			body,
-			flagged: Boolean(thread._flagged)
-		});
-	}
 
 	/** @param {'table' | 'metric' | 'view' | 'form' | 'project' | 'task' | 'note'} kind @param {string} id */
 	function openLinked(kind, id) {
@@ -933,21 +912,11 @@
 			Boolean(mailContactEmail) &&
 			!isCategorizedContact(mailContactEmail) &&
 			mailCategoryFor(mailMsg) === 'new'}
-		{@const mailLinkedTask = mailMsg ? taskByMailThreadId(mailMsg.id) : null}
-		{#if showMoreMenu || mailNeedsTriage || mailMsg}
+		{#if showMoreMenu || mailNeedsTriage}
 			<ChromeMobileBar title={mobileTitle || typeLabel} onBack={close}>
 				{#snippet trailing()}
 					{#if mailNeedsTriage}
 						<MailContactTriage email={mailContactEmail} thread={mailMsg} compact />
-					{/if}
-					{#if mailMsg}
-						<button
-							type="button"
-							class="send-chip"
-							onclick={() => openMailAsTask(mailMsg)}
-						>
-							{mailLinkedTask ? t('mail.openTask') : t('mail.addTask')}
-						</button>
 					{/if}
 					{#if showMoreMenu}
 						<ChromeActionButton
@@ -1441,7 +1410,6 @@
 			contactEmail &&
 			mailCategoryFor(mailMsg) === 'new' &&
 			!isCategorizedContact(contactEmail)}
-		{@const linkedTask = taskByMailThreadId(mailMsg.id)}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
 				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
@@ -1461,9 +1429,6 @@
 				{#if needsTriage}
 					<MailContactTriage email={contactEmail} thread={mailMsg} />
 				{/if}
-				<button type="button" class="send-chip" onclick={() => openMailAsTask(mailMsg)}>
-					{linkedTask ? t('mail.openTask') : t('mail.addTask')}
-				</button>
 				{#if showMoreMenu}
 					<button
 						type="button"

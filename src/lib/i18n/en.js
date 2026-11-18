@@ -390,6 +390,7 @@ export default {
 	'tasks.noProjects': 'No projects yet',
 	'tasks.task': 'Task',
 	'tasks.fromMail': 'From mail: {subject}',
+	'tasks.mailPrefix': 'Mail',
 	'tasks.addDescription': 'Add a description…',
 	'tasks.noSelected': 'No task selected',
 	'tasks.deleteConfirm': 'Delete this task?',

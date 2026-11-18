@@ -9,8 +9,10 @@
 	import ReplyAll from './icons/ReplyAll.svelte';
 	import DropdownMenu from './DropdownMenu.svelte';
 	import MailRichBody from './MailRichBody.svelte';
+	import PriorityBox from './PriorityBox.svelte';
 	import ProfilePic from './ProfilePic.svelte';
-	import TaskCard from './TaskCard.svelte';
+	import TaskBox from './TaskBox.svelte';
+	import TaskFieldPicker from './TaskFieldPicker.svelte';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { loadComments } from '$lib/chat.svelte.js';
@@ -20,19 +22,15 @@
 		formatMailWhen,
 		mailAuthorLabel,
 		mailComposeSeed,
+		mailLatestMessage,
+		mailPreview,
 		preferReplyAll,
 		rememberMailTip,
 		threadMessages
 	} from '$lib/mail.svelte.js';
 	import { mailView } from '$lib/mail-view.svelte.js';
 	import { swipeLeftReply } from '$lib/swipe-left-reply.js';
-	import {
-		moments,
-		openComposer,
-		selectEntity,
-		taskByMailThreadId,
-		ui
-	} from '$lib/workspace.svelte.js';
+	import { openComposer, openMailTaskComposer, taskByMailThreadId } from '$lib/workspace.svelte.js';
 
 	/**
 	 * @type {{
@@ -52,27 +50,27 @@
 		String(firstMail?.subject || mailMsg?.subject || '').trim() || t('common.noSubject')
 	);
 	const linkedTask = $derived(taskByMailThreadId(threadId));
-	const linkedMomentAssignees = $derived.by(() => {
-		const taskId = linkedTask?.id;
-		if (!taskId) return /** @type {string[]} */ ([]);
-		moments.length;
-		/** @type {string[]} */
-		const out = [];
-		const seen = new Set();
-		for (const m of moments) {
-			if (m.task_id !== taskId || m.status === 'canceled') continue;
-			for (const raw of m.assignees || []) {
-				const e = String(raw || '')
-					.trim()
-					.toLowerCase();
-				if (!e || seen.has(e)) continue;
-				seen.add(e);
-				out.push(e);
-			}
-		}
-		return out;
-	});
 	const lastMail = $derived(mails[mails.length - 1] || mailMsg);
+
+	function promoteToTask() {
+		if (!threadId) return;
+		if (linkedTask?.id) {
+			openMailTaskComposer({ id: threadId });
+			return;
+		}
+		const latest = mailLatestMessage(mailMsg) || mailMsg;
+		const body = String(mailPreview(latest) || '')
+			.replace(/<[^>]+>/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.slice(0, 2000);
+		openMailTaskComposer({
+			id: threadId,
+			subject: threadTitle === t('common.noSubject') ? '' : threadTitle,
+			body,
+			flagged: Boolean(mailMsg?._flagged)
+		});
+	}
 	const useReplyAll = $derived(preferReplyAll(lastMail, me));
 	const replyName = $derived(
 		mailAuthorLabel(lastMail) || displayNameFromEmail(lastMail?.from || replyTo || '')
@@ -193,22 +191,52 @@
 <div class="mail-thread-shell">
 	<div class="feed mail-feed" bind:this={feedEl}>
 		<div class="feed-body">
-			<h1 class="mail-thread-title">{threadTitle}</h1>
-			{#if linkedTask}
-				<div class="mail-linked-task">
-					<TaskCard
-						id={linkedTask.id}
-						title={linkedTask.title}
-						status={linkedTask.status}
-						priority={linkedTask.priority}
-						author={linkedTask.author}
-						assignees={linkedTask.assignees ?? []}
-						momentAssignees={linkedMomentAssignees}
-						onclick={() => selectEntity('task', linkedTask.id)}
-						selected={ui.selection?.kind === 'task' && ui.selection.id === linkedTask.id}
-					/>
-				</div>
-			{/if}
+			<div class="mail-thread-title-row">
+				{#if linkedTask}
+					<span class="title-status">
+						<TaskFieldPicker
+							taskId={linkedTask.id}
+							field="status"
+							value={linkedTask.status || 'open'}
+							size={24}
+						/>
+					</span>
+				{:else}
+					<button
+						type="button"
+						class="title-status inactive-hit"
+						aria-label={t('mail.addTask')}
+						onclick={promoteToTask}
+					>
+						<span class="inactive-taskbox">
+							<TaskBox state="open" size={24} />
+						</span>
+					</button>
+				{/if}
+				<h1 class="mail-thread-title">{threadTitle}</h1>
+				{#if linkedTask}
+					<span class="title-priority">
+						<TaskFieldPicker
+							taskId={linkedTask.id}
+							field="priority"
+							value={linkedTask.priority || 'none'}
+							size={22}
+							align="right"
+						/>
+					</span>
+				{:else}
+					<button
+						type="button"
+						class="title-priority inactive-hit"
+						aria-label={t('mail.addTask')}
+						onclick={promoteToTask}
+					>
+						<span class="inactive-priority">
+							<PriorityBox priority="none" size={22} />
+						</span>
+					</button>
+				{/if}
+			</div>
 			{#each mails as m (m.id)}
 				{@const fromEmail = String(m.from || '').toLowerCase()}
 				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
@@ -390,22 +418,59 @@
 		width: 100%;
 	}
 
-	.mail-thread-title {
+	.mail-thread-title-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
 		margin: 0 0 16px;
 		padding: 0 2px;
+		min-width: 0;
+	}
+
+	.title-status,
+	.title-priority {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		margin-top: 6px;
+		line-height: 0;
+	}
+
+	.inactive-hit {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		line-height: 0;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.inactive-taskbox,
+	.inactive-priority {
+		display: inline-flex;
+		opacity: 0.38;
+		transition: opacity 0.15s ease;
+	}
+
+	.inactive-hit:hover .inactive-taskbox,
+	.inactive-hit:hover .inactive-priority {
+		opacity: 0.66;
+	}
+
+	.mail-thread-title {
+		flex: 1;
+		min-width: 0;
+		margin: 0;
+		padding: 0;
 		font-size: 28px;
 		font-weight: 700;
 		letter-spacing: -0.03em;
 		line-height: 1.15;
 		color: var(--fg);
 		overflow-wrap: anywhere;
-	}
-
-	.mail-linked-task {
-		margin: -6px 0 14px;
-		padding: 0;
-		border-radius: 12px;
-		background: var(--fg-4);
 	}
 
 	.mail-panel {

@@ -392,6 +392,7 @@ export default {
 	'tasks.noProjects': 'Nog geen projecten',
 	'tasks.task': 'Taak',
 	'tasks.fromMail': 'Van mail: {subject}',
+	'tasks.mailPrefix': 'Mail',
 	'tasks.addDescription': 'Beschrijving toevoegen…',
 	'tasks.noSelected': 'Geen taak geselecteerd',
 	'tasks.deleteConfirm': 'Deze taak verwijderen?',

@@ -392,6 +392,7 @@ export default {
 	'tasks.noProjects': 'Aún no hay proyectos',
 	'tasks.task': 'Tarea',
 	'tasks.fromMail': 'Desde el correo: {subject}',
+	'tasks.mailPrefix': 'Correo',
 	'tasks.addDescription': 'Añade una descripción…',
 	'tasks.noSelected': 'Ninguna tarea seleccionada',
 	'tasks.deleteConfirm': '¿Eliminar esta tarea?',

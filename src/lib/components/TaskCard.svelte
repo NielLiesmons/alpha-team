@@ -8,6 +8,7 @@
 	import TaskFieldPicker from './TaskFieldPicker.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let {
 		id = '',
@@ -21,6 +22,8 @@
 		/** Extra emails from linked moments (Drive) */
 		/** @type {string[]} */
 		momentAssignees = [],
+		/** Quiet “Mail” prefix when linked from a thread */
+		fromMail = false,
 		selected = false,
 		onclick = () => {}
 	} = $props();
@@ -69,7 +72,12 @@
 				<TaskBox state={status} size={24} />
 			{/if}
 		</div>
-		<span class="task-title" class:task-title-closed={status === 'closed'}>{title}</span>
+		<span class="task-title" class:task-title-closed={status === 'closed'}>
+			{#if fromMail}
+				<span class="mail-prefix">{t('tasks.mailPrefix')}</span>
+			{/if}
+			{title}
+		</span>
 		{#if status !== 'closed'}
 			<div class="priority-col">
 				{#if id}
@@ -139,8 +147,19 @@
 		text-overflow: ellipsis;
 	}
 
+	.mail-prefix {
+		font-weight: 500;
+		color: var(--fg-33);
+		margin-right: 0.35em;
+	}
+
 	.task-title-closed {
 		color: var(--white66);
+	}
+
+	.task-title-closed .mail-prefix {
+		color: var(--fg-33);
+		opacity: 0.85;
 	}
 
 	.people {
