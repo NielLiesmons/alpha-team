@@ -337,6 +337,9 @@ export default {
 	'chat.activityReaction': 'a réagi',
 	'chat.activityReply': 'a répondu',
 	'chat.activityAssigned': 'vous a assigné',
+	'chat.activityYouAssigned': 'Vous avez été assigné',
+	'chat.activityReactedOn': '{name} a réagi {emoji} à votre message',
+	'chat.activityReplied': '{name} a répondu',
 	'chat.activityOpen': 'Notifications',
 
 	/* ── tasks ────────────────────────────────────────── */

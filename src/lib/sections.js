@@ -107,7 +107,7 @@ export function syncSpaceFromHost() {
 export function navForRole() {
 	/** @type {(NavItem | NavGroup)[]} */
 	const items = [
-		{ href: '/chat', label: 'Chat', icon: 'chat' },
+		{ href: '/chat', label: 'Chat', icon: 'chat', countKey: 'chat' },
 		{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
 		{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
 		{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },

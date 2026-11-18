@@ -10,7 +10,10 @@
 	} from '$lib/sections.js';
 	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
-	import { activityUnreadCount } from '$lib/chat-activity.svelte.js';
+	import {
+		activityUnreadByKind,
+		activityUnreadCount
+	} from '$lib/chat-activity.svelte.js';
 	import {
 		enterprises,
 		forceClearSelection,
@@ -22,7 +25,10 @@
 		tasks,
 		ui
 	} from '$lib/workspace.svelte.js';
-	import Bell from './icons/Bell.svelte';
+	import UnreadMark from '@alpha/ui/UnreadMark.svelte';
+	import At from './icons/At.svelte';
+	import Heart from './icons/Heart.svelte';
+	import Reply from './icons/Reply.svelte';
 	import { onMount } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
@@ -77,6 +83,13 @@
 		if (!chatList) return 0;
 		return activityUnreadCount();
 	});
+	const chatNotifCats = $derived.by(() => {
+		if (!chatList) return { reaction: 0, reply: 0, assigned: 0 };
+		return activityUnreadByKind();
+	});
+	const chatNotifHasCats = $derived(
+		chatNotifCats.reaction + chatNotifCats.reply + chatNotifCats.assigned > 0
+	);
 
 	function openChatActivity() {
 		if (
@@ -275,6 +288,9 @@
 		enterprises: enterprises.length,
 		ledger: ledgerEntries.length
 	});
+	const unreadCounts = $derived({
+		chat: activityUnreadCount()
+	});
 
 	const createKind = $derived(
 		'createKind' in activeItem
@@ -411,6 +427,7 @@
 	activeHref={activeItem.href}
 	title={activeItem.label}
 	{counts}
+	{unreadCounts}
 	{wideList}
 	listSize={chatList ? 'chat' : 'default'}
 	listCompact={chatCompact}
@@ -481,17 +498,35 @@
 		{:else if chatList}
 			<button
 				type="button"
-				class="chrome-btn chat-bell"
+				class="chrome-btn chat-activity-btn"
+				class:cats={chatNotifHasCats}
 				class:on={ui.selection?.kind === 'chat' && ui.selection.id === 'notifications'}
 				aria-label={t('chat.activityOpen')}
 				onclick={openChatActivity}
 			>
-				<Bell size={16} />
-				{#if chatNotifCount > 0}
-					<span class="bell-badge" aria-hidden="true"
-						>{chatNotifCount > 9 ? '9+' : chatNotifCount}</span
-					>
-				{/if}
+				<span class="activity-mark">
+					<UnreadMark count={chatNotifCount} />
+				</span>
+				<span class="activity-cats" aria-hidden="true">
+					{#if chatNotifCats.reaction > 0}
+						<span class="cat">
+							<Heart size={14} />
+							<span class="cat-n">{chatNotifCats.reaction > 9 ? '9+' : chatNotifCats.reaction}</span>
+						</span>
+					{/if}
+					{#if chatNotifCats.reply > 0}
+						<span class="cat">
+							<Reply size={14} />
+							<span class="cat-n">{chatNotifCats.reply > 9 ? '9+' : chatNotifCats.reply}</span>
+						</span>
+					{/if}
+					{#if chatNotifCats.assigned > 0}
+						<span class="cat">
+							<At size={14} />
+							<span class="cat-n">{chatNotifCats.assigned > 9 ? '9+' : chatNotifCats.assigned}</span>
+						</span>
+					{/if}
+				</span>
 			</button>
 		{/if}
 	{/snippet}
@@ -577,31 +612,66 @@
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
-	.chat-bell {
+	.chat-activity-btn {
 		position: relative;
+		width: auto;
+		min-width: 28px;
+		padding: 0 8px;
+		gap: 0;
 	}
 
-	.bell-badge {
-		position: absolute;
-		top: -5px;
-		right: -5px;
-		z-index: 1;
-		min-width: 16px;
-		height: 16px;
-		padding: 0 4px;
-		border-radius: 999px;
+	.activity-mark {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		box-sizing: border-box;
-		background: var(--gradient-accent-1);
-		color: #fff;
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 10px;
-		font-weight: 700;
+	}
+
+	.activity-cats {
+		display: none;
+		align-items: center;
+		gap: 8px;
+		color: var(--fg-66);
+	}
+
+	.activity-cats .cat {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		line-height: 0;
+	}
+
+	.activity-cats .cat-n {
+		font-size: 11px;
+		font-weight: 600;
 		line-height: 1;
-		pointer-events: none;
-		box-shadow: 0 0 0 1.5px var(--bg, #0a0a0a);
+		color: var(--fg-66);
+		font-variant-numeric: lining-nums;
+	}
+
+	@media (max-width: 767px) {
+		.chat-activity-btn.cats {
+			height: 32px;
+			padding: 0 10px;
+			border-radius: 999px;
+		}
+
+		.chat-activity-btn.cats .activity-mark {
+			display: none;
+		}
+
+		.chat-activity-btn.cats .activity-cats {
+			display: inline-flex;
+		}
+
+		.chat-activity-btn:not(.cats) .activity-cats {
+			display: none;
+		}
+	}
+
+	@media (min-width: 768px) {
+		.activity-cats {
+			display: none !important;
+		}
 	}
 
 	.chrome-ico {

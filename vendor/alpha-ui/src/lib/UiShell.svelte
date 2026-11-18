@@ -6,6 +6,7 @@
 	import { attachChromeScrollFade } from './chrome-scroll-fade.js';
 	import { navPngUrl } from './nav-png.js';
 	import NavIcon from './NavIcon.svelte';
+	import UnreadMark from './UnreadMark.svelte';
 	import Search from './icons/Search.svelte';
 	import PullToRefresh from './PullToRefresh.svelte';
 
@@ -49,6 +50,7 @@
 	 *   activeHref?: string,
 	 *   title?: string,
 	 *   counts?: Record<string, number>,
+	 *   unreadCounts?: Record<string, number>,
 	 *   wideList?: boolean,
 	 *   listSize?: 'default' | 'chat',
 	 *   listCompact?: boolean,
@@ -87,6 +89,8 @@
 		activeHref = '',
 		title = '',
 		counts = {},
+		/** Targeted-at-you unread (accent UnreadMark). Inventory stays in `counts`. */
+		unreadCounts = {},
 		wideList = false,
 		/** Wider list column (Chat feed on desktop). */
 		listSize = 'default',
@@ -781,6 +785,10 @@
 				{:else}
 					{@const item = /** @type {ShellSection} */ (entry)}
 					{@const count = item.countKey ? counts[item.countKey] : null}
+					{@const unread =
+						item.countKey && unreadCounts[item.countKey] != null
+							? Number(unreadCounts[item.countKey]) || 0
+							: 0}
 					{@const rowActive = active(item.href)}
 					{@const kids = item.children || []}
 					{@const expanded = rowActive && kids.length > 0}
@@ -811,9 +819,11 @@
 								</span>
 								<span class="nav-label">{item.label}</span>
 							</button>
-							{#if item.createKind || count != null}
+							{#if item.createKind || count != null || unread > 0}
 								<span class="row-end">
-									{#if count != null}
+									{#if unread > 0}
+										<UnreadMark count={unread} />
+									{:else if count != null}
 										<span class="count">{count}</span>
 									{/if}
 									{#if item.createKind}
@@ -1561,7 +1571,9 @@
 	}
 
 	.nav-row.creatable:hover .count,
-	.nav-row.creatable:focus-within .count {
+	.nav-row.creatable:focus-within .count,
+	.nav-row.creatable:hover :global(.unread-mark),
+	.nav-row.creatable:focus-within :global(.unread-mark) {
 		opacity: 0;
 	}
 
@@ -1629,9 +1641,9 @@
 
 	@media (min-width: 768px) {
 		.shell.list-chat:not(.chat-compact) .list-col.chat {
-			flex: 0 0 var(--list-chat, clamp(360px, 42vw, 520px));
-			width: var(--list-chat, clamp(360px, 42vw, 520px));
-			min-width: 320px;
+			flex: 0 0 var(--list-chat, clamp(480px, 52vw, 780px));
+			width: var(--list-chat, clamp(480px, 52vw, 780px));
+			min-width: 360px;
 		}
 
 		.shell.list-chat.chat-compact .list-col.chat {

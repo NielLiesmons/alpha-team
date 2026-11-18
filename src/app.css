@@ -164,8 +164,8 @@
 	--shell-col-sum: calc(1 + var(--phi) + var(--phi) * var(--phi));
 	--side: clamp(210px, calc(100vw / var(--shell-col-sum)), 280px);
 	--list: calc(var(--side) * var(--phi));
-	/* Chat expanded feed width (narrows to `--list` when a detail page opens) */
-	--list-chat: clamp(360px, calc(var(--list) * 1.42), 520px);
+	/* Chat expanded feed (~50% wider than prior); narrows to `--list` when detail opens */
+	--list-chat: clamp(480px, calc(var(--list) * 2.13), 780px);
 	--radius-16: 16px;
 	--radius-hero: 32px;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);

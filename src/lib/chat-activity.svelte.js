@@ -1,6 +1,6 @@
 /**
  * User-targeted chat activity — reactions / replies on my messages, tasks assigned to me.
- * Powers the Chat 3rd-column synopsis + top-bar bell badge.
+ * Powers the Chat 3rd-column synopsis + top-bar unread mark.
  */
 import { activePerson } from './actor.svelte.js';
 import { chatFeed } from './chat.svelte.js';
@@ -25,6 +25,15 @@ function assigneeEmail(raw) {
 			.toLowerCase();
 	}
 	return '';
+}
+
+/** @param {string} text @param {number} [max] */
+function clip(text, max = 96) {
+	const plain = String(text || '')
+		.replace(/\s+/g, ' ')
+		.trim();
+	if (plain.length <= max) return plain;
+	return `${plain.slice(0, max).trim()}…`;
 }
 
 /** @returns {number} */
@@ -58,10 +67,12 @@ export const seenTick = $state({ value: 0 });
  *   at: number,
  *   author: string,
  *   preview: string,
+ *   targetPreview?: string,
  *   emoji?: string,
  *   ref?: { type: string, id: string } | null,
  *   messageId?: string,
- *   taskId?: string
+ *   taskId?: string,
+ *   taskStatus?: string
  * }} ChatActivityItem
  */
 
@@ -96,13 +107,16 @@ export function activityForMe() {
 
 	for (const m of chatFeed) {
 		if (!m?.id) continue;
-		const author = String(m.author || '').trim().toLowerCase();
+		const author = String(m.author || '')
+			.trim()
+			.toLowerCase();
 		if (!author || author === me) continue;
 		const at = Date.parse(String(m.created_at || '')) || 0;
 		const replyTo = String(m.reply_to || '');
 
 		if (m.kind === 'reaction' && replyTo && myMsgIds.has(replyTo)) {
 			const emoji = String(m.reaction || m.body || '').trim() || '👍';
+			const parent = byId.get(replyTo);
 			items.push({
 				id: `reaction:${m.id}`,
 				kind: 'reaction',
@@ -110,7 +124,8 @@ export function activityForMe() {
 				author,
 				preview: emoji,
 				emoji,
-				ref: m.ref ?? byId.get(replyTo)?.ref ?? null,
+				targetPreview: clip(parent?.body || ''),
+				ref: m.ref ?? parent?.ref ?? null,
 				messageId: replyTo
 			});
 			continue;
@@ -121,15 +136,14 @@ export function activityForMe() {
 			replyTo &&
 			myMsgIds.has(replyTo)
 		) {
-			const plain = String(m.body || '')
-				.replace(/\s+/g, ' ')
-				.trim();
+			const plain = clip(m.body || '', 96) || 'Reply';
 			items.push({
 				id: `reply:${m.id}`,
 				kind: 'reply',
 				at,
 				author,
-				preview: plain.length > 96 ? `${plain.slice(0, 96).trim()}…` : plain || 'Reply',
+				preview: plain,
+				targetPreview: plain,
 				ref: m.ref ?? byId.get(replyTo)?.ref ?? null,
 				messageId: String(m.id)
 			});
@@ -146,10 +160,14 @@ export function activityForMe() {
 			id: `assigned:${task.id}`,
 			kind: 'assigned',
 			at,
-			author: String(task.author || '').trim().toLowerCase(),
+			author: String(task.author || '')
+				.trim()
+				.toLowerCase(),
 			preview: String(task.title || '').trim() || 'Task',
+			targetPreview: String(task.title || '').trim() || 'Task',
 			ref: { type: 'task', id: String(task.id) },
-			taskId: String(task.id)
+			taskId: String(task.id),
+			taskStatus: st
 		});
 	}
 
@@ -160,4 +178,21 @@ export function activityForMe() {
 export function activityUnreadCount() {
 	const seen = readActivitySeenAt();
 	return activityForMe().filter((a) => a.at > seen).length;
+}
+
+/**
+ * Unread counts by category for the mobile chat chrome.
+ * @returns {{ reaction: number, reply: number, assigned: number }}
+ */
+export function activityUnreadByKind() {
+	const seen = readActivitySeenAt();
+	/** @type {{ reaction: number, reply: number, assigned: number }} */
+	const out = { reaction: 0, reply: 0, assigned: 0 };
+	for (const a of activityForMe()) {
+		if (a.at <= seen) continue;
+		if (a.kind === 'reaction') out.reaction += 1;
+		else if (a.kind === 'reply') out.reply += 1;
+		else if (a.kind === 'assigned') out.assigned += 1;
+	}
+	return out;
 }
