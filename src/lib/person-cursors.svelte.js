@@ -1,10 +1,9 @@
 /**
- * Per-person “seen” cursors on Drive — cross-device new / targeted-unread badges.
+ * Per-person “seen” cursors — local-first, Drive eventually.
  * Leaf: meta/cursors/{emailSlug}.json (alpha.person_cursors/1).
  *
- * Local state updates are cheap; Drive persists are debounced and skipped when
- * nothing changed. Callers that run inside `$effect` must wrap writes in
- * `untrack()` so cursor reads do not re-subscribe the effect (infinite tip loop).
+ * Critical path never awaits Drive. Seeded values stay local until the user
+ * actually marks a section; that avoids tip rewrites on every hard refresh.
  */
 import { activePerson } from './actor.svelte.js';
 import { chatFeed } from './chat.svelte.js';
@@ -14,8 +13,7 @@ import { notes, tasks } from './workspace.svelte.js';
 
 const LOCAL_ACTIVITY_KEY = 'alpha.chatActivity.seenAt';
 const LOCAL_CURSORS_KEY = 'alpha.personCursors.v1';
-/** Coalesce tip writes — never stampede /v1/tip while browsing. */
-const PERSIST_MS = 4000;
+const PERSIST_MS = 8000;
 
 /** @typedef {'activity' | 'chat' | 'notes' | 'tasks'} CursorKey */
 
@@ -27,14 +25,14 @@ const EMPTY = {
 	tasks_seen_at: 0
 };
 
-/** @type {{ ready: boolean, email: string, values: Record<string, number> }} */
+/** @type {{ ready: boolean, email: string, values: Record<string, number>, dirty: boolean }} */
 export const personCursors = $state({
 	ready: false,
 	email: '',
-	values: { ...EMPTY }
+	values: { ...EMPTY },
+	dirty: false
 });
 
-/** Bumps when cursors change so derived counts re-run. */
 export const cursorsTick = $state({ value: 0 });
 
 /** @type {ReturnType<typeof setTimeout> | null} */
@@ -43,8 +41,8 @@ let persistInFlight = false;
 let persistQueued = false;
 /** @type {Record<string, number> | null} */
 let lastPersisted = null;
-let loadGen = 0;
-let loadInFlightEmail = '';
+let driveFetchEmail = '';
+let driveFetchGen = 0;
 
 /** @param {string} email */
 export function emailSlug(email) {
@@ -72,7 +70,6 @@ function parseMs(raw) {
 	return 0;
 }
 
-/** @returns {string} */
 function meEmail() {
 	return String(activePerson().email || '')
 		.trim()
@@ -135,9 +132,10 @@ function readLegacyActivitySeen() {
 /**
  * @param {Record<string, number>} next
  * @param {string} email
- * @returns {boolean} whether state changed
+ * @param {{ dirty?: boolean }} [opts]
+ * @returns {boolean}
  */
-function applyLocal(next, email) {
+function applyLocal(next, email, opts = {}) {
 	const values = {
 		activity_seen_at: Number(next.activity_seen_at) || 0,
 		chat_seen_at: Number(next.chat_seen_at) || 0,
@@ -154,6 +152,7 @@ function applyLocal(next, email) {
 	personCursors.email = email;
 	personCursors.values = values;
 	personCursors.ready = true;
+	if (opts.dirty) personCursors.dirty = true;
 	cursorsTick.value += 1;
 	writeLocalCache(email, values);
 	if (typeof localStorage !== 'undefined' && values.activity_seen_at > 0) {
@@ -174,95 +173,93 @@ function fieldFor(key) {
 	return 'tasks_seen_at';
 }
 
-/** @param {CursorKey} key */
-export function readCursor(key) {
-	cursorsTick.value;
-	const email = meEmail();
-	if (!email || personCursors.email !== email) return 0;
-	return Number(personCursors.values[fieldFor(key)] || 0) || 0;
-}
-
-/**
- * Load cursors for the signed-in person (Drive + local cache).
- * Seeds “now” on first use so historical inventory does not flood badges.
- * @param {import('./drive/client.js').DriveSession} [session]
- */
-export async function loadPersonCursors(session = activeSession()) {
+/** Hydrate from localStorage only — sync, never touches Drive. */
+export function hydratePersonCursorsLocal() {
 	const email = meEmail();
 	if (!email) {
 		if (personCursors.ready || personCursors.email) {
 			personCursors.ready = false;
 			personCursors.email = '';
 			personCursors.values = { ...EMPTY };
+			personCursors.dirty = false;
 			cursorsTick.value += 1;
 		}
 		return;
 	}
+	if (personCursors.ready && personCursors.email === email) return;
 
-	/* Skip duplicate concurrent loads for the same person. */
-	if (loadInFlightEmail === email) return;
-	const gen = ++loadGen;
-	loadInFlightEmail = email;
+	const cached = readLocalCache(email);
+	const legacyActivity = readLegacyActivitySeen();
+	const now = Date.now();
+	const seeded = {
+		activity_seen_at: Math.max(cached?.activity_seen_at || 0, legacyActivity) || now,
+		chat_seen_at: cached?.chat_seen_at || now,
+		notes_seen_at: cached?.notes_seen_at || now,
+		tasks_seen_at: cached?.tasks_seen_at || now
+	};
+	applyLocal(seeded, email);
+	/* First visit seed stays local — do not tip-write on hard refresh. */
+}
 
+/**
+ * Background Drive pull. Never blocks boot. Does not create the leaf.
+ * @param {import('./drive/client.js').DriveSession} [session]
+ */
+export async function pullPersonCursorsFromDrive(session = activeSession()) {
+	const email = meEmail();
+	if (!email || !session) return;
+	if (driveFetchEmail === email) return;
+	const gen = ++driveFetchGen;
+	driveFetchEmail = email;
 	try {
-		const cached = readLocalCache(email);
-		const legacyActivity = readLegacyActivitySeen();
-		if (cached) {
-			if (legacyActivity > (cached.activity_seen_at || 0)) {
-				cached.activity_seen_at = legacyActivity;
-			}
-			applyLocal(cached, email);
+		const bytes = await getPath(session, cursorsPath(email));
+		if (gen !== driveFetchGen) return;
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		const fromDrive = {
+			activity_seen_at: parseMs(doc.activity_seen_at),
+			chat_seen_at: parseMs(doc.chat_seen_at),
+			notes_seen_at: parseMs(doc.notes_seen_at),
+			tasks_seen_at: parseMs(doc.tasks_seen_at)
+		};
+		const local = personCursors.email === email ? personCursors.values : EMPTY;
+		const merged = {
+			activity_seen_at: Math.max(fromDrive.activity_seen_at, local.activity_seen_at || 0),
+			chat_seen_at: Math.max(fromDrive.chat_seen_at, local.chat_seen_at || 0),
+			notes_seen_at: Math.max(fromDrive.notes_seen_at, local.notes_seen_at || 0),
+			tasks_seen_at: Math.max(fromDrive.tasks_seen_at, local.tasks_seen_at || 0)
+		};
+		applyLocal(merged, email);
+		lastPersisted = fromDrive;
+		/* Only push up if local was ahead of Drive (user marked on this device). */
+		if (personCursors.dirty && !sameValues(merged, fromDrive)) {
+			schedulePersistCursors();
 		}
-
-		if (!session) return;
-		if (gen !== loadGen) return;
-
-		try {
-			const bytes = await getPath(session, cursorsPath(email));
-			if (gen !== loadGen) return;
-			const doc = JSON.parse(new TextDecoder().decode(bytes));
-			const fromDrive = {
-				activity_seen_at: parseMs(doc.activity_seen_at),
-				chat_seen_at: parseMs(doc.chat_seen_at),
-				notes_seen_at: parseMs(doc.notes_seen_at),
-				tasks_seen_at: parseMs(doc.tasks_seen_at)
-			};
-			const merged = {
-				activity_seen_at: Math.max(
-					fromDrive.activity_seen_at,
-					cached?.activity_seen_at || 0,
-					legacyActivity
-				),
-				chat_seen_at: Math.max(fromDrive.chat_seen_at, cached?.chat_seen_at || 0),
-				notes_seen_at: Math.max(fromDrive.notes_seen_at, cached?.notes_seen_at || 0),
-				tasks_seen_at: Math.max(fromDrive.tasks_seen_at, cached?.tasks_seen_at || 0)
-			};
-			applyLocal(merged, email);
-			if (!sameValues(merged, fromDrive)) schedulePersistCursors();
-		} catch {
-			if (gen !== loadGen) return;
-			const now = Date.now();
-			const seeded = {
-				activity_seen_at: Math.max(cached?.activity_seen_at || 0, legacyActivity) || now,
-				chat_seen_at: cached?.chat_seen_at || now,
-				notes_seen_at: cached?.notes_seen_at || now,
-				tasks_seen_at: cached?.tasks_seen_at || now
-			};
-			const changed = applyLocal(seeded, email);
-			/* Only create the leaf when we had nothing on Drive yet. */
-			if (changed || !cached) schedulePersistCursors();
-		}
+	} catch {
+		/* Missing leaf is fine — local seed already covers badges. */
 	} finally {
-		if (loadInFlightEmail === email) loadInFlightEmail = '';
+		if (driveFetchEmail === email) driveFetchEmail = '';
 	}
 }
 
+/**
+ * Boot / refresh entry: local sync hydrate, Drive in background.
+ * @param {import('./drive/client.js').DriveSession} [session]
+ */
+export function loadPersonCursors(session = activeSession()) {
+	hydratePersonCursorsLocal();
+	if (session) void pullPersonCursorsFromDrive(session);
+}
+
 async function flushPersist() {
+	if (!personCursors.dirty) return;
 	const session = activeSession();
 	const email = meEmail();
 	if (!session || !email || personCursors.email !== email) return;
 	const values = { ...personCursors.values };
-	if (lastPersisted && sameValues(lastPersisted, values)) return;
+	if (lastPersisted && sameValues(lastPersisted, values)) {
+		personCursors.dirty = false;
+		return;
+	}
 	if (persistInFlight) {
 		persistQueued = true;
 		return;
@@ -280,8 +277,9 @@ async function flushPersist() {
 	try {
 		await putPath(session, cursorsPath(email), 'blob', JSON.stringify(doc, null, 2));
 		lastPersisted = values;
+		personCursors.dirty = false;
 	} catch {
-		/* Offline — local cache still holds the cursor. */
+		/* Offline — keep dirty for a later attempt. */
 	} finally {
 		persistInFlight = false;
 		if (persistQueued) {
@@ -301,15 +299,16 @@ export function schedulePersistCursors(delayMs = PERSIST_MS) {
 }
 
 /**
- * Advance one or more cursors to `at` (default now). No-ops if already newer.
  * @param {CursorKey | CursorKey[]} keys
  * @param {number} [at]
  */
 export function markCursorsSeen(keys, at = Date.now()) {
 	const email = meEmail();
 	if (!email) return;
+	if (!personCursors.ready || personCursors.email !== email) {
+		hydratePersonCursorsLocal();
+	}
 	if (personCursors.email && personCursors.email !== email) return;
-	if (!personCursors.email) personCursors.email = email;
 
 	const list = Array.isArray(keys) ? keys : [keys];
 	let changed = false;
@@ -323,7 +322,7 @@ export function markCursorsSeen(keys, at = Date.now()) {
 		}
 	}
 	if (!changed) return;
-	if (!applyLocal(next, email)) return;
+	if (!applyLocal(next, email, { dirty: true })) return;
 	schedulePersistCursors();
 }
 
@@ -331,7 +330,14 @@ export function markActivitySeen() {
 	markCursorsSeen('activity');
 }
 
-/** Messages from others that are not targeted replies/reactions on my tips. */
+/** @param {CursorKey} key */
+export function readCursor(key) {
+	cursorsTick.value;
+	const email = meEmail();
+	if (!email || personCursors.email !== email) return 0;
+	return Number(personCursors.values[fieldFor(key)] || 0) || 0;
+}
+
 export function newChatCount() {
 	cursorsTick.value;
 	const len = chatFeed.length;
@@ -360,7 +366,6 @@ export function newChatCount() {
 		if (!author || author === me) continue;
 		const at = Date.parse(String(m.created_at || '')) || 0;
 		if (!at || at <= seen) continue;
-
 		const replyTo = String(m.reply_to || '');
 		if (
 			replyTo &&
@@ -387,8 +392,7 @@ export function newNotesCount() {
 			.trim()
 			.toLowerCase();
 		if (author && author === me) continue;
-		const at = Number(note.createdAt || 0) || 0;
-		if (at > seen) n += 1;
+		if ((Number(note.createdAt || 0) || 0) > seen) n += 1;
 	}
 	return n;
 }
@@ -406,8 +410,7 @@ export function newTasksCount() {
 			.trim()
 			.toLowerCase();
 		if (author && author === me) continue;
-		const at = Number(task.createdAt || 0) || 0;
-		if (at > seen) n += 1;
+		if ((Number(task.createdAt || 0) || 0) > seen) n += 1;
 	}
 	return n;
 }

@@ -15,6 +15,7 @@
 		activityUnreadCount
 	} from '$lib/chat-activity.svelte.js';
 	import {
+		hydratePersonCursorsLocal,
 		loadPersonCursors,
 		markCursorsSeen,
 		newChatCount,
@@ -344,6 +345,7 @@
 		const email = actor.email;
 		if (!email) return;
 		untrack(() => {
+			hydratePersonCursorsLocal();
 			void loadPersonCursors();
 		});
 	});

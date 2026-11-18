@@ -422,9 +422,10 @@ export async function refreshFromDrive(opts = {}) {
 				}
 			}),
 			ensureDefaultAccounts(session),
-			ensureMembers(session).then(() => hydrateAvatarUrls()),
-			loadPersonCursors(session)
+			ensureMembers(session).then(() => hydrateAvatarUrls())
 		]);
+		/* Cursors are local-first — never block workspace boot on Drive get/put. */
+		loadPersonCursors(session);
 		const plist = buckets.project;
 		replaceArray(
 			projects,

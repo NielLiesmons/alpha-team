@@ -2854,6 +2854,8 @@
 		overflow: auto;
 		width: 100%;
 		box-sizing: border-box;
+		/* Match chat channel / list density — no 56×24 hug padding. */
+		padding: 8px 4px 20px;
 	}
 
 	.activity-filter {
