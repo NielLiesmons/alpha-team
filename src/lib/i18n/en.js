@@ -339,6 +339,11 @@ export default {
 	'chat.activityReactedOn': '{name} reacted {emoji} on your message',
 	'chat.activityReplied': '{name} replied',
 	'chat.activityOpen': 'Notifications',
+	'chat.activityFilter': 'Filter notifications',
+	'chat.activityFilterReactions': 'Reactions',
+	'chat.activityFilterReplies': 'Replies',
+	'chat.activityFilterAssigned': 'Assigned',
+	'chat.activityPushPrefs': 'Notification settings',
 
 	/* ── tasks ────────────────────────────────────────── */
 	'tasks.title': 'Tasks',

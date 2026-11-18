@@ -505,7 +505,7 @@
 				onclick={openChatActivity}
 			>
 				<span class="activity-mark">
-					<UnreadMark count={chatNotifCount} />
+					<UnreadMark count={chatNotifCount || 0} />
 				</span>
 				<span class="activity-cats" aria-hidden="true">
 					{#if chatNotifCats.reaction > 0}

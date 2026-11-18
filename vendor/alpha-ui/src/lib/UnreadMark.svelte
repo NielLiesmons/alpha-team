@@ -1,21 +1,27 @@
 <script>
 	/**
-	 * Accent unread mark — for notifications targeted at the signed-in user.
-	 * Dot alone, or dot + count. Plain inventory counts should stay muted text.
-	 * @type {{ count?: number, size?: number, className?: string }}
+	 * Unread mark for notifications targeted at the signed-in user.
+	 * Accent dot + count when unread > 0; quiet muted dot when empty.
+	 * @type {{ count?: number, size?: number, quiet?: boolean, className?: string }}
 	 */
-	let { count = 0, size = 7, className = '' } = $props();
+	let { count = 0, size = 7, quiet = false, className = '' } = $props();
 
 	const n = $derived(Math.max(0, Math.floor(Number(count) || 0)));
 	const label = $derived(n > 9 ? '9+' : String(n));
+	const showQuiet = $derived(quiet || n === 0);
 </script>
 
-{#if n > 0}
-	<span class="unread-mark {className}" title={String(n)}>
-		<span class="dot" style:--dot="{size}px" aria-hidden="true"></span>
+<span
+	class="unread-mark {className}"
+	class:quiet={showQuiet}
+	class:hot={n > 0 && !quiet}
+	title={n > 0 ? String(n) : undefined}
+>
+	<span class="dot" style:--dot="{size}px" aria-hidden="true"></span>
+	{#if n > 0}
 		<span class="n">{label}</span>
-	</span>
-{/if}
+	{/if}
+</span>
 
 <style>
 	.unread-mark {
@@ -38,10 +44,21 @@
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg, #000) 35%, transparent);
 	}
 
+	.unread-mark.quiet .dot {
+		background: var(--fg-33);
+		box-shadow: none;
+		opacity: 0.85;
+	}
+
 	.n {
 		font-size: 12px;
 		font-weight: 650;
 		color: var(--accent-1, #5a58fe);
 		letter-spacing: 0;
+	}
+
+	.unread-mark.quiet .n {
+		color: var(--fg-33);
+		font-weight: 600;
 	}
 </style>

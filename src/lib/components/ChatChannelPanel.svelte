@@ -163,6 +163,11 @@
 		if (sel.kind === 'chat' && String(sel.id) === 'notifications') return false;
 		return true;
 	});
+	/** Pad morph only after a compact toggle — not on first enter to Chat. */
+	let wasCompact = $state(false);
+	$effect(() => {
+		if (compact) wasCompact = true;
+	});
 
 	/** Unique authors for tip-row pfps (events + comments). */
 	function tipAuthors(/** @type {any[]} */ messages) {
@@ -623,7 +628,7 @@
 	}
 </script>
 
-<div class="chat" class:compact>
+<div class="chat" class:compact class:was-compact={wasCompact}>
 	<div class="feed messages" bind:this={messagesEl} onscroll={measureScroll}>
 		<div class="feed-body" bind:this={feedBodyEl}>
 			{#if driveSession.error}
@@ -974,10 +979,9 @@
 		box-sizing: border-box;
 		/* Clear detail-top; bottom pad clears floating composer — see feed-scroll.js */
 		padding: 56px 24px calc(120px + env(safe-area-inset-bottom, 0px));
-		transition: padding 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 	}
 
-	/* Match other 2nd-column gutters (Tasks/Notes ~6–10px) when chat is compacted */
+	/* Match other 2nd-column gutters when chat is compacted (after a detail open). */
 	.chat.compact .messages {
 		padding-left: 10px;
 		padding-right: 10px;
@@ -986,6 +990,13 @@
 	.chat.compact .composer-dock {
 		padding-left: 10px;
 		padding-right: 10px;
+	}
+
+	.chat.compact .messages,
+	.chat:not(.compact).was-compact .messages,
+	.chat.compact .composer-dock,
+	.chat:not(.compact).was-compact .composer-dock {
+		transition: padding 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 	}
 
 	.feed-body {

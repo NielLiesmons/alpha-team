@@ -155,6 +155,19 @@
 	let lastNavHref = '';
 	/** Detail pane covering the list — hide the menu chrome so back stays usable. */
 	let detailCovering = $state(false);
+	/**
+	 * Chat width morph only after a compact↔wide toggle on Chat —
+	 * never when first landing on the section (wide is the default).
+	 */
+	let chatWasCompact = $state(false);
+
+	$effect(() => {
+		if (listSize !== 'chat') {
+			chatWasCompact = false;
+			return;
+		}
+		if (listCompact) chatWasCompact = true;
+	});
 
 	$effect(() => {
 		if (typeof window === 'undefined') return;
@@ -617,6 +630,7 @@
 	class:detail-covering={detailCovering}
 	class:list-chat={listSize === 'chat'}
 	class:chat-compact={listSize === 'chat' && listCompact}
+	class:chat-was-compact={listSize === 'chat' && chatWasCompact}
 	class:comms-feed={commsFeed}
 	bind:this={shellEl}
 	style="--menu-progress: {menuProgress}"
@@ -1629,14 +1643,10 @@
 		overflow: hidden;
 	}
 
-	/* Chat: wide fixed feed by default; compact → φ `--list` when detail opens */
+	/* Chat: wide is the default; morph only after a compact toggle (not on section enter). */
 	.list-col.chat {
 		flex-basis: var(--list-chat, var(--list));
 		width: var(--list-chat, var(--list));
-		transition:
-			flex-basis 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
-			width 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
-			min-width 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 	}
 
 	@media (min-width: 768px) {
@@ -1652,11 +1662,23 @@
 			min-width: 280px;
 		}
 
+		.shell.list-chat.chat-compact .list-col.chat,
+		.shell.list-chat.chat-was-compact:not(.chat-compact) .list-col.chat {
+			transition:
+				flex-basis 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+				width 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+				min-width 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+		}
+
 		/* Detail takes remaining space (notifications synopsis or entity page) */
 		.shell.list-chat :global(.detail) {
 			flex: 1 1 0;
 			width: auto;
 			min-width: 0;
+		}
+
+		.shell.list-chat.chat-compact :global(.detail),
+		.shell.list-chat.chat-was-compact:not(.chat-compact) :global(.detail) {
 			transition: flex-basis 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 		}
 	}

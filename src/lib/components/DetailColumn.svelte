@@ -66,6 +66,7 @@
 	import PullToRefresh from './PullToRefresh.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import ChromeMobileBar from '@alpha/ui/ChromeMobileBar.svelte';
+	import Adjust from './icons/Adjust.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
 	import { syncUi } from '$lib/sync-progress.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
@@ -732,6 +733,23 @@
 	/** Keep body mounted through the mobile slide-out so the panel doesn’t blank mid-transition. */
 	let renderBody = $state(false);
 	let panelOpen = $state(false);
+	/** For-you activity filter (Chat 3rd column). */
+	let activityFilter = $state(/** @type {'all' | 'reaction' | 'reply' | 'assigned'} */ ('all'));
+
+	const activityFilterOptions = $derived.by(() => {
+		locale.value;
+		/** @type {{ id: 'all' | 'reaction' | 'reply' | 'assigned', label: string }[]} */
+		return [
+			{ id: 'all', label: t('filter.all') },
+			{ id: 'reaction', label: t('chat.activityFilterReactions') },
+			{ id: 'reply', label: t('chat.activityFilterReplies') },
+			{ id: 'assigned', label: t('chat.activityFilterAssigned') }
+		];
+	});
+
+	function openPushPrefs() {
+		selectEntity('settings', 'notifications');
+	}
 	/** 0..1 while edge-swiping back; null when idle. Drives list underlay in UiShell. */
 	let detailDrag = $state(/** @type {number | null} */ (null));
 
@@ -956,6 +974,8 @@
 			</div>
 		</DropdownMenu>
 
+	{#key `${selection?.kind ?? 'none'}:${selection?.id ?? 'none'}`}
+	<div class="detail-page">
 	<PullToRefresh onRefresh={() => refreshAllDrive()}>
 	{#if task}
 		<header class="detail-top desktop-head">
@@ -1454,10 +1474,28 @@
 				</button>
 				<span class="detail-top-label">{t('chat.activityTitle')}</span>
 			</div>
-			<div class="detail-top-actions"></div>
+			<div class="detail-top-actions">
+				<div class="activity-filter" role="group" aria-label={t('chat.activityFilter')}>
+					{#each activityFilterOptions as opt (opt.id)}
+						<button
+							type="button"
+							class:on={activityFilter === opt.id}
+							onclick={() => (activityFilter = opt.id)}>{opt.label}</button
+						>
+					{/each}
+				</div>
+				<button
+					type="button"
+					class="icon-hit"
+					aria-label={t('chat.activityPushPrefs')}
+					onclick={openPushPrefs}
+				>
+					<Adjust size={15} />
+				</button>
+			</div>
 		</header>
 		<div class="body chat-activity-body">
-			<ChatActivity embedded />
+			<ChatActivity filter={activityFilter} embedded />
 		</div>
 	{:else if chatChannel}
 		<header class="detail-top desktop-head">
@@ -1927,8 +1965,38 @@
 		</div>
 	{/if}
 	</PullToRefresh>
+	</div>
+	{/key}
 {:else if $page.url.pathname.startsWith('/chat')}
-	<ChatActivity />
+	<div class="detail-page chat-home">
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<span class="detail-top-label">{t('chat.activityTitle')}</span>
+			</div>
+			<div class="detail-top-actions">
+				<div class="activity-filter" role="group" aria-label={t('chat.activityFilter')}>
+					{#each activityFilterOptions as opt (opt.id)}
+						<button
+							type="button"
+							class:on={activityFilter === opt.id}
+							onclick={() => (activityFilter = opt.id)}>{opt.label}</button
+						>
+					{/each}
+				</div>
+				<button
+					type="button"
+					class="icon-hit"
+					aria-label={t('chat.activityPushPrefs')}
+					onclick={openPushPrefs}
+				>
+					<Adjust size={15} />
+				</button>
+			</div>
+		</header>
+		<div class="body chat-activity-body">
+			<ChatActivity filter={activityFilter} embedded />
+		</div>
+	</div>
 {:else}
 	<div class="empty desktop-empty">
 		<p class="empty-title">{emptyCopy.title}</p>
@@ -2736,6 +2804,74 @@
 
 	.menu-wrap {
 		position: relative;
+	}
+
+	.detail-page {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+	}
+
+	.body.chat-activity-body {
+		overflow: auto;
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	.activity-filter {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		height: 28px;
+		padding: 2px;
+		box-sizing: border-box;
+		border: 1px solid transparent;
+		border-radius: 10px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		pointer-events: auto;
+	}
+
+	.activity-filter button {
+		height: 100%;
+		padding: 0 9px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--fg-33);
+		font: inherit;
+		font-size: 11px;
+		font-weight: 600;
+		cursor: pointer;
+		line-height: 1;
+		white-space: nowrap;
+	}
+
+	.activity-filter button.on {
+		background: var(--fg-8);
+		color: var(--fg);
+	}
+
+	@media (min-width: 768px) {
+		.detail-page {
+			animation: detail-page-in 0.3s var(--ease) both;
+		}
+
+		@keyframes detail-page-in {
+			from {
+				opacity: 0;
+				transform: translate3d(0, 8px, 0);
+			}
+			to {
+				opacity: 1;
+				transform: none;
+			}
+		}
 	}
 
 	@media (max-width: 767px) {

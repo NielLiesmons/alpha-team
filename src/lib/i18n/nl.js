@@ -341,6 +341,11 @@ export default {
 	'chat.activityReactedOn': '{name} reageerde {emoji} op je bericht',
 	'chat.activityReplied': '{name} antwoordde',
 	'chat.activityOpen': 'Meldingen',
+	'chat.activityFilter': 'Meldingen filteren',
+	'chat.activityFilterReactions': 'Reacties',
+	'chat.activityFilterReplies': 'Antwoorden',
+	'chat.activityFilterAssigned': 'Toegewezen',
+	'chat.activityPushPrefs': 'Meldingsinstellingen',
 
 	/* ── tasks ────────────────────────────────────────── */
 	'tasks.title': 'Taken',

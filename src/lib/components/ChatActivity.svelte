@@ -1,6 +1,7 @@
 <script>
 	/**
 	 * Chat 3rd-column synopsis — clean 2-row cards for activity aimed at me.
+	 * Chrome (title / filters / adjust) lives on DetailColumn’s detail-top.
 	 */
 	import At from './icons/At.svelte';
 	import Heart from './icons/Heart.svelte';
@@ -14,10 +15,19 @@
 	import { selectEntity } from '$lib/workspace.svelte.js';
 	import { onMount } from 'svelte';
 
-	/** @type {{ embedded?: boolean }} */
-	let { embedded = false } = $props();
+	/**
+	 * @type {{
+	 *   filter?: 'all' | 'reaction' | 'reply' | 'assigned',
+	 *   embedded?: boolean
+	 * }}
+	 */
+	let { filter = 'all', embedded = false } = $props();
 
-	const items = $derived(activityForMe());
+	const items = $derived.by(() => {
+		const all = activityForMe();
+		if (filter === 'all') return all;
+		return all.filter((i) => i.kind === filter);
+	});
 
 	onMount(() => {
 		markActivitySeen();
@@ -63,11 +73,11 @@
 					<button type="button" class="card" onclick={() => openItem(item)}>
 						<span class="cat" aria-hidden="true">
 							{#if item.kind === 'reaction'}
-								<Heart size={16} />
+								<Heart size={15} />
 							{:else if item.kind === 'reply'}
-								<Reply size={16} />
+								<Reply size={15} />
 							{:else}
-								<At size={16} />
+								<At size={15} />
 							{/if}
 						</span>
 						<span class="body">
@@ -75,9 +85,9 @@
 							<span class="line2">
 								<span class="trail-ico" aria-hidden="true">
 									{#if item.kind === 'assigned'}
-										<TaskBox state={item.taskStatus || 'open'} size={16} />
+										<TaskBox state={item.taskStatus || 'open'} size={15} />
 									{:else}
-										<TipTypeIcon name="chat" size={16} />
+										<TipTypeIcon name="chat" size={15} />
 									{/if}
 								</span>
 								<span class="trail-text">{line2(item)}</span>
@@ -95,19 +105,14 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		height: 100%;
+		flex: 1;
 		box-sizing: border-box;
-		padding: 56px 16px 32px;
-		overflow: auto;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.activity.embedded {
-		padding-top: 12px;
+		padding: 0;
+		width: 100%;
 	}
 
 	.empty {
-		margin: 28px 8px;
+		margin: 28px 0;
 		font-size: 14px;
 		color: var(--fg-33);
 		text-align: center;
@@ -119,7 +124,8 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 2px;
+		width: 100%;
 	}
 
 	.card {
@@ -127,7 +133,7 @@
 		align-items: flex-start;
 		gap: 10px;
 		width: 100%;
-		padding: 10px 10px;
+		padding: 10px 8px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -144,12 +150,12 @@
 
 	.cat {
 		flex-shrink: 0;
-		width: 22px;
-		height: 22px;
+		width: 20px;
+		height: 20px;
 		margin-top: 1px;
 		display: grid;
 		place-items: center;
-		color: var(--fg-66);
+		color: var(--fg-33);
 		line-height: 0;
 	}
 
@@ -158,14 +164,14 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 3px;
 	}
 
 	.line1 {
-		font-size: 14px;
-		font-weight: 550;
-		line-height: 1.3;
-		color: var(--fg);
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 1.35;
+		color: var(--fg-66);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -195,12 +201,5 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	@media (max-width: 767px) {
-		.activity {
-			padding: calc(56px + env(safe-area-inset-top, 0px)) 14px
-				calc(28px + env(safe-area-inset-bottom, 0px));
-		}
 	}
 </style>
