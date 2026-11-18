@@ -2080,7 +2080,8 @@
 	/* Match chat-channel-body: no top pad here — feed scrolls under detail-top */
 	.body.mail-thread-body {
 		overflow: hidden;
-		padding: 0 24px;
+		/* Same top clear as Task .body (56px) so title row sits under the fade alike */
+		padding: 56px 24px 0;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
@@ -2088,7 +2089,7 @@
 
 	@media (max-width: 767px) {
 		.body.mail-thread-body {
-			padding: 0 14px;
+			padding: 56px 14px 0;
 		}
 	}
 

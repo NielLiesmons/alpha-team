@@ -408,8 +408,8 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		display: block;
-		/* Horizontal pad lives on .mail-thread-body / panel — not here */
-		padding: 56px 0 96px;
+		/* Top clear lives on .mail-thread-body (match Task .body); bottom for reply CTA */
+		padding: 0 0 96px;
 		box-sizing: border-box;
 	}
 
