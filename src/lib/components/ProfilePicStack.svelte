@@ -123,6 +123,9 @@
 	}
 
 	.pill {
+		position: relative;
+		/* Above the last avatar overlap so the count stays readable. */
+		z-index: 4;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -140,6 +143,8 @@
 	}
 
 	.pill span {
+		position: relative;
+		z-index: 1;
 		font-size: 0.8125rem;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;

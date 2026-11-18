@@ -832,10 +832,10 @@
 	.chat-pill {
 		display: inline-flex;
 		align-items: center;
-		gap: calc(0.35rem + 2px);
+		gap: calc(0.35rem + 4px);
 		height: 44px;
 		width: max-content;
-		padding: 0 10px 0 12px;
+		padding: 0 10px 0 14px;
 		border: 0;
 		border-radius: var(--comments-radius);
 		background: transparent;
