@@ -21,6 +21,7 @@
 		mailPreview,
 		mailThreadsForCurrentView,
 		mailUi,
+		mailUnreadCountForCategory,
 		markMailRead,
 		markMailUnread,
 		moveMailThreadLocal,
@@ -38,6 +39,7 @@
 	} from '$lib/mail-view.svelte.js';
 	import { forceClearSelection, openComposer, selectEntity, ui } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import UnreadMark from '@alpha/ui/UnreadMark.svelte';
 
 	$effect(() => {
 		mailView.folder;
@@ -212,12 +214,18 @@
 <div class="feed mail">
 	<div class="category-seg" role="group" aria-label={t('mail.category')}>
 		{#each MAIL_CATEGORIES as c (c)}
+			{@const unread = mailUnreadCountForCategory(c)}
 			<button
 				type="button"
 				class="seg-btn"
 				class:on={mailView.category === c}
-				onclick={() => setMailCategory(c)}>{mailCategoryLabel(c)}</button
+				onclick={() => setMailCategory(c)}
 			>
+				<span class="seg-label">{mailCategoryLabel(c)}</span>
+				{#if unread > 0}
+					<UnreadMark count={unread} size={6} />
+				{/if}
+			</button>
 		{/each}
 	</div>
 
@@ -382,16 +390,17 @@
 		min-height: 0;
 	}
 
-	/* Quiet recessed track; height matches mobile top-bar chrome (44px round / title pill). */
+	/* Quiet recessed track — equal inset so selected pill can sit taller. */
 	.category-seg {
 		display: grid;
 		grid-auto-flow: column;
 		grid-auto-columns: 1fr;
-		align-items: center;
+		align-items: stretch;
 		gap: 2px;
 		margin: 0 10px 10px;
-		height: 44px;
-		padding: 6px;
+		height: auto;
+		min-height: 40px;
+		padding: 3px;
 		border-radius: 999px;
 		border: 0;
 		background: color-mix(in srgb, var(--fg) 4%, transparent);
@@ -412,15 +421,26 @@
 		font: inherit;
 		font-size: 12px;
 		font-weight: 600;
-		height: 28px;
+		min-height: 34px;
+		height: 100%;
 		padding: 0 8px;
 		border-radius: 999px;
 		cursor: pointer;
 		white-space: nowrap;
 		box-sizing: border-box;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
 		transition:
 			background 0.15s ease,
 			color 0.15s ease;
+	}
+
+	.seg-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.seg-btn:hover {

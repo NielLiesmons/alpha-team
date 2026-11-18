@@ -17,7 +17,11 @@ import {
 	sendJmapMail,
 	setJmapEmailsSeen
 } from './jmap-mail.js';
-import { approvedContacts, isApprovedContact } from './mail-contacts.svelte.js';
+import {
+	approvedContacts,
+	contactBucket,
+	contactBucketsVersion
+} from './mail-contacts.svelte.js';
 import { mailView } from './mail-view.svelte.js';
 import { displayNameFromEmail } from './actor.svelte.js';
 
@@ -263,16 +267,31 @@ export function isOtherMail(thread) {
 
 /**
  * Triage category for a thread.
- * Primary = approved first-contact only.
+ * Explicit contact buckets win. Uncategorized people stay in Requests (`new`);
+ * newsletter heuristics only suggest the Accept CTA (see isUpdatesMail).
+ * Transactional senders still auto-file to Other.
  * @param {any} thread
  * @returns {import('./mail-view.svelte.js').MailCategory}
  */
 export function mailCategoryFor(thread) {
-	if (isUpdatesMail(thread)) return 'updates';
+	const contact = normEmail(thread?.from || thread?._latestFrom);
+	const bucket = contact ? contactBucket(contact) : null;
+	if (bucket === 'primary' || bucket === 'updates' || bucket === 'other') return bucket;
 	if (isOtherMail(thread)) return 'other';
-	const contact = normEmail(thread?.from);
-	if (contact && isApprovedContact(contact)) return 'primary';
 	return 'new';
+}
+
+/**
+ * Unread count per triage category in the current folder.
+ * @param {import('./mail-view.svelte.js').MailCategory} cat
+ */
+export function mailUnreadCountForCategory(cat) {
+	mailView.category;
+	approvedContacts().size;
+	contactBucketsVersion();
+	return mailThreadsForCurrentFolder().filter(
+		(t) => mailCategoryFor(t) === cat && isUnreadFor(t)
+	).length;
 }
 
 /**
@@ -281,6 +300,7 @@ export function mailCategoryFor(thread) {
 export function mailThreadsForCurrentView() {
 	mailView.category;
 	approvedContacts().size; /* subscribe to approved + members */
+	contactBucketsVersion();
 	const all = mailThreadsForCurrentFolder();
 	const cat = mailView.category;
 	return all.filter((t) => mailCategoryFor(t) === cat);

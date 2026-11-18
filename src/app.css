@@ -992,3 +992,41 @@ table.data tr.selected td {
 		margin-top: 0;
 	}
 }
+
+/*
+ * Swipe-left reply reveal (mail panels + chat bubbles).
+ * Action inserts .swipe-reply-reveal; --swipe-p is 0..1 on the chip.
+ */
+.swipe-reply-reveal {
+	position: absolute;
+	width: 72px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+	z-index: 0;
+	--swipe-p: 0;
+}
+
+.swipe-reply-chip {
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 999px;
+	background: var(--fg-8);
+	color: var(--fg-33);
+	transform: scale(calc(0.55 + 0.45 * var(--swipe-p, 0)));
+	opacity: var(--swipe-p, 0);
+	transition: none;
+	box-sizing: border-box;
+}
+
+.swipe-reply-chip svg {
+	display: block;
+	overflow: visible;
+}
+
+.swipe-reply-chip path {
+	vector-effect: non-scaling-stroke;
+}

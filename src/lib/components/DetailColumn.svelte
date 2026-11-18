@@ -39,7 +39,8 @@
 		rememberMailTip,
 		threadMessages
 	} from '$lib/mail.svelte.js';
-	import { approveContact, isApprovedContact } from '$lib/mail-contacts.svelte.js';
+	import { isCategorizedContact } from '$lib/mail-contacts.svelte.js';
+	import MailContactTriage from './MailContactTriage.svelte';
 	import MailThreadFeed from './MailThreadFeed.svelte';
 	import {
 		projectLifecycle,
@@ -906,15 +907,26 @@
 	aria-busy={syncUi.active || undefined}
 >
 	{#if renderBody}
-		{#if showMoreMenu}
+		{@const mailContactEmail = mailMsg ? String(mailMsg.from || '').toLowerCase() : ''}
+		{@const mailNeedsTriage =
+			Boolean(mailMsg) &&
+			Boolean(mailContactEmail) &&
+			!isCategorizedContact(mailContactEmail) &&
+			mailCategoryFor(mailMsg) === 'new'}
+		{#if showMoreMenu || mailNeedsTriage}
 			<ChromeMobileBar title={mobileTitle || typeLabel} onBack={close}>
 				{#snippet trailing()}
-					<ChromeActionButton
-						variant="more"
-						label={t('common.more')}
-						expanded={menuOpen}
-						onclick={toggleMoreMenu}
-					/>
+					{#if mailNeedsTriage}
+						<MailContactTriage email={mailContactEmail} thread={mailMsg} compact />
+					{/if}
+					{#if showMoreMenu}
+						<ChromeActionButton
+							variant="more"
+							label={t('common.more')}
+							expanded={menuOpen}
+							onclick={toggleMoreMenu}
+						/>
+					{/if}
 				{/snippet}
 			</ChromeMobileBar>
 		{:else}
@@ -1395,10 +1407,10 @@
 				? last.to?.[0] || mailMsg.from || ''
 				: last.from || mailMsg.from || ''}
 		{@const contactEmail = String(mailMsg.from || '').toLowerCase()}
-		{@const needsApprove =
+		{@const needsTriage =
 			contactEmail &&
 			mailCategoryFor(mailMsg) === 'new' &&
-			!isApprovedContact(contactEmail)}
+			!isCategorizedContact(contactEmail)}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">
 				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
@@ -1415,14 +1427,8 @@
 				<span class="detail-top-label">{t('mail.thread')}</span>
 			</div>
 			<div class="detail-top-actions">
-				{#if needsApprove}
-					<button
-						type="button"
-						class="send-chip"
-						onclick={() => approveContact(contactEmail)}
-					>
-						{t('common.accept')}
-					</button>
+				{#if needsTriage}
+					<MailContactTriage email={contactEmail} thread={mailMsg} />
 				{/if}
 				{#if showMoreMenu}
 					<button
