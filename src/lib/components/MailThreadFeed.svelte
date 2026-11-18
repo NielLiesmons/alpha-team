@@ -39,6 +39,10 @@
 	const threadId = $derived(String(mailMsg?.id || ''));
 	const me = $derived((activePerson().email || '').trim().toLowerCase());
 	const mails = $derived(threadMessages(mailMsg));
+	const firstMail = $derived(mails[0] || mailMsg);
+	const threadTitle = $derived(
+		String(firstMail?.subject || mailMsg?.subject || '').trim() || t('common.noSubject')
+	);
 	const lastMail = $derived(mails[mails.length - 1] || mailMsg);
 	const useReplyAll = $derived(preferReplyAll(lastMail, me));
 	const replyName = $derived(
@@ -141,6 +145,7 @@
 <div class="mail-thread-shell">
 	<div class="feed mail-feed" bind:this={feedEl}>
 		<div class="feed-body">
+			<h1 class="mail-thread-title">{threadTitle}</h1>
 			{#each mails as m (m.id)}
 				{@const fromEmail = String(m.from || '').toLowerCase()}
 				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
@@ -176,65 +181,26 @@
 										<span class="mail-panel-domain">{domain}</span>
 									{/if}
 								</span>
-								<div class="mail-panel-more-wrap" data-no-swipe-reply>
-									<button
-										type="button"
-										class="mail-more-btn"
-										aria-label={t('common.more')}
-										aria-expanded={menuFor}
-										aria-haspopup="menu"
-										onclick={() => toggleReplyMenu(quoteId)}
-									>
-										<MoreDots size={14} />
-									</button>
-									{#if menuFor}
-										<button
-											type="button"
-											class="corner-scrim"
-											aria-label={t('common.close')}
-											onclick={() => (replyMenuId = '')}
-										></button>
-										<div class="corner-menu" role="menu">
-											<button type="button" role="menuitem" onclick={() => composeAction(m, 'reply')}>
-												<Reply size={14} />
-												<span>{t('mail.reply')}</span>
-											</button>
-											<button
-												type="button"
-												role="menuitem"
-												onclick={() => composeAction(m, 'replyAll')}
-											>
-												<ReplyAll size={14} />
-												<span>{t('mail.replyAll')}</span>
-											</button>
-											<button
-												type="button"
-												role="menuitem"
-												onclick={() => composeAction(m, 'forward')}
-											>
-												<Forward size={14} />
-												<span>{t('mail.forward')}</span>
-											</button>
-											<button
-												type="button"
-												role="menuitem"
-												onclick={() => {
-													replyMenuId = '';
-													onMore();
-												}}
-											>
-												<MoreDots size={14} />
-												<span>{t('common.more')}</span>
-											</button>
-										</div>
-									{/if}
-								</div>
 							</div>
 							<div class="mail-panel-row2">
 								<p class="mail-panel-to">
 									<span class="to-label">{t('mail.to')}:</span>
 									{toLine || '—'}
 								</p>
+							</div>
+						</div>
+						<div class="mail-panel-trail" data-no-swipe-reply>
+							<button
+								type="button"
+								class="mail-panel-trail-hit"
+								aria-label={t('common.more')}
+								aria-expanded={menuFor}
+								aria-haspopup="menu"
+								onclick={() => toggleReplyMenu(quoteId)}
+							>
+								<span class="mail-more-icon" aria-hidden="true">
+									<MoreDots size={14} />
+								</span>
 								{#if m._pending}
 									<span class="mail-panel-status" aria-label={t('mail.sending')}>
 										<span class="status-dot" aria-hidden="true"></span>
@@ -245,7 +211,48 @@
 								{:else}
 									<span class="mail-panel-when">{formatMailWhen(m.created_at)}</span>
 								{/if}
-							</div>
+							</button>
+							{#if menuFor}
+								<button
+									type="button"
+									class="corner-scrim"
+									aria-label={t('common.close')}
+									onclick={() => (replyMenuId = '')}
+								></button>
+								<div class="corner-menu" role="menu">
+									<button type="button" role="menuitem" onclick={() => composeAction(m, 'reply')}>
+										<Reply size={14} />
+										<span>{t('mail.reply')}</span>
+									</button>
+									<button
+										type="button"
+										role="menuitem"
+										onclick={() => composeAction(m, 'replyAll')}
+									>
+										<ReplyAll size={14} />
+										<span>{t('mail.replyAll')}</span>
+									</button>
+									<button
+										type="button"
+										role="menuitem"
+										onclick={() => composeAction(m, 'forward')}
+									>
+										<Forward size={14} />
+										<span>{t('mail.forward')}</span>
+									</button>
+									<button
+										type="button"
+										role="menuitem"
+										onclick={() => {
+											replyMenuId = '';
+											onMore();
+										}}
+									>
+										<MoreDots size={14} />
+										<span>{t('common.more')}</span>
+									</button>
+								</div>
+							{/if}
 						</div>
 					</header>
 					<div class="mail-panel-rule" aria-hidden="true"></div>
@@ -286,9 +293,9 @@
 			<button type="button" class="mail-reply-field" onclick={composeThreadReply}>
 				<span class="reply-field-icon" aria-hidden="true">
 					{#if useReplyAll}
-						<ReplyAll size={15} />
+						<ReplyAll size={15} strokeWidth={1.05} />
 					{:else}
-						<Reply size={15} />
+						<Reply size={15} strokeWidth={1.05} />
 					{/if}
 				</span>
 				<span class="reply-field-label">{t('mail.replyPrompt', { name: replyName || '…' })}</span>
@@ -324,6 +331,17 @@
 		width: 100%;
 	}
 
+	.mail-thread-title {
+		margin: 0 0 16px;
+		padding: 0 2px;
+		font-size: 28px;
+		font-weight: 700;
+		letter-spacing: -0.03em;
+		line-height: 1.15;
+		color: var(--fg);
+		overflow-wrap: anywhere;
+	}
+
 	.mail-panel {
 		position: relative;
 		display: block;
@@ -355,10 +373,10 @@
 
 	.mail-panel-head {
 		display: flex;
-		align-items: center;
+		align-items: stretch;
 		gap: 10px;
 		min-width: 0;
-		padding: 12px 14px 10px;
+		padding: 12px 8px 10px 14px;
 		box-sizing: border-box;
 	}
 
@@ -369,6 +387,7 @@
 		flex-direction: column;
 		gap: 3px;
 		justify-content: center;
+		padding-right: 4px;
 	}
 
 	.mail-panel-row1,
@@ -412,10 +431,53 @@
 		padding-top: 1px;
 	}
 
+	.mail-panel-trail {
+		position: relative;
+		z-index: 2;
+		flex-shrink: 0;
+		display: flex;
+		align-items: stretch;
+		align-self: stretch;
+		min-width: 0;
+	}
+
+	.mail-panel-trail-hit {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 4px;
+		min-width: 44px;
+		margin: 0;
+		padding: 0 2px 0 10px;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		color: var(--fg-33);
+		cursor: pointer;
+		line-height: 0;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.mail-panel-trail-hit:hover,
+	.mail-panel-trail-hit[aria-expanded='true'] {
+		background: transparent;
+		color: var(--fg-33);
+	}
+
+	.mail-more-icon {
+		display: grid;
+		place-items: center;
+		margin: 0;
+		padding: 0;
+		line-height: 0;
+		color: inherit;
+	}
+
 	.mail-panel-when,
 	.mail-panel-status {
 		margin: 0;
-		padding: 0 0 0 8px;
+		padding: 0;
 		font-size: 11px;
 		font-weight: 500;
 		line-height: 1.25;
@@ -451,35 +513,6 @@
 		50% {
 			opacity: 1;
 		}
-	}
-
-	.mail-panel-more-wrap {
-		position: relative;
-		z-index: 2;
-		flex-shrink: 0;
-		margin-left: auto;
-	}
-
-	.mail-more-btn {
-		display: grid;
-		place-items: center;
-		width: 28px;
-		height: 28px;
-		margin: 0;
-		padding: 0;
-		border: 0;
-		border-radius: 999px;
-		background: transparent;
-		color: var(--fg-33);
-		cursor: pointer;
-		line-height: 0;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.mail-more-btn:hover,
-	.mail-more-btn[aria-expanded='true'] {
-		color: var(--fg-66);
-		background: var(--fg-8);
 	}
 
 	.corner-scrim {
@@ -719,8 +752,9 @@
 		display: grid;
 		place-items: center;
 		line-height: 0;
-		color: var(--fg-66);
+		color: var(--fg-33);
 		flex-shrink: 0;
+		opacity: 0.9;
 	}
 
 	.reply-field-label {

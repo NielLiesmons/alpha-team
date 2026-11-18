@@ -376,15 +376,17 @@
 				disabled={busy || recipients.length === 0 || (!subject.trim() && !plainBody)}
 				onclick={() => (scheduleOpen = !scheduleOpen)}
 			>
-				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-					<path
-						d="M3 4.5 6 7.5 9 4.5"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
+				<span class="send-chevron" aria-hidden="true">
+					<svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+						<path
+							d="M3 4.5 6 7.5 9 4.5"
+							stroke="currentColor"
+							stroke-width="1.25"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</span>
 			</button>
 			{#if scheduleOpen}
 				<button
@@ -554,7 +556,7 @@
 	.send-divider {
 		width: 1px;
 		align-self: stretch;
-		margin: 5px 0;
+		margin: 0;
 		background: color-mix(in srgb, var(--button-primary-fg, var(--fg)) 22%, transparent);
 		flex-shrink: 0;
 		z-index: 1;
@@ -563,16 +565,24 @@
 	.send-schedule {
 		width: 30px;
 		margin: 0;
-		padding: 0;
+		padding: 0 8px 0 6px;
 		border: 0;
 		border-radius: 0 9999px 9999px 0;
 		display: grid;
 		place-items: center;
 		background: transparent;
-		color: var(--button-primary-fg, var(--fg));
+		color: color-mix(in srgb, var(--button-primary-fg, var(--fg)) 55%, transparent);
 		cursor: pointer;
 		line-height: 0;
+		box-sizing: border-box;
 		-webkit-tap-highlight-color: transparent;
+	}
+
+	.send-chevron {
+		display: grid;
+		place-items: center;
+		padding-top: 2px;
+		line-height: 0;
 	}
 
 	.send-schedule:disabled {

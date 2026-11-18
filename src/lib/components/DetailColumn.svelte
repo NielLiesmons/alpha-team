@@ -398,7 +398,7 @@
 		if (welcomeSelected) return t('detail.welcome');
 		if (pubsActivity) return t('web.activityTitle');
 		if (pubsHub) return t('nav.publications');
-		if (mailMsg) return t('nav.mail');
+		if (mailMsg) return t('mail.thread');
 		if (chatNotifsOpen) return t('chat.activityTitle');
 		if (chatChannel) return chatChannel.title || t('chat.channel');
 		if (fileEntry?.isFolder) return t('drive.folder');
@@ -427,10 +427,8 @@
 		if (welcomeSelected) return t('detail.welcome');
 		if (pubsActivity) return t('web.activityTitle');
 		if (pubsHub) return t('nav.publications');
-		if (mailMsg) {
-			const msgs = threadMessages(mailMsg);
-			return msgs[0]?.subject || mailMsg.subject || t('common.noSubject');
-		}
+		/* Subject lives big in the thread body — chrome stays generic. */
+		if (mailMsg) return t('mail.thread');
 		if (chatNotifsOpen) return t('chat.activityTitle');
 		if (chatChannel) return chatChannel.title || t('chat.general');
 		if (fileEntry) return fileTitle;
@@ -1378,8 +1376,6 @@
 		</div>
 	{:else if mailMsg}
 		{@const thread = threadMessages(mailMsg)}
-		{@const first = thread[0] || mailMsg}
-		{@const threadTitle = first.subject || mailMsg.subject || t('common.noSubject')}
 		{@const me = (activePerson().email || '').trim().toLowerCase()}
 		{@const last = thread[thread.length - 1] || mailMsg}
 		{@const replyTo =
@@ -1404,7 +1400,7 @@
 						/>
 					</svg>
 				</button>
-				<span class="detail-top-label">{threadTitle}</span>
+				<span class="detail-top-label">{t('mail.thread')}</span>
 			</div>
 			<div class="detail-top-actions">
 				{#if needsApprove}
@@ -1414,6 +1410,17 @@
 						onclick={() => approveContact(contactEmail)}
 					>
 						{t('common.accept')}
+					</button>
+				{/if}
+				{#if showMoreMenu}
+					<button
+						type="button"
+						class="icon-hit more-desktop"
+						aria-label={t('common.more')}
+						aria-expanded={menuOpen}
+						onclick={toggleMoreMenu}
+					>
+						<MoreDots size={15} />
 					</button>
 				{/if}
 			</div>
