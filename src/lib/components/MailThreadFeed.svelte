@@ -493,8 +493,9 @@
 	}
 
 	.mail-thread-title {
-		flex: 1;
+		flex: 1 1 auto;
 		min-width: 0;
+		max-width: 100%;
 		margin: 0;
 		padding: 0;
 		font-size: 28px;
@@ -503,6 +504,7 @@
 		line-height: 1.15;
 		color: var(--fg);
 		overflow-wrap: anywhere;
+		word-break: break-word;
 		white-space: normal;
 	}
 

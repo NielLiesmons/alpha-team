@@ -555,7 +555,10 @@
 		draftTitle;
 		const el = titleEl;
 		if (!el) return;
-		queueMicrotask(() => hugTitle(el));
+		/* After layout so wrapped scrollHeight is correct (not one clipped line). */
+		queueMicrotask(() => {
+			requestAnimationFrame(() => hugTitle(el));
+		});
 	});
 
 	const inlineKind = $derived.by(() => {
@@ -1084,7 +1087,15 @@
 				</span>
 			</div>
 			<DetailMetaPills entity={task} kind="task" />
-			{#if !taskMailId}
+			{#if taskMailId}
+				<button
+					type="button"
+					class="mail-thread-panel"
+					onclick={() => selectEntity('mail', taskMailId)}
+				>
+					{t('mail.thread')}
+				</button>
+			{:else}
 				<textarea
 					class="body-input"
 					bind:value={draftBody}
@@ -2288,14 +2299,16 @@
 	}
 
 	.title-input {
-		flex: 1;
+		flex: 1 1 auto;
 		min-width: 0;
 		width: 100%;
+		max-width: 100%;
 		margin: 0;
 		padding: 0;
 		border: 0;
 		outline: none;
 		resize: none;
+		/* Hide scrollbar; height comes from hugTitle so wrapped lines stay visible */
 		overflow: hidden;
 		background: transparent;
 		font-family: var(--font);
@@ -2304,20 +2317,46 @@
 		letter-spacing: -0.03em;
 		line-height: 1.2;
 		color: var(--fg);
+		/* Do not use field-sizing:content — it grows width and clips under overflow-x */
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
-		field-sizing: content;
+		word-break: break-word;
 	}
 
 	.title-stack .title-input {
 		flex: 1 1 12ch;
 		width: auto;
-		min-width: 12ch;
+		min-width: 0;
 	}
 
 	.title-input::placeholder {
 		color: var(--fg-33);
 		font-weight: 600;
+	}
+
+	.mail-thread-panel {
+		display: flex;
+		align-items: center;
+		width: 100%;
+		box-sizing: border-box;
+		margin: 4px 0 12px;
+		padding: 16px 18px;
+		border: 0;
+		border-radius: 14px;
+		background: var(--fg-8);
+		color: var(--fg);
+		font: inherit;
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		text-align: left;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.mail-thread-panel:hover {
+		color: var(--fg);
+		background: var(--fg-8);
 	}
 
 	.body-input {
@@ -2445,14 +2484,17 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
-		gap: 0 0.35em;
+		column-gap: 0;
+		row-gap: 0;
 	}
 
 	.mail-prefix {
 		flex-shrink: 0;
+		/* Prior 0.35em gap + ~8px more before the title */
+		margin-inline-end: calc(0.35em + 8px);
 		font-family: var(--font);
 		font-size: 1.55rem;
-		font-weight: 700;
+		font-weight: 400;
 		letter-spacing: -0.03em;
 		line-height: 1.2;
 		color: var(--fg-33);
