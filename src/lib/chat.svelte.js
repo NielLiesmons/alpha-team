@@ -4,12 +4,14 @@
 
 import { activePerson, displayNameFromEmail } from './actor.svelte.js';
 import {
+	compareChatMessageAsc,
 	createChatMessage,
 	deleteChatMessage,
 	listComments,
 	listFeedMessages,
 	markChatMessagesRead,
-	softDeleteChatMessage
+	softDeleteChatMessage,
+	sortChatMessagesNewestFirst
 } from './drive/entities.js';
 import { recentEmojis, rememberEmoji } from './emoji.js';
 import { activeSession } from './drive/session.svelte.js';
@@ -265,12 +267,11 @@ function mergeFeedRows(list, prev) {
 		if (pending || recent) byId.set(id, m);
 	}
 
-	const serverOrder = list.map((m) => String(m.id)).filter(Boolean);
-	const extras = [...byId.keys()].filter((id) => !serverOrder.includes(id));
-	return [
-		...extras.map((id) => byId.get(id)),
-		...serverOrder.map((id) => byId.get(id))
-	].filter(Boolean);
+	/*
+	 * Do not trust feed.json / server row order — tip LWW prepend races.
+	 * Extra locals (pending) included; durable sort by created_at + id.
+	 */
+	return sortChatMessagesNewestFirst([...byId.values()]);
 }
 
 export async function refreshChatFeed() {
@@ -350,7 +351,7 @@ function stampCommentSeq(list) {
 	const comments = (Array.isArray(list) ? list : [])
 		.filter((m) => m && m.kind !== 'event' && m.kind !== 'reaction')
 		.slice()
-		.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+		.sort(compareChatMessageAsc);
 	/** @type {Map<string, number>} */
 	const byId = new Map();
 	comments.forEach((m, i) => {

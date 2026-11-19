@@ -2040,6 +2040,88 @@ export async function putView(session, view) {
 
 const FEED_MAX = 200;
 
+/**
+ * Durable chat order: created_at, then id (lexicographic).
+ * Feed.json ids[] is tip-race fragile (LWW prepend); leaves are SoT — always
+ * rematerialize / display with this total order so devices converge.
+ * Ascending = oldest → newest. Does not use reply_to (threading stays separate).
+ * @param {any} a
+ * @param {any} b
+ */
+export function compareChatMessageAsc(a, b) {
+	const c = String(a?.created_at || '').localeCompare(String(b?.created_at || ''));
+	if (c) return c;
+	return String(a?.id || '').localeCompare(String(b?.id || ''));
+}
+
+/**
+ * @param {any[]} list
+ * @returns {any[]} newest first (mutates a shallow copy)
+ */
+export function sortChatMessagesNewestFirst(list) {
+	return (Array.isArray(list) ? list.slice() : []).sort((a, b) => compareChatMessageAsc(b, a));
+}
+
+/**
+ * @param {any[]} list
+ * @returns {any[]} oldest first
+ */
+export function sortChatMessagesOldestFirst(list) {
+	return (Array.isArray(list) ? list.slice() : []).sort(compareChatMessageAsc);
+}
+
+/**
+ * Merge feed id lists then order newest-first by leaf created_at (+ id).
+ * Cache hits avoid network; cache misses fetch from dir so tip rematerialize converges.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} dir
+ * @param {string[]} ids
+ * @param {Record<string, string>} [createdAtById]
+ * @returns {Promise<string[]>}
+ */
+async function orderFeedIdsNewestFirst(session, dir, ids, createdAtById = {}) {
+	const unique = (Array.isArray(ids) ? ids : [])
+		.map(String)
+		.filter((x, i, arr) => x && arr.indexOf(x) === i);
+	if (!unique.length) return [];
+	const { getCachedLeaf, putCachedLeaf } = await import('./leaf-cache.js');
+	const scored = await Promise.all(
+		unique.map(async (id, index) => {
+			let at = createdAtById[id] ? String(createdAtById[id]) : '';
+			if (!at && dir) {
+				const path = `chat/messages/${id}.json`;
+				const child = dir?.children?.[path];
+				const hash = child?.hash ? String(child.hash) : '';
+				if (hash) {
+					const hit = await getCachedLeaf(hash);
+					if (hit?.created_at) at = String(hit.created_at);
+				}
+				if (!at && child) {
+					try {
+						const { bytes } = await getPathFromDir(session, dir, path);
+						const doc = JSON.parse(new TextDecoder().decode(bytes));
+						at = String(doc?.created_at || '');
+						if (hash && doc) void putCachedLeaf(hash, doc);
+					} catch {
+						/* missing leaf — keep input order via index */
+					}
+				}
+			}
+			return { id, at, index };
+		})
+	);
+	scored.sort((a, b) => {
+		/* Both dated → durable total order. Otherwise keep merge/input order. */
+		if (a.at && b.at) {
+			const c = String(b.at).localeCompare(String(a.at));
+			if (c) return c;
+			return String(b.id).localeCompare(String(a.id));
+		}
+		return a.index - b.index;
+	});
+	return scored.map((s) => s.id).slice(0, FEED_MAX);
+}
+
 /** Tip-scoped feed id cache — skip feed.json download on send when tip unchanged. */
 let cachedFeedTip = '';
 /** @type {string[]} */
@@ -2112,7 +2194,8 @@ export async function listComments(session, type, entityId) {
 			/* missing leaf — skip */
 		}
 	}
-	return out;
+	/* comments.json order is tip-race fragile — leaves define chronology. */
+	return sortChatMessagesOldestFirst(out);
 }
 
 /**
@@ -2163,7 +2246,8 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 
 	const partial = () => {
 		if (typeof opts.onPartial !== 'function') return;
-		opts.onPartial(slots.filter(Boolean));
+		/* Newest-first by leaf time — never trust tip-raced ids[] order for UI. */
+		opts.onPartial(sortChatMessagesNewestFirst(slots.filter(Boolean)));
 	};
 	/* Paint IndexedDB hits immediately — hard refresh should not wait on network. */
 	if (slots.some(Boolean)) partial();
@@ -2196,7 +2280,7 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 		}
 	});
 	partial();
-	return slots.filter(Boolean);
+	return sortChatMessagesNewestFirst(slots.filter(Boolean));
 }
 
 /**
@@ -2358,6 +2442,8 @@ export async function createChatMessage(session, input, opts = {}) {
 
 	/**
 	 * Merge live feed ids from dir (or tip-scoped memory cache).
+	 * Happy-path keeps prepend union (cheap). Tip-conflict rematerialize
+	 * durable-sorts by created_at + id; UI always sorts from leaves.
 	 * @param {any} dir
 	 * @param {string} tip
 	 */
@@ -2440,9 +2526,12 @@ export async function createChatMessage(session, input, opts = {}) {
 		skipTipProbe: false,
 		rematerialize: async (dir) => {
 			const liveFeed = await listFeedIdsFromDir(session, dir);
-			const nextFeed = [id, ...liveFeed, ...known]
-				.filter((x, i, arr) => x && arr.indexOf(x) === i)
-				.slice(0, FEED_MAX);
+			const nextFeed = await orderFeedIdsNewestFirst(
+				session,
+				dir,
+				[id, ...liveFeed, ...known],
+				{ [id]: created }
+			);
 			committedFeedIds = nextFeed;
 			const nextComments = await resolveCommentIds(dir);
 			return buildWrites(nextFeed, nextComments);

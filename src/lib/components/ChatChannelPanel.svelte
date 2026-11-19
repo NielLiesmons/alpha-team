@@ -37,6 +37,7 @@
 	import { startChatTipPoll, stopChatTipPoll } from '$lib/chat-sync.svelte.js';
 	import { ui } from '$lib/workspace.svelte.js';
 	import { chatStackFlags } from '$lib/chat-stack.js';
+	import { compareChatMessageAsc } from '$lib/drive/entities.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
@@ -105,7 +106,9 @@
 	const COMPOSER_TALL_PX = 28;
 
 	const chronological = $derived(
-		[...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)].reverse()
+		[...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)].sort(
+			compareChatMessageAsc
+		)
 	);
 	const stackMap = $derived(chatStackFlags(chronological, activePerson().email || ''));
 	const canSend = $derived(Boolean(draft.trim()) || pendingFiles.length > 0);

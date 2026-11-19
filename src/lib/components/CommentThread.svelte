@@ -20,6 +20,7 @@
 		postChatMessage,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
+	import { compareChatMessageAsc } from '$lib/drive/entities.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { snapFeedToBottom } from '$lib/feed-scroll.js';
@@ -86,9 +87,7 @@
 	const key = $derived(`${type}:${entityId}`);
 	const allMessages = $derived(commentsByKey[key] ?? []);
 	const messages = $derived(
-		[...visibleChatMessages(allMessages)].sort((a, b) =>
-			String(a.created_at || '').localeCompare(String(b.created_at || ''))
-		)
+		[...visibleChatMessages(allMessages)].sort(compareChatMessageAsc)
 	);
 	const byId = $derived(new Map(messages.map((m) => [m.id, m])));
 
