@@ -166,6 +166,19 @@
 		overlayOpen = true;
 	}
 
+	/**
+	 * Retry / quote / media controls / links must win over the reaction overlay.
+	 * @param {EventTarget | null} target
+	 */
+	function isBubbleInteractiveTarget(target) {
+		if (!(target instanceof Element)) return false;
+		return Boolean(
+			target.closest(
+				'a, button, input, textarea, select, audio, video, label, [data-bubble-action], [contenteditable="true"]'
+			)
+		);
+	}
+
 	function clearHold() {
 		if (holdTimer != null) {
 			clearTimeout(holdTimer);
@@ -176,6 +189,7 @@
 	/** @param {PointerEvent} e */
 	function onBubblePointerDown(e) {
 		if (isDeleted) return;
+		if (isBubbleInteractiveTarget(e.target)) return;
 		if (e.pointerType === 'mouse') return;
 		holdFired = false;
 		moved = false;
@@ -195,6 +209,7 @@
 		clearHold();
 		holdOrigin = null;
 		if (e.pointerType === 'mouse' || isDeleted) return;
+		if (isBubbleInteractiveTarget(e.target)) return;
 		/* Short tap (no hold, no drag) opens overlay — Alpha Chat BubbleSwiper. */
 		if (!wasHold && !wasMoved) openOverlayAt(e.clientX, e.clientY);
 	}
@@ -218,6 +233,7 @@
 
 	/** @param {MouseEvent} e */
 	function onBubbleContextMenu(e) {
+		if (isBubbleInteractiveTarget(e.target)) return;
 		e.preventDefault();
 		if (isDeleted) return;
 		openOverlayAt(e.clientX, e.clientY);
@@ -334,9 +350,12 @@
 					type="button"
 					class="quote"
 					class:deleted={parentDeleted}
+					data-bubble-action="quote"
 					aria-label={parentDeleted
 						? t('chat.deletedMessage')
 						: `${t('chat.jumpToMessage')}: ${parentName}`}
+					onpointerdown={(e) => e.stopPropagation()}
+					onpointerup={(e) => e.stopPropagation()}
 					onclick={(e) => {
 						e.stopPropagation();
 						onQuoteClick?.(String(parent.id));
@@ -453,9 +472,13 @@
 			{#if msg._failed && !emojiOnly}
 				<button
 					type="button"
-					class="fail-hint fail-retry"
+					class="fail-retry"
+					data-bubble-action="retry"
+					onpointerdown={(e) => e.stopPropagation()}
+					onpointerup={(e) => e.stopPropagation()}
 					onclick={(e) => {
 						e.stopPropagation();
+						e.preventDefault();
 						void retryChatMessage(msg).catch(() => {});
 					}}>{t('chat.sendFailed')}</button
 				>
@@ -502,9 +525,13 @@
 			{#if msg._failed && emojiOnly}
 				<button
 					type="button"
-					class="fail-hint fail-hint-sticker fail-retry"
+					class="fail-retry fail-retry-sticker"
+					data-bubble-action="retry"
+					onpointerdown={(e) => e.stopPropagation()}
+					onpointerup={(e) => e.stopPropagation()}
 					onclick={(e) => {
 						e.stopPropagation();
+						e.preventDefault();
 						void retryChatMessage(msg).catch(() => {});
 					}}>{t('chat.sendFailed')}</button
 				>
@@ -1017,36 +1044,37 @@
 		padding-bottom: 1px;
 	}
 
-	.fail-hint {
-		margin: 6px 0 0;
-		padding: 0 11px;
-		font-size: 11px;
-		font-weight: 500;
-		color: #c45;
-	}
-
 	.fail-retry {
-		display: inline-block;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		align-self: flex-start;
+		margin: 6px 11px 4px;
+		padding: 7px 14px;
+		min-height: 32px;
 		border: 0;
-		background: transparent;
+		border-radius: 999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
 		font: inherit;
-		font-size: 11px;
+		font-size: 12px;
 		font-weight: 600;
-		text-align: inherit;
-		text-decoration: underline;
-		text-underline-offset: 2px;
+		line-height: 1.2;
+		text-align: center;
+		text-decoration: none;
 		cursor: pointer;
-		color: inherit;
 		-webkit-tap-highlight-color: transparent;
+		touch-action: manipulation;
 	}
 
-	.fail-hint-sticker {
-		padding: 0;
-		text-align: right;
+	.fail-retry-sticker {
+		align-self: flex-end;
+		margin: 6px 0 0;
 	}
 
-	.bubble.mine .fail-hint {
-		color: #ffe0e0;
+	.bubble.mine .fail-retry {
+		background: rgba(255, 255, 255, 0.16);
+		color: rgba(255, 255, 255, 0.78);
 	}
 
 	.action-rail {

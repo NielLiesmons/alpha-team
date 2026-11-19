@@ -2253,7 +2253,8 @@ async function listCommentIdsFromDir(session, dir, type, entityId) {
  * @param {{
  *   knownFeedIds?: string[],
  *   knownCommentIds?: string[],
- *   onLeafStored?: (msg: any) => void
+ *   onLeafStored?: (msg: any) => void,
+ *   onTipWritten?: (tip: string) => void
  * }} [opts]
  */
 export async function createChatMessage(session, input, opts = {}) {
@@ -2424,6 +2425,8 @@ export async function createChatMessage(session, input, opts = {}) {
 		commentIds = await resolveCommentIds(dirAtStart);
 	}
 
+	/** Rematerialize may replace feed ids — cache what we actually commit. */
+	let committedFeedIds = feedIds;
 	const tipAfter = await putPaths(session, buildWrites(feedIds, commentIds), {
 		/* Leaf already on the server — reuse ciphertext, don't re-upload. */
 		prePrepared: {
@@ -2440,11 +2443,12 @@ export async function createChatMessage(session, input, opts = {}) {
 			const nextFeed = [id, ...liveFeed, ...known]
 				.filter((x, i, arr) => x && arr.indexOf(x) === i)
 				.slice(0, FEED_MAX);
+			committedFeedIds = nextFeed;
 			const nextComments = await resolveCommentIds(dir);
 			return buildWrites(nextFeed, nextComments);
 		}
 	});
-	if (tipAfter) rememberFeedIds(String(tipAfter), feedIds);
+	if (tipAfter) rememberFeedIds(String(tipAfter), committedFeedIds);
 	try {
 		if (tipAfter) opts.onTipWritten?.(String(tipAfter));
 	} catch {

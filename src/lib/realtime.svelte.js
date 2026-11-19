@@ -95,7 +95,7 @@ export function publishEphemeral(input) {
 	const now = new Date();
 	const expires = input.expires_at
 		? input.expires_at
-		: new Date(now.getTime() + 6_000).toISOString();
+		: new Date(now.getTime() + 8_000).toISOString();
 	return publishRealtime({
 		type: 'ephemeral',
 		ephemeral: {
@@ -110,11 +110,20 @@ export function publishEphemeral(input) {
 	});
 }
 
-/** Debounced typing for the open composer. */
+/** @type {number} */
+let lastTypingSent = 0;
+
+/** Debounced typing for the open composer (throttle WS spam, refresh expiry). */
 export function signalTyping(channelId) {
-	publishEphemeral({ channel_id: channelId, state: 'typing' });
+	const now = Date.now();
+	/* Re-publish at most ~1.2s so peers refresh expires_at without flooding. */
+	if (now - lastTypingSent > 1_200) {
+		lastTypingSent = now;
+		publishEphemeral({ channel_id: channelId, state: 'typing' });
+	}
 	if (typingIdleTimer != null) clearTimeout(typingIdleTimer);
 	typingIdleTimer = setTimeout(() => {
+		lastTypingSent = 0;
 		publishEphemeral({ channel_id: channelId, state: 'idle' });
 	}, 4_000);
 }

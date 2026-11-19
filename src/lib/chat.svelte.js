@@ -158,7 +158,9 @@ function commentKey(type, id) {
 const CHAT_CACHE_KEY = 'alpha.chat.feed.v1';
 const CHAT_FEED_LIMIT = 200;
 /** Keep recently settled sends that a stale tip fetch has not listed yet. */
-const SETTLE_GRACE_MS = 120_000;
+const SETTLE_GRACE_MS = 180_000;
+/** Allow small device clock skew so “recent” rows are not dropped. */
+const SETTLE_SKEW_MS = 60_000;
 
 /** Bumped on each refresh / settle so stale fetches cannot clobber newer state. */
 let feedFetchGen = 0;
@@ -230,6 +232,7 @@ function mergeFeedRows(list, prev) {
 		const id = String(m?.id || '');
 		if (!id) continue;
 		if (byId.has(id)) {
+			/* Tip listed this id — prefer server row; keep local previewUrls on atts. */
 			if (Array.isArray(m.attachments)) {
 				const server = byId.get(id);
 				const prevAtt = m.attachments;
@@ -251,9 +254,16 @@ function mergeFeedRows(list, prev) {
 			String(id).startsWith('local-') ||
 			m?.delivery === 'sending' ||
 			m?.delivery === 'failed';
+		const settledAt = Date.parse(m._settledAt || '');
 		const created = Date.parse(m.created_at || '');
-		const recent =
-			Number.isFinite(created) && now - created >= 0 && now - created < SETTLE_GRACE_MS;
+		const anchor = Number.isFinite(settledAt)
+			? settledAt
+			: Number.isFinite(created)
+				? created
+				: NaN;
+		const age = Number.isFinite(anchor) ? now - anchor : Infinity;
+		/* Keep until listed on tip — tolerate mild future clock skew. */
+		const recent = age < SETTLE_GRACE_MS && age > -SETTLE_SKEW_MS;
 		if (pending || recent) byId.set(id, m);
 	}
 
@@ -946,10 +956,12 @@ export async function postChatMessage(input) {
 						: {}),
 					_pending: false,
 					_local: false,
-					_failed: false
+					_failed: false,
+					/* Anchor merge grace to local settle time (not leaf created_at / clock skew). */
+					_settledAt: new Date().toISOString()
 				};
 				delete settledMsg._localId;
-				delete settledMsg._outbox;
+				/* Keep _outbox until a refresh sees the id on tip — enables retry if tip lied. */
 				feedFetchGen += 1;
 				const idx = findSendIndex(String(created.id || '') || serverId);
 				if (idx >= 0) chatFeed[idx] = settledMsg;
@@ -1018,19 +1030,23 @@ export async function postChatMessage(input) {
 		} catch (e) {
 			const idx = findSendIndex(serverId);
 			if (idx >= 0) {
+				const prev = chatFeed[idx];
 				chatFeed[idx] = {
-					...chatFeed[idx],
+					...prev,
 					_pending: false,
 					_failed: true,
 					delivery: 'failed',
 					_local: true,
-					_localId: localId
+					_localId: localId,
+					_outbox: prev._outbox || outbox
 				};
 			}
 			chatUi.error = e instanceof Error ? e.message : String(e);
 			writeChatCache(chatFeed);
 		} finally {
 			chatUi.posting = false;
+			/* Tip wakes that arrived mid-send were queued — drain now so peers/self refresh. */
+			void import('./chat-sync.svelte.js').then(({ flushChatWake }) => flushChatWake());
 		}
 	})();
 
@@ -1050,7 +1066,11 @@ export async function retryChatMessage(msg) {
 	const trackId = String(msg._localId || msg.id || '');
 	const drop = (/** @type {any[]} */ list) =>
 		list.filter(
-			(m) => m.id !== msg.id && m._localId !== trackId && m.id !== trackId
+			(m) =>
+				m.id !== msg.id &&
+				m._localId !== trackId &&
+				m.id !== trackId &&
+				!(trackId && m._localId === trackId)
 		);
 	chatFeed.splice(0, chatFeed.length, ...drop(chatFeed));
 	if (draft.ref?.type && draft.ref?.id) {
@@ -1059,12 +1079,13 @@ export async function retryChatMessage(msg) {
 	}
 	writeChatCache(chatFeed);
 	chatUi.error = null;
+	/* Re-drive the full durable path (optimistic → leaf → tip → settle / failed). */
 	return postChatMessage({
-		body: draft.body,
-		kind: draft.kind,
-		channel_id: draft.channel_id,
-		ref: draft.ref,
-		reply_to: draft.reply_to,
+		body: String(draft.body || ''),
+		kind: draft.kind || 'chat',
+		channel_id: draft.channel_id || chatUi.activeChannelId || 'general',
+		ref: draft.ref ?? null,
+		reply_to: draft.reply_to ?? null,
 		...(draft.reaction ? { reaction: draft.reaction } : {}),
 		...(Array.isArray(draft.attachments) && draft.attachments.length
 			? { attachments: draft.attachments }

@@ -638,11 +638,12 @@
 	);
 
 	function presenceLabel(/** @type {any} */ e) {
+		const name = displayNameFromEmail(e.actor);
 		if (e.label) return e.label;
-		if (e.state === 'recording') return t('chat.recording');
-		if (e.state === 'thinking') return t('chat.thinking');
-		if (e.state === 'tool') return t('chat.working');
-		return t('chat.typing');
+		if (e.state === 'recording') return t('chat.recording', { name });
+		if (e.state === 'thinking') return t('chat.thinking', { name });
+		if (e.state === 'tool') return t('chat.working', { name });
+		return t('chat.typing', { name });
 	}
 </script>
 
@@ -814,23 +815,6 @@
 					{/each}
 				</div>
 			{/if}
-
-			{#if presence.length}
-				<div class="presence-row" aria-live="polite">
-					{#each presence as e (e.actor + e.state)}
-						<div class="presence-item">
-							<ProfilePic
-								name={displayNameFromEmail(e.actor)}
-								email={e.actor}
-								pictureUrl={pictureUrlFor(e.actor)}
-								size={28}
-							/>
-							<span class="presence-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-							<span class="presence-label">{presenceLabel(e)}</span>
-						</div>
-					{/each}
-				</div>
-			{/if}
 		</div>
 	</div>
 
@@ -860,6 +844,22 @@
 
 	<div class="composer-fade" aria-hidden="true"></div>
 	<div class="composer-dock" bind:this={composerDockEl}>
+		{#if presence.length}
+			<div class="presence-row" aria-live="polite">
+				{#each presence as e (e.actor + e.state)}
+					<div class="presence-item">
+						<ProfilePic
+							name={displayNameFromEmail(e.actor)}
+							email={e.actor}
+							pictureUrl={pictureUrlFor(e.actor)}
+							size={22}
+						/>
+						<span class="presence-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+						<span class="presence-label">{presenceLabel(e)}</span>
+					</div>
+				{/each}
+			</div>
+		{/if}
 		<!-- Suggest sits outside the pill so overflow:hidden / shine mask cannot clip it -->
 		<div class="composer-stack">
 			<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
@@ -909,7 +909,10 @@
 				{#if voiceOpen}
 					<div class="voice-shell">
 						<span class="voice-pulse" aria-hidden="true"></span>
-						<span class="voice-label">{t('chat.recording')} {voiceSecs}s</span>
+						<span class="voice-label"
+							>{t('chat.recording', { name: displayNameFromEmail(activePerson().email) })}
+							{voiceSecs}s</span
+						>
 						<button type="button" class="voice-cancel" onclick={cancelVoiceShell}>{t('chat.cancel')}</button>
 						<button
 							type="button"
@@ -1283,8 +1286,9 @@
 	.presence-row {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 4px 0 8px;
+		gap: 4px;
+		padding: 0 18px 6px;
+		pointer-events: none;
 	}
 
 	.presence-item {
@@ -1293,6 +1297,7 @@
 		gap: 8px;
 		color: var(--fg-33);
 		font-size: 12px;
+		font-weight: 500;
 	}
 
 	.presence-dots {

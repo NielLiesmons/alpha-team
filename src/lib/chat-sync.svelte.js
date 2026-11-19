@@ -8,8 +8,8 @@ import { refreshChatFeed, chatUi, markIncomingMessagesRead } from './chat.svelte
 import { getTip } from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
 
-const POLL_MS = 2000;
-const STALE_CHAT_MS = 15_000;
+const POLL_MS = 1200;
+const STALE_CHAT_MS = 10_000;
 
 let pollTimer = /** @type {ReturnType<typeof setInterval> | null} */ (null);
 let lastTip = '';
@@ -25,7 +25,7 @@ export async function pullChatIfNeeded(force = false) {
 	/* Don't clobber an in-flight send with a mid-write tip snapshot. */
 	if (chatUi.posting) return;
 	const now = Date.now();
-	if (!force && now - lastChatPull < 800) return;
+	if (!force && now - lastChatPull < 400) return;
 	inFlight = true;
 	try {
 		let tip = '';
@@ -52,6 +52,20 @@ export async function pullChatIfNeeded(force = false) {
 }
 
 /**
+ * Drain a tip-wake that arrived while we were posting (sender echo / peer tip).
+ * Call after chatUi.posting clears.
+ */
+export function flushChatWake() {
+	const queued = pendingBusTip;
+	if (queued) {
+		pendingBusTip = null;
+		void wakeChatFromTip(queued);
+		return;
+	}
+	void pullChatIfNeeded(true);
+}
+
+/**
  * Realtime bus tip-wake: skip getTip RTT, refresh feed ASAP.
  * @param {string} tip
  */
@@ -61,7 +75,9 @@ export async function wakeChatFromTip(tip) {
 		void pullChatIfNeeded(true);
 		return;
 	}
-	if (t === lastTip) return;
+	/* Same tip again within a short window is a no-op; later re-wakes still refresh. */
+	const now = Date.now();
+	if (t === lastTip && now - lastChatPull < 1_500) return;
 	const session = activeSession();
 	if (!session) return;
 	/* Sender may still be posting — receivers never have posting set. */
