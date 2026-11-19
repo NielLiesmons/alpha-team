@@ -2385,9 +2385,9 @@ export async function createChatMessage(session, input, opts = {}) {
 	}
 
 	/*
-	 * DeltaChat-ish send:
-	 * 1) Encrypt + putBlock the leaf immediately → onLeafStored (✓) before tip work.
-	 * 2) Tip/dir update can finish after; peers discover via tip shortly after.
+	 * Fast leaf + durable tip:
+	 * 1) Encrypt + putBlock the leaf → onLeafStored (UI may adopt server id, still “sending”).
+	 * 2) Tip/dir update (feed.json) — only then is the message discoverable / durable.
 	 */
 	const leafPath = `chat/messages/${id}.json`;
 	const root = parseRootKey(session.rootKey);
@@ -2405,7 +2405,6 @@ export async function createChatMessage(session, input, opts = {}) {
 	let feedIds;
 	/** @type {string[]} */
 	let commentIds = [];
-	let tipWarm = false;
 	let tipNow = peekCachedTip(session) || '';
 	if (!tipNow || tipNow !== cachedFeedTip) {
 		try {
@@ -2415,7 +2414,7 @@ export async function createChatMessage(session, input, opts = {}) {
 		}
 	}
 	if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments) {
-		tipWarm = true;
+		/* Warm id list only — putPaths still probes tip (see skipTipProbe: false). */
 		feedIds = [id, ...cachedFeedIds, ...known]
 			.filter((x, i, arr) => x && arr.indexOf(x) === i)
 			.slice(0, FEED_MAX);
@@ -2430,8 +2429,12 @@ export async function createChatMessage(session, input, opts = {}) {
 		prePrepared: {
 			[leafPath]: { hash: leafHash, wrapped_key: leafKey, kind: 'chat_message' }
 		},
-		/* Warm tip + memory feed ids: skip confirmatory getTip (saves ~1 RTT). */
-		skipTipProbe: tipWarm,
+		/*
+		 * Always probe tip for chat feed writes. Skipping under tipWarm raced with
+		 * concurrent tip moves and could commit a feed.json missing this id —
+		 * sender saw ✓ then message vanished on reopen.
+		 */
+		skipTipProbe: false,
 		rematerialize: async (dir) => {
 			const liveFeed = await listFeedIdsFromDir(session, dir);
 			const nextFeed = [id, ...liveFeed, ...known]

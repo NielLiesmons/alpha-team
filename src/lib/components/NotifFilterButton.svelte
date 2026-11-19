@@ -106,6 +106,8 @@
 
 	.notif-filter-ico {
 		display: block;
+		width: 16px;
+		height: 16px;
 	}
 
 	.notif-filter-menu {
@@ -149,6 +151,12 @@
 				var(--glass-shine) border-box;
 			backdrop-filter: blur(var(--glass-blur));
 			-webkit-backdrop-filter: blur(var(--glass-blur));
+		}
+
+		/* Match UiShell / Tasks list chrome-ico on mobile */
+		.notif-filter-ico {
+			width: 22px;
+			height: 22px;
 		}
 	}
 </style>

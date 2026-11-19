@@ -220,8 +220,26 @@ export default {
 	'settings.expandProfiles': 'Développer les profils',
 	'settings.editProfile': 'Modifier le profil',
 	'settings.shareInvite': 'Partager l’invitation',
+	'settings.invite': 'Inviter',
 	'settings.switchTo': 'Passer à',
 	'settings.addProfile': 'Ajouter un profil',
+	'settings.otherDevices': 'Autres appareils',
+	'settings.otherDevicesHint':
+		'Créez un code pour ouvrir ce profil sur un autre téléphone ou ordinateur. Partagez le QR et la phrase séparément.',
+	'settings.createDeviceCode': 'Créer un code d’accès',
+	'settings.deviceModalTitle': 'Autres appareils',
+	'settings.deviceModalHint':
+		'Chiffrez un code d’accès pour ce profil sur un autre appareil. Chuchotez la phrase séparément.',
+	'settings.deviceCodeReady':
+		'Code prêt. Ouvrez le QR sur l’autre appareil et saisissez la phrase.',
+	'settings.deviceQrAlt': 'QR d’accès au profil',
+	'settings.inviteModalTitle': 'Inviter {name}',
+	'settings.inviteModalHint':
+		'Chiffrez un QR d’invitation Drive pour cette personne. Chuchotez la phrase séparément.',
+	'settings.inviteCodeReady': 'Invitation prête pour {email}. Partagez QR + phrase.',
+	'settings.inviteQrAlt': 'QR d’invitation au profil',
+	'settings.passphrase': 'Phrase secrète',
+	'settings.passphraseTooShort': 'La phrase doit contenir au moins 6 caractères.',
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'À',
@@ -324,7 +342,11 @@ export default {
 	'chat.recording': 'Enregistrement…',
 	'chat.thinking': 'Réflexion…',
 	'chat.working': 'En cours…',
-	'chat.sendFailed': 'Envoi impossible. Réessayez.',
+	'chat.sendFailed': 'Envoi impossible — appuyez pour réessayer',
+	'chat.pendingLost':
+		'Certains messages n’ont pas fini d’être envoyés. Appuyez sur réessayer sur le message.',
+	'chat.notConnected': 'Pas connecté à Drive — message non enregistré.',
+	'chat.retryUnavailable': 'Impossible de renvoyer ce message — envoyez-le à nouveau.',
 	'chat.voiceNext': 'L’enregistrement vocal arrive bientôt.',
 	'chat.newMessages': 'Nouveaux messages',
 	'chat.searchEmoji': 'Rechercher un émoji…',

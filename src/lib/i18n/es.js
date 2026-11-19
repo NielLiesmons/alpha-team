@@ -220,8 +220,25 @@ export default {
 	'settings.expandProfiles': 'Expandir perfiles',
 	'settings.editProfile': 'Editar perfil',
 	'settings.shareInvite': 'Compartir invitación',
+	'settings.invite': 'Invitar',
 	'settings.switchTo': 'Cambiar a',
 	'settings.addProfile': 'Añadir perfil',
+	'settings.otherDevices': 'Otros dispositivos',
+	'settings.otherDevicesHint':
+		'Crea un código para iniciar sesión en este perfil en otro teléfono u ordenador. Comparte el QR y la frase por separado.',
+	'settings.createDeviceCode': 'Crear código de acceso',
+	'settings.deviceModalTitle': 'Otros dispositivos',
+	'settings.deviceModalHint':
+		'Cifra un código de acceso para este perfil en otro dispositivo. Comparte la frase por separado.',
+	'settings.deviceCodeReady': 'Código listo. Abre el QR en el otro dispositivo e introduce la frase.',
+	'settings.deviceQrAlt': 'QR de acceso al perfil',
+	'settings.inviteModalTitle': 'Invitar a {name}',
+	'settings.inviteModalHint':
+		'Cifra un QR de invitación de Drive para esta persona. Comparte la frase por separado.',
+	'settings.inviteCodeReady': 'Invitación lista para {email}. Comparte QR + frase.',
+	'settings.inviteQrAlt': 'QR de invitación al perfil',
+	'settings.passphrase': 'Frase de acceso',
+	'settings.passphraseTooShort': 'La frase debe tener al menos 6 caracteres.',
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'Para',
@@ -324,7 +341,10 @@ export default {
 	'chat.recording': 'Grabando…',
 	'chat.thinking': 'Pensando…',
 	'chat.working': 'Trabajando…',
-	'chat.sendFailed': 'No se pudo enviar. Inténtalo de nuevo.',
+	'chat.sendFailed': 'No se pudo enviar — toca para reintentar',
+	'chat.pendingLost': 'Algunos mensajes no terminaron de enviarse. Toca reintentar en el mensaje.',
+	'chat.notConnected': 'Sin conexión a Drive — mensaje no guardado.',
+	'chat.retryUnavailable': 'No se puede reintentar este mensaje — envíalo de nuevo.',
 	'chat.voiceNext': 'La captura de voz llegará pronto.',
 	'chat.newMessages': 'Mensajes nuevos',
 	'chat.searchEmoji': 'Buscar emoji…',

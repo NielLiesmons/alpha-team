@@ -22,6 +22,7 @@ import {
 } from './workspace.svelte.js';
 import { projectDisplayIcon, projectLifecycle } from './project-status.js';
 import { getContentType, resolveContentTypeCard } from './content-types/index.js';
+import { t } from './i18n.svelte.js';
 
 /** Chat ref.type → entity schema / package lookup */
 const REF_TYPE_SCHEMA = {
@@ -189,7 +190,22 @@ export function hydrateChatFeedFromCache() {
 	const cached = readChatCache();
 	if (!Array.isArray(cached) || !cached.length) return false;
 	if (chatFeed.length === 0) {
-		chatFeed.push(...cached);
+		/* Stale in-flight rows from a killed tab → failed (never silent vanish). */
+		const rows = cached.map((m) => {
+			if (!m?._pending && m?.delivery !== 'sending') return m;
+			return {
+				...m,
+				_pending: false,
+				_local: true,
+				_failed: true,
+				delivery: 'failed'
+			};
+		});
+		chatFeed.push(...rows);
+		if (rows.some((m) => m._failed)) {
+			chatUi.error = t('chat.pendingLost');
+			writeChatCache(chatFeed);
+		}
 	}
 	chatUi.settled = true;
 	chatUi.loading = false;
@@ -229,7 +245,10 @@ function mergeFeedRows(list, prev) {
 			continue;
 		}
 		const pending =
-			Boolean(m?._local || m?._pending) || String(id).startsWith('local-');
+			Boolean(m?._local || m?._pending || m?._failed) ||
+			String(id).startsWith('local-') ||
+			m?.delivery === 'sending' ||
+			m?.delivery === 'failed';
 		const created = Date.parse(m.created_at || '');
 		const recent =
 			Number.isFinite(created) && now - created >= 0 && now - created < SETTLE_GRACE_MS;
@@ -262,7 +281,8 @@ export async function refreshChatFeed() {
 	}
 	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
-	chatUi.error = null;
+	const hasFailed = chatFeed.some((m) => m?._failed);
+	if (!hasFailed) chatUi.error = null;
 	const gen = ++feedFetchGen;
 	const prev = chatFeed.slice();
 	try {
@@ -273,7 +293,8 @@ export async function refreshChatFeed() {
 			chatFeed.splice(0, chatFeed.length, ...merged);
 			chatUi.loading = false;
 			chatUi.settled = true;
-			writeChatCache(merged.filter((m) => !String(m.id || '').startsWith('local-')));
+			/* Keep pending/failed locals — stripping them made reopen vanish sends. */
+			writeChatCache(merged);
 		};
 
 		const list = await listFeedMessages(session, CHAT_FEED_LIMIT, {
@@ -678,6 +699,19 @@ export async function postChatMessage(input) {
 		}
 	}
 
+	/** Serializable enough to retry after reopen (paths only — not File blobs). */
+	const outbox = {
+		body,
+		kind,
+		channel_id: channelId,
+		ref: refWithSeq ?? null,
+		reply_to: input.reply_to ?? null,
+		...(input.reaction ? { reaction: input.reaction } : {}),
+		...(Array.isArray(input.attachments) && input.attachments.length
+			? { attachments: input.attachments }
+			: {})
+	};
+
 	const optimistic = {
 		schema: 'alpha.chat_message/1',
 		id: localId,
@@ -695,7 +729,9 @@ export async function postChatMessage(input) {
 			? { attachments: input.attachments }
 			: {}),
 		_local: true,
-		_pending: true
+		_pending: true,
+		_localId: localId,
+		_outbox: outbox
 	};
 
 	/* Paint immediately — never wait on Drive tip for the bubble. */
@@ -714,27 +750,78 @@ export async function postChatMessage(input) {
 	}
 	writeChatCache(chatFeed);
 
-	if (!session) return optimistic;
+	if (!session) {
+		const idx = chatFeed.findIndex((m) => m.id === localId);
+		if (idx >= 0) {
+			chatFeed[idx] = {
+				...chatFeed[idx],
+				_pending: false,
+				_failed: true,
+				delivery: 'failed'
+			};
+		}
+		chatUi.error = t('chat.notConnected');
+		writeChatCache(chatFeed);
+		return optimistic;
+	}
 
-	/* Drive write in background — no ✓ until leaf+feed are on the server. */
+	/**
+	 * Find this send’s row after leaf may have swapped local-* → server id.
+	 * @param {string | null} serverId
+	 */
+	function findSendIndex(serverId) {
+		return chatFeed.findIndex(
+			(m) =>
+				m.id === localId ||
+				m._localId === localId ||
+				(serverId && m.id === serverId)
+		);
+	}
+
+	/**
+	 * @param {string} key
+	 * @param {any} next
+	 * @param {string | null} serverId
+	 */
+	function patchCommentRow(key, next, serverId) {
+		const prev = commentsByKey[key] ?? [];
+		commentsByKey[key] = prev.map((m) =>
+			m.id === localId || m._localId === localId || (serverId && m.id === serverId) ? next : m
+		);
+	}
+
+	/* Drive write in background — ✓ only after feed tip is committed. */
 	void (async () => {
 		chatUi.posting = true;
+		/** @type {string | null} */
+		let serverId = null;
 		try {
 			/** @type {any[]} */
 			let attachments = Array.isArray(input.attachments) ? input.attachments : [];
 			if (typeof input.resolveAttachments === 'function') {
 				attachments = await input.resolveAttachments();
-				const idxAtt = chatFeed.findIndex((m) => m.id === localId);
+				const idxAtt = findSendIndex(serverId);
 				if (idxAtt >= 0) {
-					chatFeed[idxAtt] = {
-						...chatFeed[idxAtt],
-						attachments: attachments.map((a) => ({
-							...a,
-							previewUrl: a.previewUrl || chatFeed[idxAtt].attachments?.find(
+					const nextAtt = attachments.map((a) => ({
+						...a,
+						previewUrl:
+							a.previewUrl ||
+							chatFeed[idxAtt].attachments?.find(
 								(/** @type {any} */ x) => x.name === a.name
 							)?.previewUrl
-						}))
+					}));
+					chatFeed[idxAtt] = {
+						...chatFeed[idxAtt],
+						attachments: nextAtt,
+						_outbox: {
+							...(chatFeed[idxAtt]._outbox || outbox),
+							attachments: nextAtt.map((a) => {
+								const { previewUrl: _p, ...rest } = a;
+								return rest;
+							})
+						}
 					};
+					writeChatCache(chatFeed);
 				}
 			}
 
@@ -756,7 +843,48 @@ export async function postChatMessage(input) {
 					.map((a) => [String(a.name || a.path), a.previewUrl])
 			);
 
-			/** Paint ✓ as soon as the message leaf ciphertext is on the server (before tip). */
+			/** Leaf landed — keep “sending” until tip/index write finishes. */
+			function adoptLeaf(/** @type {any} */ leafMsg) {
+				serverId = String(leafMsg.id || '') || null;
+				const idx = findSendIndex(serverId);
+				if (idx < 0) return;
+				const prev = chatFeed[idx];
+				const next = {
+					...prev,
+					...leafMsg,
+					id: leafMsg.id,
+					channel_id: leafMsg.channel_id || channelId,
+					delivery: 'sending',
+					_pending: true,
+					_local: true,
+					_failed: false,
+					_localId: localId,
+					_outbox: prev._outbox || outbox,
+					...(Array.isArray(prev.attachments) && prev.attachments.length
+						? { attachments: prev.attachments }
+						: attachments.length
+							? { attachments }
+							: {})
+				};
+				chatFeed[idx] = next;
+				if (
+					!isEvent &&
+					input.ref &&
+					(input.ref.type === 'task' ||
+						input.ref.type === 'note' ||
+						input.ref.type === 'project' ||
+						input.ref.type === 'mail')
+				) {
+					patchCommentRow(
+						commentKey(/** @type {any} */ (input.ref.type), input.ref.id),
+						next,
+						serverId
+					);
+				}
+				writeChatCache(chatFeed);
+			}
+
+			/** Tip + feed.json committed — only now show ✓. */
 			function settleFrom(/** @type {any} */ created) {
 				const settledAtt = Array.isArray(created.attachments)
 					? created.attachments.map((a) => ({
@@ -776,10 +904,13 @@ export async function postChatMessage(input) {
 						? { attachments }
 						: {}),
 					_pending: false,
-					_local: false
+					_local: false,
+					_failed: false
 				};
+				delete settledMsg._localId;
+				delete settledMsg._outbox;
 				feedFetchGen += 1;
-				const idx = chatFeed.findIndex((m) => m.id === localId);
+				const idx = findSendIndex(String(created.id || '') || serverId);
 				if (idx >= 0) chatFeed[idx] = settledMsg;
 				else chatFeed.unshift(settledMsg);
 				if (
@@ -790,9 +921,11 @@ export async function postChatMessage(input) {
 						input.ref.type === 'project' ||
 						input.ref.type === 'mail')
 				) {
-					const key = commentKey(/** @type {any} */ (input.ref.type), input.ref.id);
-					const prev = commentsByKey[key] ?? [];
-					commentsByKey[key] = prev.map((m) => (m.id === localId ? settledMsg : m));
+					patchCommentRow(
+						commentKey(/** @type {any} */ (input.ref.type), input.ref.id),
+						settledMsg,
+						String(created.id || '') || serverId
+					);
 				}
 				writeChatCache(chatFeed);
 				return settledMsg;
@@ -815,7 +948,7 @@ export async function postChatMessage(input) {
 					knownFeedIds: knownFeedIds().filter((id) => id !== localId),
 					knownCommentIds: knownComments,
 					onLeafStored: (leafMsg) => {
-						settleFrom({
+						adoptLeaf({
 							...leafMsg,
 							...(attachments.length ? { attachments } : {})
 						});
@@ -827,7 +960,6 @@ export async function postChatMessage(input) {
 				}
 			);
 
-			/* Tip finished — refresh settle fields if leaf callback already ran. */
 			settleFrom(created);
 
 			/* Wake other devices (Home Screen PWA push). Never block the send UX. */
@@ -843,15 +975,60 @@ export async function postChatMessage(input) {
 				}).catch((e) => console.warn('chat push', e));
 			}
 		} catch (e) {
-			const idx = chatFeed.findIndex((m) => m.id === localId);
-			if (idx >= 0) chatFeed[idx] = { ...chatFeed[idx], _pending: false, _failed: true };
+			const idx = findSendIndex(serverId);
+			if (idx >= 0) {
+				chatFeed[idx] = {
+					...chatFeed[idx],
+					_pending: false,
+					_failed: true,
+					delivery: 'failed',
+					_local: true,
+					_localId: localId
+				};
+			}
 			chatUi.error = e instanceof Error ? e.message : String(e);
+			writeChatCache(chatFeed);
 		} finally {
 			chatUi.posting = false;
 		}
 	})();
 
 	return optimistic;
+}
+
+/**
+ * Re-send a failed bubble (must still have `_outbox`).
+ * @param {any} msg
+ */
+export async function retryChatMessage(msg) {
+	const draft = msg?._outbox;
+	if (!draft || typeof draft !== 'object') {
+		chatUi.error = t('chat.retryUnavailable');
+		throw new Error(chatUi.error);
+	}
+	const trackId = String(msg._localId || msg.id || '');
+	const drop = (/** @type {any[]} */ list) =>
+		list.filter(
+			(m) => m.id !== msg.id && m._localId !== trackId && m.id !== trackId
+		);
+	chatFeed.splice(0, chatFeed.length, ...drop(chatFeed));
+	if (draft.ref?.type && draft.ref?.id) {
+		const key = commentKey(/** @type {any} */ (draft.ref.type), draft.ref.id);
+		if (commentsByKey[key]) commentsByKey[key] = drop(commentsByKey[key]);
+	}
+	writeChatCache(chatFeed);
+	chatUi.error = null;
+	return postChatMessage({
+		body: draft.body,
+		kind: draft.kind,
+		channel_id: draft.channel_id,
+		ref: draft.ref,
+		reply_to: draft.reply_to,
+		...(draft.reaction ? { reaction: draft.reaction } : {}),
+		...(Array.isArray(draft.attachments) && draft.attachments.length
+			? { attachments: draft.attachments }
+			: {})
+	});
 }
 
 /**

@@ -218,8 +218,25 @@ export default {
 	'settings.expandProfiles': 'Expand profiles',
 	'settings.editProfile': 'Edit profile',
 	'settings.shareInvite': 'Share invite',
+	'settings.invite': 'Invite',
 	'settings.switchTo': 'Switch to',
 	'settings.addProfile': 'Add profile',
+	'settings.otherDevices': 'Other devices',
+	'settings.otherDevicesHint':
+		'Create a code to sign in to this profile on another phone or computer. Share the QR and passphrase separately.',
+	'settings.createDeviceCode': 'Create access code',
+	'settings.deviceModalTitle': 'Other devices',
+	'settings.deviceModalHint':
+		'Encrypt an access code for this profile on another device. Whisper the passphrase separately.',
+	'settings.deviceCodeReady': 'Code ready. Open the QR on the other device and enter the passphrase.',
+	'settings.deviceQrAlt': 'Profile access QR',
+	'settings.inviteModalTitle': 'Invite {name}',
+	'settings.inviteModalHint':
+		'Encrypt a Drive invite QR for this person. Whisper the passphrase separately.',
+	'settings.inviteCodeReady': 'Invite ready for {email}. Share QR + passphrase.',
+	'settings.inviteQrAlt': 'Profile invite QR',
+	'settings.passphrase': 'Passphrase',
+	'settings.passphraseTooShort': 'Passphrase must be at least 6 characters.',
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'To',
@@ -322,7 +339,10 @@ export default {
 	'chat.recording': 'Recording…',
 	'chat.thinking': 'Thinking…',
 	'chat.working': 'Working…',
-	'chat.sendFailed': 'Couldn’t send. Try again.',
+	'chat.sendFailed': 'Couldn’t send — tap to retry',
+	'chat.pendingLost': 'Some messages didn’t finish sending. Tap retry on the bubble.',
+	'chat.notConnected': 'Not connected to Drive — message not stored.',
+	'chat.retryUnavailable': 'Can’t retry this message — please send it again.',
 	'chat.voiceNext': 'Voice capture ships next.',
 	'chat.newMessages': 'New messages',
 	'chat.searchEmoji': 'Search emoji…',

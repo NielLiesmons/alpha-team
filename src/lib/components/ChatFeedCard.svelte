@@ -9,7 +9,12 @@
 	import Heart from './icons/Heart.svelte';
 	import Reply from './icons/Reply.svelte';
 	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
-	import { REACTION_EMOJI, reactionsForMessage, toggleReaction } from '$lib/chat.svelte.js';
+	import {
+		REACTION_EMOJI,
+		reactionsForMessage,
+		retryChatMessage,
+		toggleReaction
+	} from '$lib/chat.svelte.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { customEmojis, customEmojiUrl } from '$lib/custom-emoji.svelte.js';
 	import { customEmojiShortcode, emojiOnlyInfo, tokenizeChatBody } from '$lib/message-emoji.js';
@@ -399,7 +404,14 @@
 				</div>
 			{/if}
 			{#if msg._failed && !emojiOnly}
-				<p class="fail-hint">{t('chat.sendFailed')}</p>
+				<button
+					type="button"
+					class="fail-hint fail-retry"
+					onclick={(e) => {
+						e.stopPropagation();
+						void retryChatMessage(msg).catch(() => {});
+					}}>{t('chat.sendFailed')}</button
+				>
 			{/if}
 
 			{#if pickerOpen}
@@ -477,7 +489,14 @@
 				</div>
 			{/if}
 			{#if msg._failed && emojiOnly}
-				<p class="fail-hint fail-hint-sticker">{t('chat.sendFailed')}</p>
+				<button
+					type="button"
+					class="fail-hint fail-hint-sticker fail-retry"
+					onclick={(e) => {
+						e.stopPropagation();
+						void retryChatMessage(msg).catch(() => {});
+					}}>{t('chat.sendFailed')}</button
+				>
 			{/if}
 
 			{#if reactions.length}
@@ -929,6 +948,21 @@
 		font-size: 11px;
 		font-weight: 500;
 		color: #c45;
+	}
+
+	.fail-retry {
+		display: inline-block;
+		border: 0;
+		background: transparent;
+		font: inherit;
+		font-size: 11px;
+		font-weight: 600;
+		text-align: inherit;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+		color: inherit;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.fail-hint-sticker {

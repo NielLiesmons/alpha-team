@@ -7,7 +7,6 @@
 	import ProfileInviteModal from './ProfileInviteModal.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import Crown from './icons/Crown.svelte';
-	import MoreDots from './icons/MoreDots.svelte';
 	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
@@ -27,10 +26,10 @@
 	let profilesOpen = $state(false);
 	let shareMsg = $state('');
 	let inviteOpen = $state(false);
+	/** @type {'device' | 'invite'} */
+	let inviteMode = $state('device');
 	/** @type {string} */
 	let inviteEmail = $state('');
-	/** @type {string | null} */
-	let menuEmail = $state(null);
 
 	const isAdmin = $derived(canManageMembers(actor.email));
 	const activeEmail = $derived((actor.email || '').trim().toLowerCase());
@@ -145,12 +144,10 @@
 
 	function toggleProfiles() {
 		profilesOpen = !profilesOpen;
-		menuEmail = null;
 	}
 
 	/** @param {string} id */
 	function openSection(id) {
-		menuEmail = null;
 		if (id === 'profile') setProfileTarget(activeEmail);
 		else clearProfileTarget();
 		selectEntity('settings', id);
@@ -161,24 +158,18 @@
 		try {
 			switchDeviceProfile(email);
 			shareMsg = '';
-			menuEmail = null;
 			profilesOpen = false;
 		} catch (err) {
 			shareMsg = err instanceof Error ? err.message : String(err);
 		}
 	}
 
-	/** @param {string} email */
-	function onEdit(email) {
-		menuEmail = null;
-		setProfileTarget(email);
-		selectEntity('settings', 'profile');
-	}
-
-	/** @param {string} email */
-	function onShare(email) {
+	/**
+	 * @param {string} email
+	 * @param {'device' | 'invite'} mode
+	 */
+	function onShare(email, mode = 'invite') {
 		shareMsg = '';
-		menuEmail = null;
 		const e = String(email || '')
 			.trim()
 			.toLowerCase();
@@ -191,160 +182,112 @@
 			return;
 		}
 		inviteEmail = e;
+		inviteMode = mode;
 		inviteOpen = true;
 	}
-
-	/** @param {MouseEvent} e */
-	function onDocClick(e) {
-		const target = /** @type {Node} */ (e.target);
-		if (!(target instanceof Element) || !target.closest('.menu-wrap')) menuEmail = null;
-	}
-
-	$effect(() => {
-		if (typeof document === 'undefined') return;
-		document.addEventListener('click', onDocClick);
-		return () => document.removeEventListener('click', onDocClick);
-	});
 </script>
 
 <div class="hub" class:expanded={profilesOpen}>
 	<div class="stack" class:open={profilesOpen}>
-		{#if activeProfile}
-			{@const admin = isAdminRole(activeProfile.role)}
-			<article class="face">
-				<button type="button" class="face-main" onclick={() => openSection('profile')}>
-					<ProfilePic
-						name={displayNameFromEmail(activeProfile.email) || activeProfile.name}
-						email={activeProfile.email}
-						pictureUrl={pictureUrlFor(activeProfile.email)}
-						size={48}
-					/>
-					<span class="meta">
-						<span class="name-row">
-							<span class="name"
-								>{displayNameFromEmail(activeProfile.email) || activeProfile.name}</span
-							>
-							{#if admin}
-								<span class="crown" title={t('settings.admin')} aria-label={t('settings.admin')}><Crown size={13} /></span>
-							{/if}
-						</span>
-						<span class="email">{activeProfile.email}</span>
-					</span>
-				</button>
-				<button
-					type="button"
-					class="chev"
-					class:up={profilesOpen}
-					aria-expanded={profilesOpen}
-					aria-label={profilesOpen ? t('settings.collapseProfiles') : t('settings.expandProfiles')}
-					onclick={(e) => {
-						e.stopPropagation();
-						toggleProfiles();
-					}}
-				>
-					<svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M4 6.5 8 10.5 12 6.5"
-							stroke="currentColor"
-							stroke-width="1.6"
-							stroke-linecap="round"
-							stroke-linejoin="round"
+		<div class="card" class:stacked={!profilesOpen && stackDepth > 0}>
+			{#if activeProfile}
+				{@const admin = isAdminRole(activeProfile.role)}
+				<article class="face">
+					<button type="button" class="face-main" onclick={() => openSection('profile')}>
+						<ProfilePic
+							name={displayNameFromEmail(activeProfile.email) || activeProfile.name}
+							email={activeProfile.email}
+							pictureUrl={pictureUrlFor(activeProfile.email)}
+							size={48}
 						/>
-					</svg>
-				</button>
-				<div class="menu-wrap">
+						<span class="meta">
+							<span class="name-row">
+								<span class="name"
+									>{displayNameFromEmail(activeProfile.email) || activeProfile.name}</span
+								>
+								{#if admin}
+									<span class="crown" title={t('settings.admin')} aria-label={t('settings.admin')}
+										><Crown size={13} /></span
+									>
+								{/if}
+							</span>
+							<span class="email">{activeProfile.email}</span>
+						</span>
+					</button>
 					<button
 						type="button"
-						class="dots"
-						aria-label={t('settings.profileActions')}
-						aria-expanded={menuEmail === activeProfile.email}
+						class="chev"
+						class:up={profilesOpen}
+						aria-expanded={profilesOpen}
+						aria-label={profilesOpen ? t('settings.collapseProfiles') : t('settings.expandProfiles')}
 						onclick={(e) => {
 							e.stopPropagation();
-							menuEmail = menuEmail === activeProfile.email ? null : activeProfile.email;
+							toggleProfiles();
 						}}
 					>
-						<MoreDots size={16} />
+						<svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M4 6.5 8 10.5 12 6.5"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
 					</button>
-					{#if menuEmail === activeProfile.email}
-						<div class="menu" role="menu">
-							<button type="button" role="menuitem" onclick={() => onEdit(activeProfile.email)}
-								>{t('settings.editProfile')}</button
-							>
-							<button type="button" role="menuitem" onclick={() => onShare(activeProfile.email)}
-								>{t('settings.shareInvite')}</button
-							>
-						</div>
-					{/if}
+				</article>
+			{/if}
+
+			{#if profilesOpen}
+				<div class="roster">
+					{#each otherProfiles as p (p.email)}
+						{@const admin = isAdminRole(p.role)}
+						<article class="row-card">
+							<button type="button" class="row-main" onclick={() => onSwitch(p.email)}>
+								<ProfilePic
+									name={displayNameFromEmail(p.email) || p.name}
+									email={p.email}
+									pictureUrl={pictureUrlFor(p.email)}
+									size={40}
+								/>
+								<span class="meta">
+									<span class="name-row">
+										<span class="name">{displayNameFromEmail(p.email) || p.name}</span>
+										{#if admin}
+											<span
+												class="crown"
+												title={t('settings.admin')}
+												aria-label={t('settings.admin')}><Crown size={12} /></span
+											>
+										{/if}
+									</span>
+									<span class="email">{p.email}</span>
+								</span>
+							</button>
+							{#if isAdmin && !admin}
+								<button
+									type="button"
+									class="invite-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										onShare(p.email, 'invite');
+									}}>{t('settings.invite')}</button
+								>
+							{/if}
+						</article>
+					{/each}
+					<button type="button" class="add-row" onclick={() => (addProfileOpen = true)}>
+						<span class="add-plus" aria-hidden="true">+</span>
+						<span>{t('settings.addProfile')}</span>
+					</button>
 				</div>
-			</article>
-		{/if}
+			{/if}
+		</div>
 
 		{#if !profilesOpen && stackDepth > 0}
 			{#each Array(stackDepth) as _, i}
-				<div
-					class="layer"
-					style="--i: {i + 1}"
-					aria-hidden="true"
-				></div>
+				<div class="layer" style="--i: {i + 1}" aria-hidden="true"></div>
 			{/each}
-		{/if}
-
-		{#if profilesOpen}
-			<div class="roster">
-				{#each otherProfiles as p (p.email)}
-					{@const admin = isAdminRole(p.role)}
-					<article class="row-card">
-						<button type="button" class="row-main" onclick={() => onSwitch(p.email)}>
-							<ProfilePic
-								name={displayNameFromEmail(p.email) || p.name}
-								email={p.email}
-								pictureUrl={pictureUrlFor(p.email)}
-								size={40}
-							/>
-							<span class="meta">
-								<span class="name-row">
-									<span class="name">{displayNameFromEmail(p.email) || p.name}</span>
-									{#if admin}
-										<span class="crown" title={t('settings.admin')} aria-label={t('settings.admin')}><Crown size={12} /></span>
-									{/if}
-								</span>
-								<span class="email">{p.email}</span>
-							</span>
-						</button>
-						<div class="menu-wrap">
-							<button
-								type="button"
-								class="dots"
-								aria-label={t('settings.profileActions')}
-								aria-expanded={menuEmail === p.email}
-								onclick={(e) => {
-									e.stopPropagation();
-									menuEmail = menuEmail === p.email ? null : p.email;
-								}}
-							>
-								<MoreDots size={16} />
-							</button>
-							{#if menuEmail === p.email}
-								<div class="menu" role="menu">
-									<button type="button" role="menuitem" onclick={() => onSwitch(p.email)}
-										>{t('settings.switchTo')}</button
-									>
-									<button type="button" role="menuitem" onclick={() => onEdit(p.email)}
-										>{t('settings.editProfile')}</button
-									>
-									<button type="button" role="menuitem" onclick={() => onShare(p.email)}
-										>{t('settings.shareInvite')}</button
-									>
-								</div>
-							{/if}
-						</div>
-					</article>
-				{/each}
-				<button type="button" class="add-row" onclick={() => (addProfileOpen = true)}>
-					<span class="add-plus" aria-hidden="true">+</span>
-					<span>{t('settings.addProfile')}</span>
-				</button>
-			</div>
 		{/if}
 	</div>
 
@@ -373,7 +316,7 @@
 </div>
 
 <AddProfileSheet open={addProfileOpen} onclose={() => (addProfileOpen = false)} />
-<ProfileInviteModal bind:open={inviteOpen} email={inviteEmail} />
+<ProfileInviteModal bind:open={inviteOpen} email={inviteEmail} mode={inviteMode} />
 
 <style>
 	.hub {
@@ -389,24 +332,32 @@
 		flex-direction: column;
 		align-items: center;
 		width: 100%;
+		gap: 0;
 	}
 
-	.face {
+	.card {
 		position: relative;
 		z-index: 4;
 		width: 100%;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 14px 10px 14px 14px;
 		border-radius: 16px;
 		background: color-mix(in srgb, var(--fg) 8%, transparent);
+		overflow: hidden;
 		box-sizing: border-box;
-		transition: border-radius 0.28s ease;
 	}
 
-	.stack.open .face {
+	/* Flat bottom only while decoy stack layers sit underneath */
+	.card.stacked {
 		border-radius: 16px 16px 0 0;
+	}
+
+	.face {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 14px 10px 14px 14px;
+		box-sizing: border-box;
+		margin: 0;
+		background: transparent;
 	}
 
 	.face-main,
@@ -463,28 +414,36 @@
 		color: var(--fg-33, var(--white44));
 	}
 
-	.chev,
-	.dots {
+	.chev {
 		flex-shrink: 0;
 		width: 2.25rem;
 		height: 2.25rem;
-		border: 0;
+		border: 1px solid transparent;
 		border-radius: 999px;
-		background: transparent;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
 		color: var(--fg-66, var(--white66));
 		display: grid;
 		place-items: center;
 		cursor: pointer;
 		padding: 0;
 		font: inherit;
-		font-size: 18px;
 		line-height: 1;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		box-sizing: border-box;
+		-webkit-tap-highlight-color: transparent;
+		transition: transform 0.15s ease, color 0.15s ease;
 	}
 
-	.chev:hover,
-	.dots:hover {
-		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
+	.chev:hover {
 		color: var(--fg, var(--white));
+		transform: scale(1.06);
+	}
+
+	.chev:active {
+		transform: scale(0.96);
 	}
 
 	.chev svg {
@@ -499,41 +458,61 @@
 		--i: 1;
 		width: calc(100% - var(--i) * 18px);
 		height: calc(10px - var(--i) * 1.5px);
-		margin-top: -1px;
+		margin: 0;
+		margin-top: 0;
 		border-radius: 0 0 calc(14px - var(--i) * 3px) calc(14px - var(--i) * 3px);
-		background: color-mix(in srgb, var(--fg) calc(7% - var(--i) * 1.8%), transparent);
+		background: color-mix(in srgb, var(--fg) calc(7.5% - var(--i) * 1.5%), transparent);
 		z-index: calc(3 - var(--i));
 		pointer-events: none;
+		flex-shrink: 0;
 	}
 
 	.roster {
 		width: 100%;
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
-		border-radius: 0 0 16px 16px;
-		background: color-mix(in srgb, var(--fg) 5%, transparent);
-		animation: roster-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+		margin: 0;
+		background: transparent;
+		animation: roster-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 	}
 
 	@keyframes roster-in {
 		from {
 			opacity: 0;
-			transform: translateY(-8px);
 		}
 		to {
 			opacity: 1;
-			transform: none;
 		}
 	}
 
 	.row-card {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 8px;
 		padding: 10px 10px 10px 14px;
 		border-top: 1px solid var(--fg-8, var(--white11));
 		box-sizing: border-box;
+		margin: 0;
+	}
+
+	.invite-btn {
+		flex-shrink: 0;
+		height: 28px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
+		color: var(--fg-66, var(--white66));
+		font: inherit;
+		font-size: 12px;
+		font-weight: 600;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.invite-btn:hover {
+		color: var(--fg, var(--white));
+		background: var(--fg-8, color-mix(in srgb, var(--fg) 10%, transparent));
 	}
 
 	.add-row {
@@ -541,7 +520,7 @@
 		align-items: center;
 		gap: 12px;
 		width: 100%;
-		padding: 12px 14px;
+		padding: 10px 14px;
 		border: 0;
 		border-top: 1px solid var(--fg-8, var(--white11));
 		background: transparent;
@@ -559,52 +538,16 @@
 	}
 
 	.add-plus {
-		width: 28px;
-		height: 28px;
+		width: 40px;
+		height: 40px;
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
 		border: 1.5px solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
-		font-size: 18px;
+		font-size: 22px;
 		line-height: 1;
-	}
-
-	.menu-wrap {
-		position: relative;
+		box-sizing: border-box;
 		flex-shrink: 0;
-	}
-
-	.menu {
-		position: absolute;
-		top: calc(100% + 4px);
-		right: 0;
-		z-index: 20;
-		min-width: 148px;
-		padding: 6px;
-		border-radius: 12px;
-		background: var(--popover, var(--bg));
-		border: 1px solid var(--fg-8, var(--white11));
-		box-shadow: 0 12px 32px color-mix(in srgb, #000 22%, transparent);
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.menu button {
-		border: 0;
-		background: transparent;
-		color: var(--fg, var(--white));
-		font: inherit;
-		font-size: 13px;
-		font-weight: 550;
-		text-align: left;
-		padding: 9px 10px;
-		border-radius: 8px;
-		cursor: pointer;
-	}
-
-	.menu button:hover {
-		background: color-mix(in srgb, var(--fg) 8%, transparent);
 	}
 
 	.toast {

@@ -352,6 +352,7 @@
 			</button>
 		</div>
 	</div>
+	<div class="mail-bottom-fade" aria-hidden="true"></div>
 </div>
 
 <DropdownMenu
@@ -408,9 +409,43 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		display: block;
-		/* Top clear lives on .mail-thread-body (match Task .body); bottom for reply CTA */
-		padding: 0 0 96px;
+		/* Scroll under detail-top fade; side/bottom clear owned here (like chat channel) */
+		padding: 56px 24px calc(28px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
+	}
+
+	.mail-bottom-fade {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 2;
+		height: calc(72px + env(safe-area-inset-bottom, 0px));
+		pointer-events: none;
+		background: linear-gradient(
+			to top,
+			var(--bg) 0%,
+			color-mix(in srgb, var(--bg) 80%, transparent)
+				calc(24px + env(safe-area-inset-bottom, 0px) * 0.5),
+			transparent 100%
+		);
+	}
+
+	@media (max-width: 767px) {
+		.mail-feed {
+			padding: calc(56px + env(safe-area-inset-top, 0px)) 14px
+				calc(28px + env(safe-area-inset-bottom, 0px));
+		}
+
+		.mail-bottom-fade {
+			background: linear-gradient(
+				to top,
+				var(--shell, var(--bg)) 0%,
+				color-mix(in srgb, var(--shell, var(--bg)) 80%, transparent)
+					calc(24px + env(safe-area-inset-bottom, 0px) * 0.5),
+				transparent 100%
+			);
+		}
 	}
 
 	.feed-body {

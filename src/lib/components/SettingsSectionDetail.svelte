@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import ProfileInviteModal from './ProfileInviteModal.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import PrimaryButton from './PrimaryButton.svelte';
 	import { actor, clearActor, displayNameFromEmail } from '$lib/actor.svelte.js';
@@ -42,6 +43,9 @@
 
 	/** @type {{ sectionId: string, profileEmail?: string }} */
 	let { sectionId, profileEmail = '' } = $props();
+
+	let deviceCodeOpen = $state(false);
+	let deviceCodeMsg = $state('');
 
 	/** Profile sheet target (may differ from signed-in actor when editing another card). */
 	const targetEmail = $derived(
@@ -406,6 +410,27 @@
 		{/if}
 
 		<hr class="rule" />
+		<p class="field-label">{t('settings.otherDevices')}</p>
+		<p class="hint">{t('settings.otherDevicesHint')}</p>
+		<div class="actions">
+			<PrimaryButton
+				size="sm"
+				disabled={!targetEmail || !driveSession.connected}
+				onclick={() => {
+					deviceCodeMsg = '';
+					if (!driveSession.connected) {
+						deviceCodeMsg = t('settings.connectDriveFirst');
+						return;
+					}
+					deviceCodeOpen = true;
+				}}
+			>
+				{t('settings.createDeviceCode')}
+			</PrimaryButton>
+		</div>
+		{#if deviceCodeMsg}<p class="status">{deviceCodeMsg}</p>{/if}
+
+		<hr class="rule" />
 		<button type="button" class="btn danger disconnect" onclick={() => void disconnectThisProfile()}>
 			{displayNameFromEmail(targetEmail)
 				? t('settings.disconnectProfile', { name: displayNameFromEmail(targetEmail) })
@@ -413,6 +438,7 @@
 		</button>
 		{#if memberMsg}<p class="status">{memberMsg}</p>{/if}
 	</section>
+	<ProfileInviteModal bind:open={deviceCodeOpen} email={targetEmail} mode="device" />
 {:else if sectionId === 'notifications'}
 	<section class="block">
 		<p class="field-label">{t('settings.notificationsTitle')}</p>

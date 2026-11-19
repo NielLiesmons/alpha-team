@@ -2066,20 +2066,13 @@
 		word-break: break-word;
 	}
 
-	/* Match chat-channel-body: no top pad here — feed scrolls under detail-top */
+	/* Match chat-channel-body: zero body pad — feed owns clear + fades under chrome */
 	.body.mail-thread-body {
 		overflow: hidden;
-		/* Same top clear as Task .body (56px) so title row sits under the fade alike */
-		padding: 56px 24px 0;
+		padding: 0;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-	}
-
-	@media (max-width: 767px) {
-		.body.mail-thread-body {
-			padding: 56px 14px 0;
-		}
 	}
 
 	.send-chip {
@@ -2944,8 +2937,8 @@
 		}
 
 		/* Side inset matches mobile-bar horizontal padding (14px) */
-		.body:not(.chat-activity-body),
-		:global(.detail > .body:not(.chat-activity-body)) {
+		.body:not(.chat-activity-body):not(.mail-thread-body):not(.chat-channel-body),
+		:global(.detail > .body:not(.chat-activity-body):not(.mail-thread-body):not(.chat-channel-body)) {
 			padding: calc(56px + env(safe-area-inset-top, 0px)) 14px
 				calc(24px + env(safe-area-inset-bottom, 0px));
 		}
@@ -2956,7 +2949,8 @@
 			padding-bottom: 0;
 		}
 
-		.body.chat-activity-body {
+		.body.chat-activity-body,
+		.body.mail-thread-body {
 			padding: 0 !important;
 			overflow: hidden;
 		}

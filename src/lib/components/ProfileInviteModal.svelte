@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * Invite QR modal for sharing a profile to another device (Drive reshare).
-	 * Quiet field chrome — no accent focus stroke; dismiss via ✕ / overlay (no Cancel).
+	 * QR modal for profile access on another device (Drive reshare).
+	 * `device` = own-profile “other devices” framing; `invite` = admin invite copy.
 	 */
 	import QRCode from 'qrcode';
 	import Modal from './Modal.svelte';
@@ -9,10 +9,11 @@
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { getMailboxPassword } from '$lib/jmap-mail.js';
+	import { t } from '$lib/i18n.svelte.js';
 	import { memberFor } from '$lib/members.svelte.js';
 
-	/** @type {{ open: boolean, email: string, onclose?: () => void }} */
-	let { open = $bindable(false), email = '', onclose = () => {} } = $props();
+	/** @type {{ open: boolean, email: string, mode?: 'device' | 'invite', onclose?: () => void }} */
+	let { open = $bindable(false), email = '', mode = 'device', onclose = () => {} } = $props();
 
 	let pass = $state('');
 	let busy = $state(false);
@@ -27,6 +28,10 @@
 	);
 	const member = $derived(memberFor(e));
 	const name = $derived(member?.name || displayNameFromEmail(e) || e);
+	const isInvite = $derived(mode === 'invite');
+	const modalLabel = $derived(
+		isInvite ? t('settings.inviteModalTitle', { name }) : t('settings.deviceModalTitle')
+	);
 
 	$effect(() => {
 		if (!open) return;
@@ -47,15 +52,15 @@
 		link = '';
 		qr = '';
 		if (!e.includes('@')) {
-			msg = 'Missing profile email.';
+			msg = t('settings.missingEmail');
 			return;
 		}
 		if (!driveSession.connected) {
-			msg = 'Connect Drive first.';
+			msg = t('settings.connectDriveFirst');
 			return;
 		}
 		if (pass.trim().length < 6) {
-			msg = 'Passphrase must be at least 6 characters.';
+			msg = t('settings.passphraseTooShort');
 			return;
 		}
 		busy = true;
@@ -81,7 +86,9 @@
 				width: 280,
 				color: { dark: '#111111', light: '#ffffff' }
 			});
-			msg = `Code ready for ${e}. Share QR + passphrase.`;
+			msg = isInvite
+				? t('settings.inviteCodeReady', { email: e })
+				: t('settings.deviceCodeReady');
 		} catch (err) {
 			msg = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -90,20 +97,22 @@
 	}
 </script>
 
-<Modal bind:open label="Share invite">
+<Modal bind:open label={modalLabel}>
 	<div class="invite-sheet">
 		<header class="head">
-			<h2 class="title">Share {name}</h2>
-			<button type="button" class="icon-pill" aria-label="Close" onclick={close}>✕</button>
+			<h2 class="title">{modalLabel}</h2>
+			<button type="button" class="icon-pill" aria-label={t('common.close')} onclick={close}>✕</button>
 		</header>
-		<p class="hint">Encrypt a Drive invite QR for this profile. Whisper the passphrase separately.</p>
+		<p class="hint">
+			{isInvite ? t('settings.inviteModalHint') : t('settings.deviceModalHint')}
+		</p>
 		<div class="field-shell">
 			<input
 				class="bare"
 				type="password"
 				bind:value={pass}
 				autocomplete="new-password"
-				placeholder="Passphrase"
+				placeholder={t('settings.passphrase')}
 				onkeydown={(ev) => ev.key === 'Enter' && makeCode()}
 			/>
 			<button
@@ -112,7 +121,7 @@
 				disabled={busy || pass.trim().length < 6}
 				onclick={() => void makeCode()}
 			>
-				{busy ? '…' : 'Continue'}
+				{busy ? '…' : t('common.continue')}
 			</button>
 		</div>
 		{#if msg}
@@ -120,7 +129,12 @@
 		{/if}
 		{#if qr}
 			<figure class="qr-wrap">
-				<img src={qr} alt="Profile invite QR" width="220" height="220" />
+				<img
+					src={qr}
+					alt={isInvite ? t('settings.inviteQrAlt') : t('settings.deviceQrAlt')}
+					width="220"
+					height="220"
+				/>
 			</figure>
 		{/if}
 		{#if link}

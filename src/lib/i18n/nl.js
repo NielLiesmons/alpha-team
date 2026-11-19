@@ -220,8 +220,25 @@ export default {
 	'settings.expandProfiles': 'Profielen uitvouwen',
 	'settings.editProfile': 'Profiel bewerken',
 	'settings.shareInvite': 'Uitnodiging delen',
+	'settings.invite': 'Uitnodigen',
 	'settings.switchTo': 'Wisselen naar',
 	'settings.addProfile': 'Profiel toevoegen',
+	'settings.otherDevices': 'Andere apparaten',
+	'settings.otherDevicesHint':
+		'Maak een code om dit profiel op een andere telefoon of computer te openen. Deel de QR en wachtzin apart.',
+	'settings.createDeviceCode': 'Toegangscode maken',
+	'settings.deviceModalTitle': 'Andere apparaten',
+	'settings.deviceModalHint':
+		'Versleutel een toegangscode voor dit profiel op een ander apparaat. Fluister de wachtzin apart.',
+	'settings.deviceCodeReady': 'Code klaar. Open de QR op het andere apparaat en voer de wachtzin in.',
+	'settings.deviceQrAlt': 'Profieltoegang QR',
+	'settings.inviteModalTitle': '{name} uitnodigen',
+	'settings.inviteModalHint':
+		'Versleutel een Drive-uitnodigings-QR voor deze persoon. Fluister de wachtzin apart.',
+	'settings.inviteCodeReady': 'Uitnodiging klaar voor {email}. Deel QR + wachtzin.',
+	'settings.inviteQrAlt': 'Profieluitnodiging QR',
+	'settings.passphrase': 'Wachtzin',
+	'settings.passphraseTooShort': 'Wachtzin moet minstens 6 tekens zijn.',
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'Aan',
@@ -324,7 +341,10 @@ export default {
 	'chat.recording': 'Opnemen…',
 	'chat.thinking': 'Denkt na…',
 	'chat.working': 'Bezig…',
-	'chat.sendFailed': 'Verzenden mislukt. Probeer het opnieuw.',
+	'chat.sendFailed': 'Verzenden mislukt — tik om opnieuw te proberen',
+	'chat.pendingLost': 'Sommige berichten zijn niet verzonden. Tik op opnieuw proberen bij het bericht.',
+	'chat.notConnected': 'Niet verbonden met Drive — bericht niet opgeslagen.',
+	'chat.retryUnavailable': 'Kan dit bericht niet opnieuw verzenden — stuur het opnieuw.',
 	'chat.voiceNext': 'Spraakopname volgt binnenkort.',
 	'chat.newMessages': 'Nieuwe berichten',
 	'chat.searchEmoji': 'Emoji zoeken…',
