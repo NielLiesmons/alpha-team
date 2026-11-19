@@ -55,6 +55,7 @@
 	import FilesFolderDetail from './FilesFolderDetail.svelte';
 	import FormDetail from './FormDetail.svelte';
 	import WebsiteActivity from './WebsiteActivity.svelte';
+	import PublicationsFeed from './PublicationsFeed.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById, loadComments } from '$lib/chat.svelte.js';
 	import {
@@ -252,6 +253,8 @@
 	const welcomeSelected = $derived(selection?.kind === 'welcome');
 	const pubsHub = $derived(selection?.kind === 'pubs' && selection?.id === 'hub');
 	const pubsActivity = $derived(selection?.kind === 'pubs' && selection?.id === 'activity');
+	const pubsShop = $derived(selection?.kind === 'pubs' && selection?.id === 'shop');
+	const pubsContent = $derived(selection?.kind === 'pubs' && selection?.id === 'content');
 	const mailMsg = $derived(selection?.kind === 'mail' ? findMailOrTip(selection.id) : null);
 	const settingsSectionId = $derived(
 		selection?.kind === 'settings' ? String(selection.id || '') : ''
@@ -413,6 +416,8 @@
 		if (welcomeSelected) return t('detail.welcome');
 		if (pubsActivity) return t('web.activityTitle');
 		if (pubsHub) return t('nav.publications');
+		if (pubsShop) return t('nav.shop');
+		if (pubsContent) return t('nav.content');
 		if (mailMsg) return t('mail.thread');
 		if (chatNotifsOpen) return t('chat.activityOpen');
 		if (chatChannel) return chatChannel.title || t('chat.channel');
@@ -442,6 +447,8 @@
 		if (welcomeSelected) return t('detail.welcome');
 		if (pubsActivity) return t('web.activityTitle');
 		if (pubsHub) return t('nav.publications');
+		if (pubsShop) return t('nav.shop');
+		if (pubsContent) return t('nav.content');
 		/* Subject lives big in the thread body — chrome stays generic. */
 		if (mailMsg) return t('mail.thread');
 		if (chatNotifsOpen) return t('chat.activityOpen');
@@ -470,6 +477,8 @@
 				welcomeSelected ||
 				pubsHub ||
 				pubsActivity ||
+				pubsShop ||
+				pubsContent ||
 				mailMsg ||
 				chatChannel ||
 				chatNotifsOpen ||
@@ -491,10 +500,8 @@
 			};
 		if (path.startsWith('/publications') || path.startsWith('/website'))
 			return {
-				title: path.startsWith('/website') ? t('detail.noSection') : t('nav.publications'),
-				body: path.startsWith('/website')
-					? t('detail.pickPublication')
-					: 'Open the hub — Blog letters mail subscribers and appear on the site.'
+				title: t('detail.noSection'),
+				body: t('detail.pickFromList')
 			};
 		if (path.startsWith('/mail'))
 			return {
@@ -1371,9 +1378,66 @@
 				</button>
 				<span class="detail-top-label">{t('nav.publications')}</span>
 			</div>
+			<div class="detail-top-actions">
+				<button
+					type="button"
+					class="send-chip"
+					onclick={() => openComposer('newsletter')}
+				>{t('common.create')}</button>
+			</div>
 		</header>
 		<div class="body">
-			<p class="hint-pad">{t('web.pubsPreview')}</p>
+			<PublicationsFeed />
+		</div>
+	{:else if pubsShop}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{t('nav.shop')}</span>
+			</div>
+		</header>
+		<div class="body">
+			<div class="web-stub-bento">
+				<section class="web-stub-panel">
+					<span class="eyebrow-label-xs">{t('nav.shop')}</span>
+					<p class="muted tight">{t('web.stubShop')}</p>
+				</section>
+			</div>
+		</div>
+	{:else if pubsContent}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{t('nav.content')}</span>
+			</div>
+		</header>
+		<div class="body">
+			<div class="web-stub-bento">
+				<section class="web-stub-panel">
+					<span class="eyebrow-label-xs">{t('nav.content')}</span>
+					<p class="muted tight">{t('web.stubContent')}</p>
+				</section>
+			</div>
 		</div>
 	{:else if welcomeSelected}
 		<header class="detail-top desktop-head">
@@ -3085,5 +3149,20 @@
 		:global(.detail .detail-top.notifs-top) {
 			padding: 0 14px;
 		}
+	}
+
+	.web-stub-bento {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 12px;
+		box-sizing: border-box;
+	}
+
+	.web-stub-panel {
+		min-width: 0;
+		padding: 14px 14px 12px;
+		border-radius: 16px;
+		background: var(--fg-4);
+		box-sizing: border-box;
 	}
 </style>

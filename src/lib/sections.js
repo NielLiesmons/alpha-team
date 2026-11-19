@@ -30,13 +30,21 @@ import { parentDomain } from './space-host.js';
 
 /**
  * Per-site surfaces (order fixed: Publications → Activity → Shop → Content).
- * @type {{ href: string, labelKey: string, icon: string, createKind?: string }[]}
+ * Opened via selectEntity('pubs', selectionId) into the detail column — never
+ * by navigating the list pane away from /website.
+ * @type {{ href: string, selectionId: string, labelKey: string, icon: string, createKind?: string }[]}
  */
 export const websiteChildren = [
-	{ href: '/publications', labelKey: 'nav.publications', icon: 'publications', createKind: 'newsletter' },
-	{ href: '/website/activity', labelKey: 'nav.activity', icon: 'chat' },
-	{ href: '/website/shop', labelKey: 'nav.shop', icon: 'shop' },
-	{ href: '/website/content', labelKey: 'nav.content', icon: 'website' }
+	{
+		href: '/website',
+		selectionId: 'hub',
+		labelKey: 'nav.publications',
+		icon: 'publications',
+		createKind: 'newsletter'
+	},
+	{ href: '/website', selectionId: 'activity', labelKey: 'nav.activity', icon: 'chat' },
+	{ href: '/website', selectionId: 'shop', labelKey: 'nav.shop', icon: 'shop' },
+	{ href: '/website', selectionId: 'content', labelKey: 'nav.content', icon: 'website' }
 ];
 
 /**

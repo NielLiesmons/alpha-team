@@ -1,6 +1,4 @@
 <script>
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import {
 		moderationComments,
@@ -13,7 +11,6 @@
 	import { t } from '$lib/i18n.svelte.js';
 
 	const site = $derived(activeWebsite());
-	const path = $derived($page.url.pathname);
 
 	let visits7 = $state(/** @type {number | null} */ (null));
 	let uniques7 = $state(/** @type {number | null} */ (null));
@@ -46,14 +43,14 @@
 
 	const commentCount = $derived(moderationComments.length);
 
-	/** @param {string} href */
-	function openSection(href) {
-		if (href === '/website/activity') {
-			void refreshPublications();
-			selectEntity('pubs', 'activity');
-			return;
-		}
-		goto(href);
+	/**
+	 * Open Website deeper pages in the detail column (never replace this feed).
+	 * @param {(typeof websiteChildren)[number]} item
+	 */
+	function openSection(item) {
+		const id = item.selectionId;
+		if (id === 'hub' || id === 'activity') void refreshPublications();
+		selectEntity('pubs', id);
 	}
 
 	/**
@@ -83,10 +80,18 @@
 		return '';
 	}
 
-	/** @param {string} href */
-	function rowOn(href) {
-		if (href === '/website/activity') return ui.selection?.kind === 'pubs' && ui.selection?.id === 'activity';
-		return path === href || path.startsWith(`${href}/`);
+	/** @param {(typeof websiteChildren)[number]} item */
+	function rowOn(item) {
+		const sel = ui.selection;
+		if (!sel) return false;
+		if (item.selectionId === 'hub') {
+			return (
+				(sel.kind === 'pubs' && sel.id === 'hub') ||
+				sel.kind === 'newsletter' ||
+				sel.kind === 'welcome'
+			);
+		}
+		return sel.kind === 'pubs' && sel.id === item.selectionId;
 	}
 </script>
 
@@ -96,16 +101,16 @@
 	{#if websites.length === 0}
 		<p class="hint">{t('web.noSite')}</p>
 	{:else}
-		<div class="hub">
-			{#each websiteChildren as item (item.href)}
+		<div class="bento">
+			{#each websiteChildren as item (item.selectionId)}
 				{@const metric = metricFor(item.labelKey)}
 				<button
 					type="button"
-					class="section"
-					class:on={rowOn(item.href)}
-					onclick={() => openSection(item.href)}
+					class="panel"
+					class:on={rowOn(item)}
+					onclick={() => openSection(item)}
 				>
-					<span class="section-main">
+					<span class="panel-main">
 						<span class="eyebrow">{t(item.labelKey)}</span>
 						<span class="preview">{previewFor(item.labelKey)}</span>
 					</span>
@@ -130,23 +135,25 @@
 		box-sizing: border-box;
 	}
 
-	.hub {
-		display: flex;
-		flex-direction: column;
-		border-top: 1px solid var(--fg-8);
+	.bento {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px;
+		padding: 0 12px 8px;
+		box-sizing: border-box;
 	}
 
-	.section {
+	.panel {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
-		gap: 16px;
-		width: 100%;
-		padding: 16px 16px 18px;
+		gap: 12px;
+		min-width: 0;
+		min-height: 96px;
+		padding: 14px 14px 16px;
 		border: 0;
-		border-bottom: 1px solid var(--fg-8);
-		border-radius: 0;
-		background: transparent;
+		border-radius: 16px;
+		background: var(--fg-4);
 		color: inherit;
 		font: inherit;
 		text-align: left;
@@ -154,15 +161,15 @@
 		box-sizing: border-box;
 	}
 
-	.section:hover,
-	.section.on {
-		background: var(--fg-4);
+	.panel:hover,
+	.panel.on {
+		background: var(--fg-8);
 	}
 
-	.section-main {
+	.panel-main {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 6px;
 		min-width: 0;
 		flex: 1;
 	}
@@ -180,9 +187,11 @@
 		font-weight: 500;
 		color: var(--fg);
 		line-height: 1.35;
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		-webkit-box-orient: vertical;
 		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.metric {
@@ -193,7 +202,7 @@
 		line-height: 1;
 		color: var(--fg);
 		font-variant-numeric: tabular-nums;
-		padding-right: 2px;
+		padding-top: 2px;
 	}
 
 	.hint {
@@ -202,5 +211,11 @@
 		line-height: 1.45;
 		color: var(--fg-33);
 		text-align: center;
+	}
+
+	@media (max-width: 520px) {
+		.bento {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

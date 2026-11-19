@@ -5,7 +5,6 @@
 		activeWebsite,
 		mobileNavForRole,
 		navForRole,
-		websiteChildren,
 		websites
 	} from '$lib/sections.js';
 	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
@@ -150,15 +149,7 @@
 				{ id: 'unread', label: t('filter.unread') }
 			];
 		}
-		if (path.startsWith('/publications')) {
-			return [
-				{ id: 'all', label: t('filter.all') },
-				{ id: 'blog', label: t('filter.blog') },
-				{ id: 'post', label: t('filter.posts') },
-				{ id: 'event', label: t('filter.events') },
-				{ id: 'draft', label: t('filter.drafts') }
-			];
-		}
+		/* Publications filters live inside PublicationsFeed (detail column). */
 		return null;
 	});
 
@@ -180,9 +171,6 @@
 				'/entreprises': 'nav.entreprises',
 				'/planning': 'nav.planning',
 				'/website': 'nav.website',
-				'/website/shop': 'nav.shop',
-				'/website/content': 'nav.content',
-				'/website/activity': 'nav.activity',
 				'/publications': 'nav.publications',
 				'/settings': 'nav.settings'
 			}[href] || '';
@@ -237,42 +225,20 @@
 		return mobileNavForRole().map(withMailChildren);
 	});
 
-	const websiteOpen = $derived(
-		active('/website') ||
-			active('/publications') ||
-			websiteChildren.some((c) => active(c.href))
-	);
+	const websiteOpen = $derived(active('/website') || active('/publications'));
 
 	const activeItem = $derived.by(() => {
 		locale.value;
 		websites.length;
 		const site = activeWebsite();
 		if (websiteOpen && site) {
-			const child = websiteChildren.find((item) => active(item.href));
-			if (child) {
-				return {
-					href: child.href,
-					label: t(child.labelKey),
-					icon: child.icon,
-					createKind: child.createKind
-				};
-			}
-			if (active('/website') && path === '/website') {
-				return {
-					href: '/website',
-					label: site.host,
-					icon: 'website',
-					faviconUrl: site.faviconUrl
-				};
-			}
-			if (active('/publications')) {
-				return {
-					href: '/publications',
-					label: t('nav.publications'),
-					icon: 'publications',
-					createKind: 'newsletter'
-				};
-			}
+			return {
+				href: '/website',
+				label: site.host,
+				icon: 'website',
+				faviconUrl: site.faviconUrl,
+				createKind: 'newsletter'
+			};
 		}
 		for (const entry of roleNav) {
 			if (/** @type {any} */ (entry).type === 'group') continue;
@@ -416,8 +382,13 @@
 		if (kind === 'task') go('/tasks');
 		else if (kind === 'project') go('/projects');
 		else if (kind === 'note') go('/notes');
-		else if (kind === 'newsletter') go('/publications');
-		else if (kind === 'mail') go('/mail');
+		else if (kind === 'newsletter') {
+			if (path.startsWith('/website')) {
+				selectEntity('pubs', 'hub');
+			} else {
+				void goto('/website').then(() => selectEntity('pubs', 'hub'));
+			}
+		} else if (kind === 'mail') go('/mail');
 		else if (
 			kind === 'ledger' ||
 			kind === 'cost' ||

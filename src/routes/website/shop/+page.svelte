@@ -1,11 +1,20 @@
 <script>
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { selectEntity } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
+
+	onMount(() => {
+		void goto('/website', { replaceState: true }).then(() => {
+			selectEntity('pubs', 'shop');
+		});
+	});
 </script>
 
 <svelte:head><title>{t('nav.shop')}</title></svelte:head>
 
 <div class="feed">
-	<p class="hint">{t('web.stubShop')}</p>
+	<p class="hint">{t('common.loading')}</p>
 </div>
 
 <style>
@@ -25,6 +34,5 @@
 		line-height: 1.45;
 		color: var(--fg-33);
 		text-align: center;
-		max-width: 28ch;
 	}
 </style>

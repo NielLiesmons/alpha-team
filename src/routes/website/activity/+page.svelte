@@ -1,4 +1,5 @@
 <script>
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { refreshPublications } from '$lib/publications.svelte.js';
 	import { selectEntity } from '$lib/workspace.svelte.js';
@@ -6,14 +7,16 @@
 
 	onMount(() => {
 		void refreshPublications();
-		selectEntity('pubs', 'activity');
+		void goto('/website', { replaceState: true }).then(() => {
+			selectEntity('pubs', 'activity');
+		});
 	});
 </script>
 
 <svelte:head><title>{t('web.activityTitle')}</title></svelte:head>
 
 <div class="feed">
-	<p class="hint">{t('web.activityPreview')}</p>
+	<p class="hint">{t('common.loading')}</p>
 </div>
 
 <style>
@@ -33,6 +36,5 @@
 		line-height: 1.45;
 		color: var(--fg-33);
 		text-align: center;
-		max-width: 32ch;
 	}
 </style>

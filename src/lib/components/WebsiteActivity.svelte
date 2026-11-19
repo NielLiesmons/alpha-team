@@ -1,7 +1,6 @@
 <script>
 	/**
-	 * 3rd-column Website Insights: visits chart, countries, comments.
-	 * Hairline sections; desktop edge cells own ~24px outer pad.
+	 * 3rd-column Website Insights: visits chart, countries, comments — bento panels.
 	 */
 	import { onMount } from 'svelte';
 	import SiteCountryBars from '$lib/components/website/SiteCountryBars.svelte';
@@ -106,9 +105,9 @@
 	}
 </script>
 
-<div class="insights">
-	<section class="content-section visits">
-		<div class="section-head">
+<div class="bento">
+	<section class="panel visits">
+		<div class="panel-head">
 			<div class="metric-block">
 				<span class="eyebrow">{t('web.visits')}</span>
 				<span class="metric">{pageviewsTotal.toLocaleString()}</span>
@@ -132,15 +131,15 @@
 		<SiteVisitsChart {series} {loading} />
 	</section>
 
-	<section class="content-section countries">
-		<div class="section-head">
+	<section class="panel countries">
+		<div class="panel-head">
 			<span class="eyebrow">{t('web.byCountry')}</span>
 		</div>
 		<SiteCountryBars rows={countries} {loading} emptyLabel={t('web.noCountries')} />
 	</section>
 
-	<section class="content-section comments">
-		<div class="section-head">
+	<section class="panel comments">
+		<div class="panel-head">
 			<span class="eyebrow">{t('web.comments')}</span>
 			<span class="count">{moderationComments.length}</span>
 		</div>
@@ -196,21 +195,28 @@
 </div>
 
 <style>
-	.insights {
-		/* Full-bleed vs DetailColumn .body 24px sides — cells own outer pad (desktop). */
-		margin: 0 -24px;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.content-section {
-		position: relative;
-		padding: 14px 24px 18px;
-		border-bottom: 1px solid var(--fg-8);
+	.bento {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
 		box-sizing: border-box;
 	}
 
-	.section-head {
+	.panel {
+		min-width: 0;
+		padding: 14px 14px 16px;
+		border-radius: 16px;
+		background: var(--fg-4);
+		box-sizing: border-box;
+	}
+
+	.panel.visits,
+	.panel.countries,
+	.panel.comments {
+		grid-column: 1 / -1;
+	}
+
+	.panel-head {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
@@ -299,18 +305,17 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
+		gap: 8px;
 	}
 
 	.card {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		padding: 12px 0;
-		border-bottom: 1px solid var(--fg-8);
-	}
-
-	.card:last-child {
-		border-bottom: 0;
+		padding: 12px;
+		border-radius: 12px;
+		background: var(--fg-8);
+		box-sizing: border-box;
 	}
 
 	.head {
@@ -381,12 +386,8 @@
 	}
 
 	@media (max-width: 899px) {
-		.insights {
-			margin: 0;
-		}
-
-		.content-section {
-			padding: 12px 0 16px;
+		.bento {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>
