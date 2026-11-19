@@ -244,10 +244,10 @@
 		opacity: 0.66;
 	}
 
-	/* 28×28 glass disc, shifted further right than the old −3px overlap. */
+	/* 28×28 chrome glass disc — same pattern as ChromeMobileBar / icon-hit. */
 	.badge {
 		position: absolute;
-		right: -8px;
+		right: -14px;
 		bottom: -4px;
 		width: 28px;
 		height: 28px;
@@ -255,10 +255,12 @@
 		place-items: center;
 		border-radius: 9999px;
 		box-sizing: border-box;
-		background: color-mix(in srgb, var(--bg) 58%, transparent);
-		border: 1px solid var(--fg-16);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid transparent;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 		color: var(--fg-66);
 		line-height: 0;
 		pointer-events: none;
@@ -334,7 +336,7 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 999px;
-		background: var(--fg);
+		background: var(--gradient-accent-1);
 		flex-shrink: 0;
 		margin-left: auto;
 	}

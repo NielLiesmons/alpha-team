@@ -47,10 +47,11 @@
 	.tip-png {
 		display: block;
 		box-sizing: border-box;
-		width: 100%;
-		height: 100%;
-		max-width: 100%;
-		max-height: 100%;
+		/* ~90% of locked square so PNGs read closer to TaskBox weight */
+		width: 90%;
+		height: 90%;
+		max-width: 90%;
+		max-height: 90%;
 		object-fit: contain;
 		object-position: center;
 	}
