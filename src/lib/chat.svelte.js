@@ -294,17 +294,22 @@ export async function refreshChatFeed() {
 	chatUi.loading = chatFeed.length === 0;
 	chatUi.error = null;
 	const gen = ++feedFetchGen;
-	const prev = chatFeed.slice();
+	const seedRows = chatFeed.slice();
 	try {
 		const apply = (/** @type {any[]} */ list) => {
 			if (gen !== feedFetchGen) return;
+			/*
+			 * Merge against the LIVE feed, not a start-of-fetch snapshot.
+			 * A send that lands while listFeedMessages is in flight must survive apply().
+			 */
+			const live = chatFeed.slice();
 			/* Empty tip/ids miss must not wipe a warm localStorage feed (empty flash). */
-			if (!list?.length && (prev.length || chatFeed.length)) {
+			if (!list?.length && (live.length || seedRows.length)) {
 				chatUi.loading = false;
 				chatUi.settled = true;
 				return;
 			}
-			const merged = mergeFeedRows(list, prev);
+			const merged = mergeFeedRows(list, live);
 			if (!merged.length && !chatFeed.length) return;
 			if (!merged.length && chatFeed.length) {
 				chatUi.loading = false;
@@ -320,7 +325,7 @@ export async function refreshChatFeed() {
 
 		const list = await listFeedMessages(session, CHAT_FEED_LIMIT, {
 			/* Reuse warm rows so tip wakes only download new leaves (keeps tip I/O free). */
-			seedRows: prev,
+			seedRows,
 			onPartial: (partial) => {
 				/* Leaf-cache hits / early batches — drop skeleton before network misses finish. */
 				if (partial?.length) apply(partial);
