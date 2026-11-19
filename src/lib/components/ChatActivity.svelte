@@ -218,7 +218,7 @@
 	.row {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: 20px;
 		width: 100%;
 		/* 14px = ChromeMobileBar side padding (back button left edge) */
 		padding: calc(0.85rem - 4px) 14px;
@@ -244,7 +244,7 @@
 		opacity: 0.66;
 	}
 
-	/* 28×28 chrome glass disc — same pattern as ChromeMobileBar / icon-hit. */
+	/* 28×28 glass-shine disc — opaque --bg fill so the PFP never shows through. */
 	.badge {
 		position: absolute;
 		right: -14px;
@@ -257,10 +257,8 @@
 		box-sizing: border-box;
 		border: 1px solid transparent;
 		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
+			linear-gradient(var(--bg), var(--bg)) padding-box,
 			var(--glass-shine) border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
 		color: var(--fg-66);
 		line-height: 0;
 		pointer-events: none;
