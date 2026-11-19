@@ -8,8 +8,10 @@ import {
 	deleteChatMessage,
 	listComments,
 	listFeedMessages,
-	markChatMessagesRead
+	markChatMessagesRead,
+	softDeleteChatMessage
 } from './drive/entities.js';
+import { recentEmojis, rememberEmoji } from './emoji.js';
 import { activeSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
 import { mailTipFor } from './mail.svelte.js';
@@ -369,8 +371,46 @@ export async function loadComments(type, entityId) {
 	}
 }
 
-/** Quick-react set — matches Alpha Chat defaults (subset). */
-export const REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+/** Quick-react defaults — matches Alpha Chat `MessageReactions.DEFAULT_EMOJI`. */
+export const REACTION_EMOJI = [
+	'👍',
+	'❤️',
+	'😂',
+	'😮',
+	'😢',
+	'🙏',
+	'👎',
+	'🎉',
+	'🔥',
+	'💯',
+	'😍',
+	'🤔'
+];
+
+/**
+ * MRU first, then defaults (no dupes) — reaction stadium row.
+ * @param {number} [limit]
+ * @returns {string[]}
+ */
+export function quickReactionEmojis(limit = 24) {
+	const recent = recentEmojis();
+	const out = [];
+	const seen = new Set();
+	for (const g of recent) {
+		const emoji = String(g || '').trim();
+		if (!emoji || seen.has(emoji)) continue;
+		seen.add(emoji);
+		out.push(emoji);
+		if (out.length >= limit) return out;
+	}
+	for (const g of REACTION_EMOJI) {
+		if (seen.has(g)) continue;
+		seen.add(g);
+		out.push(g);
+		if (out.length >= limit) break;
+	}
+	return out;
+}
 
 /**
  * Aggregate reaction leaves that target a message (`kind=reaction`, `reply_to`).
@@ -516,6 +556,7 @@ export async function toggleReaction(messageId, emoji) {
 	const target = String(messageId || '');
 	const reaction = String(emoji || '').trim();
 	if (!target || !reaction) return;
+	rememberEmoji(reaction);
 
 	const me = author.trim().toLowerCase();
 	const existing = chatFeed.find(
@@ -1032,6 +1073,50 @@ export async function retryChatMessage(msg) {
 }
 
 /**
+ * Soft-delete a chat bubble — leaves a muted tombstone in the feed.
+ * @param {string} messageId
+ */
+export async function softDeleteChatMessageUi(messageId) {
+	const session = activeSession();
+	const author = activePerson().email;
+	const id = String(messageId || '');
+	if (!id) return;
+	const idx = chatFeed.findIndex((m) => m.id === id);
+	const prev = idx >= 0 ? chatFeed[idx] : null;
+	if (prev?.deleted || prev?.deleted_at) return;
+	const tombstone = {
+		...(prev || { schema: 'alpha.chat_message/1', id, kind: 'chat', author }),
+		body: '',
+		attachments: [],
+		deleted: true,
+		deleted_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+		_pending: false,
+		_failed: false,
+		_local: false
+	};
+	delete tombstone._outbox;
+	delete tombstone._localId;
+	if (idx >= 0) chatFeed[idx] = tombstone;
+	else chatFeed.unshift(tombstone);
+	writeChatCache(chatFeed);
+
+	if (!session || id.startsWith('local-')) return tombstone;
+
+	try {
+		const saved = await softDeleteChatMessage(session, id, { author: author || prev?.author });
+		const i2 = chatFeed.findIndex((m) => m.id === id);
+		if (i2 >= 0) chatFeed[i2] = { ...chatFeed[i2], ...saved, deleted: true };
+		writeChatCache(chatFeed);
+		return saved;
+	} catch (e) {
+		if (idx >= 0 && prev) chatFeed[idx] = prev;
+		writeChatCache(chatFeed);
+		chatUi.error = e instanceof Error ? e.message : String(e);
+		throw e;
+	}
+}
+
+/**
  * Open the entity a chat card refers to.
  * Always stay on the current route (usually /chat) and open DetailColumn —
  * never jump to /tasks|/notes|/… or Back leaves the chat feed.
@@ -1128,22 +1213,41 @@ export function chatRefMeta(msg) {
 	const typeIcon = pkg?.chat?.icon;
 
 	if (ref.type === 'task') {
-		const t = tasks.find((x) => x.id === ref.id);
-		const card = resolveContentTypeCard(t ? { ...t, schema: 'alpha.task/4' } : null, {
+		const task = tasks.find((x) => x.id === ref.id);
+		if (!task) {
+			return {
+				kind: typeName || 'Task',
+				title: t('chat.deletedTask'),
+				icon: typeIcon || 'tasks',
+				box: 'task',
+				status: 'open',
+				deleted: true
+			};
+		}
+		const card = resolveContentTypeCard({ ...task, schema: 'alpha.task/4' }, {
 			packageId: 'alpha.tasks'
 		});
 		return {
 			kind: card?.typeName || typeName || 'Task',
-			title: card?.title || t?.title || 'Task',
+			title: card?.title || task?.title || 'Task',
 			icon: card?.icon || typeIcon || 'tasks',
 			/* First-party host status glyph — not package CSS. */
 			box: 'task',
-			status: t?.status || 'open'
+			status: task?.status || 'open'
 		};
 	}
 	if (ref.type === 'note') {
 		const n = notes.find((x) => x.id === ref.id);
-		const card = resolveContentTypeCard(n ? { ...n, schema: 'alpha.note/1' } : null, {
+		if (!n) {
+			return {
+				kind: typeName || 'Note',
+				title: t('chat.deletedNote'),
+				icon: typeIcon || 'notes',
+				box: 'note',
+				deleted: true
+			};
+		}
+		const card = resolveContentTypeCard({ ...n, schema: 'alpha.note/1' }, {
 			packageId: 'alpha.notes'
 		});
 		return {
@@ -1155,7 +1259,17 @@ export function chatRefMeta(msg) {
 	}
 	if (ref.type === 'project') {
 		const p = projects.find((x) => x.id === ref.id);
-		const card = resolveContentTypeCard(p ? { ...p, schema: 'alpha.project/1' } : null, {
+		if (!p) {
+			return {
+				kind: typeName || 'Project',
+				title: t('chat.deletedProject'),
+				icon: typeIcon || 'projects',
+				box: 'project',
+				project: null,
+				deleted: true
+			};
+		}
+		const card = resolveContentTypeCard({ ...p, schema: 'alpha.project/1' }, {
 			packageId: 'alpha.projects'
 		});
 		return {
@@ -1168,6 +1282,16 @@ export function chatRefMeta(msg) {
 	}
 	if (ref.type === 'enterprise') {
 		const e = enterprises.find((x) => x.id === ref.id);
+		if (!e) {
+			return {
+				kind: 'Enterprise',
+				title: t('chat.deletedEnterprise'),
+				icon: 'entreprises',
+				box: 'enterprise',
+				enterprise: null,
+				deleted: true
+			};
+		}
 		return {
 			kind: 'Enterprise',
 			title: e?.title || 'Enterprise',

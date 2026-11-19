@@ -2513,6 +2513,7 @@ export async function markChatMessagesRead(session, messages, readerEmail) {
 /**
  * Remove a chat message leaf and drop it from `chat/feed.json`.
  * Pass `knownFeedIds` to skip the pre-delete GET.
+ * Used for reaction leaves — not user message soft-delete.
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
  * @param {{ knownFeedIds?: string[] }} [opts]
@@ -2547,6 +2548,44 @@ export async function deleteChatMessage(session, id, opts = {}) {
 	} catch {
 		/* feed index is enough for UI */
 	}
+}
+
+/**
+ * Soft-delete a chat message — keep id in feed, rewrite leaf as tombstone.
+ * UI shows a muted “Deleted message” bubble.
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} id
+ * @param {{ author?: string }} [opts]
+ * @returns {Promise<any>}
+ */
+export async function softDeleteChatMessage(session, id, opts = {}) {
+	const sid = String(id || '').trim();
+	if (!sid || sid.startsWith('local-')) throw new Error('Invalid message');
+	/** @type {any} */
+	let prev = null;
+	try {
+		prev = await getChatMessage(session, sid);
+	} catch {
+		prev = null;
+	}
+	const deletedAt = nowRfc3339();
+	const tombstone = {
+		schema: 'alpha.chat_message/1',
+		id: sid,
+		kind: prev?.kind === 'event' ? 'event' : 'chat',
+		author: String(opts.author || prev?.author || ''),
+		body: '',
+		created_at: prev?.created_at || deletedAt,
+		deleted_at: deletedAt,
+		deleted: true,
+		channel_id: prev?.channel_id || 'general',
+		delivery: prev?.delivery || 'sent',
+		read_by: Array.isArray(prev?.read_by) ? prev.read_by : [],
+		...(prev?.ref ? { ref: prev.ref } : {}),
+		...(prev?.reply_to ? { reply_to: prev.reply_to } : {})
+	};
+	await putPath(session, `chat/messages/${sid}.json`, 'chat_message', JSON.stringify(tombstone));
+	return tombstone;
 }
 
 /* ── Personal mail (Drive-backed until Stalwart IMAP) ── */

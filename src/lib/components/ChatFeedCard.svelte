@@ -1,23 +1,22 @@
 <script>
 	/**
-	 * Family chat bubble — Alpha Chat look + Zapstore desktop hover actions.
-	 * Peer chat outgoing: accent gradient, right-aligned, no pfp.
-	 * Threaded (comments / pub panels): all left + pfp; mine still accent gradient.
-	 * Desktop: React / Reply on hover. Mobile: long-press → react picker.
+	 * Family chat bubble — Alpha Chat look.
+	 * Mobile: tap or long-press → reaction/actions overlay.
+	 * Desktop: right-click (or hover rail) → same overlay.
 	 */
+	import ChatBubbleOverlay from './ChatBubbleOverlay.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import Heart from './icons/Heart.svelte';
 	import Reply from './icons/Reply.svelte';
 	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
-		REACTION_EMOJI,
 		reactionsForMessage,
 		retryChatMessage,
+		softDeleteChatMessageUi,
 		toggleReaction
 	} from '$lib/chat.svelte.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
-	import { customEmojis, customEmojiUrl } from '$lib/custom-emoji.svelte.js';
-	import { customEmojiShortcode, emojiOnlyInfo, tokenizeChatBody } from '$lib/message-emoji.js';
+	import { emojiOnlyInfo, tokenizeChatBody } from '$lib/message-emoji.js';
 	import { members } from '$lib/members.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
@@ -59,12 +58,16 @@
 		threaded = false
 	} = $props();
 
-	let pickerOpen = $state(false);
+	let overlayOpen = $state(false);
+	let overlayX = $state(0);
+	let overlayY = $state(0);
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let holdTimer = null;
 	let holdFired = false;
+	let moved = false;
 	/** @type {{ x: number, y: number } | null} */
 	let holdOrigin = null;
+	const isDeleted = $derived(Boolean(msg?.deleted || msg?.deleted_at));
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -142,7 +145,7 @@
 
 	/** @param {string} emoji */
 	async function onReact(emoji) {
-		pickerOpen = false;
+		overlayOpen = false;
 		try {
 			await toggleReaction(msg.id, emoji);
 		} catch {
@@ -150,8 +153,12 @@
 		}
 	}
 
-	function openReactPicker() {
-		pickerOpen = !pickerOpen;
+	/** @param {number} x @param {number} y */
+	function openOverlayAt(x, y) {
+		if (isDeleted) return;
+		overlayX = x;
+		overlayY = y;
+		overlayOpen = true;
 	}
 
 	function clearHold() {
@@ -163,60 +170,67 @@
 
 	/** @param {PointerEvent} e */
 	function onBubblePointerDown(e) {
+		if (isDeleted) return;
 		if (e.pointerType === 'mouse') return;
 		holdFired = false;
+		moved = false;
 		holdOrigin = { x: e.clientX, y: e.clientY };
 		clearHold();
 		holdTimer = setTimeout(() => {
 			holdFired = true;
-			pickerOpen = true;
+			openOverlayAt(e.clientX, e.clientY);
 			holdTimer = null;
 		}, 450);
 	}
 
-	function onBubblePointerUp() {
+	/** @param {PointerEvent} e */
+	function onBubblePointerUp(e) {
+		const wasHold = holdFired;
+		const wasMoved = moved;
 		clearHold();
 		holdOrigin = null;
+		if (e.pointerType === 'mouse' || isDeleted) return;
+		/* Short tap (no hold, no drag) opens overlay — Alpha Chat BubbleSwiper. */
+		if (!wasHold && !wasMoved) openOverlayAt(e.clientX, e.clientY);
 	}
 
 	/** @param {PointerEvent} e */
 	function onBubblePointerMove(e) {
-		if (!holdOrigin || holdTimer == null) return;
+		if (!holdOrigin) return;
 		const dx = e.clientX - holdOrigin.x;
 		const dy = e.clientY - holdOrigin.y;
-		if (dx * dx + dy * dy > 100) clearHold();
+		if (dx * dx + dy * dy > 100) {
+			moved = true;
+			clearHold();
+		}
 	}
 
 	function onBubblePointerCancel() {
 		clearHold();
 		holdOrigin = null;
+		moved = false;
 	}
 
-	/** @param {Event} e */
+	/** @param {MouseEvent} e */
 	function onBubbleContextMenu(e) {
-		/* Mobile long-press often fires contextmenu — keep picker instead of OS menu. */
-		if (pickerOpen || holdFired) {
-			e.preventDefault();
-		}
+		e.preventDefault();
+		if (isDeleted) return;
+		openOverlayAt(e.clientX, e.clientY);
 	}
 
 	function handleReply() {
-		pickerOpen = false;
+		overlayOpen = false;
 		onReply?.();
 	}
 
-	$effect(() => {
-		if (!pickerOpen) return;
-		/** @param {PointerEvent} e */
-		function onDoc(e) {
-			const target = /** @type {Node | null} */ (e.target);
-			const root = document.querySelector(`[data-chat-bubble="${msg.id}"]`);
-			if (root && target && root.contains(target)) return;
-			pickerOpen = false;
+	async function handleDelete() {
+		overlayOpen = false;
+		try {
+			await softDeleteChatMessageUi(msg.id);
+		} catch {
+			/* chatUi.error set in helper */
 		}
-		document.addEventListener('pointerdown', onDoc, true);
-		return () => document.removeEventListener('pointerdown', onDoc, true);
-	});
+	}
 
 	$effect(() => {
 		const atts = Array.isArray(msg.attachments) ? msg.attachments : [];
@@ -252,11 +266,12 @@
 	class:mine={isMine}
 	class:threaded
 	class:failed={msg._failed}
+	class:deleted={isDeleted}
 	class:stack-first={stackFirst}
 	class:stack-last={stackLast}
 	class:stack-mid={!stackFirst && !stackLast}
 	data-chat-bubble={msg.id}
-	use:swipeLeftReply={{ onReply: handleReply }}
+	use:swipeLeftReply={{ onReply: isDeleted ? () => {} : handleReply }}
 >
 	{#if threaded || !isMine}
 		<div class="avatar-wrap" class:hidden-slot={!stackLast}>
@@ -268,6 +283,19 @@
 
 	<div class="bubble-trailing">
 		<div class="bubble-stack">
+			{#if isDeleted}
+				<div
+					class="bubble deleted-bubble"
+					class:mine={isMine}
+					class:stack-first={stackFirst}
+					class:stack-last={stackLast}
+					class:stack-mid={!stackFirst && !stackLast}
+					role="group"
+					aria-label={t('chat.deletedMessage')}
+				>
+					<p class="deleted-text">{t('chat.deletedMessage')}</p>
+				</div>
+			{:else}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="bubble"
@@ -414,44 +442,8 @@
 				>
 			{/if}
 
-			{#if pickerOpen}
-				<div class="react-picker" role="listbox" aria-label={t('chat.reactions')}>
-					{#each customEmojis.slice(0, 6) as em (em.id)}
-						{@const code = customEmojiShortcode(em.name)}
-						{@const src = customEmojiUrl(em.name)}
-						<button
-							type="button"
-							class="react-pick custom"
-							role="option"
-							title={code}
-							onclick={(e) => {
-								e.stopPropagation();
-								void onReact(code);
-							}}
-						>
-							{#if src}
-								<img src={src} alt={code} width="22" height="22" draggable="false" />
-							{:else}
-								{code}
-							{/if}
-						</button>
-					{/each}
-					{#each REACTION_EMOJI as emoji (emoji)}
-						<button
-							type="button"
-							class="react-pick"
-							role="option"
-							onclick={(e) => {
-								e.stopPropagation();
-								void onReact(emoji);
-							}}
-						>
-							{emoji}
-						</button>
-					{/each}
-				</div>
-			{/if}
 			</div>
+			{/if}
 
 			{#if isMine && stackLast && emojiOnly && (showReceipt || when)}
 				<div class="meta-out meta-out-sticker">
@@ -499,7 +491,7 @@
 				>
 			{/if}
 
-			{#if reactions.length}
+			{#if !isDeleted && reactions.length}
 				<div class="reaction-pills" role="list">
 					{#each reactions as r (r.emoji)}
 						<button
@@ -538,33 +530,47 @@
 			{/if}
 		</div>
 
-		<div class="action-rail" role="group" aria-label={t('chat.messageActions')}>
-			<button
-				type="button"
-				class="rail-btn"
-				aria-label={t('chat.react')}
-				aria-expanded={pickerOpen}
-				onclick={(e) => {
-					e.stopPropagation();
-					openReactPicker();
-				}}
-			>
-				<Heart size={14} />
-			</button>
-			<button
-				type="button"
-				class="rail-btn"
-				aria-label={t('chat.reply')}
-				onclick={(e) => {
-					e.stopPropagation();
-					handleReply();
-				}}
-			>
-				<Reply size={14} />
-			</button>
-		</div>
+		{#if !isDeleted}
+			<div class="action-rail" role="group" aria-label={t('chat.messageActions')}>
+				<button
+					type="button"
+					class="rail-btn"
+					aria-label={t('chat.react')}
+					aria-expanded={overlayOpen}
+					onclick={(e) => {
+						e.stopPropagation();
+						const r = /** @type {HTMLElement} */ (e.currentTarget).getBoundingClientRect();
+						openOverlayAt(r.left + r.width / 2, r.top);
+					}}
+				>
+					<Heart size={14} />
+				</button>
+				<button
+					type="button"
+					class="rail-btn"
+					aria-label={t('chat.reply')}
+					onclick={(e) => {
+						e.stopPropagation();
+						handleReply();
+					}}
+				>
+					<Reply size={14} />
+				</button>
+			</div>
+		{/if}
 	</div>
 </article>
+
+<ChatBubbleOverlay
+	open={overlayOpen}
+	x={overlayX}
+	y={overlayY}
+	canDelete={isMine}
+	onclose={() => (overlayOpen = false)}
+	onreact={(emoji) => void onReact(emoji)}
+	onreply={handleReply}
+	ondelete={isMine ? () => void handleDelete() : null}
+/>
 
 <style>
 	.card {
@@ -605,6 +611,27 @@
 
 	.card.failed .text {
 		opacity: 0.7;
+	}
+
+	.bubble.deleted-bubble {
+		background: var(--fg-4) !important;
+		color: var(--fg-33);
+		padding: 8px 12px;
+		min-height: 0;
+		box-shadow: none;
+	}
+
+	.bubble.deleted-bubble.mine {
+		background: var(--fg-4) !important;
+	}
+
+	.deleted-text {
+		margin: 0;
+		font-size: 13px;
+		font-weight: 500;
+		font-style: italic;
+		color: var(--fg-33);
+		line-height: 1.3;
 	}
 
 	.avatar-wrap {
@@ -1023,52 +1050,6 @@
 			opacity: 1;
 			pointer-events: auto;
 		}
-	}
-
-	.react-picker {
-		position: absolute;
-		bottom: calc(100% + 8px);
-		left: 0;
-		z-index: 5;
-		display: flex;
-		gap: 2px;
-		padding: 4px;
-		border-radius: 999px;
-		border: 1px solid var(--glass-border);
-		background: var(--glass-panel);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		box-shadow: 0 8px 24px var(--shadow);
-	}
-
-	.card.mine:not(.threaded) .react-picker {
-		left: auto;
-		right: 0;
-	}
-
-	.react-pick {
-		width: 32px;
-		height: 32px;
-		display: grid;
-		place-items: center;
-		padding: 0;
-		border: 0;
-		border-radius: 999px;
-		background: transparent;
-		font-size: 16px;
-		line-height: 1;
-		cursor: pointer;
-	}
-
-	.react-pick:hover {
-		background: var(--fg-8);
-	}
-
-	.react-pick.custom img {
-		display: block;
-		width: 22px;
-		height: 22px;
-		object-fit: contain;
 	}
 
 	.reaction-pills {

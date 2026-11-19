@@ -692,6 +692,7 @@
 								<button
 									type="button"
 									class="pub-tip"
+									class:deleted={Boolean(refMeta?.deleted)}
 									aria-label={refMeta ? `${refMeta.kind}: ${refMeta.title}` : t('chat.open')}
 									onclick={() => openChatRef(block.messages[0])}
 								>
@@ -1127,6 +1128,18 @@
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
+	}
+
+	.pub-tip.deleted .pub-kind,
+	.pub-tip.deleted .pub-title {
+		color: var(--fg-33);
+		font-style: italic;
+		font-weight: 500;
+	}
+
+	.pub-tip.deleted .pub-box,
+	.pub-tip.deleted .pub-glyph {
+		opacity: 0.45;
 	}
 
 	.pub-tip:hover,
