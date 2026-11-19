@@ -2,7 +2,7 @@
 	/**
 	 * Chat notifications — Notes-density rows in the detail column.
 	 * Body chrome is zeroed; only card-stack gutters + top clear for detail-top.
-	 * PFP matches ChromeMobileBar 44px glass hits; left edge aligns with back inset.
+	 * PFP 36px; badge sits further right with less overlap than the old 44px stack.
 	 */
 	import At from './icons/At.svelte';
 	import Reply from './icons/Reply.svelte';
@@ -10,7 +10,12 @@
 	import TaskBox from './TaskBox.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
-	import { activityForMe, markActivitySeen } from '$lib/chat-activity.svelte.js';
+	import {
+		activityForMe,
+		groupActivityByTime,
+		markActivitySeen,
+		readActivitySeenAt
+	} from '$lib/chat-activity.svelte.js';
 	import { openChatRef } from '$lib/chat.svelte.js';
 	import { profileNameCss } from '$lib/color.js';
 	import { t } from '$lib/i18n.svelte.js';
@@ -25,6 +30,9 @@
 	 * }}
 	 */
 	let { filter = 'all', embedded = false } = $props();
+
+	/** Seen watermark when the feed opened — unread chrome stays for this visit. */
+	let seenAtOpen = $state(readActivitySeenAt());
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -41,7 +49,10 @@
 		return all.filter((i) => i.kind === filter);
 	});
 
+	const groups = $derived(groupActivityByTime(items));
+
 	onMount(() => {
+		seenAtOpen = readActivitySeenAt();
 		markActivitySeen();
 	});
 
@@ -79,6 +90,19 @@
 		if (item.kind === 'assigned') return item.preview;
 		return item.targetPreview || item.preview || '';
 	}
+
+	/** @param {import('$lib/chat-activity.svelte.js').ChatActivityItem} item */
+	function isUnread(item) {
+		return item.at > seenAtOpen;
+	}
+
+	/** @param {'today' | 'week' | 'month' | 'earlier'} key */
+	function groupLabel(key) {
+		if (key === 'today') return t('chat.activityGroupToday');
+		if (key === 'week') return t('chat.activityGroupThisWeek');
+		if (key === 'month') return t('chat.activityGroupThisMonth');
+		return t('chat.activityGroupEarlier');
+	}
 </script>
 
 <!-- class "feed" so detail-top chrome scroll fade can find this scroller -->
@@ -86,49 +110,67 @@
 	{#if items.length === 0}
 		<p class="empty">{t('chat.activityEmpty')}</p>
 	{:else}
-		<div class="card-stack">
-			{#each items as item (item.id)}
-				{@const who = person(item)}
-				<button type="button" class="row" onclick={() => openItem(item)}>
-					<span class="pfp" aria-hidden="true">
-						<ProfilePic
-							name={who.name}
-							email={who.email}
-							pictureUrl={pictureUrlFor(who.email)}
-							size={44}
-						/>
-						{#if item.kind === 'assigned'}
-							<span class="task-mark">
-								<TaskBox state={item.taskStatus || 'open'} size={18} />
-							</span>
-						{:else}
-							<span class="badge" class:emoji-badge={item.kind === 'reaction'}>
-								{#if item.kind === 'reaction'}
-									<span class="emoji">{item.emoji || '❤️'}</span>
-								{:else if item.kind === 'mention'}
-									<At size={14} />
-								{:else}
-									<Reply size={14} />
+		{#each groups as group (group.key)}
+			<div class="task-group-header">
+				<span class="eyebrow-label-xs">{groupLabel(group.key)}</span>
+			</div>
+			<div class="card-stack">
+				{#each group.items as item (item.id)}
+					{@const who = person(item)}
+					{@const unread = isUnread(item)}
+					<button
+						type="button"
+						class="row"
+						class:read={!unread}
+						onclick={() => openItem(item)}
+					>
+						<span class="pfp" aria-hidden="true">
+							<ProfilePic
+								name={who.name}
+								email={who.email}
+								pictureUrl={pictureUrlFor(who.email)}
+								size={36}
+							/>
+							{#if item.kind === 'assigned'}
+								<span class="task-mark">
+									<TaskBox state={item.taskStatus || 'open'} size={18} />
+								</span>
+							{:else}
+								<span class="badge" class:emoji-badge={item.kind === 'reaction'}>
+									{#if item.kind === 'reaction'}
+										<span class="emoji">{item.emoji || '❤️'}</span>
+									{:else if item.kind === 'mention'}
+										<At size={12} />
+									{:else}
+										<Reply size={12} />
+									{/if}
+								</span>
+							{/if}
+						</span>
+						<span class="copy">
+							<span class="line1">
+								<span class="line1-text">
+									<span
+										class="who"
+										style:color={unread
+											? profileNameCss(who.email, who.name, isDark)
+											: undefined}
+										>{who.name}</span
+									>
+									<span class="verb">{verb(item)}</span>
+								</span>
+								{#if unread}
+									<span class="unread-dot" aria-label={t('mail.unread')}></span>
 								{/if}
 							</span>
-						{/if}
-					</span>
-					<span class="copy">
-						<span class="line1">
-							<span
-								class="who"
-								style:color={profileNameCss(who.email, who.name, isDark)}
-								>{who.name}</span
-							>
-							<span class="verb">{verb(item)}</span>
+							<span class="line2">
+								<span class="preview">{preview(item)}</span>
+							</span>
 						</span>
-						<span class="line2">
-							<span class="preview">{preview(item)}</span>
-						</span>
-					</span>
-				</button>
-			{/each}
-		</div>
+					</button>
+				{/each}
+			</div>
+		{/each}
 	{/if}
 </div>
 
@@ -160,9 +202,17 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 6px 0;
+		padding: 4px 0 10px;
 		box-sizing: border-box;
 		width: 100%;
+	}
+
+	.eyebrow-label-xs {
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--fg-66);
 	}
 
 	.row {
@@ -182,25 +232,25 @@
 		box-sizing: border-box;
 	}
 
-	.row:hover {
-		background: var(--fg-4);
-	}
-
 	.pfp {
 		position: relative;
 		flex-shrink: 0;
-		width: 44px;
-		height: 44px;
+		width: 36px;
+		height: 36px;
 		line-height: 0;
 	}
 
-	/* Before: 20×20 solid shell disc. After: 26×26 frosted glass. */
+	.row.read .pfp {
+		opacity: 0.66;
+	}
+
+	/* 28×28 glass disc, shifted further right than the old −3px overlap. */
 	.badge {
 		position: absolute;
-		right: -3px;
-		bottom: -3px;
-		width: 26px;
-		height: 26px;
+		right: -8px;
+		bottom: -4px;
+		width: 28px;
+		height: 28px;
 		display: grid;
 		place-items: center;
 		border-radius: 9999px;
@@ -227,7 +277,7 @@
 	/* Assigned keeps bare TaskBox — no glass badge circle */
 	.task-mark {
 		position: absolute;
-		right: -3px;
+		right: -6px;
 		bottom: -3px;
 		line-height: 0;
 		pointer-events: none;
@@ -238,19 +288,27 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
+		gap: 5px;
 		justify-content: center;
 	}
 
 	.line1 {
 		display: flex;
-		align-items: baseline;
-		gap: 5px;
+		align-items: center;
+		gap: 8px;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 14px;
 		font-weight: 600;
 		line-height: 1.2;
+	}
+
+	.line1-text {
+		display: flex;
+		align-items: baseline;
+		gap: 5px;
+		min-width: 0;
+		flex: 1;
 		overflow: hidden;
 		white-space: nowrap;
 	}
@@ -262,10 +320,23 @@
 		min-width: 0;
 	}
 
+	.row.read .who {
+		color: var(--fg-66);
+	}
+
 	.verb {
 		flex-shrink: 0;
 		font-weight: 500;
 		color: var(--fg-33);
+	}
+
+	.unread-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 999px;
+		background: var(--fg);
+		flex-shrink: 0;
+		margin-left: auto;
 	}
 
 	.line2 {

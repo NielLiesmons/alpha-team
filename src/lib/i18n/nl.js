@@ -380,6 +380,10 @@ export default {
 	'chat.activityFilterReplies': 'Antwoorden',
 	'chat.activityFilterAssigned': 'Toegewezen',
 	'chat.activityPushPrefs': 'Meldingsinstellingen',
+	'chat.activityGroupToday': 'VANDAAG',
+	'chat.activityGroupThisWeek': 'DEZE WEEK',
+	'chat.activityGroupThisMonth': 'DEZE MAAND',
+	'chat.activityGroupEarlier': 'EERDER',
 
 	/* ── tasks ────────────────────────────────────────── */
 	'tasks.title': 'Taken',

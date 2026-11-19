@@ -380,6 +380,10 @@ export default {
 	'chat.activityFilterReplies': 'Respuestas',
 	'chat.activityFilterAssigned': 'Asignadas',
 	'chat.activityPushPrefs': 'Ajustes de notificaciones',
+	'chat.activityGroupToday': 'HOY',
+	'chat.activityGroupThisWeek': 'ESTA SEMANA',
+	'chat.activityGroupThisMonth': 'ESTE MES',
+	'chat.activityGroupEarlier': 'ANTERIORES',
 
 	/* ── tasks ────────────────────────────────────────── */
 	'tasks.title': 'Tareas',

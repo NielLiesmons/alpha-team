@@ -206,6 +206,69 @@ export function activityForMe() {
 	return items.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
 }
 
+/**
+ * Calendar-relative bucket for an activity timestamp.
+ * Buckets are mutually exclusive: today → rest of this week → rest of this month → earlier.
+ * @param {number} at
+ * @param {number} [now]
+ * @returns {'today' | 'week' | 'month' | 'earlier'}
+ */
+export function activityTimeBucket(at, now = Date.now()) {
+	const t = Number(at) || 0;
+	const dayStart = startOfLocalDay(now);
+	if (t >= dayStart) return 'today';
+	const weekStart = startOfLocalWeek(now);
+	if (t >= weekStart) return 'week';
+	const monthStart = startOfLocalMonth(now);
+	if (t >= monthStart) return 'month';
+	return 'earlier';
+}
+
+/**
+ * Group newest-first activity into TODAY / THIS WEEK / THIS MONTH / EARLIER sections.
+ * Empty buckets are omitted.
+ * @param {ChatActivityItem[]} items
+ * @param {number} [now]
+ * @returns {{ key: 'today' | 'week' | 'month' | 'earlier', items: ChatActivityItem[] }[]}
+ */
+export function groupActivityByTime(items, now = Date.now()) {
+	/** @type {Record<'today' | 'week' | 'month' | 'earlier', ChatActivityItem[]>} */
+	const buckets = { today: [], week: [], month: [], earlier: [] };
+	for (const item of items) {
+		buckets[activityTimeBucket(item.at, now)].push(item);
+	}
+	/** @type {('today' | 'week' | 'month' | 'earlier')[]} */
+	const order = ['today', 'week', 'month', 'earlier'];
+	return order
+		.filter((key) => buckets[key].length > 0)
+		.map((key) => ({ key, items: buckets[key] }));
+}
+
+/** @param {number} ms */
+function startOfLocalDay(ms) {
+	const d = new Date(ms);
+	d.setHours(0, 0, 0, 0);
+	return d.getTime();
+}
+
+/** Monday-start local week. @param {number} ms */
+function startOfLocalWeek(ms) {
+	const d = new Date(ms);
+	d.setHours(0, 0, 0, 0);
+	const day = d.getDay(); /* 0 = Sun */
+	const diff = day === 0 ? 6 : day - 1;
+	d.setDate(d.getDate() - diff);
+	return d.getTime();
+}
+
+/** @param {number} ms */
+function startOfLocalMonth(ms) {
+	const d = new Date(ms);
+	d.setDate(1);
+	d.setHours(0, 0, 0, 0);
+	return d.getTime();
+}
+
 /** Unread badge count (activity newer than last open). */
 export function activityUnreadCount() {
 	const seen = readActivitySeenAt();
