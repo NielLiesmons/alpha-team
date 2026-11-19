@@ -82,12 +82,16 @@
 		if (item.kind === 'assigned') return t('chat.activityAssigned');
 		if (item.kind === 'reaction') return t('chat.activityReaction');
 		if (item.kind === 'mention') return t('chat.activityMention');
-		return t('chat.activityReply');
+		const parent = String(item.targetPreview || '').trim();
+		if (parent) return t('chat.activityReply', { preview: parent });
+		return t('chat.activityReplyBare');
 	}
 
 	/** @param {import('$lib/chat-activity.svelte.js').ChatActivityItem} item */
 	function preview(item) {
 		if (item.kind === 'assigned') return item.preview;
+		/* Replies: line2 is the reply body; parent preview lives in the verb. */
+		if (item.kind === 'reply') return item.preview || '';
 		return item.targetPreview || item.preview || '';
 	}
 
@@ -330,7 +334,10 @@
 	}
 
 	.verb {
-		flex-shrink: 0;
+		flex-shrink: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		font-weight: 500;
 		color: var(--fg-33);
 	}

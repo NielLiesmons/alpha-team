@@ -150,14 +150,16 @@ export function activityForMe() {
 			const plain = clip(m.body || '', 96) || 'Reply';
 			const isReplyToMe = Boolean(replyTo && myMsgIds.has(replyTo));
 			if (isReplyToMe) {
+				const parent = byId.get(replyTo);
 				items.push({
 					id: `reply:${m.id}`,
 					kind: 'reply',
 					at,
 					author,
 					preview: plain,
-					targetPreview: plain,
-					ref: m.ref ?? byId.get(replyTo)?.ref ?? null,
+					/* Parent/target body for “replied to "…"” — not the reply itself. */
+					targetPreview: clip(parent?.body || '', 48),
+					ref: m.ref ?? parent?.ref ?? null,
 					messageId: String(m.id)
 				});
 				continue;
