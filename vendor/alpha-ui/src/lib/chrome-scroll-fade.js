@@ -1,6 +1,6 @@
 /**
  * Drive --chrome-scroll-fade (0→1 over the first `fadePx` of scroll) on a column root.
- * Finds the nested feed/body scroller (same selectors as PullToRefresh).
+ * Prefers nested `.feed` / `.fill` / `.ptr-scroll` over wrapping `.body` (often overflow:hidden).
  *
  * @param {ParentNode | null | undefined} root
  * @param {(v: number) => void} setFade
@@ -16,23 +16,40 @@ export function attachChromeScrollFade(root, setFade, fadePx = 16) {
 	/** @type {HTMLElement | null} */
 	let scroller = null;
 
+	/** @param {Element} node */
+	function isScrollableY(node) {
+		const style = getComputedStyle(node);
+		const oy = style.overflowY;
+		return oy === 'auto' || oy === 'scroll' || oy === 'overlay';
+	}
+
 	/** @param {ParentNode | null | undefined} el */
 	function findScroller(el) {
 		if (!el || !(el instanceof Element)) return null;
-		const candidates = el.querySelectorAll('.feed, .fill, .body, .ptr-scroll');
-		for (const node of candidates) {
-			const style = getComputedStyle(node);
-			const oy = style.overflowY;
-			if (
-				(oy === 'auto' || oy === 'scroll' || oy === 'overlay') &&
-				node.scrollHeight > node.clientHeight + 1
-			) {
+
+		/* Prefer real feed scrollports — never bind a non-scrolling .body wrapper first. */
+		const preferred = el.querySelectorAll('.feed, .fill, .ptr-scroll');
+		for (const node of preferred) {
+			if (isScrollableY(node) && node.scrollHeight > node.clientHeight + 1) {
 				return /** @type {HTMLElement} */ (node);
 			}
 		}
-		for (const node of candidates) {
-			return /** @type {HTMLElement} */ (node);
+		for (const node of preferred) {
+			if (isScrollableY(node)) return /** @type {HTMLElement} */ (node);
 		}
+
+		const bodies = el.querySelectorAll('.body');
+		for (const node of bodies) {
+			if (isScrollableY(node) && node.scrollHeight > node.clientHeight + 1) {
+				return /** @type {HTMLElement} */ (node);
+			}
+		}
+		for (const node of bodies) {
+			if (isScrollableY(node)) return /** @type {HTMLElement} */ (node);
+		}
+
+		if (preferred[0]) return /** @type {HTMLElement} */ (preferred[0]);
+		if (bodies[0]) return /** @type {HTMLElement} */ (bodies[0]);
 		return null;
 	}
 

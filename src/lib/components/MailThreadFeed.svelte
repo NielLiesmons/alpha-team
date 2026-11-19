@@ -352,6 +352,7 @@
 			</button>
 		</div>
 	</div>
+	<div class="mail-top-fade" aria-hidden="true"></div>
 	<div class="mail-bottom-fade" aria-hidden="true"></div>
 </div>
 
@@ -409,9 +410,26 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		display: block;
-		/* Scroll under detail-top fade; side/bottom clear owned here (like chat channel) */
+		/* Clear detail-top control row; content scrolls under the fade zone */
 		padding: 56px 24px calc(28px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
+	}
+
+	/* Always-on top veil — same language as bottom fade / detail-top zone */
+	.mail-top-fade {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 0;
+		z-index: 2;
+		height: 72px;
+		pointer-events: none;
+		background: linear-gradient(
+			to bottom,
+			var(--bg) 0%,
+			color-mix(in srgb, var(--bg) 80%, transparent) 50%,
+			transparent 100%
+		);
 	}
 
 	.mail-bottom-fade {
@@ -433,8 +451,19 @@
 
 	@media (max-width: 767px) {
 		.mail-feed {
-			padding: calc(56px + env(safe-area-inset-top, 0px)) 14px
+			/* Match chat channel: clear ChromeMobileBar (88px + safe) */
+			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
 				calc(28px + env(safe-area-inset-bottom, 0px));
+		}
+
+		.mail-top-fade {
+			height: calc(88px + env(safe-area-inset-top, 0px));
+			background: linear-gradient(
+				to bottom,
+				var(--shell, var(--bg)) 0%,
+				color-mix(in srgb, var(--shell, var(--bg)) 80%, transparent) 50%,
+				transparent 100%
+			);
 		}
 
 		.mail-bottom-fade {

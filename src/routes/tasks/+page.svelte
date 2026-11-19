@@ -154,8 +154,8 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		margin: 0 10px 0 16px;
-		padding: 6px 10px 6px 13px;
+		margin: 0 10px;
+		padding: 6px 10px;
 		border: 0;
 		border-radius: 10px;
 		background: var(--fg-4);

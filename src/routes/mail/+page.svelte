@@ -412,9 +412,9 @@
 		min-height: 0;
 	}
 
-	/* Inbox triage only — stroked SegmentedControl; light top inset (not 10px). */
+	/* Inbox triage only — stroked SegmentedControl; sit 2px under list chrome. */
 	.category-seg {
-		margin: 4px 10px 10px;
+		margin: 2px 10px 10px;
 	}
 
 	.banner {

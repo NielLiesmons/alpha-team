@@ -561,9 +561,9 @@ h2 {
 	align-items: center;
 	gap: 10px;
 	width: auto;
-	/* Match UiShell .list-top gutters: 16/10 desktop, 14/14 mobile. */
-	margin: 0 10px 0 16px;
-	padding: 6px 10px 6px 13px;
+	/* Equal L/R inset — same as card-stack outer gutter (+ header’s own pad). */
+	margin: 0 10px;
+	padding: 6px 10px;
 	border: 0;
 	border-radius: 10px;
 	background: var(--fg-4);
