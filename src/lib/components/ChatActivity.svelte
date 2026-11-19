@@ -141,13 +141,15 @@
 								</span>
 							{:else}
 								<span class="badge" class:emoji-badge={item.kind === 'reaction'}>
-									{#if item.kind === 'reaction'}
-										<span class="emoji">{item.emoji || '❤️'}</span>
-									{:else if item.kind === 'mention'}
-										<At size={16} />
-									{:else}
-										<Reply size={12} />
-									{/if}
+									<span class="badge-glyph">
+										{#if item.kind === 'reaction'}
+											<span class="emoji">{item.emoji || '❤️'}</span>
+										{:else if item.kind === 'mention'}
+											<At size={16} />
+										{:else}
+											<Reply size={12} />
+										{/if}
+									</span>
 								</span>
 							{/if}
 						</span>
@@ -273,6 +275,18 @@
 
 	.badge.emoji-badge {
 		color: inherit;
+	}
+
+	.badge-glyph {
+		display: grid;
+		place-items: center;
+		line-height: 0;
+	}
+
+	/* Mute glyph only — glass .badge background stays full opacity. */
+	.row.read .badge-glyph,
+	.row.read .task-mark {
+		opacity: 0.66;
 	}
 
 	.emoji {
