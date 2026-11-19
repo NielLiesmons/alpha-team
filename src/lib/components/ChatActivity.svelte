@@ -244,7 +244,7 @@
 		opacity: 0.66;
 	}
 
-	/* 28×28 glass-shine disc — opaque --bg fill so the PFP never shows through. */
+	/* 28×28 chrome glass disc — same pattern as ChromeMobileBar / icon-hit. */
 	.badge {
 		position: absolute;
 		right: -14px;
@@ -257,8 +257,10 @@
 		box-sizing: border-box;
 		border: 1px solid transparent;
 		background:
-			linear-gradient(var(--bg), var(--bg)) padding-box,
+			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 		color: var(--fg-66);
 		line-height: 0;
 		pointer-events: none;

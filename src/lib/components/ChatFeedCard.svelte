@@ -89,6 +89,8 @@
 		const author = String(msg.author || '').trim().toLowerCase();
 		return Boolean(me && author && me === author);
 	});
+	/** Threaded layout (smaller left avatar) is incoming-only — never flip outgoing. */
+	const useThreaded = $derived(Boolean(threaded) && !isMine);
 	const reactions = $derived(reactionsForMessage(msg.id));
 	/** sending = not on Drive yet (no check); sent = single ✓; read = double ✓✓ (other account). */
 	const delivery = $derived.by(() => {
@@ -264,7 +266,7 @@
 <article
 	class="card desktop-bubble-actions-target"
 	class:mine={isMine}
-	class:threaded
+	class:threaded={useThreaded}
 	class:failed={msg._failed}
 	class:deleted={isDeleted}
 	class:stack-first={stackFirst}
@@ -273,14 +275,14 @@
 	data-chat-bubble={msg.id}
 	use:swipeLeftReply={{ onReply: isDeleted ? () => {} : handleReply }}
 >
-	{#if threaded || !isMine}
-		<div class="avatar-wrap" class:hidden-slot={!stackLast} class:threaded>
+	{#if !isMine}
+		<div class="avatar-wrap" class:hidden-slot={!stackLast} class:threaded={useThreaded}>
 			{#if stackLast}
 				<ProfilePic
 					name={name}
 					email={msg.author}
 					pictureUrl={pictureUrlFor(msg.author)}
-					size={threaded ? 22 : 34}
+					size={useThreaded ? 26 : 34}
 				/>
 			{/if}
 		</div>
@@ -646,9 +648,9 @@
 		align-self: flex-end;
 	}
 
-	/* Match tip-row icon square (TIP_ICON = 22) inside publication panels. */
+	/* Publication-panel comments: 26px incoming avatar (tip icons stay 22). */
 	.avatar-wrap.threaded {
-		width: 22px;
+		width: 26px;
 	}
 
 	.avatar-wrap.hidden-slot {
@@ -664,7 +666,7 @@
 	}
 
 	.card.threaded .bubble-trailing {
-		max-width: calc(100% - 30px);
+		max-width: calc(100% - 32px);
 	}
 
 	.card.mine:not(.threaded) .bubble-trailing {

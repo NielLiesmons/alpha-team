@@ -1224,8 +1224,8 @@
 
 	.view-more-row:not(.mine) {
 		justify-content: flex-start;
-		/* Align with bubble start, not pfp: avatar 34 + card gap 6. */
-		padding-left: 40px;
+		/* 6px left of prior 40px — tracks incoming bubble start with 26px avatar. */
+		padding-left: 34px;
 	}
 
 	.view-more-pill {
