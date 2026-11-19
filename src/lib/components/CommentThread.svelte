@@ -865,12 +865,13 @@
 		right: 0;
 		top: 0;
 		z-index: 5;
-		height: 44px;
+		/* 10 + 28btn + 10 — top pad matches horizontal pad of the button row. */
+		height: 48px;
 		display: grid;
 		grid-template-columns: 28px 1fr 28px;
 		align-items: center;
 		gap: 8px;
-		padding: 6px 10px;
+		padding: 10px;
 		box-sizing: border-box;
 		pointer-events: none;
 		background: linear-gradient(
@@ -933,7 +934,7 @@
 		min-height: 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
-		padding: 44px 10px calc(72px + env(safe-area-inset-bottom, 0px));
+		padding: 48px 10px calc(72px + env(safe-area-inset-bottom, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -1200,9 +1201,14 @@
 		}
 
 		.sheet-top {
-			height: 56px;
+			/* 12 + 44btn + 12 — top pad matches horizontal pad on mobile. */
+			height: 68px;
 			grid-template-columns: 44px 1fr 44px;
-			padding: 6px 12px;
+			padding: 12px;
+		}
+
+		.list {
+			padding-top: 68px;
 		}
 
 		.composer-dock {
