@@ -2084,32 +2084,30 @@ async function orderFeedIdsNewestFirst(session, dir, ids, createdAtById = {}) {
 		.map(String)
 		.filter((x, i, arr) => x && arr.indexOf(x) === i);
 	if (!unique.length) return [];
-	const { getCachedLeaf, putCachedLeaf } = await import('./leaf-cache.js');
-	const scored = await Promise.all(
-		unique.map(async (id, index) => {
-			let at = createdAtById[id] ? String(createdAtById[id]) : '';
-			if (!at && dir) {
-				const path = `chat/messages/${id}.json`;
-				const child = dir?.children?.[path];
-				const hash = child?.hash ? String(child.hash) : '';
-				if (hash) {
-					const hit = await getCachedLeaf(hash);
-					if (hit?.created_at) at = String(hit.created_at);
-				}
-				if (!at && child) {
-					try {
-						const { bytes } = await getPathFromDir(session, dir, path);
-						const doc = JSON.parse(new TextDecoder().decode(bytes));
-						at = String(doc?.created_at || '');
-						if (hash && doc) void putCachedLeaf(hash, doc);
-					} catch {
-						/* missing leaf — keep input order via index */
-					}
+	const { getCachedLeaf, mapPool, putCachedLeaf } = await import('./leaf-cache.js');
+	const scored = await mapPool(unique, 6, async (id, index) => {
+		let at = createdAtById[id] ? String(createdAtById[id]) : '';
+		if (!at && dir) {
+			const path = `chat/messages/${id}.json`;
+			const child = dir?.children?.[path];
+			const hash = child?.hash ? String(child.hash) : '';
+			if (hash) {
+				const hit = await getCachedLeaf(hash);
+				if (hit?.created_at) at = String(hit.created_at);
+			}
+			if (!at && child) {
+				try {
+					const { bytes } = await getPathFromDir(session, dir, path);
+					const doc = JSON.parse(new TextDecoder().decode(bytes));
+					at = String(doc?.created_at || '');
+					if (hash && doc) void putCachedLeaf(hash, doc);
+				} catch {
+					/* missing leaf — keep input order via index */
 				}
 			}
-			return { id, at, index };
-		})
-	);
+		}
+		return { id, at, index };
+	});
 	scored.sort((a, b) => {
 		/* Both dated → durable total order. Otherwise keep merge/input order. */
 		if (a.at && b.at) {
@@ -2217,9 +2215,11 @@ export async function listFeedIds(session) {
 /**
  * Load feed messages with leaf-cache + one tip/dir load (same pattern as listTracks).
  * Optional onPartial paints cache hits / early batches before misses finish.
+ * Pass seedRows to reuse in-memory messages and only network-fetch new ids —
+ * avoids connection-pool stampedes that starve tip PUT/GET.
  * @param {import('./client.js').DriveSession} session
  * @param {number} [limit]
- * @param {{ onPartial?: (rows: any[]) => void }} [opts]
+ * @param {{ onPartial?: (rows: any[]) => void, seedRows?: any[] }} [opts]
  */
 export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	const { tip, dir } = await loadRootDirWithTip(session);
@@ -2228,6 +2228,13 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	if (!ids.length) return [];
 
 	const { getCachedLeaf, mapPool, putCachedLeaf } = await import('./leaf-cache.js');
+	/** @type {Map<string, any>} */
+	const seedById = new Map();
+	for (const row of Array.isArray(opts.seedRows) ? opts.seedRows : []) {
+		const id = String(row?.id || '');
+		if (!id || id.startsWith('local-') || row?._pending || row?._failed) continue;
+		seedById.set(id, row);
+	}
 	/** @type {{ id: string, path: string, hash: string | null }[]} */
 	const entries = ids.map((id) => {
 		const path = `chat/messages/${id}.json`;
@@ -2238,10 +2245,17 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	/** @type {(any | null)[]} */
 	const slots = new Array(entries.length).fill(null);
 
-	await mapPool(entries, 48, async (entry, i) => {
-		if (!entry.hash) return;
-		const hit = await getCachedLeaf(entry.hash);
-		if (hit) slots[i] = hit;
+	/* IndexedDB first (cheap), then seed rows — network only for true misses. */
+	await mapPool(entries, 16, async (entry, i) => {
+		if (entry.hash) {
+			const hit = await getCachedLeaf(entry.hash);
+			if (hit) {
+				slots[i] = hit;
+				return;
+			}
+		}
+		const seed = seedById.get(entry.id);
+		if (seed) slots[i] = seed;
 	});
 
 	const partial = () => {
@@ -2259,7 +2273,8 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	}
 
 	let lastPartialCount = slots.filter(Boolean).length;
-	await mapPool(missIdx, 32, async (i) => {
+	/* Keep well under browser per-host connection limits so tip I/O stays responsive. */
+	await mapPool(missIdx, 6, async (i) => {
 		const entry = entries[i];
 		try {
 			const { bytes } = await getPathFromDir(session, dir, entry.path);

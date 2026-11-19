@@ -23,11 +23,23 @@ import {
 /** @type {{ key: string, tip: string, dir: any } | null} */
 let rootDirCache = null;
 
+/** Coalesce concurrent GET /v1/tip — browsers only allow ~6 connections/host. */
+/** @type {Map<string, Promise<string>>} */
+const tipInflight = new Map();
+
 /**
  * @param {DriveSession} session
  */
 function sessionCacheKey(session) {
 	return `${session.url}\0${session.rootKey}`;
+}
+
+/**
+ * Tip-inflight key (token distinguishes Spaces sharing a URL).
+ * @param {DriveSession} session
+ */
+function tipCacheKey(session) {
+	return `${session.url}|${String(session.token || '').slice(0, 16)}`;
 }
 
 function rootDirIdbKey(session) {
@@ -104,17 +116,32 @@ async function api(session, method, path, body, contentType, signal) {
  * @returns {Promise<string>} tip hash, or '' when the Drive has never been initialized
  */
 export async function getTip(session, signal) {
+	const key = tipCacheKey(session);
+	/* Abortable callers skip the shared promise (they own the lifetime). */
+	if (!signal) {
+		const pending = tipInflight.get(key);
+		if (pending) return pending;
+	}
 	const headers = { Authorization: `Bearer ${session.token}` };
-	const res = await fetch(`${session.url.replace(/\/$/, '')}/v1/tip`, {
-		method: 'GET',
-		headers,
-		signal
-	});
-	/* Empty Drive — no tip yet (genesis). */
-	if (res.status === 404) return '';
-	if (!res.ok) throw new Error(`GET /v1/tip: ${res.status}`);
-	const body = await res.json();
-	return body.root_hash ?? '';
+	const work = (async () => {
+		const res = await fetch(`${session.url.replace(/\/$/, '')}/v1/tip`, {
+			method: 'GET',
+			headers,
+			signal
+		});
+		/* Empty Drive — no tip yet (genesis). */
+		if (res.status === 404) return '';
+		if (!res.ok) throw new Error(`GET /v1/tip: ${res.status}`);
+		const body = await res.json();
+		return body.root_hash ?? '';
+	})();
+	if (!signal) {
+		tipInflight.set(key, work);
+		void work.finally(() => {
+			if (tipInflight.get(key) === work) tipInflight.delete(key);
+		});
+	}
+	return work;
 }
 
 /**

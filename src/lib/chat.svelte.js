@@ -319,6 +319,8 @@ export async function refreshChatFeed() {
 		};
 
 		const list = await listFeedMessages(session, CHAT_FEED_LIMIT, {
+			/* Reuse warm rows so tip wakes only download new leaves (keeps tip I/O free). */
+			seedRows: prev,
 			onPartial: (partial) => {
 				/* Leaf-cache hits / early batches — drop skeleton before network misses finish. */
 				if (partial?.length) apply(partial);
@@ -855,6 +857,26 @@ export async function postChatMessage(input) {
 		chatUi.posting = true;
 		/** @type {string | null} */
 		let serverId = null;
+		/** Tip congestion used to leave bubbles “sending” forever — surface retry. */
+		const SEND_WATCHDOG_MS = 45_000;
+		let settled = false;
+		const watchdog = setTimeout(() => {
+			if (settled) return;
+			const idx = findSendIndex(serverId);
+			if (idx < 0) return;
+			const prevRow = chatFeed[idx];
+			if (prevRow?.delivery === 'sent' || prevRow?._failed) return;
+			chatFeed[idx] = {
+				...prevRow,
+				_pending: false,
+				_failed: true,
+				delivery: 'failed',
+				_local: true,
+				_localId: localId,
+				_outbox: prevRow._outbox || outbox
+			};
+			writeChatCache(chatFeed);
+		}, SEND_WATCHDOG_MS);
 		try {
 			/** @type {any[]} */
 			let attachments = Array.isArray(input.attachments) ? input.attachments : [];
@@ -1023,6 +1045,7 @@ export async function postChatMessage(input) {
 			);
 
 			settleFrom(created);
+			settled = true;
 
 			/* Wake other devices (Home Screen PWA push). Never block the send UX. */
 			if (!isReaction && kind !== 'reaction') {
@@ -1037,6 +1060,7 @@ export async function postChatMessage(input) {
 				}).catch((e) => console.warn('chat push', e));
 			}
 		} catch (e) {
+			settled = true;
 			const idx = findSendIndex(serverId);
 			if (idx >= 0) {
 				const prev = chatFeed[idx];
@@ -1052,6 +1076,7 @@ export async function postChatMessage(input) {
 			}
 			writeChatCache(chatFeed);
 		} finally {
+			clearTimeout(watchdog);
 			chatUi.posting = false;
 			/* Tip wakes that arrived mid-send were queued — drain now so peers/self refresh. */
 			void import('./chat-sync.svelte.js').then(({ flushChatWake }) => flushChatWake());

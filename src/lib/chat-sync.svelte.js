@@ -8,8 +8,7 @@ import { refreshChatFeed, chatUi, markIncomingMessagesRead } from './chat.svelte
 import { getTip } from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
 
-const POLL_MS = 1200;
-const STALE_CHAT_MS = 10_000;
+const POLL_MS = 1500;
 
 let pollTimer = /** @type {ReturnType<typeof setInterval> | null} */ (null);
 let lastTip = '';
@@ -35,8 +34,12 @@ export async function pullChatIfNeeded(force = false) {
 			tip = '';
 		}
 		const tipChanged = Boolean(tip && tip !== lastTip);
-		const stale = now - lastChatPull > STALE_CHAT_MS;
-		if (force || tipChanged || lastChatPull === 0 || (stale && chatUi.activeChannelId)) {
+		/*
+		 * Only reload the feed when tip moved (or first/forced pull).
+		 * A tip-unchanged “stale” full refresh stampeded /v1/blocks, starved tip
+		 * PUT/GET, and made peer delivery take minutes.
+		 */
+		if (force || tipChanged || lastChatPull === 0) {
 			if (tip) lastTip = tip;
 			await refreshChatFeed();
 			lastChatPull = Date.now();
@@ -130,6 +133,7 @@ export function startChatTipPoll() {
 	pollTimer = setInterval(() => {
 		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
 		if (!watching) return;
+		/* Tip poll only — full feed reload happens when tip hash moves. */
 		void pullChatIfNeeded(false);
 	}, POLL_MS);
 }
