@@ -274,9 +274,14 @@
 	use:swipeLeftReply={{ onReply: isDeleted ? () => {} : handleReply }}
 >
 	{#if threaded || !isMine}
-		<div class="avatar-wrap" class:hidden-slot={!stackLast}>
+		<div class="avatar-wrap" class:hidden-slot={!stackLast} class:threaded>
 			{#if stackLast}
-				<ProfilePic name={name} email={msg.author} pictureUrl={pictureUrlFor(msg.author)} size={34} />
+				<ProfilePic
+					name={name}
+					email={msg.author}
+					pictureUrl={pictureUrlFor(msg.author)}
+					size={threaded ? 22 : 34}
+				/>
 			{/if}
 		</div>
 	{/if}
@@ -641,6 +646,11 @@
 		align-self: flex-end;
 	}
 
+	/* Match tip-row icon square (TIP_ICON = 22) inside publication panels. */
+	.avatar-wrap.threaded {
+		width: 22px;
+	}
+
 	.avatar-wrap.hidden-slot {
 		visibility: hidden;
 	}
@@ -651,6 +661,10 @@
 		gap: 8px;
 		min-width: 0;
 		max-width: calc(100% - 40px);
+	}
+
+	.card.threaded .bubble-trailing {
+		max-width: calc(100% - 30px);
 	}
 
 	.card.mine:not(.threaded) .bubble-trailing {

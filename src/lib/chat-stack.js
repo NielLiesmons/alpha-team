@@ -8,6 +8,7 @@ export const CHAT_STACK_GAP_MS = 10 * 60 * 1000;
 
 /**
  * Same key as chatPublicationRefKey — kept local so this util stays import-light.
+ * Must stay in sync with chat.svelte.js `chatPublicationRefKey` (ADR §3c barrier).
  * @param {any} msg
  * @returns {string}
  */
@@ -19,7 +20,13 @@ function stackContextKey(msg) {
 		ref.type !== 'task' &&
 		ref.type !== 'note' &&
 		ref.type !== 'project' &&
-		ref.type !== 'enterprise'
+		ref.type !== 'enterprise' &&
+		ref.type !== 'mail' &&
+		ref.type !== 'sheet' &&
+		ref.type !== 'table' &&
+		ref.type !== 'ai_thread' &&
+		ref.type !== 'git_repo' &&
+		ref.type !== 'file'
 	) {
 		return '';
 	}
