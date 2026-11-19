@@ -2,6 +2,7 @@
 	import FloatPanel from './FloatPanel.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
+	import { setMailPriority } from '$lib/mail.svelte.js';
 	import { ensureMailTask, patchTask } from '$lib/workspace.svelte.js';
 
 	const STATUSES = [
@@ -49,11 +50,13 @@
 	let hitBtn = $state();
 
 	const options = $derived(field === 'status' ? STATUSES : PRIORITIES);
-	const ariaLabel = $derived(field === 'status' ? 'Set task status' : 'Set task priority');
+	const ariaLabel = $derived(field === 'status' ? 'Set task status' : 'Set priority');
 	const valueLabel = $derived(options.find((o) => o.value === value)?.label ?? value);
 	const iconSize = $derived(variant === 'pill' ? 20 : size);
-	const unset = $derived(!taskId && Boolean(mailThread?.id));
-	const boxState = $derived(field === 'status' ? (unset ? 'empty' : value) : value);
+	/** Unset TaskBox only — priority can exist on mail without a task. */
+	const statusUnset = $derived(field === 'status' && !taskId && Boolean(mailThread?.id));
+	const boxState = $derived(field === 'status' ? (statusUnset ? 'empty' : value) : value);
+	const priorityQuiet = $derived(field === 'priority' && !taskId && (value === 'none' || !value));
 
 	/**
 	 * @param {MouseEvent} e
@@ -73,12 +76,19 @@
 		e.preventDefault();
 		open = false;
 		if (next === value && taskId) return;
+		if (next === value && !taskId && field === 'priority') return;
 		saving = true;
 		try {
 			if (taskId) {
 				await patchTask(taskId, field === 'status' ? { status: next } : { priority: next });
 			} else if (mailThread?.id) {
-				await ensureMailTask(mailThread, field === 'status' ? { status: next } : { priority: next });
+				if (field === 'priority') {
+					/* Mail-only urgency — do not promote to a task. */
+					setMailPriority(mailThread.id, next);
+				} else {
+					/* Status / TaskBox is the only promote path. */
+					await ensureMailTask(mailThread, { status: next });
+				}
 			}
 		} catch (err) {
 			alert(err instanceof Error ? err.message : String(err));
@@ -88,7 +98,13 @@
 	}
 </script>
 
-<div class="picker" class:align-right={align === 'right'} class:pill={variant === 'pill'} class:unset>
+<div
+	class="picker"
+	class:align-right={align === 'right'}
+	class:pill={variant === 'pill'}
+	class:status-unset={statusUnset}
+	class:priority-quiet={priorityQuiet}
+>
 	<button
 		bind:this={hitBtn}
 		type="button"
@@ -103,7 +119,7 @@
 		{#if field === 'status'}
 			<TaskBox state={boxState} size={iconSize} />
 		{:else}
-			<PriorityBox priority={unset ? 'none' : value} size={variant === 'pill' ? 18 : size} />
+			<PriorityBox priority={value || 'none'} size={variant === 'pill' ? 18 : size} />
 		{/if}
 		{#if variant === 'pill'}
 			<span class="pill-text">{valueLabel}</span>
@@ -123,7 +139,7 @@
 				<button
 					type="button"
 					class="option"
-					class:active={value === opt.value && !unset}
+					class:active={value === opt.value && !statusUnset}
 					onclick={(e) => pick(e, opt.value)}
 				>
 					{#if field === 'status'}
@@ -189,8 +205,8 @@
 		cursor: wait;
 	}
 
-	.unset :global(.task-box),
-	.unset :global(.priority-box) {
+	/* Empty TaskBox keeps full opacity so stroke/fill contrast reads on mobile. */
+	.priority-quiet :global(.priority-box) {
 		opacity: 0.55;
 	}
 

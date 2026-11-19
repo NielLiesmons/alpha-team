@@ -395,9 +395,30 @@ export function mailThreadContact(thread) {
 
 /**
  * Tip/cache snapshot so Chat can show Mail · subject without the Mail list loaded.
- * @type {Record<string, { subject: string, from: string, from_name: string }>}
+ * Also holds mail-only urgency (`priority`) until the thread is promoted to a task.
+ * @type {Record<string, { subject: string, from: string, from_name: string, priority?: string }>}
  */
 export const mailTipCache = $state({});
+
+const MAIL_PRIORITIES = new Set(['none', 'low', 'medium', 'high', 'urgent']);
+
+/**
+ * @param {unknown} raw
+ * @returns {'none' | 'low' | 'medium' | 'high' | 'urgent' | ''}
+ */
+function normalizeMailPriority(raw) {
+	const p = String(raw || '').trim();
+	return MAIL_PRIORITIES.has(p) ? /** @type {'none' | 'low' | 'medium' | 'high' | 'urgent'} */ (p) : '';
+}
+
+function persistMailTipCache() {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		localStorage.setItem('alpha.mail.tips.v1', JSON.stringify(mailTipCache));
+	} catch {
+		/* ignore */
+	}
+}
 
 /**
  * @param {any} thread
@@ -409,23 +430,79 @@ export function rememberMailTip(thread) {
 	const from = normEmail(thread.from);
 	const from_name = String(thread.from_name || mailAuthorLabel(thread) || '').trim();
 	const prev = mailTipCache[id];
+	const fromThread =
+		thread && Object.prototype.hasOwnProperty.call(thread, '_priority')
+			? normalizeMailPriority(thread._priority) || 'none'
+			: normalizeMailPriority(thread?.priority);
+	const priority =
+		fromThread ||
+		(prev && Object.prototype.hasOwnProperty.call(prev, 'priority')
+			? normalizeMailPriority(prev.priority) || 'none'
+			: '');
 	/* Skip no-op writes — chat feed derived tracks mailTipCache; rewriting loops forever. */
 	if (
 		prev &&
 		prev.subject === subject &&
 		prev.from === from &&
-		prev.from_name === from_name
+		prev.from_name === from_name &&
+		(prev.priority || '') === (priority || '')
 	) {
 		return;
 	}
-	mailTipCache[id] = { subject, from, from_name };
-	if (typeof localStorage !== 'undefined') {
-		try {
-			localStorage.setItem('alpha.mail.tips.v1', JSON.stringify(mailTipCache));
-		} catch {
-			/* ignore */
-		}
+	mailTipCache[id] = priority
+		? { subject, from, from_name, priority }
+		: { subject, from, from_name };
+	/* Keep live row in sync with tip-cached urgency across JMAP refreshes. */
+	if (priority && thread && thread._priority !== priority) thread._priority = priority;
+	persistMailTipCache();
+}
+
+/**
+ * Mail-only urgency (not a task). Reads live `_priority`, then tip cache, then flagged→urgent.
+ * Explicit tip/`_priority` (including `none`) wins over mailbox flagged.
+ * @param {string | null | undefined} threadId
+ * @param {{ _priority?: string, priority?: string, _flagged?: boolean, flagged?: boolean } | null} [thread]
+ */
+export function mailPriorityFor(threadId, thread = null) {
+	const id = String(threadId || thread?.id || '').trim();
+	const live = id ? findMail(id) : null;
+	if (live && Object.prototype.hasOwnProperty.call(live, '_priority')) {
+		return normalizeMailPriority(live._priority) || 'none';
 	}
+	if (thread && Object.prototype.hasOwnProperty.call(thread, '_priority')) {
+		return normalizeMailPriority(thread._priority) || 'none';
+	}
+	const tip = id ? mailTipCache[id] : null;
+	if (tip && Object.prototype.hasOwnProperty.call(tip, 'priority')) {
+		return normalizeMailPriority(tip.priority) || 'none';
+	}
+	const fromArg = normalizeMailPriority(thread?.priority);
+	if (fromArg) return fromArg;
+	if (live?._flagged || thread?._flagged || thread?.flagged) return 'urgent';
+	return 'none';
+}
+
+/**
+ * Persist urgency on a non-task mail thread (tip cache + live row `_priority`).
+ * Does not create or patch a task.
+ * @param {string} threadId
+ * @param {string} priority
+ */
+export function setMailPriority(threadId, priority) {
+	const id = String(threadId || '').trim();
+	const next = normalizeMailPriority(priority) || 'none';
+	if (!id) return;
+	const live = findMail(id);
+	if (live) live._priority = next;
+	const prev = mailTipCache[id];
+	const subject = String(live?.subject || prev?.subject || '').trim() || '(no subject)';
+	const from = normEmail(live?.from || prev?.from);
+	const from_name = String(
+		live?.from_name || prev?.from_name || (live ? mailAuthorLabel(live) : '') || ''
+	).trim();
+	/* Always store priority (incl. none) so explicit clears survive refresh vs flagged. */
+	mailTipCache[id] = { subject, from, from_name, priority: next };
+	persistMailTipCache();
 }
 
 export function hydrateMailTipCache() {
@@ -436,11 +513,22 @@ export function hydrateMailTipCache() {
 		if (!doc || typeof doc !== 'object') return;
 		for (const [id, row] of Object.entries(doc)) {
 			if (!id || !row || typeof row !== 'object') continue;
-			mailTipCache[id] = {
-				subject: String(row.subject || '(no subject)'),
-				from: normEmail(row.from),
-				from_name: String(row.from_name || '').trim()
-			};
+			const hasPriority = Object.prototype.hasOwnProperty.call(row, 'priority');
+			const priority = hasPriority
+				? normalizeMailPriority(/** @type {any} */ (row).priority) || 'none'
+				: '';
+			mailTipCache[id] = priority
+				? {
+						subject: String(row.subject || '(no subject)'),
+						from: normEmail(row.from),
+						from_name: String(row.from_name || '').trim(),
+						priority
+					}
+				: {
+						subject: String(row.subject || '(no subject)'),
+						from: normEmail(row.from),
+						from_name: String(row.from_name || '').trim()
+					};
 		}
 	} catch {
 		/* ignore */

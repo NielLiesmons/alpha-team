@@ -22,7 +22,9 @@
 		mailAuthorLabel,
 		mailComposeSeed,
 		mailLatestMessage,
+		mailPriorityFor,
 		mailPreview,
+		mailTipCache,
 		preferReplyAll,
 		rememberMailTip,
 		threadMessages
@@ -50,6 +52,11 @@
 	);
 	const linkedTask = $derived(taskByMailThreadId(threadId));
 	const lastMail = $derived(mails[mails.length - 1] || mailMsg);
+	/* Touch tip cache so mail-only priority updates re-render the title chrome. */
+	const mailOnlyPriority = $derived.by(() => {
+		mailTipCache;
+		return mailPriorityFor(threadId, mailMsg);
+	});
 	const mailPromoteSeed = $derived.by(() => {
 		if (!threadId) return null;
 		const latest = mailLatestMessage(mailMsg) || mailMsg;
@@ -62,7 +69,8 @@
 			id: threadId,
 			subject: threadTitle === t('common.noSubject') ? '' : threadTitle,
 			body,
-			flagged: Boolean(mailMsg?._flagged)
+			flagged: Boolean(mailMsg?._flagged),
+			_priority: mailOnlyPriority
 		};
 	});
 	const useReplyAll = $derived(preferReplyAll(lastMail, me));
@@ -216,7 +224,7 @@
 					{:else if mailPromoteSeed}
 						<TaskFieldPicker
 							field="priority"
-							value="none"
+							value={mailOnlyPriority}
 							size={26}
 							align="right"
 							mailThread={mailPromoteSeed}

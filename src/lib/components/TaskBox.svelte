@@ -159,10 +159,23 @@
 		border: var(--task-box-stroke) solid var(--accent-1-66);
 	}
 
-	.state-canceled,
-	.state-empty {
+	.state-canceled {
 		background: var(--white8);
 		border: var(--task-box-stroke) solid transparent;
+	}
+
+	/* Unset mail→task chrome: stronger plate than canceled so it reads on mobile
+	   title bars, without the cross glyph of a real canceled task. */
+	.state-empty {
+		background: var(--fg-8);
+		border: var(--task-box-stroke) solid var(--fg-16);
+	}
+
+	@media (max-width: 767px) {
+		.state-empty {
+			background: var(--fg-8);
+			border: calc(var(--task-box-stroke) + 0.4px) solid var(--fg-16);
+		}
 	}
 
 	.task-box.embedded {

@@ -48,6 +48,7 @@ import { loadPersonCursors } from './person-cursors.svelte.js';
 import { idbGet, idbSet, workspaceCacheKey } from './local-db.js';
 import { popDetailLayer, pushDetailLayer } from './nav-stack.js';
 import { beginSync, endSync, setSyncRatio } from './sync-progress.svelte.js';
+import { mailPriorityFor } from './mail.svelte.js';
 
 /** People available for assignee pickers. Email = account id. */
 export const people = members;
@@ -159,7 +160,8 @@ export function taskByMailThreadId(threadId) {
 
 /**
  * Open TaskCreate for a mail thread — edit existing linked task, or seed a new one.
- * @param {{ id: string, subject?: string, body?: string, flagged?: boolean }} thread
+ * Pass `_priority` / `priority` on the thread when mail-only urgency should seed the draft.
+ * @param {{ id: string, subject?: string, body?: string, flagged?: boolean, _priority?: string, priority?: string }} thread
  */
 export function openMailTaskComposer(thread) {
 	const threadId = String(thread?.id || '').trim();
@@ -170,18 +172,21 @@ export function openMailTaskComposer(thread) {
 		return;
 	}
 	const title = String(thread.subject || '').trim();
+	const seeded =
+		String(thread._priority || thread.priority || '').trim() ||
+		(thread.flagged ? 'urgent' : 'none');
 	openComposer('task', undefined, 'open', {
 		title: title || undefined,
 		body: String(thread.body || '').trim() || undefined,
 		mail_thread_id: threadId,
-		priority: thread.flagged ? 'urgent' : 'none'
+		priority: seeded
 	});
 }
 
 /**
  * Promote a mail thread into its linked task (or patch the existing one) without
- * opening TaskCreate. Keeps the current selection so the mail thread stays open.
- * @param {{ id: string, subject?: string, body?: string, flagged?: boolean }} thread
+ * opening TaskCreate. Does not navigate — mail chrome stays on the thread.
+ * @param {{ id: string, subject?: string, body?: string, flagged?: boolean, _priority?: string, priority?: string }} thread
  * @param {{ status?: string, priority?: string }} [patch]
  */
 export async function ensureMailTask(thread, patch = {}) {
@@ -195,24 +200,23 @@ export async function ensureMailTask(thread, patch = {}) {
 		if (Object.keys(next).length) await patchTask(existing.id, next);
 		return tasks.find((t) => t.id === existing.id) ?? existing;
 	}
-	const prev = ui.selection ? { kind: ui.selection.kind, id: ui.selection.id } : null;
 	const title = String(thread.subject || '').trim();
-	const created = await saveTask(
+	const seededPriority =
+		patch.priority ?? mailPriorityFor(threadId, thread) ?? (thread.flagged ? 'urgent' : 'none');
+	return saveTask(
 		{
 			title: title || undefined,
 			body: String(thread.body || '').trim() || undefined,
 			status: patch.status || 'open',
-			priority: patch.priority ?? (thread.flagged ? 'urgent' : 'none'),
+			priority: seededPriority,
 			mail_thread_id: threadId,
 			labels: [],
 			project_ids: [],
 			assignees: []
 		},
-		true
+		true,
+		{ select: false }
 	);
-	/* Stay on the mail thread (saveTask selects the new task by default). */
-	if (prev) ui.selection = prev;
-	return created;
 }
 
 /**
@@ -746,10 +750,16 @@ export async function saveMoment(draft, isNew) {
 	}
 }
 
-export async function saveTask(draft, isNew) {
+/**
+ * @param {any} draft
+ * @param {boolean} isNew
+ * @param {{ select?: boolean }} [opts]
+ */
+export async function saveTask(draft, isNew, opts = {}) {
 	const session = activeSession();
 	const author = draft.author ?? activePerson().email;
 	const canPush = Boolean(session) && !isOffline();
+	const select = opts.select !== false;
 
 	if (isNew) {
 		const tempId = draft.id || crypto.randomUUID();
@@ -767,7 +777,7 @@ export async function saveTask(draft, isNew) {
 			_pending: !canPush
 		};
 		tasks.unshift(optimistic);
-		ui.selection = { kind: 'task', id: tempId };
+		if (select) ui.selection = { kind: 'task', id: tempId };
 		scheduleWorkspacePersist();
 		if (!canPush) {
 			void import('./chat.svelte.js').then(({ announceEntityCreated }) =>
@@ -801,7 +811,7 @@ export async function saveTask(draft, isNew) {
 			const confirmed = mergeConfirmed(optimistic, uiTask);
 			if (idx >= 0) tasks[idx] = confirmed;
 			else tasks.unshift(confirmed);
-			if (ui.selection?.id === tempId) ui.selection = { kind: 'task', id: confirmed.id };
+			if (select && ui.selection?.id === tempId) ui.selection = { kind: 'task', id: confirmed.id };
 			scheduleWorkspacePersist();
 			void import('./chat.svelte.js').then(({ announceEntityCreated }) =>
 				announceEntityCreated('task', confirmed.id)
