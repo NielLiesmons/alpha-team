@@ -4,16 +4,23 @@
  */
 
 import {
+	addAudienceMember,
 	approveComment,
 	banComment,
+	createAudience,
 	createCampaign,
+	deleteAudience,
 	deleteCampaign,
 	deletePost,
+	fetchAudienceMembers,
+	fetchAudiences,
 	fetchCampaigns,
 	fetchMailSettings,
 	fetchModerationComments,
 	fetchPost,
 	fetchPosts,
+	importAudienceCsv,
+	patchAudience,
 	patchCampaign,
 	rejectComment,
 	saveMailSettings,
@@ -25,6 +32,9 @@ import { space } from './sections.js';
 
 /** @type {any[]} */
 export const campaigns = $state([]);
+
+/** @type {any[]} */
+export const audiences = $state([]);
 
 /** @type {any[]} */
 export const publicPosts = $state([]);
@@ -55,7 +65,9 @@ export const defaultMailBranding = {
  *     subject_en: string,
  *     body_fr: string,
  *     body_en: string
- *   }
+ *   },
+ *   publishers: { email: string, name: string }[],
+ *   default_audience_id: string
  * }} */
 export const mailSettings = $state({
 	from: '',
@@ -68,7 +80,9 @@ export const mailSettings = $state({
 		subject_en: '',
 		body_fr: '',
 		body_en: ''
-	}
+	},
+	publishers: [],
+	default_audience_id: 'subscribers'
 });
 
 /**
@@ -89,6 +103,13 @@ function applyMailSettings(raw) {
 		body_fr: raw?.welcome?.body_fr || '',
 		body_en: raw?.welcome?.body_en || ''
 	};
+	mailSettings.publishers = Array.isArray(raw?.publishers)
+		? raw.publishers.map((p) => ({
+				email: String(p?.email || '').trim().toLowerCase(),
+				name: String(p?.name || '').trim()
+			})).filter((p) => p.email)
+		: [];
+	mailSettings.default_audience_id = String(raw?.default_audience_id || 'subscribers');
 }
 
 export const pubsUi = $state({
@@ -186,11 +207,13 @@ export async function refreshPublications() {
 	try {
 		const postsP = fetchPosts().catch(() => ({ items: [] }));
 		const modP = fetchModerationComments().catch(() => ({ items: [] }));
-		const [settings, list, posts, mod] = await Promise.all([
+		const audP = fetchAudiences().catch(() => ({ items: [] }));
+		const [settings, list, posts, mod, aud] = await Promise.all([
 			fetchMailSettings(),
 			fetchCampaigns(),
 			postsP,
-			modP
+			modP,
+			audP
 		]);
 		applyMailSettings(settings);
 		campaigns.splice(0, campaigns.length, ...(list.items || []));
@@ -201,12 +224,79 @@ export async function refreshPublications() {
 			pendingComments.length,
 			...(mod.items || []).filter((c) => c.status === 'pending')
 		);
+		audiences.splice(0, audiences.length, ...(aud.items || []));
 		pubsUi.loadedAt = new Date().toISOString();
 	} catch (e) {
 		pubsUi.error = e instanceof Error ? e.message : String(e);
 	} finally {
 		pubsUi.loading = false;
 	}
+}
+
+export async function refreshAudiences() {
+	try {
+		const aud = await fetchAudiences();
+		audiences.splice(0, audiences.length, ...(aud.items || []));
+	} catch (e) {
+		pubsUi.error = e instanceof Error ? e.message : String(e);
+	}
+}
+
+/**
+ * @param {{ title: string, description?: string }} input
+ */
+export async function persistCreateAudience(input) {
+	const a = await createAudience(input);
+	audiences.push(a);
+	audiences.sort((x, y) => Number(y.is_default) - Number(x.is_default));
+	return a;
+}
+
+/**
+ * @param {string} id
+ * @param {{ title?: string, description?: string }} patch
+ */
+export async function persistPatchAudience(id, patch) {
+	const a = await patchAudience(id, patch);
+	const idx = audiences.findIndex((x) => x.id === id);
+	if (idx >= 0) audiences[idx] = a;
+	return a;
+}
+
+/** @param {string} id */
+export async function persistDeleteAudience(id) {
+	await deleteAudience(id);
+	const idx = audiences.findIndex((x) => x.id === id);
+	if (idx >= 0) audiences.splice(idx, 1);
+}
+
+/**
+ * @param {string} id
+ * @param {{ all?: boolean }} [opts]
+ */
+export async function loadAudienceMembers(id, opts = {}) {
+	const res = await fetchAudienceMembers(id, opts);
+	return res.items || [];
+}
+
+/**
+ * @param {string} id
+ * @param {{ email: string, name?: string }} input
+ */
+export async function persistAddAudienceMember(id, input) {
+	const sub = await addAudienceMember(id, input);
+	await refreshAudiences();
+	return sub;
+}
+
+/**
+ * @param {string} id
+ * @param {string} csv
+ */
+export async function persistImportAudienceCsv(id, csv) {
+	const result = await importAudienceCsv(id, csv);
+	await refreshAudiences();
+	return result;
 }
 
 /** @param {string} id */
@@ -244,7 +334,15 @@ export async function persistBanComment(id) {
 }
 
 /**
- * @param {{ from?: string, brand_name?: string, footer_html?: string, branding?: object, welcome?: object }} patch
+ * @param {{
+ *   from?: string,
+ *   brand_name?: string,
+ *   footer_html?: string,
+ *   branding?: object,
+ *   welcome?: object,
+ *   publishers?: { email: string, name?: string }[],
+ *   default_audience_id?: string
+ * }} patch
  */
 export async function persistMailSettings(patch) {
 	const saved = await saveMailSettings(patch);
@@ -259,7 +357,8 @@ export async function persistMailSettings(patch) {
  *   description?: string,
  *   image_url?: string,
  *   publisher_email?: string,
- *   publisher_name?: string
+ *   publisher_name?: string,
+ *   audience_id?: string
  * }} input
  */
 export async function persistCampaign(input) {

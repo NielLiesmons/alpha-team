@@ -11,6 +11,7 @@
 	import EditorToolbar from './EditorToolbar.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import {
+		audiences,
 		campaigns,
 		loadPostDetail,
 		mailSettings,
@@ -19,7 +20,8 @@
 		persistSendCampaign,
 		persistUpdateCampaign,
 		persistUpdatePost,
-		publicPosts
+		publicPosts,
+		refreshAudiences
 	} from '$lib/publications.svelte.js';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { members } from '$lib/members.svelte.js';
@@ -36,6 +38,7 @@
 	let publisherEmail = $state('');
 	let publisherName = $state('');
 	let publisherOpen = $state(false);
+	let audienceId = $state('subscribers');
 	let footerHtml = $state('');
 	let busy = $state(false);
 	let err = $state('');
@@ -139,6 +142,7 @@
 			publisherOpen = false;
 			return;
 		}
+		if (!audiences.length) void refreshAudiences().catch(() => {});
 		const key = editingPostSlug
 			? `post:${editingPostSlug}`
 			: editingCampaign?.id
@@ -151,6 +155,10 @@
 		imageUrl = null;
 		footerHtml = mailSettings.footer_html || '';
 		publisherOpen = false;
+		audienceId =
+			editingCampaign?.audience_id ||
+			mailSettings.default_audience_id ||
+			'subscribers';
 
 		const me = activePerson();
 		if (editingPostSlug) {
@@ -200,7 +208,8 @@
 	function publisherPayload() {
 		return {
 			publisher_email: publisherEmail || undefined,
-			publisher_name: publisherName || undefined
+			publisher_name: publisherName || undefined,
+			audience_id: audienceId || 'subscribers'
 		};
 	}
 
@@ -389,6 +398,22 @@
 		<EditorToolbar editor={tipTap} />
 	</div>
 
+	{#if !editingPostSlug && editingCampaign?.status !== 'sent'}
+		<section class="audience-block" aria-label={t('aud.sendTo')}>
+			<label class="audience-label" for="letter-audience">{t('aud.sendTo')}</label>
+			<select id="letter-audience" class="audience-select" bind:value={audienceId}>
+				{#each audiences as a (a.id)}
+					<option value={a.id}>
+						{a.title}{#if a.is_default}
+							({t('aud.default')}){/if} — {a.member_count ?? 0}
+					</option>
+				{:else}
+					<option value="subscribers">{t('aud.default')}</option>
+				{/each}
+			</select>
+		</section>
+	{/if}
+
 	<section class="footer-block" aria-label={t('web.footerEdit')}>
 		<div class="footer-head">
 			<span class="footer-label">{t('web.footerEdit')}</span>
@@ -486,6 +511,33 @@
 		font-size: 11px;
 		line-height: 1.35;
 		color: var(--fg-33);
+	}
+
+	.audience-block {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 4px 14px 12px;
+	}
+
+	.audience-label {
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--fg-33);
+	}
+
+	.audience-select {
+		border: none;
+		background: var(--fg-8);
+		border-radius: 999px;
+		padding: 10px 14px;
+		font: inherit;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg);
+		max-width: 100%;
 	}
 
 	.footer-block {

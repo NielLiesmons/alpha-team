@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import {
+		audiences,
 		moderationComments,
 		publicPosts,
 		refreshPublications
@@ -49,7 +50,7 @@
 	 */
 	function openSection(item) {
 		const id = item.selectionId;
-		if (id === 'hub' || id === 'activity') void refreshPublications();
+		if (id === 'hub' || id === 'activity' || id === 'audiences') void refreshPublications();
 		selectEntity('pubs', id);
 	}
 
@@ -67,6 +68,10 @@
 		if (labelKey === 'nav.publications') {
 			return latestPubTitle || t('web.pubsPreview');
 		}
+		if (labelKey === 'nav.audiences') {
+			const n = audiences.length;
+			return n ? t('web.audiencesPreview', { n: String(n) }) : t('web.audiencesPreviewEmpty');
+		}
 		if (labelKey === 'nav.shop') return t('web.shopPreview');
 		if (labelKey === 'nav.content') return t('web.contentPreview');
 		return '';
@@ -77,6 +82,7 @@
 		if (labelKey === 'nav.activity' && visits7 != null) return visits7.toLocaleString();
 		if (labelKey === 'nav.activity' && uniques7 != null) return uniques7.toLocaleString();
 		if (labelKey === 'nav.publications') return publicPosts.length ? String(publicPosts.length) : '';
+		if (labelKey === 'nav.audiences' && audiences.length) return String(audiences.length);
 		return '';
 	}
 

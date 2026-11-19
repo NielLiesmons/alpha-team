@@ -120,7 +120,8 @@ export function deletePost(idOrSlug) {
  *   description?: string,
  *   image_url?: string,
  *   publisher_email?: string,
- *   publisher_name?: string
+ *   publisher_name?: string,
+ *   audience_id?: string
  * }} input
  */
 export function createCampaign(input) {
@@ -139,6 +140,7 @@ export function createCampaign(input) {
  *   image_url?: string,
  *   publisher_email?: string,
  *   publisher_name?: string,
+ *   audience_id?: string,
  *   scheduled_at?: string | null
  * }} patch
  */
@@ -182,6 +184,69 @@ export function deleteCampaign(id, opts = {}) {
 
 export function fetchModerationComments() {
 	return api(`/v1/projects/${project()}/comments/moderation`);
+}
+
+export function fetchAudiences() {
+	return api(`/v1/projects/${project()}/audiences`);
+}
+
+/**
+ * @param {{ title: string, description?: string }} input
+ */
+export function createAudience(input) {
+	return api(`/v1/projects/${project()}/audiences`, {
+		method: 'POST',
+		body: JSON.stringify(input)
+	});
+}
+
+/**
+ * @param {string} id
+ * @param {{ title?: string, description?: string }} patch
+ */
+export function patchAudience(id, patch) {
+	return api(`/v1/projects/${project()}/audiences/${encodeURIComponent(id)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch)
+	});
+}
+
+/** @param {string} id */
+export function deleteAudience(id) {
+	return api(`/v1/projects/${project()}/audiences/${encodeURIComponent(id)}`, {
+		method: 'DELETE'
+	});
+}
+
+/**
+ * @param {string} id
+ * @param {{ all?: boolean }} [opts]
+ */
+export function fetchAudienceMembers(id, opts = {}) {
+	const q = opts.all ? '?all=1' : '';
+	return api(`/v1/projects/${project()}/audiences/${encodeURIComponent(id)}/subscribers${q}`);
+}
+
+/**
+ * @param {string} id
+ * @param {{ email: string, name?: string }} input
+ */
+export function addAudienceMember(id, input) {
+	return api(`/v1/projects/${project()}/audiences/${encodeURIComponent(id)}/subscribers`, {
+		method: 'POST',
+		body: JSON.stringify(input)
+	});
+}
+
+/**
+ * @param {string} id
+ * @param {string} csv
+ */
+export function importAudienceCsv(id, csv) {
+	return api(`/v1/projects/${project()}/audiences/${encodeURIComponent(id)}/import`, {
+		method: 'POST',
+		body: JSON.stringify({ csv })
+	});
 }
 
 /**

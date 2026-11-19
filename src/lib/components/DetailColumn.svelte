@@ -55,6 +55,7 @@
 	import FilesFolderDetail from './FilesFolderDetail.svelte';
 	import FormDetail from './FormDetail.svelte';
 	import WebsiteActivity from './WebsiteActivity.svelte';
+	import AudiencesPanel from './AudiencesPanel.svelte';
 	import PublicationsFeed from './PublicationsFeed.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
 	import { channelById, loadComments } from '$lib/chat.svelte.js';
@@ -253,6 +254,7 @@
 	const welcomeSelected = $derived(selection?.kind === 'welcome');
 	const pubsHub = $derived(selection?.kind === 'pubs' && selection?.id === 'hub');
 	const pubsActivity = $derived(selection?.kind === 'pubs' && selection?.id === 'activity');
+	const pubsAudiences = $derived(selection?.kind === 'pubs' && selection?.id === 'audiences');
 	const pubsShop = $derived(selection?.kind === 'pubs' && selection?.id === 'shop');
 	const pubsContent = $derived(selection?.kind === 'pubs' && selection?.id === 'content');
 	const mailMsg = $derived(selection?.kind === 'mail' ? findMailOrTip(selection.id) : null);
@@ -415,6 +417,7 @@
 		}
 		if (welcomeSelected) return t('detail.welcome');
 		if (pubsActivity) return t('web.activityTitle');
+		if (pubsAudiences) return t('nav.audiences');
 		if (pubsHub) return t('nav.publications');
 		if (pubsShop) return t('nav.shop');
 		if (pubsContent) return t('nav.content');
@@ -446,6 +449,7 @@
 		if (pubPost?.title) return pubPost.title;
 		if (welcomeSelected) return t('detail.welcome');
 		if (pubsActivity) return t('web.activityTitle');
+		if (pubsAudiences) return t('nav.audiences');
 		if (pubsHub) return t('nav.publications');
 		if (pubsShop) return t('nav.shop');
 		if (pubsContent) return t('nav.content');
@@ -1361,6 +1365,26 @@
 		</header>
 		<div class="body">
 			<WebsiteActivity />
+		</div>
+	{:else if pubsAudiences}
+		<header class="detail-top desktop-head">
+			<div class="detail-top-start">
+				<button type="button" class="icon-hit" aria-label={t('common.back')} onclick={close}>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3.5 5.5 8 10 12.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+				<span class="detail-top-label">{t('nav.audiences')}</span>
+			</div>
+		</header>
+		<div class="body">
+			<AudiencesPanel />
 		</div>
 	{:else if pubsHub}
 		<header class="detail-top desktop-head">

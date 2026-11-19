@@ -42,6 +42,7 @@ export const websiteChildren = [
 		icon: 'publications',
 		createKind: 'newsletter'
 	},
+	{ href: '/website', selectionId: 'audiences', labelKey: 'nav.audiences', icon: 'mail' },
 	{ href: '/website', selectionId: 'activity', labelKey: 'nav.activity', icon: 'chat' },
 	{ href: '/website', selectionId: 'shop', labelKey: 'nav.shop', icon: 'shop' },
 	{ href: '/website', selectionId: 'content', labelKey: 'nav.content', icon: 'website' }
