@@ -5,7 +5,7 @@
 
 import { refreshMembersAndAvatars } from './avatar.svelte.js';
 import { refreshChatFeed, chatUi, markIncomingMessagesRead } from './chat.svelte.js';
-import { getTip } from './drive/client.js';
+import { getTip, peekCachedTip } from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
 
 const POLL_MS = 1500;
@@ -82,7 +82,9 @@ export function flushChatWake() {
 }
 
 /**
- * Realtime bus tip-wake: skip getTip RTT, refresh feed ASAP.
+ * Realtime bus tip-wake: refresh feed ASAP (Drive remains SoT).
+ * Do not stamp lastTip before refresh — a premature stamp skipped later polls
+ * when Drive was briefly behind the bus tip.
  * @param {string} tip
  */
 export async function wakeChatFromTip(tip) {
@@ -105,10 +107,14 @@ export async function wakeChatFromTip(tip) {
 		pendingBusTip = t;
 		return;
 	}
-	lastTip = t;
 	inFlight = true;
 	try {
 		await refreshChatFeed();
+		/*
+		 * Prefer Drive tip after load so poll self-heals if the bus tip raced ahead
+		 * of a visible putTip. Fall back to the bus hash when cache is empty.
+		 */
+		lastTip = peekCachedTip(session) || t;
 		lastChatPull = Date.now();
 		void markIncomingMessagesRead();
 		void refreshMembersAndAvatars().catch(() => {});

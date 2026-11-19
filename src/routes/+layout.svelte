@@ -21,11 +21,14 @@
 	const signedIn = $derived(Boolean(driveSession.connected && actor.email));
 	const webManifestLink = $derived(pwaInfo?.webManifest?.linkTag ?? '');
 
+	/* Realtime bus: connect as soon as Drive creds exist (actor optional on the wire). */
 	$effect(() => {
-		if (!signedIn) {
+		if (!driveSession.connected) {
 			stopRealtime();
 			return;
 		}
+		/* Re-open when actor appears so hello carries the email for diagnostics. */
+		void actor.email;
 		return startRealtime();
 	});
 

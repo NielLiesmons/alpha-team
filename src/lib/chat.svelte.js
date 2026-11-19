@@ -647,7 +647,9 @@ export async function toggleReaction(messageId, emoji) {
 			{
 				knownFeedIds: knownFeedIds().filter((id) => id !== localId),
 				onTipWritten: (tip) => {
-					void import('./realtime.svelte.js').then(({ publishTipWake }) => publishTipWake(tip));
+					void import('./realtime.svelte.js').then(({ publishTipWake }) => {
+						publishTipWake(tip);
+					});
 				}
 			}
 		);
@@ -1042,9 +1044,11 @@ export async function postChatMessage(input) {
 							...(attachments.length ? { attachments } : {})
 						});
 					},
-					/* Publish tip hash the instant putTip lands — no extra getTip RTT. */
+					/* Publish tip hash the instant putTip lands — queues if WS is reconnecting. */
 					onTipWritten: (tip) => {
-						void import('./realtime.svelte.js').then(({ publishTipWake }) => publishTipWake(tip));
+						void import('./realtime.svelte.js').then(({ publishTipWake }) => {
+							publishTipWake(tip);
+						});
 					}
 				}
 			);

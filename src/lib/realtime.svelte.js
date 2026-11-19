@@ -13,6 +13,7 @@ import { projectSlug } from './space-host.js';
 const PING_MS = 25_000;
 const RECONNECT_MIN_MS = 800;
 const RECONNECT_MAX_MS = 20_000;
+const CONNECT_TIMEOUT_MS = 8_000;
 
 function realtimeToken() {
 	if (typeof localStorage === 'undefined') return '';
@@ -31,14 +32,22 @@ let sock = null;
 let pingTimer = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let reconnectTimer = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let connectTimer = null;
 let wantOpen = false;
 let backoff = RECONNECT_MIN_MS;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let typingIdleTimer = null;
+/** Tip wake that failed while WS was down — flush on open. */
+let pendingTipWake = /** @type {string | null} */ (null);
+let listenersBound = false;
 
 export const realtimeUi = $state({
 	connected: false,
-	lastError: /** @type {string | null} */ (null)
+	lastError: /** @type {string | null} */ (null),
+	lastPublishedTip: /** @type {string | null} */ (null),
+	lastReceivedTip: /** @type {string | null} */ (null),
+	lastReceivedAt: 0
 });
 
 function spaceId() {
@@ -46,7 +55,9 @@ function spaceId() {
 }
 
 function wsUrl() {
-	const base = apiBase().replace(/^http/, 'ws');
+	const httpBase = apiBase();
+	if (!httpBase) return '';
+	const base = httpBase.replace(/^http/, 'ws');
 	const params = new URLSearchParams({ space: spaceId() });
 	const token = realtimeToken();
 	if (token) params.set('token', token);
@@ -64,6 +75,10 @@ function clearTimers() {
 		clearTimeout(reconnectTimer);
 		reconnectTimer = null;
 	}
+	if (connectTimer != null) {
+		clearTimeout(connectTimer);
+		connectTimer = null;
+	}
 }
 
 /**
@@ -79,11 +94,27 @@ export function publishRealtime(envelope) {
 	}
 }
 
-/** Tip-wake after a chat tip write. */
+function flushPendingTipWake() {
+	const t = pendingTipWake;
+	if (!t) return;
+	if (publishRealtime({ type: 'tip', tip: t })) {
+		pendingTipWake = null;
+		realtimeUi.lastPublishedTip = t;
+	}
+}
+
+/** Tip-wake after a chat tip write. Queues if the socket is mid-reconnect. */
 export function publishTipWake(tip) {
 	const t = String(tip || '').trim();
 	if (!t) return false;
-	return publishRealtime({ type: 'tip', tip: t });
+	ensureRealtime();
+	if (publishRealtime({ type: 'tip', tip: t })) {
+		pendingTipWake = null;
+		realtimeUi.lastPublishedTip = t;
+		return true;
+	}
+	pendingTipWake = t;
+	return false;
 }
 
 /**
@@ -188,7 +219,14 @@ function onMessage(ev) {
 	if (!data || typeof data !== 'object') return;
 	const type = String(data.type || '');
 	if (type === 'tip' && data.tip) {
-		void wakeChatFromTip(String(data.tip));
+		const tip = String(data.tip);
+		realtimeUi.lastReceivedTip = tip;
+		realtimeUi.lastReceivedAt = Date.now();
+		try {
+			void wakeChatFromTip(tip);
+		} catch (e) {
+			console.warn('tip-wake handler', e);
+		}
 		return;
 	}
 	if (type === 'ephemeral' && data.ephemeral) {
@@ -210,21 +248,44 @@ function scheduleReconnect() {
 
 function openSocket() {
 	if (typeof WebSocket === 'undefined') return;
+	if (!wantOpen) return;
 	if (sock && (sock.readyState === WebSocket.OPEN || sock.readyState === WebSocket.CONNECTING)) {
+		return;
+	}
+	const url = wsUrl();
+	if (!url) {
+		realtimeUi.lastError = 'no api base';
+		scheduleReconnect();
 		return;
 	}
 	clearTimers();
 	try {
-		sock = new WebSocket(wsUrl());
+		sock = new WebSocket(url);
 	} catch (e) {
 		realtimeUi.lastError = e instanceof Error ? e.message : String(e);
 		scheduleReconnect();
 		return;
 	}
+	connectTimer = setTimeout(() => {
+		connectTimer = null;
+		if (sock && sock.readyState === WebSocket.CONNECTING) {
+			realtimeUi.lastError = 'connect timeout';
+			try {
+				sock.close();
+			} catch {
+				/* close handler reconnects */
+			}
+		}
+	}, CONNECT_TIMEOUT_MS);
 	sock.addEventListener('open', () => {
+		if (connectTimer != null) {
+			clearTimeout(connectTimer);
+			connectTimer = null;
+		}
 		realtimeUi.connected = true;
 		realtimeUi.lastError = null;
 		backoff = RECONNECT_MIN_MS;
+		flushPendingTipWake();
 		pingTimer = setInterval(() => {
 			publishRealtime({ type: 'ping' });
 			pruneEphemeral();
@@ -246,32 +307,71 @@ function onVisibility() {
 	if (typeof document === 'undefined') return;
 	if (document.visibilityState !== 'visible') return;
 	/* iOS often kills WS in background — reconnect as soon as we're foreground again. */
+	backoff = RECONNECT_MIN_MS;
 	if (!sock || sock.readyState === WebSocket.CLOSED || sock.readyState === WebSocket.CLOSING) {
-		backoff = RECONNECT_MIN_MS;
 		openSocket();
+	} else if (sock.readyState === WebSocket.CONNECTING) {
+		/* hung connect — kick it */
+		try {
+			sock.close();
+		} catch {
+			/* ignore */
+		}
 	}
 }
 
-/** Start from root layout once signed in. */
-export function startRealtime() {
-	wantOpen = true;
-	openSocket();
-	if (typeof document !== 'undefined') {
-		document.addEventListener('visibilitychange', onVisibility);
+function onOnline() {
+	if (!wantOpen) return;
+	backoff = RECONNECT_MIN_MS;
+	if (sock && sock.readyState === WebSocket.OPEN) {
+		flushPendingTipWake();
+		return;
 	}
+	try {
+		sock?.close();
+	} catch {
+		/* ignore */
+	}
+	sock = null;
+	openSocket();
+}
+
+function bindWindowListeners() {
+	if (listenersBound || typeof window === 'undefined') return;
+	listenersBound = true;
+	document.addEventListener('visibilitychange', onVisibility);
+	window.addEventListener('online', onOnline);
+}
+
+function unbindWindowListeners() {
+	if (!listenersBound || typeof window === 'undefined') return;
+	listenersBound = false;
+	document.removeEventListener('visibilitychange', onVisibility);
+	window.removeEventListener('online', onOnline);
+}
+
+/** Keep / reopen the bus when a Drive session exists (idempotent). */
+export function ensureRealtime() {
+	wantOpen = true;
+	bindWindowListeners();
+	openSocket();
+}
+
+/** Start from root layout once Drive is connected. */
+export function startRealtime() {
+	ensureRealtime();
 	return () => stopRealtime();
 }
 
 export function stopRealtime() {
 	wantOpen = false;
-	if (typeof document !== 'undefined') {
-		document.removeEventListener('visibilitychange', onVisibility);
-	}
+	unbindWindowListeners();
 	clearTimers();
 	if (typingIdleTimer != null) {
 		clearTimeout(typingIdleTimer);
 		typingIdleTimer = null;
 	}
+	/* Keep pendingTipWake across actor-driven reconnects; flush on next open. */
 	try {
 		sock?.close();
 	} catch {
