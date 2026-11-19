@@ -6,6 +6,8 @@
  */
 import { activePerson } from './actor.svelte.js';
 import { chatFeed } from './chat.svelte.js';
+import { members } from './members.svelte.js';
+import { tokenizeChatBody } from './message-emoji.js';
 import {
 	cursorsTick,
 	markActivitySeen as markCursorActivitySeen,
@@ -58,7 +60,7 @@ export const seenTick = cursorsTick;
 /**
  * @typedef {{
  *   id: string,
- *   kind: 'reaction' | 'reply' | 'assigned',
+ *   kind: 'reaction' | 'reply' | 'mention' | 'assigned',
  *   at: number,
  *   author: string,
  *   preview: string,
@@ -71,6 +73,23 @@ export const seenTick = cursorsTick;
  * }} ChatActivityItem
  */
 
+/** @param {string} body @param {string} me */
+function bodyMentionsMe(body, me) {
+	if (!me || !body) return false;
+	const people = (members || []).map((m) => ({
+		email: String(m.email || '')
+			.trim()
+			.toLowerCase(),
+		name: String(m.name || '').trim()
+	}));
+	if (!people.some((p) => p.email === me)) {
+		people.push({ email: me, name: '' });
+	}
+	return tokenizeChatBody(body, { people }).some(
+		(tok) => tok.type === 'mention' && String(tok.email || '').toLowerCase() === me
+	);
+}
+
 /**
  * Chronological activity aimed at the signed-in person (newest first).
  * @returns {ChatActivityItem[]}
@@ -79,6 +98,7 @@ export function activityForMe() {
 	/* Do not subscribe to cursorsTick here — list shape is feed/tasks only. */
 	chatFeed.length;
 	tasks.length;
+	members.length;
 	const me = meEmail();
 	if (!me) return [];
 
@@ -126,22 +146,34 @@ export function activityForMe() {
 			continue;
 		}
 
-		if (
-			(m.kind === 'comment' || m.kind === 'chat' || !m.kind) &&
-			replyTo &&
-			myMsgIds.has(replyTo)
-		) {
+		if (m.kind === 'comment' || m.kind === 'chat' || !m.kind) {
 			const plain = clip(m.body || '', 96) || 'Reply';
-			items.push({
-				id: `reply:${m.id}`,
-				kind: 'reply',
-				at,
-				author,
-				preview: plain,
-				targetPreview: plain,
-				ref: m.ref ?? byId.get(replyTo)?.ref ?? null,
-				messageId: String(m.id)
-			});
+			const isReplyToMe = Boolean(replyTo && myMsgIds.has(replyTo));
+			if (isReplyToMe) {
+				items.push({
+					id: `reply:${m.id}`,
+					kind: 'reply',
+					at,
+					author,
+					preview: plain,
+					targetPreview: plain,
+					ref: m.ref ?? byId.get(replyTo)?.ref ?? null,
+					messageId: String(m.id)
+				});
+				continue;
+			}
+			if (bodyMentionsMe(m.body || '', me)) {
+				items.push({
+					id: `mention:${m.id}`,
+					kind: 'mention',
+					at,
+					author,
+					preview: plain,
+					targetPreview: plain,
+					ref: m.ref ?? null,
+					messageId: String(m.id)
+				});
+			}
 		}
 	}
 
@@ -191,7 +223,7 @@ export function activityUnreadByKind() {
 	for (const a of activityForMe()) {
 		if (a.at <= seen) continue;
 		if (a.kind === 'reaction') out.reaction += 1;
-		else if (a.kind === 'reply') out.reply += 1;
+		else if (a.kind === 'reply' || a.kind === 'mention') out.reply += 1;
 		else if (a.kind === 'assigned') out.assigned += 1;
 	}
 	return out;

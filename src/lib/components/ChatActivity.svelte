@@ -1,7 +1,8 @@
 <script>
 	/**
 	 * Chat notifications — Notes-density rows in the detail column.
-	 * Body chrome is zeroed; only card-stack gutters (6px) + top clear for detail-top.
+	 * Body chrome is zeroed; only card-stack gutters + top clear for detail-top.
+	 * PFP matches ChromeMobileBar 44px glass hits; left edge aligns with back inset.
 	 */
 	import At from './icons/At.svelte';
 	import Reply from './icons/Reply.svelte';
@@ -36,6 +37,7 @@
 	const items = $derived.by(() => {
 		const all = activityForMe();
 		if (filter === 'all') return all;
+		if (filter === 'reply') return all.filter((i) => i.kind === 'reply' || i.kind === 'mention');
 		return all.filter((i) => i.kind === filter);
 	});
 
@@ -68,6 +70,7 @@
 	function verb(item) {
 		if (item.kind === 'assigned') return t('chat.activityAssigned');
 		if (item.kind === 'reaction') return t('chat.activityReaction');
+		if (item.kind === 'mention') return t('chat.activityMention');
 		return t('chat.activityReply');
 	}
 
@@ -92,8 +95,23 @@
 							name={who.name}
 							email={who.email}
 							pictureUrl={pictureUrlFor(who.email)}
-							size={32}
+							size={44}
 						/>
+						{#if item.kind === 'assigned'}
+							<span class="task-mark">
+								<TaskBox state={item.taskStatus || 'open'} size={18} />
+							</span>
+						{:else}
+							<span class="badge" class:emoji-badge={item.kind === 'reaction'}>
+								{#if item.kind === 'reaction'}
+									<span class="emoji">{item.emoji || '❤️'}</span>
+								{:else if item.kind === 'mention'}
+									<At size={11} />
+								{:else}
+									<Reply size={11} />
+								{/if}
+							</span>
+						{/if}
 					</span>
 					<span class="copy">
 						<span class="line1">
@@ -105,17 +123,6 @@
 							<span class="verb">{verb(item)}</span>
 						</span>
 						<span class="line2">
-							<span class="kind" class:emoji-kind={item.kind === 'reaction'} aria-hidden="true">
-								{#if item.kind === 'reaction'}
-									<span class="emoji">{item.emoji || '❤️'}</span>
-								{:else if item.kind === 'reply'}
-									<Reply size={12} />
-								{:else if item.kind === 'assigned'}
-									<TaskBox state={item.taskStatus || 'open'} size={12} />
-								{:else}
-									<At size={12} />
-								{/if}
-							</span>
 							<span class="preview">{preview(item)}</span>
 						</span>
 					</span>
@@ -148,12 +155,12 @@
 		text-align: center;
 	}
 
-	/* Same as Notes / Tasks */
+	/* Vertical stack gutters only — horizontal inset matches top-bar back */
 	.card-stack {
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 6px;
+		padding: 6px 0;
 		box-sizing: border-box;
 		width: 100%;
 	}
@@ -161,9 +168,10 @@
 	.row {
 		display: flex;
 		align-items: flex-start;
-		gap: 10px;
+		gap: 12px;
 		width: 100%;
-		padding: calc(0.85rem - 4px) calc(0.9rem - 2px);
+		/* 14px = ChromeMobileBar side padding (back button left edge) */
+		padding: calc(0.85rem - 4px) 14px;
 		border: 0;
 		border-radius: 12px;
 		background: transparent;
@@ -179,9 +187,48 @@
 	}
 
 	.pfp {
+		position: relative;
 		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
 		line-height: 0;
-		margin-top: 1px;
+	}
+
+	.badge {
+		position: absolute;
+		right: -2px;
+		bottom: -2px;
+		width: 20px;
+		height: 20px;
+		display: grid;
+		place-items: center;
+		border-radius: 9999px;
+		box-sizing: border-box;
+		background: var(--shell, var(--bg));
+		border: 1.5px solid var(--shell, var(--bg));
+		box-shadow: 0 0 0 1px var(--fg-8);
+		color: var(--fg-66);
+		line-height: 0;
+		pointer-events: none;
+	}
+
+	.badge.emoji-badge {
+		color: inherit;
+		box-shadow: 0 0 0 1px var(--fg-8);
+	}
+
+	.emoji {
+		display: block;
+		font-size: 11px;
+		line-height: 1;
+	}
+
+	.task-mark {
+		position: absolute;
+		right: -3px;
+		bottom: -3px;
+		line-height: 0;
+		pointer-events: none;
 	}
 
 	.copy {
@@ -189,9 +236,9 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
+		gap: 0;
 		justify-content: center;
-		min-height: 32px;
+		min-height: 44px;
 	}
 
 	.line1 {
@@ -202,7 +249,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 14px;
 		font-weight: 600;
-		line-height: 1.15;
+		line-height: 1.1;
 		overflow: hidden;
 		white-space: nowrap;
 	}
@@ -221,47 +268,31 @@
 	}
 
 	.line2 {
-		display: flex;
-		align-items: center;
-		gap: 0;
-		min-width: 0;
-		line-height: 1.15;
-	}
-
-	.kind {
-		flex: 0 0 auto;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--fg-33);
-		line-height: 0;
-		width: 14px;
-		margin-right: 4px;
-	}
-
-	.kind.emoji-kind {
-		color: inherit;
-		width: auto;
-		margin-right: 3px;
-	}
-
-	.emoji {
 		display: block;
-		font-size: 12px;
-		line-height: 1;
+		min-width: 0;
+		margin-top: -1px;
+		line-height: 1.1;
 	}
 
 	.preview {
-		flex: 1;
+		display: block;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
-		line-height: 1.15;
+		line-height: 1.1;
 		color: var(--fg-66);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	@media (min-width: 768px) {
+		/* Match desktop notifs-top: padding 0 10px 0 16px */
+		.row {
+			padding-left: 16px;
+			padding-right: 10px;
+		}
 	}
 
 	@media (max-width: 767px) {
