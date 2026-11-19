@@ -743,6 +743,7 @@ export default {
 	'meta.deadline': 'Deadline',
 	'meta.momentStart': 'Start van moment',
 	'meta.momentEnd': 'Einde van moment',
+	'meta.assignee': 'Toegewezen',
 	'meta.assignees': 'Toegewezen aan',
 	'meta.noProjects': 'Nog geen projecten',
 	'meta.searchLabel': 'Label zoeken / toevoegen',

@@ -1,5 +1,7 @@
 <script>
+	import { activePerson } from '$lib/actor.svelte.js';
 	import ProfilePic from './ProfilePic.svelte';
+	import ProfilePicStack from './ProfilePicStack.svelte';
 	import LabelPill from './LabelPill.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
@@ -44,7 +46,7 @@
 	 */
 	let { entity, kind } = $props();
 
-	/** @type {null | 'status' | 'priority' | 'schedule' | 'projects' | 'labels'} */
+	/** @type {null | 'status' | 'priority' | 'schedule' | 'assignees' | 'projects' | 'labels'} */
 	let menu = $state(null);
 	let saving = $state(false);
 	let deadlineDate = $state('');
@@ -60,16 +62,20 @@
 	/** @type {HTMLButtonElement | undefined} */
 	let scheduleBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
+	let assigneeBtn = $state();
+	/** @type {HTMLButtonElement | undefined} */
 	let projectsBtn = $state();
 	/** @type {HTMLButtonElement | undefined} */
 	let labelsBtn = $state();
 	/* Status + priority live in the open-task title row */
 	const showStatusPriority = $derived(false);
 	const showSchedule = $derived(kind === 'task');
+	const showAssignees = $derived(kind === 'task');
 	const assignees = $derived(entity?.assignees ?? []);
 	const targets = $derived(entity?.targets ?? []);
 	const labels = $derived(entity?.labels ?? []);
 	const projectIds = $derived(entity?.project_ids ?? targets.map((/** @type {any} */ tg) => tg.id));
+	const me = $derived(activePerson());
 	const statusLabel = $derived.by(() => {
 		locale.value;
 		const key = STATUSES.find((s) => s.value === entity?.status)?.labelKey;
@@ -86,7 +92,7 @@
 			: null
 	);
 	const hasSchedule = $derived(
-		Boolean(entity?.deadline_at || linkedMoment?.start_at || linkedMoment?.end_at || assignees.length)
+		Boolean(entity?.deadline_at || linkedMoment?.start_at || linkedMoment?.end_at)
 	);
 
 	/** @param {string | null | undefined} iso */
@@ -111,7 +117,7 @@
 	}
 
 	/**
-	 * @param {null | 'status' | 'priority' | 'schedule' | 'projects' | 'labels'} next
+	 * @param {null | 'status' | 'priority' | 'schedule' | 'assignees' | 'projects' | 'labels'} next
 	 * @param {MouseEvent} [e]
 	 */
 	function toggleMenu(next, e) {
@@ -171,7 +177,6 @@
 	async function persistSchedule() {
 		await apply({
 			deadline_at: fromDateInput(deadlineDate),
-			assignees: scheduleAssignees,
 			_schedule:
 				scheduleStart || scheduleEnd
 					? {
@@ -183,17 +188,33 @@
 	}
 
 	/**
+	 * Assignees toggled from the dedicated Assignees pill (not Planning).
 	 * @param {{ email: string, name: string }} person
 	 * @param {MouseEvent} e
 	 */
 	async function toggleAssignee(person, e) {
 		e.stopPropagation();
 		const key = person.email;
+		const has = assignees.some((/** @type {any} */ a) => (a.email || a.name) === key);
+		const next = has
+			? assignees.filter((/** @type {any} */ a) => (a.email || a.name) !== key)
+			: [...assignees, person];
+		await apply({ assignees: next });
+	}
+
+	/**
+	 * Keep draft list in sync when toggling from inside the Planning panel.
+	 * @param {{ email: string, name: string }} person
+	 * @param {MouseEvent} e
+	 */
+	async function toggleScheduleAssignee(person, e) {
+		e.stopPropagation();
+		const key = person.email;
 		const has = scheduleAssignees.some((a) => (a.email || a.name) === key);
 		scheduleAssignees = has
 			? scheduleAssignees.filter((a) => (a.email || a.name) !== key)
 			: [...scheduleAssignees, person];
-		await persistSchedule();
+		await apply({ assignees: scheduleAssignees });
 	}
 
 	async function onScheduleDateChange() {
@@ -285,20 +306,34 @@
 				onpointerdown={keepKeyboard}
 				onclick={(e) => toggleMenu('schedule', e)}
 			>
-				{#if assignees.length > 0}
-					<span class="schedule-pfps">
-						{#each assignees.slice(0, 2) as a, i (a.email ?? a.name ?? i)}
-							<span class="schedule-pfp" style:z-index={2 - i}>
-								<ProfilePic name={a.name ?? ''} size={16} />
-							</span>
-						{/each}
-					</span>
-					<span>{t('meta.planning')}</span>
+				<span class="planning-ico">
+					<NavIcon name="planning" size={14} />
+				</span>
+				<span>{t('meta.planning')}</span>
+			</button>
+		</div>
+	{/if}
+
+	{#if showAssignees}
+		<div class="meta-item" role="listitem">
+			<button
+				bind:this={assigneeBtn}
+				type="button"
+				class="meta-pill"
+				class:empty={assignees.length === 0}
+				aria-label={t('meta.assignees')}
+				aria-expanded={menu === 'assignees'}
+				onpointerdown={keepKeyboard}
+				onclick={(e) => toggleMenu('assignees', e)}
+			>
+				{#if assignees.length === 0}
+					<ProfilePic name={me.name} size={20} />
+					<span>{t('meta.assignee')}</span>
 				{:else}
-					<span class="planning-ico">
-						<NavIcon name="planning" size={14} />
+					<ProfilePicStack profiles={assignees} size="xs" />
+					<span class="pill-names">
+						{assignees.map((/** @type {any} */ a) => a.name).filter(Boolean).join(', ')}
 					</span>
-					<span>{t('meta.planning')}</span>
 				{/if}
 			</button>
 		</div>
@@ -469,7 +504,7 @@
 							type="button"
 							class="option"
 							class:active={on}
-							onclick={(e) => toggleAssignee(person, e)}
+							onclick={(e) => toggleScheduleAssignee(person, e)}
 						>
 							<ProfilePic name={person.name} size={20} />
 							<span class="option-text">{person.name}</span>
@@ -488,6 +523,43 @@
 					{/each}
 				</div>
 			</div>
+		</div>
+	</FloatPanel>
+{/if}
+
+{#if showAssignees}
+	<FloatPanel
+		open={menu === 'assignees'}
+		anchor={assigneeBtn}
+		placement="below"
+		width={220}
+		maxHeight={280}
+		onclose={closeMenu}
+	>
+		<div class="float-list" role="listbox">
+			{#each people as person (person.email)}
+				{@const on = assignees.some((/** @type {any} */ a) => a.email === person.email)}
+				<button
+					type="button"
+					class="option"
+					class:active={on}
+					onclick={(e) => toggleAssignee(person, e)}
+				>
+					<ProfilePic name={person.name} size={20} />
+					<span class="option-text">{person.name}</span>
+					{#if on}
+						<svg class="option-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<path
+								d="M3.2 8.2 L6.4 11.3 L12.8 4.5"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					{/if}
+				</button>
+			{/each}
 		</div>
 	</FloatPanel>
 {/if}

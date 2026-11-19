@@ -745,6 +745,7 @@ export default {
 	'meta.deadline': 'Échéance',
 	'meta.momentStart': 'Début du moment',
 	'meta.momentEnd': 'Fin du moment',
+	'meta.assignee': 'Assigné',
 	'meta.assignees': 'Assignés',
 	'meta.noProjects': 'Aucun projet pour l’instant',
 	'meta.searchLabel': 'Rechercher / ajouter une étiquette',

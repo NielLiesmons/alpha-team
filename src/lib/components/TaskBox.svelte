@@ -68,6 +68,8 @@
 				d="M12.7001 0.699299L6.70025 6.69916M6.70025 6.69916L0.700195 12.6992M6.70025 6.69916L12.7002 12.6991M6.70025 6.69916L0.700308 0.699219"
 			/>
 		</svg>
+	{:else if state === 'empty'}
+		<!-- Canceled-style plate, no glyph — used for unset mail→task chrome -->
 	{:else if state === 'planned'}
 		<span
 			class="plan-dot"
@@ -157,7 +159,8 @@
 		border: var(--task-box-stroke) solid var(--accent-1-66);
 	}
 
-	.state-canceled {
+	.state-canceled,
+	.state-empty {
 		background: var(--white8);
 		border: var(--task-box-stroke) solid transparent;
 	}

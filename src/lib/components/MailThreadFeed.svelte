@@ -9,9 +9,8 @@
 	import ReplyAll from './icons/ReplyAll.svelte';
 	import DropdownMenu from './DropdownMenu.svelte';
 	import MailRichBody from './MailRichBody.svelte';
-	import PriorityBox from './PriorityBox.svelte';
+	import DetailMetaPills from './DetailMetaPills.svelte';
 	import ProfilePic from './ProfilePic.svelte';
-	import TaskBox from './TaskBox.svelte';
 	import TaskFieldPicker from './TaskFieldPicker.svelte';
 	import { activePerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
@@ -30,7 +29,7 @@
 	} from '$lib/mail.svelte.js';
 	import { mailView } from '$lib/mail-view.svelte.js';
 	import { swipeLeftReply } from '$lib/swipe-left-reply.js';
-	import { openComposer, openMailTaskComposer, taskByMailThreadId } from '$lib/workspace.svelte.js';
+	import { openComposer, taskByMailThreadId } from '$lib/workspace.svelte.js';
 
 	/**
 	 * @type {{
@@ -51,26 +50,21 @@
 	);
 	const linkedTask = $derived(taskByMailThreadId(threadId));
 	const lastMail = $derived(mails[mails.length - 1] || mailMsg);
-
-	function promoteToTask() {
-		if (!threadId) return;
-		if (linkedTask?.id) {
-			openMailTaskComposer({ id: threadId });
-			return;
-		}
+	const mailPromoteSeed = $derived.by(() => {
+		if (!threadId) return null;
 		const latest = mailLatestMessage(mailMsg) || mailMsg;
 		const body = String(mailPreview(latest) || '')
 			.replace(/<[^>]+>/g, ' ')
 			.replace(/\s+/g, ' ')
 			.trim()
 			.slice(0, 2000);
-		openMailTaskComposer({
+		return {
 			id: threadId,
 			subject: threadTitle === t('common.noSubject') ? '' : threadTitle,
 			body,
 			flagged: Boolean(mailMsg?._flagged)
-		});
-	}
+		};
+	});
 	const useReplyAll = $derived(preferReplyAll(lastMail, me));
 	const replyName = $derived(
 		mailAuthorLabel(lastMail) || displayNameFromEmail(lastMail?.from || replyTo || '')
@@ -192,30 +186,26 @@
 	<div class="feed mail-feed" bind:this={feedEl}>
 		<div class="feed-body">
 			<div class="mail-thread-title-row">
-				{#if linkedTask}
-					<span class="title-status">
+				<span class="title-status">
+					{#if linkedTask}
 						<TaskFieldPicker
 							taskId={linkedTask.id}
 							field="status"
 							value={linkedTask.status || 'open'}
 							size={24}
 						/>
-					</span>
-				{:else}
-					<button
-						type="button"
-						class="title-status inactive-hit"
-						aria-label={t('mail.addTask')}
-						onclick={promoteToTask}
-					>
-						<span class="inactive-taskbox">
-							<TaskBox state="open" size={24} />
-						</span>
-					</button>
-				{/if}
+					{:else if mailPromoteSeed}
+						<TaskFieldPicker
+							field="status"
+							value="open"
+							size={24}
+							mailThread={mailPromoteSeed}
+						/>
+					{/if}
+				</span>
 				<h1 class="mail-thread-title">{threadTitle}</h1>
-				{#if linkedTask}
-					<span class="title-priority">
+				<span class="title-priority">
+					{#if linkedTask}
 						<TaskFieldPicker
 							taskId={linkedTask.id}
 							field="priority"
@@ -223,20 +213,20 @@
 							size={26}
 							align="right"
 						/>
-					</span>
-				{:else}
-					<button
-						type="button"
-						class="title-priority inactive-hit"
-						aria-label={t('mail.addTask')}
-						onclick={promoteToTask}
-					>
-						<span class="inactive-priority">
-							<PriorityBox priority="none" size={26} />
-						</span>
-					</button>
-				{/if}
+					{:else if mailPromoteSeed}
+						<TaskFieldPicker
+							field="priority"
+							value="none"
+							size={26}
+							align="right"
+							mailThread={mailPromoteSeed}
+						/>
+					{/if}
+				</span>
 			</div>
+			{#if linkedTask}
+				<DetailMetaPills entity={linkedTask} kind="task" />
+			{/if}
 			{#each mails as m (m.id)}
 				{@const fromEmail = String(m.from || '').toLowerCase()}
 				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
@@ -484,9 +474,9 @@
 
 	.mail-thread-title-row {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 10px;
-		margin: 0 0 16px;
+		margin: 0 0 12px;
 		padding: 0 2px;
 		min-width: 0;
 	}
@@ -497,31 +487,9 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		align-self: center;
 		line-height: 0;
-	}
-
-	.inactive-hit {
-		margin: 0;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		color: inherit;
-		cursor: pointer;
-		line-height: 0;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.inactive-taskbox,
-	.inactive-priority {
-		display: inline-flex;
-		opacity: 0.38;
-		transition: opacity 0.15s ease;
-	}
-
-	.inactive-hit:hover .inactive-taskbox,
-	.inactive-hit:hover .inactive-priority {
-		opacity: 0.66;
+		/* Optical center with first title line (28px / 1.15) */
+		padding-top: 4px;
 	}
 
 	.mail-thread-title {
@@ -535,6 +503,7 @@
 		line-height: 1.15;
 		color: var(--fg);
 		overflow-wrap: anywhere;
+		white-space: normal;
 	}
 
 	.mail-panel {

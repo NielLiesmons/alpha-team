@@ -179,6 +179,43 @@ export function openMailTaskComposer(thread) {
 }
 
 /**
+ * Promote a mail thread into its linked task (or patch the existing one) without
+ * opening TaskCreate. Keeps the current selection so the mail thread stays open.
+ * @param {{ id: string, subject?: string, body?: string, flagged?: boolean }} thread
+ * @param {{ status?: string, priority?: string }} [patch]
+ */
+export async function ensureMailTask(thread, patch = {}) {
+	const threadId = String(thread?.id || '').trim();
+	if (!threadId) return null;
+	const existing = taskByMailThreadId(threadId);
+	if (existing?.id) {
+		const next = {};
+		if (patch.status != null && patch.status !== existing.status) next.status = patch.status;
+		if (patch.priority != null && patch.priority !== existing.priority) next.priority = patch.priority;
+		if (Object.keys(next).length) await patchTask(existing.id, next);
+		return tasks.find((t) => t.id === existing.id) ?? existing;
+	}
+	const prev = ui.selection ? { kind: ui.selection.kind, id: ui.selection.id } : null;
+	const title = String(thread.subject || '').trim();
+	const created = await saveTask(
+		{
+			title: title || undefined,
+			body: String(thread.body || '').trim() || undefined,
+			status: patch.status || 'open',
+			priority: patch.priority ?? (thread.flagged ? 'urgent' : 'none'),
+			mail_thread_id: threadId,
+			labels: [],
+			project_ids: [],
+			assignees: []
+		},
+		true
+	);
+	/* Stay on the mail thread (saveTask selects the new task by default). */
+	if (prev) ui.selection = prev;
+	return created;
+}
+
+/**
  * Delete a Drive entity and drop it from local workspace state.
  * @param {'task' | 'project' | 'note' | 'enterprise'} kind
  * @param {string} id

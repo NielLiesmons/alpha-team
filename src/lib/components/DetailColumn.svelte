@@ -120,6 +120,8 @@
 
 	/** @type {HTMLTextAreaElement | undefined} */
 	let descEl = $state();
+	/** @type {HTMLTextAreaElement | undefined} */
+	let titleEl = $state();
 
 	/** @param {HTMLTextAreaElement | null | undefined} el */
 	function hugDescription(el) {
@@ -127,6 +129,13 @@
 		el.style.height = 'auto';
 		/* ≥ one line so empty placeholder stays visible */
 		el.style.height = `${Math.max(el.scrollHeight, 24)}px`;
+	}
+
+	/** @param {HTMLTextAreaElement | null | undefined} el */
+	function hugTitle(el) {
+		if (!el) return;
+		el.style.height = 'auto';
+		el.style.height = `${Math.max(el.scrollHeight, 32)}px`;
 	}
 
 	const selection = $derived(ui.selection);
@@ -540,6 +549,13 @@
 		const el = descEl;
 		if (!el) return;
 		queueMicrotask(() => hugDescription(el));
+	});
+
+	$effect(() => {
+		draftTitle;
+		const el = titleEl;
+		if (!el) return;
+		queueMicrotask(() => hugTitle(el));
 	});
 
 	const inlineKind = $derived.by(() => {
@@ -1034,16 +1050,29 @@
 				{/if}
 			</div>
 		</header>
+		{@const taskMailId = String(task.mail_thread_id || task._drive?.mail_thread_id || '').trim()}
 		<div class="body">
 			<div class="title-row task-title-row">
-				<TaskFieldPicker taskId={task.id} field="status" value={task.status} size={24} />
-				<input
-					class="title-input"
-					bind:value={draftTitle}
-					aria-label={t('detail.ariaTaskTitle')}
-					placeholder={t('common.untitled')}
-					oninput={scheduleDraftSave}
-				/>
+				<span class="title-status">
+					<TaskFieldPicker taskId={task.id} field="status" value={task.status} size={24} />
+				</span>
+				<div class="title-stack">
+					{#if taskMailId}
+						<span class="mail-prefix">{t('tasks.mailPrefix')}</span>
+					{/if}
+					<textarea
+						bind:this={titleEl}
+						class="title-input"
+						rows="1"
+						bind:value={draftTitle}
+						aria-label={t('detail.ariaTaskTitle')}
+						placeholder={t('common.untitled')}
+						oninput={(e) => {
+							hugTitle(/** @type {HTMLTextAreaElement} */ (e.currentTarget));
+							scheduleDraftSave();
+						}}
+					></textarea>
+				</div>
 				<span class="title-priority">
 					<TaskFieldPicker
 						taskId={task.id}
@@ -1055,14 +1084,16 @@
 				</span>
 			</div>
 			<DetailMetaPills entity={task} kind="task" />
-			<textarea
-				class="body-input"
-				bind:value={draftBody}
-				aria-label={t('detail.ariaTaskDesc')}
-				placeholder={t('tasks.addDescription')}
-				rows="3"
-				oninput={scheduleDraftSave}
-			></textarea>
+			{#if !taskMailId}
+				<textarea
+					class="body-input"
+					bind:value={draftBody}
+					aria-label={t('detail.ariaTaskDesc')}
+					placeholder={t('tasks.addDescription')}
+					rows="3"
+					oninput={scheduleDraftSave}
+				></textarea>
+			{/if}
 		</div>
 		<CommentThread
 			type="task"
@@ -1103,18 +1134,25 @@
 		</header>
 		<div class="body">
 			<div class="title-row">
-				<ProjectBox
-					state={projectLifecycle(project, tasks)}
-					icon={projectDisplayIcon(project, enterprises)}
-					size={24}
-				/>
-				<input
+				<span class="title-status">
+					<ProjectBox
+						state={projectLifecycle(project, tasks)}
+						icon={projectDisplayIcon(project, enterprises)}
+						size={24}
+					/>
+				</span>
+				<textarea
+					bind:this={titleEl}
 					class="title-input"
+					rows="1"
 					bind:value={draftTitle}
 					aria-label={t('detail.ariaProjectTitle')}
 					placeholder={t('common.untitled')}
-					oninput={scheduleDraftSave}
-				/>
+					oninput={(e) => {
+						hugTitle(/** @type {HTMLTextAreaElement} */ (e.currentTarget));
+						scheduleDraftSave();
+					}}
+				></textarea>
 			</div>
 			<textarea
 				class="body-input body-input-hug"
@@ -1250,13 +1288,18 @@
 		</header>
 		<div class="body note-body-wrap">
 			<div class="title-row">
-				<input
+				<textarea
+					bind:this={titleEl}
 					class="title-input"
+					rows="1"
 					bind:value={draftTitle}
 					aria-label={t('detail.ariaNoteTitle')}
 					placeholder={t('common.untitled')}
-					oninput={scheduleDraftSave}
-				/>
+					oninput={(e) => {
+						hugTitle(/** @type {HTMLTextAreaElement} */ (e.currentTarget));
+						scheduleDraftSave();
+					}}
+				></textarea>
 			</div>
 			<DetailMetaPills entity={note} kind="note" />
 			{#key note.id}
@@ -1750,14 +1793,21 @@
 		</header>
 		<div class="body">
 			<div class="title-row">
-				<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={36} />
-				<input
+				<span class="title-status">
+					<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={36} />
+				</span>
+				<textarea
+					bind:this={titleEl}
 					class="title-input"
+					rows="1"
 					bind:value={draftTitle}
 					aria-label={t('detail.ariaEntTitle')}
 					placeholder={t('common.untitled')}
-					oninput={scheduleDraftSave}
-				/>
+					oninput={(e) => {
+						hugTitle(/** @type {HTMLTextAreaElement} */ (e.currentTarget));
+						scheduleDraftSave();
+					}}
+				></textarea>
 			</div>
 			<textarea
 				class="body-input body-input-hug"
@@ -2245,6 +2295,8 @@
 		padding: 0;
 		border: 0;
 		outline: none;
+		resize: none;
+		overflow: hidden;
 		background: transparent;
 		font-family: var(--font);
 		font-size: 1.55rem;
@@ -2252,6 +2304,15 @@
 		letter-spacing: -0.03em;
 		line-height: 1.2;
 		color: var(--fg);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		field-sizing: content;
+	}
+
+	.title-stack .title-input {
+		flex: 1 1 12ch;
+		width: auto;
+		min-width: 12ch;
 	}
 
 	.title-input::placeholder {
@@ -2350,7 +2411,7 @@
 
 	.title-row {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 10px;
 		min-width: 0;
 	}
@@ -2359,7 +2420,7 @@
 		/* Match TaskCreate: status | title | priority — side inset from .body */
 		padding-left: 0;
 		padding-right: 0;
-		align-items: center;
+		align-items: flex-start;
 	}
 
 	.task-title-row .title {
@@ -2367,12 +2428,34 @@
 		min-width: 0;
 	}
 
-	.task-title-row .title-priority {
+	.title-status,
+	.title-priority {
 		flex-shrink: 0;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		line-height: 0;
+		/* Optical center with first title line (~1.55rem / 1.2) */
+		padding-top: 4px;
+	}
+
+	.title-stack {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0 0.35em;
+	}
+
+	.mail-prefix {
+		flex-shrink: 0;
+		font-family: var(--font);
+		font-size: 1.55rem;
+		font-weight: 700;
+		letter-spacing: -0.03em;
+		line-height: 1.2;
+		color: var(--fg-33);
 	}
 
 	.title {

@@ -743,6 +743,7 @@ export default {
 	'meta.deadline': 'Fecha límite',
 	'meta.momentStart': 'Inicio del momento',
 	'meta.momentEnd': 'Fin del momento',
+	'meta.assignee': 'Asignado',
 	'meta.assignees': 'Asignados',
 	'meta.noProjects': 'Aún no hay proyectos',
 	'meta.searchLabel': 'Buscar / añadir etiqueta',

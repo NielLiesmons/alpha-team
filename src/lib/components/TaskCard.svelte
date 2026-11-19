@@ -1,6 +1,7 @@
 <script>
 	/**
 	 * Feed row: status | title | people stack | priority
+	 * Mail-linked tasks: quiet “Mail” prefix + Mail Thread panel button (no description).
 	 */
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
@@ -9,6 +10,7 @@
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import { selectEntity } from '$lib/workspace.svelte.js';
 
 	let {
 		id = '',
@@ -24,6 +26,8 @@
 		momentAssignees = [],
 		/** Quiet “Mail” prefix when linked from a thread */
 		fromMail = false,
+		/** @type {string | null} */
+		mailThreadId = null,
 		selected = false,
 		onclick = () => {}
 	} = $props();
@@ -52,12 +56,23 @@
 		if (author) add(author);
 		return [...map.values()];
 	});
+
+	const threadId = $derived(String(mailThreadId || '').trim());
+
+	/** @param {MouseEvent} e */
+	function openMailThread(e) {
+		e.stopPropagation();
+		e.preventDefault();
+		if (!threadId) return;
+		selectEntity('mail', threadId);
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role a11y_click_events_have_key_events -->
 <article
 	class="task-card"
 	class:selected
+	class:from-mail={fromMail}
 	role="button"
 	tabindex="0"
 	aria-current={selected ? 'true' : undefined}
@@ -93,6 +108,13 @@
 			</span>
 		{/if}
 	</div>
+	{#if fromMail && threadId}
+		<div class="mail-row">
+			<button type="button" class="mail-thread-btn" onclick={openMailThread}>
+				{t('mail.thread')}
+			</button>
+		</div>
+	{/if}
 </article>
 
 <style>
@@ -148,6 +170,7 @@
 	}
 
 	.mail-prefix {
+		font-size: inherit;
 		font-weight: 500;
 		color: var(--fg-33);
 		margin-right: 0.35em;
@@ -174,5 +197,33 @@
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
+	}
+
+	.mail-row {
+		display: flex;
+		padding: 8px 0 0 36px;
+		box-sizing: border-box;
+	}
+
+	.mail-thread-btn {
+		display: inline-flex;
+		align-items: center;
+		height: 28px;
+		padding: 0 12px;
+		margin: 0;
+		border: 0;
+		border-radius: 9999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 500;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.mail-thread-btn:hover {
+		background: var(--fg-8);
+		color: var(--fg);
 	}
 </style>

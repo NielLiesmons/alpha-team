@@ -2,7 +2,7 @@
 	import FloatPanel from './FloatPanel.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import PriorityBox from './PriorityBox.svelte';
-	import { patchTask } from '$lib/workspace.svelte.js';
+	import { ensureMailTask, patchTask } from '$lib/workspace.svelte.js';
 
 	const STATUSES = [
 		{ value: 'backlog', label: 'Backlog' },
@@ -22,14 +22,25 @@
 		{ value: 'urgent', label: 'Urgent' }
 	];
 
-	/** @type {{ taskId: string, field: 'status' | 'priority', value: string, size?: number, align?: 'left' | 'right', variant?: 'icon' | 'pill' }} */
+	/**
+	 * @type {{
+	 *   taskId?: string,
+	 *   field: 'status' | 'priority',
+	 *   value: string,
+	 *   size?: number,
+	 *   align?: 'left' | 'right',
+	 *   variant?: 'icon' | 'pill',
+	 *   mailThread?: { id: string, subject?: string, body?: string, flagged?: boolean } | null
+	 * }}
+	 */
 	let {
-		taskId,
+		taskId = '',
 		field,
 		value,
 		size = 22,
 		align = 'left',
-		variant = 'icon'
+		variant = 'icon',
+		mailThread = null
 	} = $props();
 
 	let open = $state(false);
@@ -41,6 +52,8 @@
 	const ariaLabel = $derived(field === 'status' ? 'Set task status' : 'Set task priority');
 	const valueLabel = $derived(options.find((o) => o.value === value)?.label ?? value);
 	const iconSize = $derived(variant === 'pill' ? 20 : size);
+	const unset = $derived(!taskId && Boolean(mailThread?.id));
+	const boxState = $derived(field === 'status' ? (unset ? 'empty' : value) : value);
 
 	/**
 	 * @param {MouseEvent} e
@@ -59,10 +72,14 @@
 		e.stopPropagation();
 		e.preventDefault();
 		open = false;
-		if (next === value || !taskId) return;
+		if (next === value && taskId) return;
 		saving = true;
 		try {
-			await patchTask(taskId, field === 'status' ? { status: next } : { priority: next });
+			if (taskId) {
+				await patchTask(taskId, field === 'status' ? { status: next } : { priority: next });
+			} else if (mailThread?.id) {
+				await ensureMailTask(mailThread, field === 'status' ? { status: next } : { priority: next });
+			}
 		} catch (err) {
 			alert(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -71,7 +88,7 @@
 	}
 </script>
 
-<div class="picker" class:align-right={align === 'right'} class:pill={variant === 'pill'}>
+<div class="picker" class:align-right={align === 'right'} class:pill={variant === 'pill'} class:unset>
 	<button
 		bind:this={hitBtn}
 		type="button"
@@ -84,9 +101,9 @@
 		onclick={toggle}
 	>
 		{#if field === 'status'}
-			<TaskBox state={value} size={iconSize} />
+			<TaskBox state={boxState} size={iconSize} />
 		{:else}
-			<PriorityBox priority={value} size={variant === 'pill' ? 18 : size} />
+			<PriorityBox priority={unset ? 'none' : value} size={variant === 'pill' ? 18 : size} />
 		{/if}
 		{#if variant === 'pill'}
 			<span class="pill-text">{valueLabel}</span>
@@ -106,7 +123,7 @@
 				<button
 					type="button"
 					class="option"
-					class:active={value === opt.value}
+					class:active={value === opt.value && !unset}
 					onclick={(e) => pick(e, opt.value)}
 				>
 					{#if field === 'status'}
@@ -170,6 +187,11 @@
 	.hit:disabled {
 		opacity: 0.55;
 		cursor: wait;
+	}
+
+	.unset :global(.task-box),
+	.unset :global(.priority-box) {
+		opacity: 0.55;
 	}
 
 	.float-list {

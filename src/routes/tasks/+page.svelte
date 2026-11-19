@@ -103,6 +103,9 @@
 			</div>
 			<div class="card-stack">
 				{#each group.items as task (task.id)}
+					{@const mailThreadId = String(
+						task.mail_thread_id || task._drive?.mail_thread_id || ''
+					).trim()}
 					<TaskCard
 						id={task.id}
 						title={task.title}
@@ -111,7 +114,8 @@
 						author={task.author}
 						assignees={task.assignees ?? []}
 						momentAssignees={momentAssigneeEmails(task.id)}
-						fromMail={Boolean(task.mail_thread_id || task._drive?.mail_thread_id)}
+						fromMail={Boolean(mailThreadId)}
+						{mailThreadId}
 						onclick={() => selectEntity('task', task.id)}
 						selected={ui.selection?.kind === 'task' && ui.selection.id === task.id}
 					/>

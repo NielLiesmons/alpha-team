@@ -741,6 +741,7 @@ export default {
 	'meta.deadline': 'Deadline',
 	'meta.momentStart': 'Moment start',
 	'meta.momentEnd': 'Moment end',
+	'meta.assignee': 'Assignee',
 	'meta.assignees': 'Assignees',
 	'meta.noProjects': 'No projects yet',
 	'meta.searchLabel': 'Search / Add label',
