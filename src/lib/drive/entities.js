@@ -2552,7 +2552,7 @@ export async function deleteChatMessage(session, id, opts = {}) {
 
 /**
  * Soft-delete a chat message — keep id in feed, rewrite leaf as tombstone.
- * UI shows a muted “Deleted message” bubble.
+ * UI shows a muted “Deleted Message” bubble.
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
  * @param {{ author?: string }} [opts]

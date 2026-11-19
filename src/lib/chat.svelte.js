@@ -1411,11 +1411,17 @@ function normEmail(value) {
 }
 
 /**
+ * Resolve a reply_to parent for quote chrome.
+ * Soft-deleted parents stay in the feed as tombstones; missing ids get a
+ * deleted stub so ChatFeedCard can still show “Deleted Message”.
  * @param {string | null | undefined} replyToId
  */
 export function findChatParent(replyToId) {
 	if (!replyToId) return null;
-	return chatFeed.find((m) => m.id === replyToId) ?? null;
+	const id = String(replyToId);
+	const found = chatFeed.find((m) => m.id === id);
+	if (found) return found;
+	return { id, deleted: true, body: '', author: '' };
 }
 
 /** Helpers for project boxes in chat tips. */

@@ -83,6 +83,9 @@
 	const parentName = $derived(
 		parent ? parentPerson?.name || displayNameFromEmail(parent.author) : ''
 	);
+	const parentDeleted = $derived(
+		Boolean(parent && (parent.deleted || parent.deleted_at || parent._deleted))
+	);
 	const isReply = $derived(Boolean(parent));
 	const isMine = $derived.by(() => {
 		const me = (actor.email || '').trim().toLowerCase();
@@ -330,7 +333,10 @@
 				<button
 					type="button"
 					class="quote"
-					aria-label={`${t('chat.jumpToMessage')}: ${parentName}`}
+					class:deleted={parentDeleted}
+					aria-label={parentDeleted
+						? t('chat.deletedMessage')
+						: `${t('chat.jumpToMessage')}: ${parentName}`}
 					onclick={(e) => {
 						e.stopPropagation();
 						onQuoteClick?.(String(parent.id));
@@ -338,14 +344,20 @@
 				>
 					<div
 						class="quote-bar"
-						style:background={accentRgb(parent.author, parentName)}
+						style:background={parentDeleted
+							? undefined
+							: accentRgb(parent.author, parentName)}
 						aria-hidden="true"
 					></div>
 					<div class="quote-body">
-						<span class="quote-name" style:color={nameColor(parent.author, parentName)}
-							>{parentName}</span
-						>
-						<span class="quote-text">{preview(parent.body)}</span>
+						{#if parentDeleted}
+							<span class="quote-text deleted">{t('chat.deletedMessage')}</span>
+						{:else}
+							<span class="quote-name" style:color={nameColor(parent.author, parentName)}
+								>{parentName}</span
+							>
+							<span class="quote-text">{preview(parent.body)}</span>
+						{/if}
 					</div>
 				</button>
 			{/if}
@@ -636,7 +648,6 @@
 		margin: 0;
 		font-size: 13px;
 		font-weight: 500;
-		font-style: italic;
 		color: var(--fg-33);
 		line-height: 1.3;
 	}
@@ -899,9 +910,17 @@
 		-webkit-tap-highlight-color: transparent;
 	}
 
+	.quote.deleted {
+		cursor: default;
+	}
+
 	.quote:focus-visible {
 		outline: 2px solid var(--accent-1);
 		outline-offset: 1px;
+	}
+
+	.quote.deleted:focus-visible {
+		outline: none;
 	}
 
 	.bubble.mine .quote {
@@ -913,6 +932,10 @@
 		width: 2.8px;
 		flex-shrink: 0;
 		align-self: stretch;
+	}
+
+	.quote.deleted .quote-bar {
+		background: var(--fg-33);
 	}
 
 	.quote-body {
@@ -941,8 +964,17 @@
 		text-overflow: ellipsis;
 	}
 
+	.quote-text.deleted {
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
 	.bubble.mine .quote-text {
 		color: rgba(255, 255, 255, 0.72);
+	}
+
+	.bubble.mine .quote-text.deleted {
+		color: rgba(255, 255, 255, 0.55);
 	}
 
 	.text {

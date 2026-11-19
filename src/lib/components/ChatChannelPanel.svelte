@@ -1134,7 +1134,6 @@
 	.pub-tip.deleted .pub-kind,
 	.pub-tip.deleted .pub-title {
 		color: var(--fg-33);
-		font-style: italic;
 		font-weight: 500;
 	}
 
