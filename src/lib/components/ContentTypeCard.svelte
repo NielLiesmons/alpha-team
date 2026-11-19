@@ -63,9 +63,15 @@
 		cursor: pointer;
 	}
 	.ct-glyph {
-		flex: 0 0 auto;
+		flex: 0 0 22px;
+		width: 22px;
+		height: 22px;
+		max-width: 22px;
+		max-height: 22px;
+		overflow: hidden;
 		display: grid;
 		place-items: center;
+		box-sizing: border-box;
 		color: var(--fg-66);
 	}
 	.ct-kind {

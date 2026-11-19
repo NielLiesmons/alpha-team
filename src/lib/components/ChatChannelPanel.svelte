@@ -1173,16 +1173,24 @@
 		flex-shrink: 0;
 		width: 22px;
 		height: 22px;
+		max-width: 22px;
+		max-height: 22px;
+		overflow: hidden;
 		display: grid;
 		place-items: center;
+		box-sizing: border-box;
 	}
 
 	.pub-glyph {
 		flex-shrink: 0;
 		width: 22px;
 		height: 22px;
+		max-width: 22px;
+		max-height: 22px;
+		overflow: hidden;
 		display: grid;
 		place-items: center;
+		box-sizing: border-box;
 		color: var(--fg-33);
 	}
 
