@@ -106,9 +106,9 @@
 								{#if item.kind === 'reaction'}
 									<span class="emoji">{item.emoji || '❤️'}</span>
 								{:else if item.kind === 'mention'}
-									<At size={11} />
+									<At size={14} />
 								{:else}
-									<Reply size={11} />
+									<Reply size={14} />
 								{/if}
 							</span>
 						{/if}
@@ -167,7 +167,7 @@
 
 	.row {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		gap: 12px;
 		width: 100%;
 		/* 14px = ChromeMobileBar side padding (back button left edge) */
@@ -194,19 +194,21 @@
 		line-height: 0;
 	}
 
+	/* Before: 20×20 solid shell disc. After: 26×26 frosted glass. */
 	.badge {
 		position: absolute;
-		right: -2px;
-		bottom: -2px;
-		width: 20px;
-		height: 20px;
+		right: -3px;
+		bottom: -3px;
+		width: 26px;
+		height: 26px;
 		display: grid;
 		place-items: center;
 		border-radius: 9999px;
 		box-sizing: border-box;
-		background: var(--shell, var(--bg));
-		border: 1.5px solid var(--shell, var(--bg));
-		box-shadow: 0 0 0 1px var(--fg-8);
+		background: color-mix(in srgb, var(--bg) 58%, transparent);
+		border: 1px solid var(--fg-16);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		color: var(--fg-66);
 		line-height: 0;
 		pointer-events: none;
@@ -214,15 +216,15 @@
 
 	.badge.emoji-badge {
 		color: inherit;
-		box-shadow: 0 0 0 1px var(--fg-8);
 	}
 
 	.emoji {
 		display: block;
-		font-size: 11px;
+		font-size: 13px;
 		line-height: 1;
 	}
 
+	/* Assigned keeps bare TaskBox — no glass badge circle */
 	.task-mark {
 		position: absolute;
 		right: -3px;
@@ -236,9 +238,8 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0;
+		gap: 1px;
 		justify-content: center;
-		min-height: 44px;
 	}
 
 	.line1 {
@@ -249,7 +250,7 @@
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 14px;
 		font-weight: 600;
-		line-height: 1.1;
+		line-height: 1.2;
 		overflow: hidden;
 		white-space: nowrap;
 	}
@@ -270,17 +271,21 @@
 	.line2 {
 		display: block;
 		min-width: 0;
-		margin-top: -1px;
-		line-height: 1.1;
+		padding: 0;
+		margin: 0;
+		line-height: 1.2;
 	}
 
+	/* Reset global `.preview { padding: 16px }` from app.css */
 	.preview {
 		display: block;
 		min-width: 0;
+		padding: 0;
+		margin: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
-		line-height: 1.1;
+		line-height: 1.2;
 		color: var(--fg-66);
 		overflow: hidden;
 		text-overflow: ellipsis;
