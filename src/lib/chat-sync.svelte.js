@@ -17,12 +17,21 @@ let watching = false;
 let inFlight = false;
 /** Tip hash from the bus while a pull was already running — run again after. */
 let pendingBusTip = /** @type {string | null} */ (null);
+/** Poll/force arrived while inFlight — run another tip check after. */
+let pendingRepull = false;
 
 export async function pullChatIfNeeded(force = false) {
 	const session = activeSession();
-	if (!session || inFlight) return;
+	if (!session) return;
 	/* Don't clobber an in-flight send with a mid-write tip snapshot. */
-	if (chatUi.posting) return;
+	if (chatUi.posting) {
+		pendingRepull = true;
+		return;
+	}
+	if (inFlight) {
+		pendingRepull = true;
+		return;
+	}
 	const now = Date.now();
 	if (!force && now - lastChatPull < 400) return;
 	inFlight = true;
@@ -50,7 +59,10 @@ export async function pullChatIfNeeded(force = false) {
 		inFlight = false;
 		const queued = pendingBusTip;
 		pendingBusTip = null;
+		const repull = pendingRepull;
+		pendingRepull = false;
 		if (queued) void wakeChatFromTip(queued);
+		else if (repull) void pullChatIfNeeded(true);
 	}
 }
 
@@ -60,8 +72,9 @@ export async function pullChatIfNeeded(force = false) {
  */
 export function flushChatWake() {
 	const queued = pendingBusTip;
+	pendingBusTip = null;
+	pendingRepull = false;
 	if (queued) {
-		pendingBusTip = null;
 		void wakeChatFromTip(queued);
 		return;
 	}
@@ -103,7 +116,10 @@ export async function wakeChatFromTip(tip) {
 		inFlight = false;
 		const queued = pendingBusTip;
 		pendingBusTip = null;
+		const repull = pendingRepull;
+		pendingRepull = false;
 		if (queued && queued !== lastTip) void wakeChatFromTip(queued);
+		else if (repull) void pullChatIfNeeded(true);
 	}
 }
 

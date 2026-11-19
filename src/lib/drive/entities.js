@@ -2126,6 +2126,13 @@ let cachedFeedTip = '';
 let cachedFeedIds = [];
 
 /**
+ * Serialize chat tip commits. Parallel putPaths CAS-retry storms under rapid
+ * multi-send — leaves land, then feed.json races drop ids / delay peers.
+ * @type {Promise<unknown>}
+ */
+let chatTipWriteChain = Promise.resolve();
+
+/**
  * @param {string} tip
  * @param {string[]} ids
  */
@@ -2528,30 +2535,32 @@ export async function createChatMessage(session, input, opts = {}) {
 
 	/** Rematerialize may replace feed ids — cache what we actually commit. */
 	let committedFeedIds = feedIds;
-	const tipAfter = await putPaths(session, buildWrites(feedIds, commentIds), {
-		/* Leaf already on the server — reuse ciphertext, don't re-upload. */
-		prePrepared: {
-			[leafPath]: { hash: leafHash, wrapped_key: leafKey, kind: 'chat_message' }
-		},
-		/*
-		 * Always probe tip for chat feed writes. Skipping under tipWarm raced with
-		 * concurrent tip moves and could commit a feed.json missing this id —
-		 * sender saw ✓ then message vanished on reopen.
-		 */
-		skipTipProbe: false,
-		rematerialize: async (dir) => {
-			const liveFeed = await listFeedIdsFromDir(session, dir);
-			const nextFeed = await orderFeedIdsNewestFirst(
-				session,
-				dir,
-				[id, ...liveFeed, ...known],
-				{ [id]: created }
-			);
-			committedFeedIds = nextFeed;
-			const nextComments = await resolveCommentIds(dir);
-			return buildWrites(nextFeed, nextComments);
-		}
-	});
+	const runTipWrite = () =>
+		putPaths(session, buildWrites(feedIds, commentIds), {
+			/* Leaf already on the server — reuse ciphertext, don't re-upload. */
+			prePrepared: {
+				[leafPath]: { hash: leafHash, wrapped_key: leafKey, kind: 'chat_message' }
+			},
+			/*
+			 * Always probe tip for chat feed writes. Skipping under tipWarm raced with
+			 * concurrent tip moves and could commit a feed.json missing this id —
+			 * sender saw ✓ then message vanished on reopen.
+			 */
+			skipTipProbe: false,
+			rematerialize: async (dir) => {
+				const liveFeed = await listFeedIdsFromDir(session, dir);
+				const nextFeed = await orderFeedIdsNewestFirst(
+					session,
+					dir,
+					[id, ...liveFeed, ...known],
+					{ [id]: created }
+				);
+				committedFeedIds = nextFeed;
+				const nextComments = await resolveCommentIds(dir);
+				return buildWrites(nextFeed, nextComments);
+			}
+		});
+	const tipAfter = await (chatTipWriteChain = chatTipWriteChain.then(runTipWrite, runTipWrite));
 	if (tipAfter) rememberFeedIds(String(tipAfter), committedFeedIds);
 	try {
 		if (tipAfter) opts.onTipWritten?.(String(tipAfter));
