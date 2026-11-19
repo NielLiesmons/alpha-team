@@ -42,6 +42,12 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 - Mobile sheets may still support drag-down-to-dismiss as a gesture; Modal/CreateSheet chrome itself stays clean (title / actions only).
 - Comment / chat entity panels: FAB inset inside the detail column (`~20px`); open panel matches Modal glass (`--modal-bg` / `--glass-panel`). Desktop floating card keeps **full** rounded corners (incl. bottom). Composer chrome matches Chat (`ChatComposer` + quote bar).
 
+## Mobile scrollbars
+
+- ≤767px: **no scrollbars by default** (`@alpha/ui/scrollbars.css`) — overflow still scrolls.
+- Opt in with `.show-scrollbar` only when scroll affordance is otherwise unclear.
+- Do **not** opt in for horizontal emoji rows, pill tracks, or segmented controls (stay hidden).
+
 ## Destructive
 
 - Settings Disconnect / cancel-danger chrome: **grayscale only** (muted text + quiet fill).

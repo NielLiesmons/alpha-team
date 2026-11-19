@@ -1,5 +1,6 @@
 @import url('https://fonts.bunny.net/css?family=inter:400,500,600,700|ovo:400&display=swap');
 @import '@alpha/ui/popover.css';
+@import '@alpha/ui/scrollbars.css';
 
 /*
  * Ovo is Regular-only. Without this, font-weight:700 invents bold and Chrome
