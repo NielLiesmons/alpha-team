@@ -7,6 +7,7 @@ import { chatFeed, chatUi } from './chat.svelte.js';
 
 const LOCAL_KEYS = [
 	'alpha.chat.feed.v1',
+	'alpha.mail.list.v1',
 	'alpha.workspace.cache.v1',
 	'alpha.tracks.cache.v1',
 	'alpha.player.cache.v1'
@@ -63,7 +64,12 @@ export async function clearLocalUiCache() {
 				if (!k || skip.has(k)) continue;
 				if (
 					k.startsWith('alpha.') &&
-					(k.includes('cache') || k.includes('feed') || k.includes('workspace') || k.includes('track'))
+					(k.includes('cache') ||
+						k.includes('feed') ||
+						k.includes('workspace') ||
+						k.includes('track') ||
+						k.includes('mail.list') ||
+						k.startsWith('alpha.members.v1:'))
 				) {
 					localStorage.removeItem(k);
 					clearedKeys.push(k);

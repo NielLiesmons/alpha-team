@@ -193,7 +193,7 @@ function remember(key, buffer, type, kind) {
  *   content_type?: string,
  *   name?: string
  * }} att
- * @param {{ signal?: AbortSignal }} [opts]
+ * @param {{ signal?: AbortSignal, localOnly?: boolean }} [opts]
  * @returns {Promise<{ url: string, type: string, kind: 'image' | 'video' | 'voice' | 'file' } | null>}
  */
 export async function getAttachmentObjectUrl(session, att, opts = {}) {
@@ -211,6 +211,19 @@ export async function getAttachmentObjectUrl(session, att, opts = {}) {
 	}
 
 	if (opts.signal?.aborted) return null;
+
+	/* Boot / PFP warm — memory + IndexedDB only; never share inflight with network. */
+	if (opts.localOnly) {
+		const cached = await idbGetBlob(key);
+		if (!cached?.buffer) return null;
+		const entry = remember(
+			key,
+			cached.buffer,
+			cached.type || typeHint,
+			/** @type {any} */ (cached.kind) || kind
+		);
+		return { url: entry.url, type: entry.type, kind: /** @type {any} */ (entry.kind) };
+	}
 
 	const pending = inflight.get(key);
 	if (pending) {

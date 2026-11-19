@@ -1,9 +1,12 @@
 /**
  * Profile picture URLs from Drive paths on meta/members.json.
  * Drive session stays shared; only the picture blob path is per-member.
+ *
+ * Local-first: members cache supplies paths sync; media-cache IDB supplies
+ * decrypted JPEG bytes across hard refresh (small team → few PFPs, always warm).
  */
 
-import { getPath } from './drive/client.js';
+import { getAttachmentObjectUrl } from './drive/media-cache.js';
 import { putAvatarImage } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
 import { memberFor, members, upsertMember } from './members.svelte.js';
@@ -39,6 +42,21 @@ export function hydrateAvatarUrls() {
 }
 
 /**
+ * Await IndexedDB hits for every known member picture (no network).
+ * Call after session + members hydrate so first paint already has blob URLs.
+ */
+export async function warmAvatarUrlsFromCache() {
+	const session = activeSession();
+	if (!session) return;
+	const paths = [...new Set(members.map((m) => m.picture).filter(Boolean))];
+	await Promise.all(
+		paths.map((p) => ensureAvatarUrl(/** @type {string} */ (p), { localOnly: true }))
+	);
+	/* Network fill-in for misses — don't block boot. */
+	hydrateAvatarUrls();
+}
+
+/**
  * Reload members.json from Drive and hydrate picture blobs.
  * Call on boot (after chat) and whenever the tip moves.
  */
@@ -47,13 +65,14 @@ export async function refreshMembersAndAvatars() {
 	if (!session) return;
 	const { ensureMembers } = await import('./members.svelte.js');
 	await ensureMembers(session);
-	hydrateAvatarUrls();
+	await warmAvatarUrlsFromCache();
 }
 
 /**
  * @param {string} path
+ * @param {{ localOnly?: boolean }} [opts]
  */
-export async function ensureAvatarUrl(path) {
+export async function ensureAvatarUrl(path, opts = {}) {
 	const p = String(path || '').trim();
 	if (!p) return null;
 	if (urlByPath[p]) return urlByPath[p];
@@ -62,15 +81,20 @@ export async function ensureAvatarUrl(path) {
 	if (!session) return null;
 	loading.add(p);
 	try {
-		const bytes = await getPath(session, p);
-		const copy = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-		const blob = new Blob([copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength)], {
-			type: 'image/jpeg'
-		});
-		const prev = urlByPath[p];
-		if (prev) URL.revokeObjectURL(prev);
-		urlByPath[p] = URL.createObjectURL(blob);
-		return urlByPath[p];
+		/* media-cache: memory → IndexedDB → getPath. PFPs stay fast across refresh. */
+		const res = await getAttachmentObjectUrl(
+			session,
+			{
+				path: p,
+				kind: 'image',
+				content_type: 'image/jpeg',
+				name: 'avatar.jpg'
+			},
+			{ localOnly: Boolean(opts.localOnly) }
+		);
+		if (!res?.url) return null;
+		urlByPath[p] = res.url;
+		return res.url;
 	} catch {
 		return null;
 	} finally {

@@ -5,11 +5,12 @@
  */
 
 import { actor, loadActor } from './actor.svelte.js';
-import { refreshMembersAndAvatars } from './avatar.svelte.js';
+import { refreshMembersAndAvatars, warmAvatarUrlsFromCache } from './avatar.svelte.js';
 import { hydrateChatFeedFromCache, refreshChatFeed } from './chat.svelte.js';
 import { loadDeviceProfiles } from './device-profiles.svelte.js';
 import { refreshBackgroundDrive } from './drive-refresh.js';
-import { driveSession, loadSessionFromStorage } from './drive/session.svelte.js';
+import { driveSession, loadSessionFromStorage, activeSession } from './drive/session.svelte.js';
+import { hydrateMembersFromCache } from './members.svelte.js';
 import { ensurePersistentStorage } from './offline-store.js';
 import {
 	absorbReturnToFromLocation,
@@ -53,8 +54,9 @@ export async function bootApp() {
 		/* ignore */
 	}
 	try {
-		const { hydrateMailTipCache } = await import('./mail.svelte.js');
+		const { hydrateMailTipCache, hydrateMailFromCache } = await import('./mail.svelte.js');
 		hydrateMailTipCache();
+		hydrateMailFromCache();
 	} catch {
 		/* ignore */
 	}
@@ -81,12 +83,19 @@ export async function bootApp() {
 	// Shell chrome first; lists wait on hydrate so we never flash empty offline.
 	ui.source = 'drive';
 	hydrateChatFeedFromCache();
+	hydrateMembersFromCache(activeSession());
 	appBoot.ready = true;
 	driveSession.loading = false;
 	void ensurePersistentStorage();
 
 	try {
 		await hydrateWorkspaceFromCache();
+	} catch {
+		/* ignore */
+	}
+	/* Warm PFPs from IndexedDB before unlocking lists — small team, few blobs. */
+	try {
+		await warmAvatarUrlsFromCache();
 	} catch {
 		/* ignore */
 	}

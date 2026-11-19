@@ -6,6 +6,8 @@
 import { getPath, putPath } from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
 
+const MEMBERS_LS_PREFIX = 'alpha.members.v1:';
+
 /** @typedef {'owner' | 'admin' | 'member'} MemberRole */
 /** @typedef {'active' | 'invited' | 'disabled'} MemberStatus */
 
@@ -89,6 +91,61 @@ function replaceMembers(list) {
 
 /**
  * @param {import('./drive/client.js').DriveSession} session
+ */
+function membersCacheKey(session) {
+	return MEMBERS_LS_PREFIX + String(session?.url || '');
+}
+
+/**
+ * Persist members (incl. picture paths) for instant hydrate on hard refresh.
+ * @param {import('./drive/client.js').DriveSession} session
+ * @param {Member[]} list
+ */
+function persistMembersCache(session, list) {
+	if (typeof localStorage === 'undefined' || !session?.url) return;
+	try {
+		localStorage.setItem(
+			membersCacheKey(session),
+			JSON.stringify({
+				at: Date.now(),
+				members: list.map((m) => ({
+					email: normalizeEmail(m.email),
+					name: m.name,
+					role: m.role,
+					status: m.status || 'active',
+					...(m.picture ? { picture: m.picture } : {}),
+					...(m.invited_at ? { invited_at: m.invited_at } : {}),
+					...(m.joined_at ? { joined_at: m.joined_at } : {})
+				}))
+			})
+		);
+	} catch {
+		/* quota */
+	}
+}
+
+/**
+ * Sync hydrate member rows (picture paths) before Drive round-trip.
+ * @param {import('./drive/client.js').DriveSession} [session]
+ * @returns {boolean}
+ */
+export function hydrateMembersFromCache(session = activeSession()) {
+	if (!session?.url || typeof localStorage === 'undefined') return false;
+	if (members.length > 0) return true;
+	try {
+		const raw = localStorage.getItem(membersCacheKey(session));
+		const doc = raw ? JSON.parse(raw) : null;
+		const list = parseMembersDoc({ members: doc?.members });
+		if (!list.length) return false;
+		replaceMembers(list);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * @param {import('./drive/client.js').DriveSession} session
  * @param {Member[]} list
  */
 export async function saveMembers(session, list = members) {
@@ -107,6 +164,7 @@ export async function saveMembers(session, list = members) {
 	};
 	await putPath(session, MEMBERS_PATH, 'blob', JSON.stringify(doc, null, 2));
 	replaceMembers(doc.members);
+	persistMembersCache(session, doc.members);
 	return doc;
 }
 
@@ -132,6 +190,7 @@ function mergeDefaultMembers(list) {
 
 export async function ensureMembers(session = activeSession()) {
 	if (!session) return members;
+	hydrateMembersFromCache(session);
 	try {
 		const bytes = await getPath(session, MEMBERS_PATH);
 		const text = typeof bytes === 'string' ? bytes : new TextDecoder().decode(bytes);
@@ -139,6 +198,7 @@ export async function ensureMembers(session = activeSession()) {
 		if (list.length) {
 			const { list: merged, changed } = mergeDefaultMembers(list);
 			replaceMembers(merged);
+			persistMembersCache(session, merged);
 			if (changed) {
 				try {
 					await saveMembers(session, merged);

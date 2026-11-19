@@ -206,10 +206,8 @@ export function hydrateChatFeedFromCache() {
 			};
 		});
 		chatFeed.push(...rows);
-		if (rows.some((m) => m._failed)) {
-			chatUi.error = t('chat.pendingLost');
-			writeChatCache(chatFeed);
-		}
+		/* Failed bubbles carry their own retry — never a global pendingLost banner. */
+		if (rows.some((m) => m._failed)) writeChatCache(chatFeed);
 	}
 	chatUi.settled = true;
 	chatUi.loading = false;
@@ -293,15 +291,25 @@ export async function refreshChatFeed() {
 	}
 	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
-	const hasFailed = chatFeed.some((m) => m?._failed);
-	if (!hasFailed) chatUi.error = null;
+	chatUi.error = null;
 	const gen = ++feedFetchGen;
 	const prev = chatFeed.slice();
 	try {
 		const apply = (/** @type {any[]} */ list) => {
 			if (gen !== feedFetchGen) return;
+			/* Empty tip/ids miss must not wipe a warm localStorage feed (empty flash). */
+			if (!list?.length && (prev.length || chatFeed.length)) {
+				chatUi.loading = false;
+				chatUi.settled = true;
+				return;
+			}
 			const merged = mergeFeedRows(list, prev);
 			if (!merged.length && !chatFeed.length) return;
+			if (!merged.length && chatFeed.length) {
+				chatUi.loading = false;
+				chatUi.settled = true;
+				return;
+			}
 			chatFeed.splice(0, chatFeed.length, ...merged);
 			chatUi.loading = false;
 			chatUi.settled = true;
@@ -811,7 +819,7 @@ export async function postChatMessage(input) {
 				delivery: 'failed'
 			};
 		}
-		chatUi.error = t('chat.notConnected');
+		/* Bubble shows _failed + retry — no global banner. */
 		writeChatCache(chatFeed);
 		return optimistic;
 	}
@@ -1041,7 +1049,6 @@ export async function postChatMessage(input) {
 					_outbox: prev._outbox || outbox
 				};
 			}
-			chatUi.error = e instanceof Error ? e.message : String(e);
 			writeChatCache(chatFeed);
 		} finally {
 			chatUi.posting = false;
@@ -1060,8 +1067,7 @@ export async function postChatMessage(input) {
 export async function retryChatMessage(msg) {
 	const draft = msg?._outbox;
 	if (!draft || typeof draft !== 'object') {
-		chatUi.error = t('chat.retryUnavailable');
-		throw new Error(chatUi.error);
+		throw new Error(t('chat.retryUnavailable'));
 	}
 	const trackId = String(msg._localId || msg.id || '');
 	const drop = (/** @type {any[]} */ list) =>
@@ -1078,7 +1084,6 @@ export async function retryChatMessage(msg) {
 		if (commentsByKey[key]) commentsByKey[key] = drop(commentsByKey[key]);
 	}
 	writeChatCache(chatFeed);
-	chatUi.error = null;
 	/* Re-drive the full durable path (optimistic → leaf → tip → settle / failed). */
 	return postChatMessage({
 		body: String(draft.body || ''),

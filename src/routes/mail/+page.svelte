@@ -27,6 +27,7 @@
 		markMailUnread,
 		moveMailThreadLocal,
 		preferReplyAll,
+		hydrateMailFromCache,
 		refreshMail,
 		threadMessages,
 		threadParticipantProfiles
@@ -54,6 +55,9 @@
 			badge: mailUnreadCountForCategory(c)
 		}))
 	);
+
+	/* Sync before first paint — skeleton only if this folder has no cache. */
+	hydrateMailFromCache();
 
 	$effect(() => {
 		mailView.folder;

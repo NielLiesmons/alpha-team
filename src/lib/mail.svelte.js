@@ -35,6 +35,126 @@ export const mailUi = $state({
 	sending: false
 });
 
+/** localStorage list cache — paint folder threads before JMAP/Drive (chat feed pattern). */
+const MAIL_LIST_CACHE_KEY = 'alpha.mail.list.v1';
+
+/**
+ * Slim rows for cache — drop heavy HTML / raw JMAP so quota stays healthy.
+ * @param {any} msg
+ */
+function thinMailMessage(msg) {
+	if (!msg || typeof msg !== 'object') return msg;
+	const body = String(msg.body || '')
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim()
+		.slice(0, 400);
+	return {
+		schema: msg.schema || 'alpha.mail_message/1',
+		id: msg.id,
+		threadId: msg.threadId || msg.id,
+		from: msg.from,
+		from_name: msg.from_name,
+		to: Array.isArray(msg.to) ? msg.to : [],
+		to_people: Array.isArray(msg.to_people) ? msg.to_people : undefined,
+		subject: msg.subject,
+		body,
+		created_at: msg.created_at,
+		transport: msg.transport,
+		messageId: msg.messageId,
+		read_by: Array.isArray(msg.read_by) ? msg.read_by : undefined,
+		_unread: Boolean(msg._unread),
+		_flagged: Boolean(msg._flagged),
+		...(msg._priority != null ? { _priority: msg._priority } : {}),
+		...(msg._local ? { _local: true } : {}),
+		...(msg._pending ? { _pending: true } : {}),
+		...(msg._jmap?.keywords ? { _jmap: { keywords: { ...msg._jmap.keywords } } } : {})
+	};
+}
+
+/**
+ * @param {any} thread
+ */
+function thinMailThread(thread) {
+	if (!thread || typeof thread !== 'object') return thread;
+	const msgs = Array.isArray(thread.messages)
+		? thread.messages.map(thinMailMessage)
+		: undefined;
+	const base = thinMailMessage(thread);
+	return {
+		...base,
+		...(msgs ? { messages: msgs } : {}),
+		...(thread._latestFrom ? { _latestFrom: thread._latestFrom } : {}),
+		...(thread.participantEmails ? { participantEmails: thread.participantEmails } : {})
+	};
+}
+
+/**
+ * @param {string} email
+ * @param {string} folder
+ */
+function mailListCacheSlot(email, folder) {
+	return `${normEmail(email)}|${String(folder || 'inbox')}`;
+}
+
+/**
+ * @param {string} email
+ * @param {string} folder
+ * @param {any[]} threads
+ */
+function writeMailListCache(email, folder, threads) {
+	if (typeof localStorage === 'undefined') return;
+	const me = normEmail(email) || 'drive';
+	if (!Array.isArray(threads)) return;
+	try {
+		const raw = localStorage.getItem(MAIL_LIST_CACHE_KEY);
+		const doc = raw ? JSON.parse(raw) : {};
+		const next = doc && typeof doc === 'object' ? doc : {};
+		next[mailListCacheSlot(me, folder)] = {
+			at: Date.now(),
+			threads: threads.slice(0, 80).map(thinMailThread)
+		};
+		localStorage.setItem(MAIL_LIST_CACHE_KEY, JSON.stringify(next));
+	} catch {
+		/* quota */
+	}
+}
+
+/**
+ * @param {string} [email]
+ * @param {string} [folder]
+ * @returns {any[] | null}
+ */
+function readMailListCache(email, folder) {
+	if (typeof localStorage === 'undefined') return null;
+	const me = normEmail(email || mailActorEmail()) || 'drive';
+	const fold = String(folder || mailView.folder || 'inbox');
+	try {
+		const raw = localStorage.getItem(MAIL_LIST_CACHE_KEY);
+		const doc = raw ? JSON.parse(raw) : null;
+		const row = doc?.[mailListCacheSlot(me, fold)];
+		return Array.isArray(row?.threads) ? row.threads : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Paint cached folder threads immediately (hard refresh) — mirror hydrateChatFeedFromCache.
+ * @param {string} [email]
+ * @param {string} [folder]
+ * @returns {boolean}
+ */
+export function hydrateMailFromCache(email, folder) {
+	const cached = readMailListCache(email, folder);
+	if (!Array.isArray(cached) || !cached.length) return false;
+	if (mailMessages.length === 0) {
+		mailMessages.push(...cached);
+		mailUi.loading = false;
+	}
+	return true;
+}
+
 /**
  * Optimistic unread overrides survive refresh until JMAP/$seen catches up (or TTL).
  * @type {Map<string, { unread: boolean, until: number }>}
@@ -680,6 +800,8 @@ function mailMsgSame(a, b) {
 /** @type {Promise<void> | null} */
 let refreshMailInflight = null;
 let refreshMailQueued = false;
+/** Last folder painted into mailMessages — swap cache on folder change. */
+let paintedMailFolder = '';
 
 export async function refreshMail() {
 	/* Never clobber an in-flight send — that caused cards to flicker / duplicate. */
@@ -696,6 +818,17 @@ export async function refreshMail() {
 		const me = mailActorEmail();
 		const pw = me ? getMailboxPassword(me) : '';
 		const folder = mailView.folder;
+		/* Folder switch or cold start — paint that folder’s cache before network. */
+		if (folder !== paintedMailFolder || mailMessages.length === 0) {
+			const cached = readMailListCache(me, folder);
+			if (Array.isArray(cached) && cached.length) {
+				mailMessages.splice(0, mailMessages.length, ...cached);
+				mailUi.loading = false;
+			} else if (folder !== paintedMailFolder) {
+				mailMessages.splice(0, mailMessages.length);
+			}
+			paintedMailFolder = folder;
+		}
 		const hadLocal = mailMessages.length > 0;
 		const pendingSnap = snapshotOptimisticMail();
 		const keepError = mailUi.error;
@@ -713,19 +846,26 @@ export async function refreshMail() {
 					refreshMailQueued = true;
 					return;
 				}
+				/* Never wipe a warm cache with an empty miss. */
+				if (!list.length && mailMessages.length) {
+					return;
+				}
 				mailMessages.length = 0;
 				mailMessages.push(...list);
 				for (const m of list) rememberMailTip(m);
 				reapplyOptimisticMail(pendingSnap);
 				reapplyUnreadOverrides();
+				writeMailListCache(me, folder, mailMessages);
 				return;
 			}
 
 			const session = activeSession();
 			if (!session) {
-				const locals = mailMessages.filter((m) => m._local);
-				mailMessages.splice(0, mailMessages.length, ...locals);
-				for (const m of locals) rememberMailTip(m);
+				if (!hadLocal) {
+					const locals = mailMessages.filter((m) => m._local);
+					mailMessages.splice(0, mailMessages.length, ...locals);
+					for (const m of locals) rememberMailTip(m);
+				}
 				reapplyOptimisticMail(pendingSnap);
 				reapplyUnreadOverrides();
 				if (me && !pw) {
@@ -739,11 +879,15 @@ export async function refreshMail() {
 				refreshMailQueued = true;
 				return;
 			}
+			if (!list.length && mailMessages.length) {
+				return;
+			}
 			mailMessages.length = 0;
 			mailMessages.push(...list);
 			for (const m of list) rememberMailTip(m);
 			reapplyOptimisticMail(pendingSnap);
 			reapplyUnreadOverrides();
+			writeMailListCache(me, folder, mailMessages);
 			if (me && !pw) {
 				mailUi.error =
 					'Showing Drive drafts only — add mailbox password in Settings to sync Stalwart.';

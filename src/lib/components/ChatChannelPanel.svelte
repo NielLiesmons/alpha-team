@@ -57,6 +57,9 @@
 	/** @type {{ channelId?: string }} */
 	let { channelId = 'general' } = $props();
 
+	/* Sync before first paint — onMount is one frame too late (empty flash over cache). */
+	hydrateChatFeedFromCache();
+
 	let draft = $state('');
 	/** @type {any | null} */
 	let replyTo = $state(null);
@@ -653,9 +656,6 @@
 		<div class="feed-body" bind:this={feedBodyEl}>
 			{#if driveSession.error}
 				<p class="banner"><span class="err">{driveSession.error}</span></p>
-			{/if}
-			{#if chatUi.error}
-				<p class="banner"><span class="err">{chatUi.error}</span></p>
 			{/if}
 
 			{#if chronological.length === 0 && (!chatUi.settled || chatUi.loading)}
