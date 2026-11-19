@@ -144,7 +144,7 @@
 									{#if item.kind === 'reaction'}
 										<span class="emoji">{item.emoji || '❤️'}</span>
 									{:else if item.kind === 'mention'}
-										<At size={12} />
+										<At size={16} />
 									{:else}
 										<Reply size={12} />
 									{/if}
@@ -156,9 +156,7 @@
 								<span class="line1-text">
 									<span
 										class="who"
-										style:color={unread
-											? profileNameCss(who.email, who.name, isDark)
-											: undefined}
+										style:color={profileNameCss(who.email, who.name, isDark)}
 										>{who.name}</span
 									>
 									<span class="verb">{verb(item)}</span>
@@ -279,7 +277,7 @@
 
 	.emoji {
 		display: block;
-		font-size: 13px;
+		font-size: 14.5px;
 		line-height: 1;
 	}
 
@@ -329,8 +327,9 @@
 		min-width: 0;
 	}
 
+	/* Keep derived profile color; mute via opacity (not gray --fg-66). */
 	.row.read .who {
-		color: var(--fg-66);
+		opacity: 0.66;
 	}
 
 	.verb {
