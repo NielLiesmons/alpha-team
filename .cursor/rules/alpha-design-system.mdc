@@ -20,6 +20,7 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 - **Title** 14px / 600 / `--fg`; **timestamp** 12px / 500 / `--fg-33` with ≥2px trailing pad (prefer preview-row trail).
 - **Preview:** Chat message line `--fg-66`; Notes body snippet quieter `--fg-33`. People on the right via `ProfilePic` / `ProfilePicStack`.
 - Chat stacking: publication panels are barriers (`chat-stack.js`). See ADR §3c.
+- **Empty:** large centered muted copy like Chat (`empty-title` ~1.65rem / `--fg-33`, `empty-body` 14px / `--fg-16`) — not small left-aligned list chrome.
 
 ## Icons
 

@@ -247,26 +247,28 @@
 	{#if !appBoot.listsReady || (mailUi.loading && threadsList.length === 0)}
 		<FeedSkeleton rows={6} />
 	{:else if !actor.email}
-		<p class="empty">
-			{t('mail.chooseWho')}
-			<span class="hint">{t('mail.settingsPathHint')}</span>
-		</p>
+		<div class="empty">
+			<p class="empty-title">{t('mail.chooseWho')}</p>
+			<p class="empty-body">{t('mail.settingsPathHint')}</p>
+		</div>
 	{:else if threadsList.length === 0}
-		<p class="empty">
-			{ui.listFilter === 'unread'
-				? t('mail.noUnread')
-				: t('mail.emptyFolder', {
-						category: mailCategoryLabel(mailView.category).toLowerCase(),
-						folder: mailFolderLabel(mailView.folder)
-					})}
-			<span class="hint">
+		<div class="empty">
+			<p class="empty-title">
+				{ui.listFilter === 'unread'
+					? t('mail.noUnread')
+					: t('mail.emptyFolder', {
+							category: mailCategoryLabel(mailView.category).toLowerCase(),
+							folder: mailFolderLabel(mailView.folder)
+						})}
+			</p>
+			<p class="empty-body">
 				{#if mailView.category === 'primary'}
 					{t('mail.primaryHint')}
 				{:else}
 					{t('mail.forEmail', { email: actor.email })}
 				{/if}
-			</span>
-		</p>
+			</p>
+		</div>
 	{:else}
 		<div class="card-stack">
 			{#each threadsList as thread (thread.id)}
@@ -409,7 +411,9 @@
 	.mail {
 		display: flex;
 		flex-direction: column;
+		flex: 1;
 		min-height: 0;
+		overflow: auto;
 	}
 
 	/* Inbox triage only — stroked SegmentedControl; sit 2px under list chrome. */
@@ -430,22 +434,31 @@
 	}
 
 	.empty {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 32px 20px;
-		margin: 0;
-		font-size: 15px;
-		font-weight: 600;
-		color: var(--fg-66);
+		align-items: center;
+		justify-content: center;
+		margin: auto;
+		padding: 2rem 1.5rem;
+		text-align: center;
 	}
 
-	.hint {
-		font-size: 13px;
-		font-weight: 400;
-		line-height: 1.4;
+	.empty-title {
+		margin: 0;
+		font-family: var(--font);
+		font-size: 1.65rem;
+		font-weight: 650;
+		letter-spacing: -0.02em;
 		color: var(--fg-33);
-		max-width: 28rem;
+	}
+
+	.empty-body {
+		margin: 0.55rem 0 0;
+		max-width: 16rem;
+		font-size: 14px;
+		line-height: 1.5;
+		color: var(--fg-16);
 	}
 
 	.card-stack {
