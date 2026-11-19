@@ -240,11 +240,13 @@
 		line-height: 0;
 	}
 
-	.row.read .pfp {
+	/* Mute only the avatar — not the badge (opacity on .pfp killed glass on read). */
+	.row.read .pfp :global(.profile-pic) {
 		opacity: 0.66;
 	}
 
-	/* 28×28 chrome glass disc — same pattern as ChromeMobileBar / icon-hit. */
+	/* 28×28 chrome glass disc — same pattern as ChromeMobileBar / icon-hit.
+	   Always full-opacity glass for read and unread. */
 	.badge {
 		position: absolute;
 		right: -14px;
@@ -264,6 +266,7 @@
 		color: var(--fg-66);
 		line-height: 0;
 		pointer-events: none;
+		opacity: 1;
 	}
 
 	.badge.emoji-badge {
