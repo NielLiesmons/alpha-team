@@ -872,19 +872,9 @@
 		display: inline-flex;
 		align-items: center;
 		line-height: 0;
-	}
-
-	/* Match mail inbox `.convo-stack` ProfilePicStack count pill */
-	.pill-stack :global(.pill) {
-		background: var(--fg-11, color-mix(in srgb, var(--fg) 12%, transparent));
-	}
-
-	.pill-stack :global(.pill span) {
-		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
-		font-weight: 600;
-		color: var(--fg-33);
-		font-variant-numeric: lining-nums;
+		/* Soften the stack slightly without shrinking type below ProfilePicStack defaults
+		   (0.8125rem / 600 / --fg-66 on --fg-8 pill). */
+		opacity: 0.92;
 	}
 
 	.sheet-top {
