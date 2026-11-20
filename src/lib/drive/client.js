@@ -28,6 +28,14 @@ let rootDirCache = null;
 const tipInflight = new Map();
 
 /**
+ * Serialize ALL tip commits (chat, cursors, receipts, …). Parallel putPaths
+ * causes CAS rematerialize storms — each retry re-uploads the ~140KB root dir
+ * and turns a ~3s send into 10–20s peer latency.
+ * @type {Promise<unknown>}
+ */
+let tipWriteChain = Promise.resolve();
+
+/**
  * @param {DriveSession} session
  */
 function sessionCacheKey(session) {
@@ -311,6 +319,28 @@ export async function putPath(session, logicalPath, kind, plaintext) {
  */
 export async function putPaths(session, entries, opts = {}) {
 	if (!entries?.length) return;
+	const run = () => putPathsUnlocked(session, entries, opts);
+	return /** @type {Promise<string | void>} */ (
+		(tipWriteChain = tipWriteChain.then(run, run))
+	);
+}
+
+/**
+ * @param {DriveSession} session
+ * @param {{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]} entries
+ * @param {{
+ *   mergeFirst?: boolean,
+ *   skipTipProbe?: boolean,
+ *   baseTip?: string,
+ *   baseDir?: any,
+ *   prePrepared?: Record<string, { hash: string, wrapped_key: string, kind: string, display_name?: string }>,
+ *   rematerialize?: (
+ *     dir: any,
+ *     entries: { path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]
+ *   ) => Promise<{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]>
+ * }} [opts]
+ */
+async function putPathsUnlocked(session, entries, opts = {}) {
 	const root = parseRootKey(session.rootKey);
 	/** @type {{ path: string, kind: string, plaintext: Uint8Array | string }[]} */
 	let current = entries;

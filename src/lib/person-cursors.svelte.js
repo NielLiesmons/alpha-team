@@ -13,7 +13,8 @@ import { notes, tasks } from './workspace.svelte.js';
 
 const LOCAL_ACTIVITY_KEY = 'alpha.chatActivity.seenAt';
 const LOCAL_CURSORS_KEY = 'alpha.personCursors.v1';
-const PERSIST_MS = 8000;
+/* Was 8s — each flush rewrites the full cryptree tip and CAS-fights chat sends. */
+const PERSIST_MS = 20_000;
 
 /** @typedef {'activity' | 'chat' | 'notes' | 'tasks'} CursorKey */
 
@@ -255,6 +256,16 @@ async function flushPersist() {
 	const session = activeSession();
 	const email = meEmail();
 	if (!session || !email || personCursors.email !== email) return;
+	/* Never tip-write cursors mid-chat-send — that CAS-retries the message tip. */
+	try {
+		const { chatUi } = await import('./chat.svelte.js');
+		if (chatUi?.posting) {
+			schedulePersistCursors(2_500);
+			return;
+		}
+	} catch {
+		/* ignore */
+	}
 	const values = { ...personCursors.values };
 	if (lastPersisted && sameValues(lastPersisted, values)) {
 		personCursors.dirty = false;
