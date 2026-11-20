@@ -1,10 +1,20 @@
 /**
- * Coordinated Drive refresh with tip short-circuit + shared progress.
+ * Coordinated Drive refresh with tip short-circuit + section-scoped progress.
  * Chat-first: feed always before workspace / mail.
+ * After tip mismatch: fetch skinny space-meta change-summary for badges /
+ * selective title spinners, then defer fat crawl.
  * Media library refresh lives in alpha-player.
  */
 import { refreshMembersAndAvatars } from './avatar.svelte.js';
 import { refreshChatFeed } from './chat.svelte.js';
+import {
+	changeSummaryUi,
+	dirtySectionsFromSummary,
+	fetchChangeSummary,
+	hydrateChangeSummaryLocal,
+	markChangeSummaryApplied,
+	sectionForPath
+} from './drive/change-summary.svelte.js';
 import { getTip } from './drive/client.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { getLastAppliedTip, setLastAppliedTip } from './drive/tip-gate.js';
@@ -27,6 +37,32 @@ function hasLocalWorkspace() {
 	);
 }
 
+function isOffline() {
+	return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+/** @returns {import('./drive/change-summary.svelte.js').SyncSection | null} */
+function currentSection() {
+	if (typeof location === 'undefined') return null;
+	return sectionForPath(location.pathname);
+}
+
+/**
+ * Title spinner only for the open section, and only when that type is dirty.
+ * @param {import('./drive/change-summary.svelte.js').SyncSection[]} dirty
+ * @param {boolean} tipMismatch
+ */
+function beginTitleSpinForRoute(dirty, tipMismatch) {
+	const route = currentSection();
+	if (!route || route === 'chat') return;
+	const legacyNoSummary = tipMismatch && !changeSummaryUi.doc.updated_at;
+	const hit =
+		dirty.includes(/** @type {any} */ (route)) ||
+		(legacyNoSummary && route !== 'mail');
+	if (hit) beginSync('', [route]);
+	else if (route === 'mail') beginSync('', ['mail']);
+}
+
 /**
  * Urgent path — paint / refresh chat feed only.
  */
@@ -40,10 +76,6 @@ export async function refreshChatUrgent() {
  * Heavy domains after chat — counters, notes, mail.
  * Safe to fire-and-forget once chat has settled.
  */
-function isOffline() {
-	return typeof navigator !== 'undefined' && navigator.onLine === false;
-}
-
 export async function refreshBackgroundDrive() {
 	const session = activeSession();
 	if (!session) return;
@@ -54,7 +86,7 @@ export async function refreshBackgroundDrive() {
 		return;
 	}
 
-	beginSync('Updating');
+	hydrateChangeSummaryLocal(session);
 	driveSession.syncing = true;
 	driveSession.error = null;
 
@@ -87,12 +119,18 @@ export async function refreshBackgroundDrive() {
 			return;
 		}
 
+		const tipMismatch = Boolean(tip && tip !== last);
+		if (tipMismatch) await fetchChangeSummary(session);
+		const dirty = dirtySectionsFromSummary(tipMismatch);
+		beginTitleSpinForRoute(dirty, tipMismatch);
+
 		await refreshFromDrive({ skipTipGate: true, outerProgress: true });
 		setSyncRatio(0.8, 1);
 		await refreshMail();
 		setSyncRatio(1, 1);
 
 		if (tip) setLastAppliedTip(session, tip);
+		markChangeSummaryApplied(session);
 	} catch (e) {
 		driveSession.error = e instanceof Error ? e.message : String(e);
 	} finally {
@@ -122,7 +160,7 @@ export async function refreshAllDrive() {
 		return;
 	}
 
-	beginSync('Updating');
+	hydrateChangeSummaryLocal(session);
 	driveSession.syncing = true;
 	driveSession.error = null;
 
@@ -135,7 +173,10 @@ export async function refreshAllDrive() {
 		}
 
 		/* Chat always first — never wait on workspace crawl. */
+		const route = currentSection();
+		if (route === 'chat') beginSync('', ['chat']);
 		await refreshChatFeed();
+		if (route === 'chat') endSync(['chat']);
 		setSyncRatio(0.18, 1);
 		void refreshMembersAndAvatars().catch(() => {});
 		setSyncRatio(0.24, 1);
@@ -150,12 +191,18 @@ export async function refreshAllDrive() {
 			return;
 		}
 
+		const tipMismatch = Boolean(tip && tip !== last);
+		if (tipMismatch) await fetchChangeSummary(session);
+		const dirty = dirtySectionsFromSummary(tipMismatch);
+		beginTitleSpinForRoute(dirty, tipMismatch);
+
 		await refreshFromDrive({ skipTipGate: true, outerProgress: true });
 		setSyncRatio(0.8, 1);
 		await refreshMail();
 		setSyncRatio(1, 1);
 
 		if (tip) setLastAppliedTip(session, tip);
+		markChangeSummaryApplied(session);
 	} catch (e) {
 		driveSession.error = e instanceof Error ? e.message : String(e);
 	} finally {

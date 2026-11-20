@@ -50,7 +50,8 @@
 		mailView,
 		setMailFolder
 	} from '$lib/mail-view.svelte.js';
-	import { syncUi } from '$lib/sync-progress.svelte.js';
+	import { sectionForPath } from '$lib/drive/change-summary.svelte.js';
+	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
 	import { locale, t } from '$lib/i18n.svelte.js';
 	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
 	import UiShell from '@alpha/ui/UiShell.svelte';
@@ -461,7 +462,7 @@
 	listSize={chatList ? 'chat' : 'default'}
 	listCompact={chatCompact}
 	{commsFeed}
-	syncing={syncUi.active}
+	syncing={isSectionSyncing(sectionForPath(path))}
 	filterOptions={customChrome ? null : filterOptions}
 	filterValue={ui.listFilter}
 	{createMenuItems}
@@ -497,7 +498,7 @@
 	{#snippet listTitleSlot()}
 		<ListTitleChrome
 			title={activeItem.label}
-			syncing={syncUi.active}
+			syncing={isSectionSyncing(sectionForPath(path))}
 			titleClass={planningList ? 'planning-title' : ''}
 		/>
 	{/snippet}

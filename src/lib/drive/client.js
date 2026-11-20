@@ -23,18 +23,38 @@ import {
 /** @type {{ key: string, tip: string, dir: any } | null} */
 let rootDirCache = null;
 
+/** Chat mailbox tip (named tip `chat`) — append-once chain, not a cryptree dir. */
+/** @type {{ key: string, tip: string } | null} */
+let mailboxTipCache = null;
+/** @type {{ key: string, tip: string, messages: any[] } | null} */
+let mailboxFeedCache = null;
+/** Decrypted mailbox envelopes by ciphertext hash. */
+/** @type {Map<string, any>} */
+const mailboxEntryCache = new Map();
+
 /** Coalesce concurrent GET /v1/tip — browsers only allow ~6 connections/host. */
 /** @type {Map<string, Promise<string>>} */
 const tipInflight = new Map();
 
+/** @type {Map<string, Promise<string>>} */
+const namedTipInflight = new Map();
+
 /**
- * Serialize ALL tip commits (chat, cursors, receipts, …). Parallel putPaths
- * causes CAS rematerialize storms — each retry re-uploads the ~140KB root dir
- * and turns a ~3s send into 10–20s peer latency.
+ * Serialize Space tip commits (cursors, entities, …). Chat mailbox uses its own chain.
  * @type {Promise<unknown>}
  */
 let tipWriteChain = Promise.resolve();
 
+/**
+ * Serialize chat mailbox appends (messages, receipts, soft-deletes).
+ * @type {Promise<unknown>}
+ */
+let chatTipWriteChainLocal = Promise.resolve();
+
+/** Named tip for the chat mailbox head pointer. */
+export const CHAT_TIP_NAME = 'chat';
+/** AAD path for mailbox entry ciphertext (tip hash = sha256 of this blob). */
+const CHAT_MAIL_AAD = 'chat/mail';
 /**
  * @param {DriveSession} session
  */
@@ -54,6 +74,10 @@ function rootDirIdbKey(session) {
 	return `alpha.drive.rootdir.v1:${sessionCacheKey(session)}`;
 }
 
+function mailboxFeedIdbKey(session) {
+	return `alpha.drive.chatmail.v1:${sessionCacheKey(session)}`;
+}
+
 /**
  * In-memory tip from last successful load/put — no network.
  * @param {DriveSession} session
@@ -62,6 +86,16 @@ export function peekCachedTip(session) {
 	if (!session || !rootDirCache) return '';
 	if (rootDirCache.key !== sessionCacheKey(session)) return '';
 	return rootDirCache.tip || '';
+}
+
+/**
+ * In-memory chat mailbox tip — no network.
+ * @param {DriveSession} session
+ */
+export function peekCachedChatTip(session) {
+	if (!session || !mailboxTipCache) return '';
+	if (mailboxTipCache.key !== sessionCacheKey(session)) return '';
+	return mailboxTipCache.tip || '';
 }
 
 /**
@@ -77,6 +111,33 @@ export function peekCachedRootDir(session) {
 		tip: rootDirCache.tip || '',
 		dir: structuredClone(rootDirCache.dir)
 	};
+}
+
+/**
+ * @param {DriveSession} session
+ * @param {string} tip
+ */
+function rememberMailboxTip(session, tip) {
+	mailboxTipCache = { key: sessionCacheKey(session), tip: tip || '' };
+}
+
+/**
+ * @param {DriveSession} session
+ * @param {string} tip
+ * @param {any[]} messages
+ */
+function rememberMailboxFeed(session, tip, messages) {
+	rememberMailboxTip(session, tip);
+	mailboxFeedCache = {
+		key: sessionCacheKey(session),
+		tip: tip || '',
+		messages: Array.isArray(messages) ? messages.map((m) => structuredClone(m)) : []
+	};
+	void idbSet(mailboxFeedIdbKey(session), {
+		at: Date.now(),
+		tip: tip || '',
+		messages: mailboxFeedCache.messages
+	}).catch(() => {});
 }
 
 /**
@@ -173,6 +234,391 @@ export async function getTip(session, signal) {
  */
 async function putTip(session, hash) {
 	await api(session, 'PUT', '/v1/tip', JSON.stringify({ root_hash: hash }), 'application/json');
+}
+
+/**
+ * @param {DriveSession} session
+ * @param {string} [name]
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<string>}
+ */
+export async function getNamedTip(session, name = CHAT_TIP_NAME, signal) {
+	const tipName = String(name || CHAT_TIP_NAME);
+	const key = `${tipCacheKey(session)}|named:${tipName}`;
+	if (!signal) {
+		const pending = namedTipInflight.get(key);
+		if (pending) return pending;
+	}
+	const headers = { Authorization: `Bearer ${session.token}` };
+	const work = (async () => {
+		const res = await fetch(
+			`${session.url.replace(/\/$/, '')}/v1/tips/${encodeURIComponent(tipName)}`,
+			{ method: 'GET', headers, signal }
+		);
+		if (res.status === 404) return '';
+		if (!res.ok) throw new Error(`GET /v1/tips/${tipName}: ${res.status}`);
+		const body = await res.json();
+		return body.root_hash ?? '';
+	})();
+	if (!signal) {
+		namedTipInflight.set(key, work);
+		void work.finally(() => {
+			if (namedTipInflight.get(key) === work) namedTipInflight.delete(key);
+		});
+	}
+	return work;
+}
+
+/**
+ * @param {DriveSession} session
+ * @param {string} hash
+ * @param {string} [name]
+ */
+export async function putNamedTip(session, hash, name = CHAT_TIP_NAME) {
+	const tipName = String(name || CHAT_TIP_NAME);
+	await api(
+		session,
+		'PUT',
+		`/v1/tips/${encodeURIComponent(tipName)}`,
+		JSON.stringify({ root_hash: hash }),
+		'application/json'
+	);
+}
+
+/**
+ * Encrypt plaintext under root+AAD, put block, advance a named tip to that hash.
+ * Used for skinny signals (space-meta change-summary, person cursors) that must
+ * not require rematerializing the fat Space root dir.
+ * @param {DriveSession} session
+ * @param {string} tipName
+ * @param {string} aadPath
+ * @param {Uint8Array | string} plaintext
+ * @returns {Promise<string>} ciphertext hash (= named tip)
+ */
+export async function putNamedEncrypted(session, tipName, aadPath, plaintext) {
+	const root = parseRootKey(session.rootKey);
+	const bytes =
+		typeof plaintext === 'string' ? new TextEncoder().encode(plaintext) : plaintext;
+	const ct = await encryptWithRoot(root, aadPath, bytes);
+	const hash = await sha256Hex(ct);
+	await putBlock(session, hash, ct);
+	await putNamedTip(session, hash, tipName);
+	return hash;
+}
+
+/**
+ * Read named tip → block → decrypt with root+AAD. Returns null on missing tip.
+ * @param {DriveSession} session
+ * @param {string} tipName
+ * @param {string} aadPath
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<Uint8Array | null>}
+ */
+export async function getNamedEncrypted(session, tipName, aadPath, signal) {
+	const tip = await getNamedTip(session, tipName, signal);
+	if (!tip) return null;
+	const ct = await getBlock(session, tip, signal);
+	const root = parseRootKey(session.rootKey);
+	return decrypt(root, aadPath, ct);
+}
+
+/**
+ * Decrypt one mailbox envelope by ciphertext hash.
+ * @param {DriveSession} session
+ * @param {Uint8Array} root
+ * @param {string} hash
+ * @param {AbortSignal} [signal]
+ */
+async function decryptMailboxEntry(session, root, hash, signal) {
+	const hit = mailboxEntryCache.get(hash);
+	if (hit) return hit;
+	const ct = await getBlock(session, hash, signal);
+	const pt = await decrypt(root, CHAT_MAIL_AAD, ct);
+	const doc = JSON.parse(new TextDecoder().decode(pt));
+	mailboxEntryCache.set(hash, doc);
+	return doc;
+}
+
+/**
+ * Fold mailbox envelopes (newest-first) into chat messages (newest-first).
+ * Optional seedMessages = already-materialized older feed when walking only a tip prefix.
+ * @param {{ hash: string, prev?: string | null, entry?: any }[]} newestFirst
+ * @param {number} limit
+ * @param {any[]} [seedMessages]
+ */
+function materializeMailboxMessages(newestFirst, limit, seedMessages = []) {
+	/** @type {Map<string, any>} */
+	const byId = new Map();
+	for (const m of Array.isArray(seedMessages) ? seedMessages : []) {
+		const id = String(m?.id || '');
+		if (id) byId.set(id, { ...m });
+	}
+	/** @type {Set<string>} */
+	const retracted = new Set();
+	for (let i = newestFirst.length - 1; i >= 0; i--) {
+		const entry = newestFirst[i]?.entry;
+		if (!entry || typeof entry !== 'object') continue;
+		const kind = String(entry.kind || '');
+		if (kind === 'message' && entry.message?.id) {
+			const id = String(entry.message.id);
+			if (retracted.has(id)) continue;
+			byId.set(id, { ...entry.message });
+		} else if (kind === 'retract') {
+			const id = String(entry.message_id || '');
+			if (id) {
+				retracted.add(id);
+				byId.delete(id);
+			}
+		} else if (kind === 'tombstone') {
+			const id = String(entry.message_id || '');
+			if (!id) continue;
+			const prev = byId.get(id) || {
+				schema: 'alpha.chat_message/1',
+				id,
+				kind: 'chat',
+				author: String(entry.author || ''),
+				body: '',
+				created_at: entry.deleted_at || '',
+				channel_id: 'general',
+				delivery: 'sent',
+				read_by: []
+			};
+			byId.set(id, {
+				...prev,
+				body: '',
+				deleted: true,
+				deleted_at: entry.deleted_at || prev.deleted_at || '',
+				author: String(entry.author || prev.author || '')
+			});
+		} else if (kind === 'receipts') {
+			const reader = String(entry.reader || '')
+				.trim()
+				.toLowerCase();
+			const ids = Array.isArray(entry.message_ids) ? entry.message_ids.map(String) : [];
+			if (!reader || !ids.length) continue;
+			for (const id of ids) {
+				const msg = byId.get(id);
+				if (!msg) continue;
+				const readBy = Array.isArray(msg.read_by)
+					? msg.read_by.map((e) => String(e).toLowerCase())
+					: [];
+				if (!readBy.includes(reader)) readBy.push(reader);
+				byId.set(id, { ...msg, read_by: readBy, delivery: 'read' });
+			}
+		}
+	}
+	const out = [...byId.values()];
+	out.sort((a, b) => {
+		const c = String(b?.created_at || '').localeCompare(String(a?.created_at || ''));
+		if (c) return c;
+		return String(b?.id || '').localeCompare(String(a?.id || ''));
+	});
+	return out.slice(0, limit);
+}
+
+/**
+ * Append-once mailbox entry + CAS tip advance in one Drive RTT.
+ * @param {DriveSession} session
+ * @param {any} entry — { kind:'message', message } | receipts | tombstone | retract
+ * @param {{ prevTip?: string }} [opts]
+ * @returns {Promise<string>} new tip hash
+ */
+export async function appendMailboxEntry(session, entry, opts = {}) {
+	const root = parseRootKey(session.rootKey);
+	const run = async () => {
+		let prev =
+			opts.prevTip != null ? String(opts.prevTip) : peekCachedChatTip(session) || '';
+		let rtts = 0;
+		const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+		for (let attempt = 0; attempt < 4; attempt++) {
+			const envelope = {
+				schema: 'alpha.chat_mail/1',
+				prev: prev || null,
+				at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+				entry
+			};
+			const pt = new TextEncoder().encode(JSON.stringify(envelope));
+			const ct = await encryptWithRoot(root, CHAT_MAIL_AAD, pt);
+			const hash = await sha256Hex(ct);
+			const res = await fetch(
+				`${session.url.replace(/\/$/, '')}/v1/mailboxes/${encodeURIComponent(CHAT_TIP_NAME)}/append`,
+				{
+					method: 'PUT',
+					headers: {
+						Authorization: `Bearer ${session.token}`,
+						'Content-Type': 'application/octet-stream',
+						'x-alpha-hash': hash,
+						'x-alpha-prev': prev || ''
+					},
+					body: new Blob([ct])
+				}
+			);
+			rtts += 1;
+			if (res.status === 204 || res.ok) {
+				mailboxEntryCache.set(hash, envelope);
+				rememberMailboxTip(session, hash);
+				/* Prepend message into warm feed cache when possible. */
+				if (entry?.kind === 'message' && entry.message && mailboxFeedCache) {
+					const key = sessionCacheKey(session);
+					if (mailboxFeedCache.key === key) {
+						const next = [
+							structuredClone(entry.message),
+							...mailboxFeedCache.messages.filter((m) => m?.id !== entry.message.id)
+						];
+						rememberMailboxFeed(session, hash, next);
+					}
+				} else if (mailboxFeedCache?.key === sessionCacheKey(session)) {
+					/* Ops invalidate materialization — next pull rebuilds. */
+					mailboxFeedCache = { ...mailboxFeedCache, tip: '' };
+				}
+				if (typeof console !== 'undefined' && console.debug) {
+					console.debug('[chat-latency] appendMailbox', {
+						ms: Math.round(
+							(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
+						),
+						rtts,
+						tipBytes: ct.length,
+						attempt,
+						kind: String(entry?.kind || '')
+					});
+				}
+				return hash;
+			}
+			if (res.status === 409) {
+				let current = '';
+				try {
+					const body = await res.json();
+					current = String(body?.root_hash || '');
+				} catch {
+					current = '';
+				}
+				prev = current;
+				continue;
+			}
+			const text = await res.text().catch(() => '');
+			throw new Error(`mailbox append: ${res.status} ${text}`.trim());
+		}
+		throw new Error('mailbox append CAS exhausted');
+	};
+	return /** @type {Promise<string>} */ (
+		(chatTipWriteChainLocal = chatTipWriteChainLocal.then(run, run))
+	);
+}
+
+/**
+ * Walk chat mailbox from tip → prev until limit messages (or stopAt hash).
+ * @param {DriveSession} session
+ * @param {{
+ *   limit?: number,
+ *   stopAt?: string,
+ *   tip?: string,
+ *   signal?: AbortSignal,
+ *   onPartial?: (rows: any[]) => void
+ * }} [opts]
+ * @returns {Promise<{ tip: string, messages: any[] }>}
+ */
+export async function loadMailboxMessages(session, opts = {}) {
+	const limit = Math.max(1, Math.min(500, Number(opts.limit) || 200));
+	const stopAt = String(opts.stopAt || '');
+	const cacheKey = sessionCacheKey(session);
+	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+	let tip = opts.tip != null ? String(opts.tip) : '';
+	if (!tip) {
+		try {
+			tip = await getNamedTip(session, CHAT_TIP_NAME, opts.signal);
+		} catch (e) {
+			if (e?.name === 'AbortError') throw e;
+			if (mailboxFeedCache && mailboxFeedCache.key === cacheKey) {
+				return {
+					tip: mailboxFeedCache.tip || '',
+					messages: mailboxFeedCache.messages.map((m) => structuredClone(m))
+				};
+			}
+			throw e;
+		}
+	}
+	const priorTip = peekCachedChatTip(session);
+	const priorFeed =
+		mailboxFeedCache &&
+		mailboxFeedCache.key === cacheKey &&
+		mailboxFeedCache.tip === (stopAt || priorTip) &&
+		Array.isArray(mailboxFeedCache.messages)
+			? mailboxFeedCache.messages
+			: null;
+
+	rememberMailboxTip(session, tip);
+	if (!tip) {
+		rememberMailboxFeed(session, '', []);
+		return { tip: '', messages: [] };
+	}
+	if (
+		mailboxFeedCache &&
+		mailboxFeedCache.key === cacheKey &&
+		mailboxFeedCache.tip === tip &&
+		Array.isArray(mailboxFeedCache.messages)
+	) {
+		return {
+			tip,
+			messages: mailboxFeedCache.messages.map((m) => structuredClone(m))
+		};
+	}
+
+	const root = parseRootKey(session.rootKey);
+	/** @type {{ hash: string, prev?: string | null, entry?: any }[]} */
+	const newestFirst = [];
+	const walkStop = stopAt || (priorFeed ? priorTip : '');
+	let hash = tip;
+	let netFetches = 0;
+	let msgCount = 0;
+	while (hash && newestFirst.length < limit * 4) {
+		if (walkStop && hash === walkStop) break;
+		let doc;
+		try {
+			const cached = mailboxEntryCache.get(hash);
+			if (!cached) netFetches += 1;
+			doc = await decryptMailboxEntry(session, root, hash, opts.signal);
+		} catch {
+			break;
+		}
+		newestFirst.push({ hash, prev: doc?.prev ?? null, entry: doc?.entry });
+		if (doc?.entry?.kind === 'message') msgCount += 1;
+		if (!walkStop && msgCount >= limit) break;
+		hash = doc?.prev ? String(doc.prev) : '';
+		if (typeof opts.onPartial === 'function' && msgCount > 0 && msgCount % 12 === 0) {
+			opts.onPartial(materializeMailboxMessages(newestFirst, limit, priorFeed || []));
+		}
+	}
+	const messages = materializeMailboxMessages(newestFirst, limit, priorFeed || []);
+	rememberMailboxFeed(session, tip, messages);
+	if (typeof opts.onPartial === 'function') opts.onPartial(messages);
+	if (typeof console !== 'undefined' && console.debug) {
+		console.debug('[chat-latency] listFeed', {
+			ms: Math.round(
+				(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
+			),
+			ids: messages.length,
+			netFetches,
+			tip: tip.slice(0, 12)
+		});
+	}
+	return { tip, messages: messages.map((m) => structuredClone(m)) };
+}
+
+/**
+ * @deprecated cryptree chat tip — mailbox cutover. Returns empty dir shape for any stray caller.
+ * @param {DriveSession} session
+ * @param {AbortSignal} [signal]
+ */
+export async function loadChatDirWithTip(session, signal) {
+	const tip = await getNamedTip(session, CHAT_TIP_NAME, signal).catch(() => peekCachedChatTip(session));
+	return { tip: tip || '', dir: { schema: 'alpha.dir/1', children: {} } };
+}
+
+/** @deprecated */
+export function peekCachedChatDir(session) {
+	const tip = peekCachedChatTip(session);
+	if (!tip) return null;
+	return { tip, dir: { schema: 'alpha.dir/1', children: {} } };
 }
 
 /**
@@ -485,6 +931,14 @@ async function putPathsUnlocked(session, entries, opts = {}) {
 		}
 	} catch {
 		/* non-JSON blobs (media) — ignore */
+	}
+
+	/* Skinny space-meta watermarks — peers get ASAP badges without fat rematerialize. */
+	try {
+		const { bumpChangeSummaryFromPuts } = await import('./change-summary.svelte.js');
+		void bumpChangeSummaryFromPuts(session, current);
+	} catch {
+		/* ignore */
 	}
 
 	return dirHash;

@@ -2,20 +2,23 @@
 
 import { parseAudioFilename, readAudioTags, stripId3Containers } from './audio-meta.js';
 import {
+	appendMailboxEntry,
 	deletePaths,
+	getNamedTip,
 	getPath,
 	getPathFromDir,
-	getTip,
+	loadMailboxMessages,
 	loadRootDir,
 	loadRootDirWithTip,
-	peekCachedRootDir,
-	peekCachedTip,
-	putBlock,
+	peekCachedChatTip,
 	putPath,
-	putPaths
+	putPaths,
+	CHAT_TIP_NAME
 } from './client.js';
-import { encrypt, parseRootKey, sha256Hex } from './crypto.js';
+import { sha256Hex } from './crypto.js';
 import { putMediaBlob } from './media.js';
+
+const LEGACY_CHAT_MIGRATE_KEY = 'alpha.chat.mailboxMigrate.v1';
 
 function nowRfc3339() {
 	return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -2121,48 +2124,24 @@ async function orderFeedIdsNewestFirst(session, dir, ids, createdAtById = {}) {
 	return scored.map((s) => s.id).slice(0, FEED_MAX);
 }
 
-/** Tip-scoped feed id cache — skip feed.json download on send when tip unchanged. */
-let cachedFeedTip = '';
-/** @type {string[]} */
-let cachedFeedIds = [];
-
 /**
- * Serialize chat tip commits. Parallel putPaths CAS-retry storms under rapid
- * multi-send — leaves land, then feed.json races drop ids / delay peers.
+ * Serialize chat mailbox appends at the entities layer (UI may fire concurrent sends).
  * @type {Promise<unknown>}
  */
 let chatTipWriteChain = Promise.resolve();
 
 /**
- * @param {string} tip
- * @param {string[]} ids
- */
-function rememberFeedIds(tip, ids) {
-	if (!tip || !Array.isArray(ids)) return;
-	cachedFeedTip = tip;
-	cachedFeedIds = ids.map(String);
-}
-
-/**
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
- * @param {any} [dir]
+ * @param {any} [_dir] unused — mailbox cutover
  */
-export async function getChatMessage(session, id, dir) {
-	const path = `chat/messages/${id}.json`;
-	const root = dir || (await loadRootDir(session));
-	const hash = root?.children?.[path]?.hash || root?.children?.[path.replace(/^\//, '')]?.hash;
-	const { getCachedLeaf, putCachedLeaf } = await import('./leaf-cache.js');
-	if (hash) {
-		const hit = await getCachedLeaf(hash);
-		if (hit) return hit;
-	}
-	const { bytes } = dir
-		? await getPathFromDir(session, dir, path)
-		: { bytes: await getPath(session, path) };
-	const doc = JSON.parse(new TextDecoder().decode(bytes));
-	if (hash) void putCachedLeaf(hash, doc);
-	return doc;
+export async function getChatMessage(session, id, _dir) {
+	const sid = String(id || '').trim();
+	if (!sid) throw new Error('missing message id');
+	const { messages } = await loadMailboxMessages(session, { limit: FEED_MAX });
+	const hit = messages.find((m) => String(m?.id) === sid);
+	if (!hit) throw new Error(`chat message not found: ${sid}`);
+	return hit;
 }
 
 /**
@@ -2210,135 +2189,153 @@ export async function listComments(session, type, entityId) {
  */
 export async function listFeedIds(session) {
 	try {
-		const bytes = await getPath(session, 'chat/feed.json');
-		const doc = JSON.parse(new TextDecoder().decode(bytes));
-		if (Array.isArray(doc?.ids)) return doc.ids.map(String);
-		if (Array.isArray(doc)) return doc.map(String);
-		return [];
+		const { messages } = await loadMailboxMessages(session, { limit: FEED_MAX });
+		return messages.map((m) => String(m.id)).filter(Boolean);
 	} catch {
 		return [];
 	}
 }
 
 /**
- * Load feed messages with leaf-cache + one tip/dir load (same pattern as listTracks).
- * Optional onPartial paints cache hits / early batches before misses finish.
- * Pass seedRows to reuse in-memory messages and only network-fetch new ids —
- * avoids connection-pool stampedes that starve tip PUT/GET.
+ * Load feed from append-only chat mailbox (tip → prev walk).
+ * Pass seedRows so tip-wake can paint immediately; walk only fetches new envelopes.
  * @param {import('./client.js').DriveSession} session
  * @param {number} [limit]
  * @param {{ onPartial?: (rows: any[]) => void, seedRows?: any[] }} [opts]
  */
 export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
-	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-	const { tip, dir } = await loadRootDirWithTip(session);
-	const ids = (await listFeedIdsFromDir(session, dir)).slice(0, limit);
-	rememberFeedIds(tip, ids);
-	if (!ids.length) return [];
-
-	const { getCachedLeaf, mapPool, putCachedLeaf } = await import('./leaf-cache.js');
-	/** @type {Map<string, any>} */
-	const seedById = new Map();
-	for (const row of Array.isArray(opts.seedRows) ? opts.seedRows : []) {
-		const id = String(row?.id || '');
-		if (!id || id.startsWith('local-') || row?._pending || row?._failed) continue;
-		seedById.set(id, row);
+	const seedRows = Array.isArray(opts.seedRows) ? opts.seedRows : [];
+	if (seedRows.length && typeof opts.onPartial === 'function') {
+		opts.onPartial(sortChatMessagesNewestFirst(seedRows.filter((m) => m && !m._pending)));
 	}
-	/** @type {{ id: string, path: string, hash: string | null }[]} */
-	const entries = ids.map((id) => {
-		const path = `chat/messages/${id}.json`;
-		const child = dir.children?.[path];
-		return { id: String(id), path, hash: child?.hash ? String(child.hash) : null };
+	const stopAt = peekCachedChatTip(session) || '';
+	let { messages } = await loadMailboxMessages(session, {
+		limit,
+		stopAt,
+		onPartial: opts.onPartial
 	});
-
-	/** @type {(any | null)[]} */
-	const slots = new Array(entries.length).fill(null);
-
-	/*
-	 * Prefer seed rows for ids we already have — tip-wake should only network-fetch
-	 * new leaves. IDB only for unseeded ids (avoids 200× IDB on every peer tip).
-	 */
-	/** @type {number[]} */
-	const needIdb = [];
-	for (let i = 0; i < entries.length; i++) {
-		const seed = seedById.get(entries[i].id);
-		if (seed) slots[i] = seed;
-		else needIdb.push(i);
-	}
-	if (needIdb.length) {
-		await mapPool(needIdb, 16, async (i) => {
-			const entry = entries[i];
-			if (!entry.hash) return;
-			const hit = await getCachedLeaf(entry.hash);
-			if (hit) slots[i] = hit;
-		});
-	}
-
-	const partial = () => {
-		if (typeof opts.onPartial !== 'function') return;
-		/* Newest-first by leaf time — never trust tip-raced ids[] order for UI. */
-		opts.onPartial(sortChatMessagesNewestFirst(slots.filter(Boolean)));
-	};
-	/* Paint seed/IDB hits immediately — hard refresh should not wait on network. */
-	if (slots.some(Boolean)) partial();
-
-	/** @type {number[]} */
-	const missIdx = [];
-	for (let i = 0; i < slots.length; i++) {
-		if (!slots[i]) missIdx.push(i);
-	}
-
-	let lastPartialCount = slots.filter(Boolean).length;
-	/* Keep well under browser per-host connection limits so tip I/O stays responsive. */
-	await mapPool(missIdx, 6, async (i) => {
-		const entry = entries[i];
+	/* Empty mailbox → one-shot migrate from Space chat/feed.json + message leaves. */
+	if (!messages.length && !stopAt) {
 		try {
-			const { bytes } = await getPathFromDir(session, dir, entry.path);
-			const doc = JSON.parse(new TextDecoder().decode(bytes));
-			if (entry.hash) void putCachedLeaf(entry.hash, doc);
-			slots[i] = doc;
+			const migrated = await migrateLegacyChatToMailbox(session);
+			if (migrated > 0) {
+				({ messages } = await loadMailboxMessages(session, { limit }));
+			}
 		} catch {
-			slots[i] = null;
+			/* legacy missing / mailbox API not deployed yet */
 		}
-		const filled = slots.filter(Boolean).length;
-		/* First screenful ASAP, then every ~24 newly filled leaves. */
-		if (filled >= 24 && filled - lastPartialCount >= 24) {
-			lastPartialCount = filled;
-			partial();
-		} else if (filled >= 12 && lastPartialCount < 12) {
-			lastPartialCount = filled;
-			partial();
-		}
-	});
-	partial();
-	if (typeof console !== 'undefined' && console.debug) {
-		console.debug('[chat-latency] listFeed', {
-			ms: Math.round(
-				(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
-			),
-			ids: ids.length,
-			seeded: seedById.size,
-			netMisses: missIdx.length
-		});
 	}
-	return sortChatMessagesNewestFirst(slots.filter(Boolean));
+	if (!seedRows.length) return messages;
+	/** Merge seed so optimistic / in-flight locals survive a tip-wake. */
+	const byId = new Map();
+	for (const row of messages) {
+		const id = String(row?.id || '');
+		if (id) byId.set(id, row);
+	}
+	for (const row of seedRows) {
+		const id = String(row?.id || '');
+		if (!id) continue;
+		if (id.startsWith('local-') || row?._pending || row?._failed) {
+			byId.set(id, row);
+			continue;
+		}
+		if (!byId.has(id)) byId.set(id, row);
+	}
+	return sortChatMessagesNewestFirst([...byId.values()]).slice(0, limit);
 }
 
 /**
- * Read feed ids from an already-loaded root dir (no tip GET).
+ * Best-effort: Space `chat/feed.json` + `chat/messages/{id}.json` → mailbox append chain.
+ * Skips when mailbox tip already set or this browser already migrated.
  * @param {import('./client.js').DriveSession} session
- * @param {any} dir
+ * @returns {Promise<number>} messages appended
  */
-async function listFeedIdsFromDir(session, dir) {
+export async function migrateLegacyChatToMailbox(session) {
+	if (!session) return 0;
+	const gateKey = `${LEGACY_CHAT_MIGRATE_KEY}:${session.url}|${String(session.token || '').slice(0, 12)}`;
 	try {
-		const { bytes } = await getPathFromDir(session, dir, 'chat/feed.json');
-		const doc = JSON.parse(new TextDecoder().decode(bytes));
-		if (Array.isArray(doc?.ids)) return doc.ids.map(String);
-		if (Array.isArray(doc)) return doc.map(String);
-		return [];
+		if (typeof localStorage !== 'undefined' && localStorage.getItem(gateKey) === '1') {
+			return 0;
+		}
 	} catch {
-		return [];
+		/* ignore */
 	}
+	let existing = '';
+	try {
+		existing = await getNamedTip(session, CHAT_TIP_NAME);
+	} catch {
+		existing = '';
+	}
+	if (existing) {
+		try {
+			if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
+		} catch {
+			/* ignore */
+		}
+		return 0;
+	}
+
+	/** @type {string[]} */
+	let ids = [];
+	try {
+		const bytes = await getPath(session, 'chat/feed.json');
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		if (Array.isArray(doc)) ids = doc.map(String);
+		else if (Array.isArray(doc?.ids)) ids = doc.ids.map(String);
+	} catch {
+		/* no legacy feed */
+	}
+	if (!ids.length) {
+		try {
+			const dir = await loadRootDir(session);
+			const children = dir?.children && typeof dir.children === 'object' ? dir.children : {};
+			ids = Object.keys(children)
+				.filter((p) => /^chat\/messages\/[^/]+\.json$/.test(p))
+				.map((p) => p.replace(/^chat\/messages\//, '').replace(/\.json$/, ''));
+		} catch {
+			ids = [];
+		}
+	}
+	ids = ids.filter((x, i, a) => x && a.indexOf(x) === i);
+	if (!ids.length) {
+		try {
+			if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
+		} catch {
+			/* ignore */
+		}
+		return 0;
+	}
+
+	/** @type {any[]} */
+	const msgs = [];
+	for (const id of ids) {
+		try {
+			const bytes = await getPath(session, `chat/messages/${id}.json`);
+			const doc = JSON.parse(new TextDecoder().decode(bytes));
+			if (doc?.id) msgs.push(doc);
+		} catch {
+			/* skip missing leaf */
+		}
+	}
+	const ordered = sortChatMessagesOldestFirst(msgs);
+	let n = 0;
+	for (const message of ordered) {
+		try {
+			await appendMailboxEntry(session, { kind: 'message', message });
+			n += 1;
+		} catch (e) {
+			/* Mailbox API missing (pre-deploy) — abort; retry next open. */
+			const msg = e instanceof Error ? e.message : String(e);
+			if (/404|mailboxes/i.test(msg)) return n;
+			throw e;
+		}
+	}
+	try {
+		if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
+	} catch {
+		/* ignore */
+	}
+	return n;
 }
 
 /**
@@ -2429,7 +2426,6 @@ export async function createChatMessage(session, input, opts = {}) {
 			: {})
 	};
 
-	const known = Array.isArray(opts.knownFeedIds) ? opts.knownFeedIds : [];
 	const knownComments = Array.isArray(opts.knownCommentIds) ? opts.knownCommentIds : [];
 	const wantsComments =
 		kind !== 'event' &&
@@ -2445,189 +2441,59 @@ export async function createChatMessage(session, input, opts = {}) {
 		? /** @type {'task'|'note'|'project'|'mail'|'file'} */ (input.ref.type)
 		: null;
 	const refId = wantsComments ? String(input.ref.id) : '';
-	const leafPlain = JSON.stringify(msg);
 
-	/**
-	 * @param {string[]} feedIds
-	 * @param {string[]} [commentIds]
-	 */
-	function buildWrites(feedIds, commentIds) {
-		/** @type {{ path: string, kind: string, plaintext: string }[]} */
-		const writes = [
-			{
-				path: `chat/messages/${id}.json`,
-				kind: 'chat_message',
-				plaintext: leafPlain
-			},
-			{
-				path: 'chat/feed.json',
-				kind: 'chat_feed',
-				plaintext: JSON.stringify({
-					schema: 'alpha.chat_feed/1',
-					ids: feedIds,
-					updated_at: created
-				})
-			}
-		];
-		if (wantsComments && refType && refId) {
-			writes.push({
-				path: `${refType}s/${refId}/comments.json`,
-				kind: 'blob',
-				plaintext: JSON.stringify({
-					schema: 'alpha.comments_index/1',
-					ids: commentIds || []
-				})
-			});
-		}
-		return writes;
-	}
-
-	/**
-	 * Merge live feed ids from dir (or tip-scoped memory cache).
-	 * Happy-path keeps prepend union (cheap). Tip-conflict rematerialize
-	 * durable-sorts by created_at + id; UI always sorts from leaves.
-	 * @param {any} dir
-	 * @param {string} tip
-	 */
-	async function resolveFeedIds(dir, tip) {
-		if (tip && tip === cachedFeedTip && cachedFeedIds.length) {
-			return [id, ...cachedFeedIds, ...known]
-				.filter((x, i, arr) => x && arr.indexOf(x) === i)
-				.slice(0, FEED_MAX);
-		}
-		const liveFeed = await listFeedIdsFromDir(session, dir);
-		rememberFeedIds(tip, liveFeed);
-		return [id, ...liveFeed, ...known]
-			.filter((x, i, arr) => x && arr.indexOf(x) === i)
-			.slice(0, FEED_MAX);
-	}
-
-	/**
-	 * @param {any} dir
-	 */
-	async function resolveCommentIds(dir) {
-		if (!wantsComments || !refType || !refId) return /** @type {string[]} */ ([]);
-		const liveComments = await listCommentIdsFromDir(session, dir, refType, refId);
-		return [...liveComments, ...knownComments, id].filter(
-			(x, i, arr) => x && arr.indexOf(x) === i
-		);
-	}
-
-	/*
-	 * Fast leaf + durable tip:
-	 * 1) Encrypt + putBlock the leaf in parallel with tip/dir prep → onLeafStored.
-	 * 2) Tip/dir update (feed.json) — only then is the message discoverable / durable.
-	 */
-	const leafPath = `chat/messages/${id}.json`;
-	const root = parseRootKey(session.rootKey);
-	const leafBytes = new TextEncoder().encode(leafPlain);
 	const tSend = typeof performance !== 'undefined' ? performance.now() : Date.now();
-	const leafPrep = (async () => {
-		const { ciphertext: leafCt, fileKeyHex: leafKey } = await encrypt(root, leafPath, leafBytes);
-		const leafHash = await sha256Hex(leafCt);
-		const tLeaf0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-		await putBlock(session, leafHash, leafCt);
-		const leafPutMs = Math.round(
-			(typeof performance !== 'undefined' ? performance.now() : Date.now()) - tLeaf0
-		);
-		try {
-			opts.onLeafStored?.(msg);
-		} catch {
-			/* UI settle must never break the tip write */
-		}
-		return { leafHash, leafKey, leafPutMs };
-	})();
+	try {
+		opts.onLeafStored?.(msg);
+	} catch {
+		/* UI settle must never break append */
+	}
 
-	/** @type {string[]} */
-	let feedIds = [];
 	/** @type {string[]} */
 	let commentIds = [];
-	/** @type {string} */
-	let tipAtPrep = '';
-	/** @type {any} */
-	let dirAtPrep = null;
+	const commentsPrep = wantsComments
+		? (async () => {
+				const { dir } = await loadRootDirWithTip(session);
+				const live = await listCommentIdsFromDir(session, dir, refType, refId);
+				commentIds = [...live, ...knownComments, id].filter(
+					(x, i, arr) => x && arr.indexOf(x) === i
+				);
+			})()
+		: Promise.resolve();
 
-	const indexPrep = (async () => {
-		const mem = peekCachedRootDir(session);
-		let tipNow = mem?.tip || peekCachedTip(session) || '';
-		if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments && mem?.dir) {
-			/* Fully warm — no getTip RTT; putPaths reuses baseTip/baseDir. */
-			feedIds = [id, ...cachedFeedIds, ...known]
-				.filter((x, i, arr) => x && arr.indexOf(x) === i)
-				.slice(0, FEED_MAX);
-			tipAtPrep = tipNow;
-			dirAtPrep = mem.dir;
-			return;
-		}
-		if (!tipNow || tipNow !== cachedFeedTip) {
-			try {
-				tipNow = await getTip(session);
-			} catch {
-				tipNow = tipNow || '';
-			}
-		}
-		if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments && mem?.dir) {
-			feedIds = [id, ...cachedFeedIds, ...known]
-				.filter((x, i, arr) => x && arr.indexOf(x) === i)
-				.slice(0, FEED_MAX);
-			tipAtPrep = tipNow;
-			dirAtPrep = mem.dir;
-			return;
-		}
-		const { tip: tipAtStart, dir: dirAtStart } = await loadRootDirWithTip(session);
-		tipAtPrep = tipAtStart;
-		dirAtPrep = dirAtStart;
-		feedIds = await resolveFeedIds(dirAtStart, tipAtStart);
-		commentIds = await resolveCommentIds(dirAtStart);
-	})();
+	/* prev tip read inside append at chain turn — keeps 1 RTT when warm. */
+	const runAppend = () => appendMailboxEntry(session, { kind: 'message', message: msg });
+	const [tipAfter] = await Promise.all([
+		(chatTipWriteChain = chatTipWriteChain.then(runAppend, runAppend)),
+		commentsPrep
+	]);
 
-	const [{ leafHash, leafKey, leafPutMs }] = await Promise.all([leafPrep, indexPrep]);
-	const prepMs = Math.round(
-		(typeof performance !== 'undefined' ? performance.now() : Date.now()) - tSend
-	);
+	/* Entity comments index still lives on the Space tip (rare vs chat sends). */
+	if (wantsComments && refType && refId) {
+		try {
+			await putPaths(session, [
+				{
+					path: `${refType}s/${refId}/comments.json`,
+					kind: 'blob',
+					plaintext: JSON.stringify({
+						schema: 'alpha.comments_index/1',
+						ids: commentIds
+					})
+				}
+			]);
+		} catch {
+			/* comment index best-effort — mailbox message already durable */
+		}
+	}
 
-	/** Rematerialize may replace feed ids — cache what we actually commit. */
-	let committedFeedIds = feedIds;
-	const runTipWrite = () =>
-		putPaths(session, buildWrites(feedIds, commentIds), {
-			/* Leaf already on the server — reuse ciphertext, don't re-upload. */
-			prePrepared: {
-				[leafPath]: { hash: leafHash, wrapped_key: leafKey, kind: 'chat_message' }
-			},
-			/* Skip redundant getTip when prep just loaded this tip+dir. */
-			...(tipAtPrep && dirAtPrep ? { baseTip: tipAtPrep, baseDir: dirAtPrep } : {}),
-			/*
-			 * Always probe tip for chat feed writes. Skipping under tipWarm raced with
-			 * concurrent tip moves and could commit a feed.json missing this id —
-			 * sender saw ✓ then message vanished on reopen.
-			 */
-			skipTipProbe: false,
-			rematerialize: async (dir) => {
-				/*
-				 * Cheap prepend-union only — UI sorts by leaf created_at+id.
-				 * orderFeedIdsNewestFirst here used to fetch dozens of leaves on conflict
-				 * and turn a tip race into multi-second peer stalls.
-				 */
-				const liveFeed = await listFeedIdsFromDir(session, dir);
-				const nextFeed = [id, ...liveFeed, ...known]
-					.filter((x, i, arr) => x && arr.indexOf(x) === i)
-					.slice(0, FEED_MAX);
-				committedFeedIds = nextFeed;
-				const nextComments = await resolveCommentIds(dir);
-				return buildWrites(nextFeed, nextComments);
-			}
-		});
-	const tipAfter = await (chatTipWriteChain = chatTipWriteChain.then(runTipWrite, runTipWrite));
-	if (tipAfter) rememberFeedIds(String(tipAfter), committedFeedIds);
 	if (typeof console !== 'undefined' && console.debug) {
 		const totalMs = Math.round(
 			(typeof performance !== 'undefined' ? performance.now() : Date.now()) - tSend
 		);
 		console.debug('[chat-latency] createChatMessage', {
 			totalMs,
-			prepMs,
-			leafPutMs,
-			tip: tipAfter ? String(tipAfter).slice(0, 12) : ''
+			tip: tipAfter ? String(tipAfter).slice(0, 12) : '',
+			mode: 'mailbox-append'
 		});
 	}
 	try {
@@ -2663,8 +2529,8 @@ export async function markChatMessagesRead(session, messages, readerEmail) {
 		.toLowerCase();
 	if (!session || !reader || !Array.isArray(messages) || !messages.length) return [];
 
-	/** @type {{ path: string, kind: string, plaintext: string }[]} */
-	const writes = [];
+	/** @type {string[]} */
+	const ids = [];
 	/** @type {any[]} */
 	const updated = [];
 	for (const msg of messages) {
@@ -2678,70 +2544,48 @@ export async function markChatMessagesRead(session, messages, readerEmail) {
 			? msg.read_by.map((e) => String(e).toLowerCase())
 			: [];
 		if (prev.includes(reader)) continue;
-		const next = {
+		ids.push(id);
+		updated.push({
 			...msg,
 			read_by: [...prev, reader],
 			delivery: 'read'
-		};
-		writes.push({
-			path: `chat/messages/${id}.json`,
-			kind: 'chat_message',
-			plaintext: JSON.stringify(next)
 		});
-		updated.push(next);
 	}
-	if (!writes.length) return [];
-	/* Same tip chain as chat sends — receipt tip writes must not CAS-storm message commits. */
+	if (!ids.length) return [];
 	await (chatTipWriteChain = chatTipWriteChain.then(
-		() => putPaths(session, writes),
-		() => putPaths(session, writes)
+		() =>
+			appendMailboxEntry(session, {
+				kind: 'receipts',
+				reader,
+				message_ids: ids
+			}),
+		() =>
+			appendMailboxEntry(session, {
+				kind: 'receipts',
+				reader,
+				message_ids: ids
+			})
 	));
 	return updated;
 }
 
 /**
- * Remove a chat message leaf and drop it from `chat/feed.json`.
- * Pass `knownFeedIds` to skip the pre-delete GET.
- * Used for reaction leaves — not user message soft-delete.
+ * Retract a chat message (reactions) via mailbox op — not a Space tip rewrite.
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
- * @param {{ knownFeedIds?: string[] }} [opts]
+ * @param {{ knownFeedIds?: string[] }} [_opts]
  */
-export async function deleteChatMessage(session, id, opts = {}) {
+export async function deleteChatMessage(session, id, _opts = {}) {
 	const sid = String(id || '').trim();
 	if (!sid || sid.startsWith('local-')) return;
-
-	let serverFeed = [];
-	try {
-		serverFeed = await listFeedIds(session);
-	} catch {
-		serverFeed = [];
-	}
-	const known = Array.isArray(opts.knownFeedIds) ? opts.knownFeedIds : [];
-	const feedIds = [...serverFeed, ...known].filter((x, i, arr) => x && arr.indexOf(x) === i);
-	const nextIds = feedIds.filter((x) => x !== sid).slice(0, FEED_MAX);
-	const updated = nowRfc3339();
-	await putPaths(session, [
-		{
-			path: 'chat/feed.json',
-			kind: 'chat_feed',
-			plaintext: JSON.stringify(
-				{ schema: 'alpha.chat_feed/1', ids: nextIds, updated_at: updated },
-				null,
-				2
-			)
-		}
-	]);
-	try {
-		await deletePaths(session, [`chat/messages/${sid}.json`]);
-	} catch {
-		/* feed index is enough for UI */
-	}
+	await (chatTipWriteChain = chatTipWriteChain.then(
+		() => appendMailboxEntry(session, { kind: 'retract', message_id: sid }),
+		() => appendMailboxEntry(session, { kind: 'retract', message_id: sid })
+	));
 }
 
 /**
- * Soft-delete a chat message — keep id in feed, rewrite leaf as tombstone.
- * UI shows a muted “Deleted Message” bubble.
+ * Soft-delete via mailbox tombstone op.
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
  * @param {{ author?: string }} [opts]
@@ -2773,7 +2617,22 @@ export async function softDeleteChatMessage(session, id, opts = {}) {
 		...(prev?.ref ? { ref: prev.ref } : {}),
 		...(prev?.reply_to ? { reply_to: prev.reply_to } : {})
 	};
-	await putPath(session, `chat/messages/${sid}.json`, 'chat_message', JSON.stringify(tombstone));
+	await (chatTipWriteChain = chatTipWriteChain.then(
+		() =>
+			appendMailboxEntry(session, {
+				kind: 'tombstone',
+				message_id: sid,
+				deleted_at: deletedAt,
+				author: tombstone.author
+			}),
+		() =>
+			appendMailboxEntry(session, {
+				kind: 'tombstone',
+				message_id: sid,
+				deleted_at: deletedAt,
+				author: tombstone.author
+			})
+	));
 	return tombstone;
 }
 

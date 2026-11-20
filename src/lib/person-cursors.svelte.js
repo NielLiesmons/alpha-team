@@ -7,7 +7,12 @@
  */
 import { activePerson } from './actor.svelte.js';
 import { chatFeed } from './chat.svelte.js';
-import { getPath, putPath } from './drive/client.js';
+import { watermarkSuggestsNew } from './drive/change-summary.svelte.js';
+import {
+	getNamedEncrypted,
+	getPath,
+	putNamedEncrypted
+} from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
 import { notes, tasks } from './workspace.svelte.js';
 
@@ -57,6 +62,12 @@ export function emailSlug(email) {
 /** @param {string} email */
 function cursorsPath(email) {
 	return `meta/cursors/${emailSlug(email)}.json`;
+}
+
+/** Named tip — keeps “seen” flushes off the fat Space tip. */
+/** @param {string} email */
+function cursorsTipName(email) {
+	return `cursor-${emailSlug(email)}`;
 }
 
 /** @param {unknown} raw */
@@ -213,8 +224,16 @@ export async function pullPersonCursorsFromDrive(session = activeSession()) {
 	const gen = ++driveFetchGen;
 	driveFetchEmail = email;
 	try {
-		const bytes = await getPath(session, cursorsPath(email));
-		if (gen !== driveFetchGen) return;
+		let bytes = await getNamedEncrypted(session, cursorsTipName(email), cursorsPath(email));
+		/* Legacy Space leaf — one-shot migrate onto named tip when dirty flush runs. */
+		if (!bytes) {
+			try {
+				bytes = await getPath(session, cursorsPath(email));
+			} catch {
+				bytes = null;
+			}
+		}
+		if (!bytes || gen !== driveFetchGen) return;
 		const doc = JSON.parse(new TextDecoder().decode(bytes));
 		const fromDrive = {
 			activity_seen_at: parseMs(doc.activity_seen_at),
@@ -286,7 +305,13 @@ async function flushPersist() {
 		updated_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 	};
 	try {
-		await putPath(session, cursorsPath(email), 'blob', JSON.stringify(doc, null, 2));
+		/* Named tip — does not advance / invalidate the fat Space tip for peers. */
+		await putNamedEncrypted(
+			session,
+			cursorsTipName(email),
+			cursorsPath(email),
+			JSON.stringify(doc, null, 2)
+		);
 		lastPersisted = values;
 		personCursors.dirty = false;
 	} catch {
@@ -392,10 +417,10 @@ export function newChatCount() {
 
 export function newNotesCount() {
 	cursorsTick.value;
-	const len = notes.length;
 	const me = meEmail();
-	if (!me || !personCursors.ready || len === 0) return 0;
+	if (!me || !personCursors.ready) return 0;
 	const seen = Number(personCursors.values.notes_seen_at || 0) || 0;
+	const len = notes.length;
 	let n = 0;
 	for (let i = 0; i < len; i++) {
 		const note = notes[i];
@@ -405,15 +430,17 @@ export function newNotesCount() {
 		if (author && author === me) continue;
 		if ((Number(note.createdAt || 0) || 0) > seen) n += 1;
 	}
+	/* ASAP: change-summary watermark before fat crawl fills `notes`. */
+	if (n === 0 && watermarkSuggestsNew('notes', seen)) return 1;
 	return n;
 }
 
 export function newTasksCount() {
 	cursorsTick.value;
-	const len = tasks.length;
 	const me = meEmail();
-	if (!me || !personCursors.ready || len === 0) return 0;
+	if (!me || !personCursors.ready) return 0;
 	const seen = Number(personCursors.values.tasks_seen_at || 0) || 0;
+	const len = tasks.length;
 	let n = 0;
 	for (let i = 0; i < len; i++) {
 		const task = tasks[i];
@@ -423,5 +450,6 @@ export function newTasksCount() {
 		if (author && author === me) continue;
 		if ((Number(task.createdAt || 0) || 0) > seen) n += 1;
 	}
+	if (n === 0 && watermarkSuggestsNew('tasks', seen)) return 1;
 	return n;
 }

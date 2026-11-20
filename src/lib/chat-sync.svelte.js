@@ -5,7 +5,11 @@
 
 import { refreshMembersAndAvatars } from './avatar.svelte.js';
 import { refreshChatFeed, chatUi, markIncomingMessagesRead } from './chat.svelte.js';
-import { getTip, peekCachedTip } from './drive/client.js';
+import {
+	CHAT_TIP_NAME,
+	getNamedTip,
+	peekCachedChatTip
+} from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
 
 /*
@@ -61,15 +65,14 @@ export async function pullChatIfNeeded(force = false) {
 	try {
 		let tip = '';
 		try {
-			tip = await getTip(session);
+			tip = await getNamedTip(session, CHAT_TIP_NAME);
 		} catch {
 			tip = '';
 		}
 		const tipChanged = Boolean(tip && tip !== lastTip);
 		/*
-		 * Only reload the feed when tip moved (or first/forced pull).
-		 * A tip-unchanged “stale” full refresh stampeded /v1/blocks, starved tip
-		 * PUT/GET, and made peer delivery take minutes.
+		 * Only reload the feed when the chat named tip moved (or first/forced pull).
+		 * Space tip changes (cursors, tasks) must not stampede chat leaf fetches.
 		 */
 		if (force || tipChanged || lastChatPull === 0) {
 			if (tip) lastTip = tip;
@@ -77,7 +80,8 @@ export async function pullChatIfNeeded(force = false) {
 			lastChatPull = Date.now();
 			/* Receipt tip writes compete with message tip CAS — defer. */
 			scheduleReadReceipts();
-			if (tipChanged || force) void refreshMembersAndAvatars().catch(() => {});
+			/* Members/avatars live on Space tip — refresh on force only, not every chat tip. */
+			if (force) void refreshMembersAndAvatars().catch(() => {});
 			if (typeof console !== 'undefined' && console.debug) {
 				console.debug('[chat-latency] pullChat', {
 					ms: Math.round(
@@ -146,13 +150,12 @@ export async function wakeChatFromTip(tip) {
 	try {
 		await refreshChatFeed();
 		/*
-		 * Prefer Drive tip after load so poll self-heals if the bus tip raced ahead
-		 * of a visible putTip. Fall back to the bus hash when cache is empty.
+		 * Prefer chat named tip after load so poll self-heals if the bus tip raced
+		 * ahead of a visible putNamedTip. Fall back to the bus hash when cache is empty.
 		 */
-		lastTip = peekCachedTip(session) || t;
+		lastTip = peekCachedChatTip(session) || t;
 		lastChatPull = Date.now();
 		scheduleReadReceipts();
-		void refreshMembersAndAvatars().catch(() => {});
 		if (typeof console !== 'undefined' && console.debug) {
 			console.debug('[chat-latency] tipWake', {
 				ms: Math.round(

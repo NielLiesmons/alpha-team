@@ -78,7 +78,8 @@
 	import MoreDots from './icons/MoreDots.svelte';
 	import TipTypeIcon from './TipTypeIcon.svelte';
 	import NotifFilterButton from './NotifFilterButton.svelte';
-	import { syncUi } from '$lib/sync-progress.svelte.js';
+	import { sectionForPath } from '$lib/drive/change-summary.svelte.js';
+	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
 	import { attachChromeScrollFade } from '$lib/chrome-scroll-fade.js';
 	import { openEntreprisesEntity } from '$lib/entity-routes.js';
@@ -919,6 +920,12 @@
 			el.removeEventListener('touchcancel', onEnd);
 		};
 	});
+
+	const detailSyncing = $derived(
+		isSectionSyncing(
+			sectionForPath(typeof location !== 'undefined' ? location.pathname : '')
+		)
+	);
 </script>
 
 <aside
@@ -932,8 +939,8 @@
 	aria-label="Detail"
 	bind:this={detailRoot}
 	style="--chrome-scroll-fade: {detailFade}; --detail-progress: {detailProgress}"
-	class:titles-syncing={syncUi.active}
-	aria-busy={syncUi.active || undefined}
+	class:titles-syncing={detailSyncing}
+	aria-busy={detailSyncing || undefined}
 >
 	{#if renderBody}
 		{@const mailContactEmail = mailMsg ? String(mailMsg.from || '').toLowerCase() : ''}
@@ -943,7 +950,7 @@
 			!isCategorizedContact(mailContactEmail) &&
 			mailCategoryFor(mailMsg) === 'new'}
 		{#if showMoreMenu || mailNeedsTriage || chatNotifsOpen}
-			<ChromeMobileBar title={mobileTitle || typeLabel} onBack={close}>
+			<ChromeMobileBar title={mobileTitle || typeLabel} syncing={detailSyncing} onBack={close}>
 				{#snippet trailing()}
 					{#if chatNotifsOpen}
 						<NotifFilterButton
@@ -969,7 +976,7 @@
 				{/snippet}
 			</ChromeMobileBar>
 		{:else}
-			<ChromeMobileBar title={mobileTitle || typeLabel} onBack={close} />
+			<ChromeMobileBar title={mobileTitle || typeLabel} syncing={detailSyncing} onBack={close} />
 		{/if}
 
 		<DropdownMenu
@@ -2388,6 +2395,27 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	/* Desktop detail title spinner — after label, only while this section syncs */
+	:global(.detail.titles-syncing .detail-top-start .detail-top-label::after) {
+		content: '';
+		display: inline-block;
+		width: 12px;
+		height: 12px;
+		margin-left: 8px;
+		vertical-align: -1px;
+		box-sizing: border-box;
+		border: 2px solid var(--fg-11);
+		border-top-color: var(--fg-66);
+		border-radius: 50%;
+		animation: detail-title-spin 0.7s linear infinite;
+	}
+
+	@keyframes detail-title-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	:global(.detail .ptr) {

@@ -47,7 +47,7 @@ import { loadWorkspaceLeaves } from './drive/workspace-load.js';
 import { loadPersonCursors } from './person-cursors.svelte.js';
 import { idbGet, idbSet, workspaceCacheKey } from './local-db.js';
 import { popDetailLayer, pushDetailLayer } from './nav-stack.js';
-import { beginSync, endSync, setSyncRatio } from './sync-progress.svelte.js';
+import { endSync, setSyncRatio } from './sync-progress.svelte.js';
 import { mailPriorityFor } from './mail.svelte.js';
 
 /** People available for assignee pickers. Email = account id. */
@@ -434,7 +434,7 @@ export async function refreshFromDrive(opts = {}) {
 	const ownProgress = !opts.outerProgress;
 	if (ownProgress) {
 		driveSession.syncing = true;
-		beginSync('Workspace');
+		/* Title spinner is section-scoped via drive-refresh — no global Updating. */
 	}
 	driveSession.error = null;
 	try {

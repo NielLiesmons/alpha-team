@@ -8,14 +8,16 @@
 		mailView,
 		setMailFolder
 	} from '$lib/mail-view.svelte.js';
-	import { syncUi } from '$lib/sync-progress.svelte.js';
+	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import Spinner from '@alpha/ui/Spinner.svelte';
 
 	let open = $state(false);
 	/** @type {HTMLButtonElement | undefined} */
 	let anchorEl = $state();
 
 	const label = $derived(mailFolderLabel(mailView.folder) || t('mail.inbox'));
+	const syncing = $derived(isSectionSyncing('mail'));
 
 	function toggle() {
 		open = !open;
@@ -32,7 +34,7 @@
 	}
 </script>
 
-<div class="mail-title" class:titles-syncing={syncUi.active} aria-busy={syncUi.active || undefined}>
+<div class="mail-title" class:titles-syncing={syncing} aria-busy={syncing || undefined}>
 	<button
 		type="button"
 		class="title-btn desktop"
@@ -42,6 +44,9 @@
 		onclick={toggle}
 	>
 		<span class="title-label">{label}</span>
+		{#if syncing}
+			<Spinner size={12} label="Refreshing" />
+		{/if}
 		<svg class="chev" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 			<path
 				d="M3 4.5 6 7.5 9 4.5"
@@ -61,6 +66,9 @@
 		onclick={toggle}
 	>
 		<span class="mobile-name">{label}</span>
+		{#if syncing}
+			<Spinner size={12} label="Refreshing" />
+		{/if}
 		<svg class="chev" width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 			<path
 				d="M3 4.5 6 7.5 9 4.5"
