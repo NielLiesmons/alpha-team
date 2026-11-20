@@ -557,7 +557,9 @@
 		return s || undefined;
 	});
 
-	const fabCountLabel = $derived(String(messages.length));
+	/** Hide count pill when empty — collapsed FAB is chat icon only. */
+	const fabCountLabel = $derived(messages.length > 0 ? String(messages.length) : '');
+	const showFabStack = $derived(messages.length > 0);
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -577,7 +579,13 @@
 	aria-label={sheetVisible ? t('comments.title') : undefined}
 >
 	{#if phase === 'fab'}
-		<button type="button" class="chat-pill" aria-label={t('comments.title')} onclick={() => void openSheet()}>
+		<button
+			type="button"
+			class="chat-pill"
+			class:icon-only={!showFabStack}
+			aria-label={t('comments.title')}
+			onclick={() => void openSheet()}
+		>
 			<svg
 				width="18"
 				height="18"
@@ -593,13 +601,15 @@
 					d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
 				/>
 			</svg>
-			<span class="pill-stack">
-				<ProfilePicStack
-					profiles={commentatorProfiles}
-					size="xxs"
-					text={fabCountLabel}
-				/>
-			</span>
+			{#if showFabStack}
+				<span class="pill-stack">
+					<ProfilePicStack
+						profiles={commentatorProfiles}
+						size="xxs"
+						text={fabCountLabel}
+					/>
+				</span>
+			{/if}
 		</button>
 	{:else}
 		<div class="sheet-top" aria-hidden="false">
@@ -849,6 +859,11 @@
 		letter-spacing: 0;
 	}
 
+	.chat-pill.icon-only {
+		/* Symmetric pad when stack/count is hidden */
+		padding: 0 14px;
+	}
+
 	.chat-pill:hover {
 		color: var(--fg);
 	}
@@ -857,7 +872,16 @@
 		display: inline-flex;
 		align-items: center;
 		line-height: 0;
-		opacity: 0.92;
+	}
+
+	/* Quiet count chrome — subtler than default ProfilePicStack pill */
+	.pill-stack :global(.pill) {
+		background: var(--fg-11, color-mix(in srgb, var(--fg) 12%, transparent));
+	}
+
+	.pill-stack :global(.pill span) {
+		color: var(--fg-33);
+		font-weight: 500;
 	}
 
 	.sheet-top {

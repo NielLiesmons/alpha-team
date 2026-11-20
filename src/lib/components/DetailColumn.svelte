@@ -74,6 +74,7 @@
 	import PullToRefresh from './PullToRefresh.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import ChromeMobileBar from '@alpha/ui/ChromeMobileBar.svelte';
+	import DetailTitleRow from '@alpha/ui/DetailTitleRow.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
 	import TipTypeIcon from './TipTypeIcon.svelte';
 	import NotifFilterButton from './NotifFilterButton.svelte';
@@ -1070,17 +1071,17 @@
 		</header>
 		{@const taskMailId = String(task.mail_thread_id || task._drive?.mail_thread_id || '').trim()}
 		<div class="body">
-			<div class="title-row task-title-row">
-				<span class="title-status">
+			<DetailTitleRow>
+				{#snippet leading()}
 					<TaskFieldPicker taskId={task.id} field="status" value={task.status} size={24} />
-				</span>
+				{/snippet}
 				<div class="title-stack">
 					{#if taskMailId}
 						<span class="mail-prefix">{t('tasks.mailPrefix')}</span>
 					{/if}
 					<textarea
 						bind:this={titleEl}
-						class="title-input"
+						class="detail-title title-input"
 						rows="1"
 						bind:value={draftTitle}
 						aria-label={t('detail.ariaTaskTitle')}
@@ -1091,7 +1092,7 @@
 						}}
 					></textarea>
 				</div>
-				<span class="title-priority">
+				{#snippet trailing()}
 					<TaskFieldPicker
 						taskId={task.id}
 						field="priority"
@@ -1099,8 +1100,8 @@
 						size={26}
 						align="right"
 					/>
-				</span>
-			</div>
+				{/snippet}
+			</DetailTitleRow>
 			<DetailMetaPills entity={task} kind="task" />
 			{#if taskMailId}
 				<button
@@ -1159,17 +1160,17 @@
 			</div>
 		</header>
 		<div class="body">
-			<div class="title-row">
-				<span class="title-status">
+			<DetailTitleRow>
+				{#snippet leading()}
 					<ProjectBox
 						state={projectLifecycle(project, tasks)}
 						icon={projectDisplayIcon(project, enterprises)}
 						size={24}
 					/>
-				</span>
+				{/snippet}
 				<textarea
 					bind:this={titleEl}
-					class="title-input"
+					class="detail-title title-input"
 					rows="1"
 					bind:value={draftTitle}
 					aria-label={t('detail.ariaProjectTitle')}
@@ -1179,7 +1180,7 @@
 						scheduleDraftSave();
 					}}
 				></textarea>
-			</div>
+			</DetailTitleRow>
 			<textarea
 				class="body-input body-input-hug"
 				bind:this={descEl}
@@ -1322,10 +1323,10 @@
 			</div>
 		</header>
 		<div class="body note-body-wrap">
-			<div class="title-row">
+			<DetailTitleRow>
 				<textarea
 					bind:this={titleEl}
-					class="title-input"
+					class="detail-title title-input"
 					rows="1"
 					bind:value={draftTitle}
 					aria-label={t('detail.ariaNoteTitle')}
@@ -1335,7 +1336,7 @@
 						scheduleDraftSave();
 					}}
 				></textarea>
-			</div>
+			</DetailTitleRow>
 			<DetailMetaPills entity={note} kind="note" />
 			{#key note.id}
 				<div class="note-editor-pad">
@@ -1910,13 +1911,13 @@
 			</div>
 		</header>
 		<div class="body">
-			<div class="title-row">
-				<span class="title-status">
+			<DetailTitleRow>
+				{#snippet leading()}
 					<EnterpriseBox state={enterprise.status ?? 'active'} icon={enterprise.icon} size={36} />
-				</span>
+				{/snippet}
 				<textarea
 					bind:this={titleEl}
-					class="title-input"
+					class="detail-title title-input"
 					rows="1"
 					bind:value={draftTitle}
 					aria-label={t('detail.ariaEntTitle')}
@@ -1926,7 +1927,7 @@
 						scheduleDraftSave();
 					}}
 				></textarea>
-			</div>
+			</DetailTitleRow>
 			<textarea
 				class="body-input body-input-hug"
 				bind:this={descEl}
@@ -2434,40 +2435,11 @@
 		padding-right: 4px;
 	}
 
-	.title-input {
-		flex: 1 1 auto;
-		min-width: 0;
-		width: 100%;
-		max-width: 100%;
-		margin: 0;
-		padding: 0;
-		border: 0;
-		outline: none;
-		resize: none;
-		/* Hide scrollbar; height comes from hugTitle so wrapped lines stay visible */
-		overflow: hidden;
-		background: transparent;
-		font-family: var(--font);
-		font-size: 1.55rem;
-		font-weight: 700;
-		letter-spacing: -0.03em;
-		line-height: 1.2;
-		color: var(--fg);
-		/* Do not use field-sizing:content — it grows width and clips under overflow-x */
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		word-break: break-word;
-	}
-
+	/* Typography + pad from @alpha/ui DetailTitleRow (`.detail-title`); local tweaks only */
 	.title-stack .title-input {
 		flex: 1 1 12ch;
 		width: auto;
 		min-width: 0;
-	}
-
-	.title-input::placeholder {
-		color: var(--fg-33);
-		font-weight: 600;
 	}
 
 	.mail-thread-panel {
@@ -2584,36 +2556,6 @@
 		transform: scale(0.96);
 	}
 
-	.title-row {
-		display: flex;
-		align-items: flex-start;
-		gap: 10px;
-		min-width: 0;
-	}
-
-	.task-title-row {
-		/* Match TaskCreate: status | title | priority — side inset from .body */
-		padding-left: 0;
-		padding-right: 0;
-		align-items: flex-start;
-	}
-
-	.task-title-row .title {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.title-status,
-	.title-priority {
-		flex-shrink: 0;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		line-height: 0;
-		/* Optical center with first title line (~1.55rem / 1.2) */
-		padding-top: 4px;
-	}
-
 	.title-stack {
 		flex: 1;
 		min-width: 0;
@@ -2629,31 +2571,20 @@
 		/* Prior 0.35em gap + ~8px more before the title */
 		margin-inline-end: calc(0.35em + 8px);
 		font-family: var(--font);
-		font-size: 1.55rem;
+		font-size: var(--detail-title-size, 1.55rem);
 		font-weight: 400;
 		letter-spacing: -0.03em;
-		line-height: 1.2;
+		line-height: var(--detail-title-line-height, 1.2);
 		color: var(--fg-33);
-	}
-
-	.title {
-		flex: 1;
-		min-width: 0;
-		margin: 0;
-		font-family: var(--font);
-		font-size: 1.55rem;
-		font-weight: 700;
-		letter-spacing: -0.03em;
-		line-height: 1.2;
-		color: var(--white);
 	}
 
 	.body {
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		/* Clears solid part of the 72px detail-top fade; FAB clearance when present */
-		padding: 56px 24px max(32px, var(--comments-fab-clearance, 0px));
+		/* Clears solid part of the detail-top fade; FAB clearance when present */
+		padding: var(--detail-scroll-pad-top, 56px) 24px
+			max(32px, var(--comments-fab-clearance, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 0;
@@ -2710,14 +2641,15 @@
 
 	.body.files-folder-body {
 		overflow: auto;
-		padding: 56px 24px 32px;
+		padding: var(--detail-scroll-pad-top, 56px) 24px 32px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
 	}
 
 	.body.file-detail-body {
-		padding: 56px 24px max(32px, var(--comments-fab-clearance, 0px));
+		padding: var(--detail-scroll-pad-top, 56px) 24px
+			max(32px, var(--comments-fab-clearance, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
@@ -2770,19 +2702,12 @@
 		overflow: auto;
 	}
 
-	.title-row,
 	.block,
 	.prose,
 	.summary,
 	.muted {
 		padding-left: 0;
 		padding-right: 0;
-	}
-
-	.title-row {
-		/* Desktop: 4px under control row (was 8 — ~4px too much air) */
-		padding-top: 4px;
-		padding-bottom: 10px;
 	}
 
 	.block {
@@ -3151,10 +3076,6 @@
 			display: flex;
 		}
 
-		.title-row {
-			padding-top: 10px;
-		}
-
 		.bento {
 			grid-template-columns: 1fr;
 			/* Body already has 14px side inset — don’t double-pad */
@@ -3172,7 +3093,8 @@
 		/* Side inset matches mobile-bar horizontal padding (14px) */
 		.body:not(.chat-activity-body):not(.mail-thread-body):not(.chat-channel-body),
 		:global(.detail > .body:not(.chat-activity-body):not(.mail-thread-body):not(.chat-channel-body)) {
-			padding: calc(56px + env(safe-area-inset-top, 0px)) 14px
+			padding: var(--detail-scroll-pad-top-mobile, calc(56px + env(safe-area-inset-top, 0px)))
+				14px
 				max(
 					calc(24px + env(safe-area-inset-bottom, 0px)),
 					var(--comments-fab-clearance, 0px)

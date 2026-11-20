@@ -3,6 +3,7 @@
 	 * Mail thread panels only — private chat lives in CommentThread (FAB panel),
 	 * same pattern as Tasks / Notes / Projects.
 	 */
+	import DetailTitleRow from '@alpha/ui/DetailTitleRow.svelte';
 	import ArrowRight from './icons/ArrowRight.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
 	import Reply from './icons/Reply.svelte';
@@ -193,8 +194,8 @@
 <div class="mail-thread-shell">
 	<div class="feed mail-feed" bind:this={feedEl}>
 		<div class="feed-body">
-			<div class="mail-thread-title-row">
-				<span class="title-status">
+			<DetailTitleRow>
+				{#snippet leading()}
 					{#if linkedTask}
 						<TaskFieldPicker
 							taskId={linkedTask.id}
@@ -210,9 +211,9 @@
 							mailThread={mailPromoteSeed}
 						/>
 					{/if}
-				</span>
-				<h1 class="mail-thread-title">{threadTitle}</h1>
-				<span class="title-priority">
+				{/snippet}
+				<h1 class="detail-title">{threadTitle}</h1>
+				{#snippet trailing()}
 					{#if linkedTask}
 						<TaskFieldPicker
 							taskId={linkedTask.id}
@@ -230,8 +231,8 @@
 							mailThread={mailPromoteSeed}
 						/>
 					{/if}
-				</span>
-			</div>
+				{/snippet}
+			</DetailTitleRow>
 			{#if linkedTask}
 				<DetailMetaPills entity={linkedTask} kind="task" />
 			{/if}
@@ -410,8 +411,8 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		display: block;
-		/* Clear detail-top control row; FAB clearance from .detail.has-comments-fab */
-		padding: 56px 24px
+		/* Match Notes/Tasks DetailColumn .body pad; FAB clearance from .detail.has-comments-fab */
+		padding: var(--detail-scroll-pad-top, 56px) 24px
 			max(
 				calc(28px + env(safe-area-inset-bottom, 0px)),
 				var(--comments-fab-clearance, 0px)
@@ -441,17 +442,13 @@
 
 	@media (max-width: 767px) {
 		.mail-feed {
-			/* Match chat channel: clear ChromeMobileBar (88px + safe) */
-			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
+			/* Same as Notes/Tasks .body — not full ChromeMobileBar 88px (that overshoots) */
+			padding: var(--detail-scroll-pad-top-mobile, calc(56px + env(safe-area-inset-top, 0px)))
+				14px
 				max(
 					calc(28px + env(safe-area-inset-bottom, 0px)),
 					var(--comments-fab-clearance, 0px)
 				);
-		}
-
-		.mail-thread-title-row {
-			/* Match DetailColumn .title-row mobile top pad */
-			padding-top: 10px;
 		}
 
 		.mail-bottom-fade {
@@ -468,43 +465,6 @@
 	.feed-body {
 		display: block;
 		width: 100%;
-	}
-
-	.mail-thread-title-row {
-		display: flex;
-		align-items: flex-start;
-		gap: 10px;
-		/* Match DetailColumn .title-row desktop top pad (4px) */
-		margin: 0;
-		padding: 4px 2px 10px;
-		min-width: 0;
-	}
-
-	.title-status,
-	.title-priority {
-		flex-shrink: 0;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		line-height: 0;
-		/* Optical center with first title line (28px / 1.15) */
-		padding-top: 4px;
-	}
-
-	.mail-thread-title {
-		flex: 1 1 auto;
-		min-width: 0;
-		max-width: 100%;
-		margin: 0;
-		padding: 0;
-		font-size: 28px;
-		font-weight: 700;
-		letter-spacing: -0.03em;
-		line-height: 1.15;
-		color: var(--fg);
-		overflow-wrap: anywhere;
-		word-break: break-word;
-		white-space: normal;
 	}
 
 	.mail-panel {
