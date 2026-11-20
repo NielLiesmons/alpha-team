@@ -874,14 +874,17 @@
 		line-height: 0;
 	}
 
-	/* Quiet count chrome — subtler than default ProfilePicStack pill */
+	/* Match mail inbox `.convo-stack` ProfilePicStack count pill */
 	.pill-stack :global(.pill) {
 		background: var(--fg-11, color-mix(in srgb, var(--fg) 12%, transparent));
 	}
 
 	.pill-stack :global(.pill span) {
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 600;
 		color: var(--fg-33);
-		font-weight: 500;
+		font-variant-numeric: lining-nums;
 	}
 
 	.sheet-top {
