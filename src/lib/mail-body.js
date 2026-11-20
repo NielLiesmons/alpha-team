@@ -47,15 +47,30 @@ export function isHtmlMailBody(text) {
 /**
  * TipTap / composer / inbound HTML safe to drop into the thread.
  * Strips scripts, styles, and inline event handlers; neuters javascript: URLs.
+ * Also unwraps Gmail false-positive anchors whose label is only `+` / `++`
+ * (e.g. “d'inventer ++”) while keeping real http(s)/mailto links.
  * @param {string} html
  */
 export function safeMailHtml(html) {
-	return String(html || '')
+	let s = String(html || '')
 		.replace(/<script[\s\S]*?<\/script>/gi, '')
 		.replace(/<style[\s\S]*?<\/style>/gi, '')
 		.replace(/<\/?(?:base|object|embed|iframe|form|input|button|textarea|select)\b[^>]*>/gi, '')
 		.replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
 		.replace(/\s(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, '');
+
+	/* Gmail sometimes autolinks bare `++` — unwrap those, keep real link labels. */
+	s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (full, _attrs, inner) => {
+		const label = String(inner || '')
+			.replace(/<[^>]+>/g, '')
+			.replace(/&nbsp;/gi, ' ')
+			.replace(/\s+/g, ' ')
+			.trim();
+		if (/^\++$/.test(label)) return inner;
+		return full;
+	});
+
+	return s;
 }
 
 /** @param {string} s */
