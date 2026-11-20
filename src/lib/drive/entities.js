@@ -2167,7 +2167,7 @@ export async function getChatMessage(session, id, dir) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {'task' | 'note' | 'project' | 'mail'} type
+ * @param {'task' | 'note' | 'project' | 'mail' | 'file'} type
  * @param {string} entityId
  * @returns {Promise<string[]>}
  */
@@ -2186,7 +2186,7 @@ export async function listCommentIds(session, type, entityId) {
 
 /**
  * @param {import('./client.js').DriveSession} session
- * @param {'task' | 'note' | 'project' | 'mail'} type
+ * @param {'task' | 'note' | 'project' | 'mail' | 'file'} type
  * @param {string} entityId
  */
 export async function listComments(session, type, entityId) {
@@ -2344,7 +2344,7 @@ async function listFeedIdsFromDir(session, dir) {
 /**
  * @param {import('./client.js').DriveSession} session
  * @param {any} dir
- * @param {'task' | 'note' | 'project' | 'mail'} type
+ * @param {'task' | 'note' | 'project' | 'mail' | 'file'} type
  * @param {string} entityId
  */
 async function listCommentIdsFromDir(session, dir, type, entityId) {
@@ -2438,10 +2438,11 @@ export async function createChatMessage(session, input, opts = {}) {
 				(input.ref.type === 'task' ||
 					input.ref.type === 'note' ||
 					input.ref.type === 'project' ||
-					input.ref.type === 'mail')
+					input.ref.type === 'mail' ||
+					input.ref.type === 'file')
 		);
 	const refType = wantsComments
-		? /** @type {'task'|'note'|'project'|'mail'} */ (input.ref.type)
+		? /** @type {'task'|'note'|'project'|'mail'|'file'} */ (input.ref.type)
 		: null;
 	const refId = wantsComments ? String(input.ref.id) : '';
 	const leafPlain = JSON.stringify(msg);

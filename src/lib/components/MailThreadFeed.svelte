@@ -410,8 +410,12 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		display: block;
-		/* Clear detail-top control row; content scrolls under the fade zone */
-		padding: 56px 24px calc(28px + env(safe-area-inset-bottom, 0px));
+		/* Clear detail-top control row; FAB clearance from .detail.has-comments-fab */
+		padding: 56px 24px
+			max(
+				calc(28px + env(safe-area-inset-bottom, 0px)),
+				var(--comments-fab-clearance, 0px)
+			);
 		box-sizing: border-box;
 	}
 
@@ -438,7 +442,10 @@
 		right: 0;
 		bottom: 0;
 		z-index: 2;
-		height: calc(72px + env(safe-area-inset-bottom, 0px));
+		height: max(
+			calc(72px + env(safe-area-inset-bottom, 0px)),
+			var(--comments-fab-clearance, 0px)
+		);
 		pointer-events: none;
 		background: linear-gradient(
 			to top,
@@ -453,7 +460,10 @@
 		.mail-feed {
 			/* Match chat channel: clear ChromeMobileBar (88px + safe) */
 			padding: calc(88px + env(safe-area-inset-top, 0px)) 14px
-				calc(28px + env(safe-area-inset-bottom, 0px));
+				max(
+					calc(28px + env(safe-area-inset-bottom, 0px)),
+					var(--comments-fab-clearance, 0px)
+				);
 		}
 
 		.mail-top-fade {

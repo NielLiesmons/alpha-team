@@ -925,6 +925,9 @@
 	class:open={panelOpen}
 	class:vacant={!renderBody}
 	class:dragging={detailDrag != null}
+	class:has-comments-fab={Boolean(
+		task || project || note || mailMsg || (fileEntry && !fileEntry.isFolder)
+	)}
 	aria-label="Detail"
 	bind:this={detailRoot}
 	style="--chrome-scroll-fade: {detailFade}; --detail-progress: {detailProgress}"
@@ -1770,6 +1773,12 @@
 			</div>
 			<p class="muted">{t('drive.encryptedHint')}</p>
 		</div>
+		<CommentThread
+			type="file"
+			entityId={filePath}
+			tip={{ title: fileTitle || t('drive.file') }}
+			onMore={toggleMoreMenu}
+		/>
 	{:else if accountingPanel}
 		<AccountingDetail />
 	{:else if ledger}
@@ -2287,6 +2296,14 @@
 		cursor: not-allowed;
 	}
 
+	/*
+	 * When CommentThread FAB is present: scroll padding so last lines clear the
+	 * 44px pill + ~20px inset (+ safe-area). Matches CommentThread --fab-bottom.
+	 */
+	.detail.has-comments-fab {
+		--comments-fab-clearance: calc(44px + max(20px, env(safe-area-inset-bottom, 0px)) + 12px);
+	}
+
 	.detail {
 		position: relative;
 		flex: 1 1 auto;
@@ -2509,7 +2526,7 @@
 	}
 
 	.note-editor-pad {
-		/* Match task .prose — 4px under meta pills */
+		/* Match task .prose — 4px under meta pills; FAB clearance via .body padding */
 		padding: 4px 0 16px;
 		flex: 1;
 		min-height: 0;
@@ -2635,8 +2652,8 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		/* Clears solid part of the 72px detail-top fade */
-		padding: 56px 24px 32px;
+		/* Clears solid part of the 72px detail-top fade; FAB clearance when present */
+		padding: 56px 24px max(32px, var(--comments-fab-clearance, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 0;
@@ -2700,7 +2717,7 @@
 	}
 
 	.body.file-detail-body {
-		padding: 56px 24px 32px;
+		padding: 56px 24px max(32px, var(--comments-fab-clearance, 0px));
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
@@ -3155,7 +3172,10 @@
 		.body:not(.chat-activity-body):not(.mail-thread-body):not(.chat-channel-body),
 		:global(.detail > .body:not(.chat-activity-body):not(.mail-thread-body):not(.chat-channel-body)) {
 			padding: calc(56px + env(safe-area-inset-top, 0px)) 14px
-				calc(24px + env(safe-area-inset-bottom, 0px));
+				max(
+					calc(24px + env(safe-area-inset-bottom, 0px)),
+					var(--comments-fab-clearance, 0px)
+				);
 		}
 
 		/* Player feed scrolls under the mobile bar — pad inside PlayerDetail.feed */

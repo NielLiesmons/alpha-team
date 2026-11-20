@@ -32,7 +32,7 @@
 
 	/**
 	 * @type {{
-	 *   type: 'task' | 'note' | 'project' | 'mail',
+	 *   type: 'task' | 'note' | 'project' | 'mail' | 'file',
 	 *   entityId: string,
 	 *   tip?: {
 	 *     title?: string,
@@ -751,6 +751,8 @@
 		--comments-radius: 22px;
 		--fab-right: 20px;
 		--fab-bottom: max(20px, env(safe-area-inset-bottom));
+		/* Expose clearance for detail scroll padding (height + inset + gap). */
+		--comments-fab-clearance: calc(44px + var(--fab-bottom) + 12px);
 		position: absolute;
 		right: var(--fab-right);
 		bottom: var(--fab-bottom);

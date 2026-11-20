@@ -70,7 +70,7 @@ export const chatUi = $state({
 
 /**
  * Ask CommentThread for `kind:id` to open (and optionally scroll to a comment).
- * @param {'task' | 'note' | 'project' | 'mail' | string} type
+ * @param {'task' | 'note' | 'project' | 'mail' | 'file' | string} type
  * @param {string} entityId
  * @param {string | null} [scrollToId]
  */
@@ -155,6 +155,21 @@ export function unreadCountForChannel(channelId, email = activePerson().email ||
 
 function commentKey(type, id) {
 	return `${type}:${id}`;
+}
+
+/**
+ * Entity kinds that keep a Drive `comments.json` index + CommentThread FAB.
+ * @param {string | undefined | null} type
+ * @returns {type is 'task' | 'note' | 'project' | 'mail' | 'file'}
+ */
+export function isCommentEntityType(type) {
+	return (
+		type === 'task' ||
+		type === 'note' ||
+		type === 'project' ||
+		type === 'mail' ||
+		type === 'file'
+	);
 }
 
 const CHAT_CACHE_KEY = 'alpha.chat.feed.v1';
@@ -346,10 +361,6 @@ export async function refreshChatFeed() {
 	}
 }
 
-/**
- * @param {'task' | 'note' | 'project' | 'mail'} type
- * @param {string} entityId
- */
 /**
  * Stamp 0-based `ref.seq` on comment leaves (oldest → newest) and mirror onto the feed.
  * @param {any[]} list
@@ -732,15 +743,7 @@ export async function postChatMessage(input) {
 
 	/** 0-based comment index on the entity — feed uses this for instant “view more”. */
 	let refWithSeq = input.ref ? { ...input.ref } : null;
-	if (
-		refWithSeq &&
-		!isEvent &&
-		!isReaction &&
-		(refWithSeq.type === 'task' ||
-			refWithSeq.type === 'note' ||
-			refWithSeq.type === 'project' ||
-			refWithSeq.type === 'mail')
-	) {
+	if (refWithSeq && !isEvent && !isReaction && isCommentEntityType(refWithSeq.type)) {
 		if (typeof refWithSeq.seq !== 'number') {
 			const ck = commentKey(/** @type {any} */ (refWithSeq.type), refWithSeq.id);
 			const existing = (commentsByKey[ck] ?? []).filter(
@@ -805,14 +808,7 @@ export async function postChatMessage(input) {
 
 	/* Paint immediately — never wait on Drive tip for the bubble. */
 	chatFeed.unshift(optimistic);
-	if (
-		!isEvent &&
-		input.ref &&
-		(input.ref.type === 'task' ||
-			input.ref.type === 'note' ||
-			input.ref.type === 'project' ||
-			input.ref.type === 'mail')
-	) {
+	if (!isEvent && input.ref && isCommentEntityType(input.ref.type)) {
 		const key = commentKey(/** @type {any} */ (input.ref.type), input.ref.id);
 		const prev = commentsByKey[key] ?? [];
 		commentsByKey[key] = [...prev, optimistic];
@@ -915,12 +911,7 @@ export async function postChatMessage(input) {
 			}
 
 			const knownComments =
-				!isEvent &&
-				input.ref &&
-				(input.ref.type === 'task' ||
-					input.ref.type === 'note' ||
-					input.ref.type === 'project' ||
-					input.ref.type === 'mail')
+				!isEvent && input.ref && isCommentEntityType(input.ref.type)
 					? (commentsByKey[commentKey(/** @type {any} */ (input.ref.type), input.ref.id)] ?? [])
 							.map((m) => String(m.id))
 							.filter((id) => id && !id.startsWith('local-'))
@@ -956,14 +947,7 @@ export async function postChatMessage(input) {
 							: {})
 				};
 				chatFeed[idx] = next;
-				if (
-					!isEvent &&
-					input.ref &&
-					(input.ref.type === 'task' ||
-						input.ref.type === 'note' ||
-						input.ref.type === 'project' ||
-						input.ref.type === 'mail')
-				) {
+				if (!isEvent && input.ref && isCommentEntityType(input.ref.type)) {
 					patchCommentRow(
 						commentKey(/** @type {any} */ (input.ref.type), input.ref.id),
 						next,
@@ -1004,14 +988,7 @@ export async function postChatMessage(input) {
 				const idx = findSendIndex(String(created.id || '') || serverId);
 				if (idx >= 0) chatFeed[idx] = settledMsg;
 				else chatFeed.unshift(settledMsg);
-				if (
-					!isEvent &&
-					input.ref &&
-					(input.ref.type === 'task' ||
-						input.ref.type === 'note' ||
-						input.ref.type === 'project' ||
-						input.ref.type === 'mail')
-				) {
+				if (!isEvent && input.ref && isCommentEntityType(input.ref.type)) {
 					patchCommentRow(
 						commentKey(/** @type {any} */ (input.ref.type), input.ref.id),
 						settledMsg,
@@ -1196,13 +1173,14 @@ export function openChatRef(msg) {
 		return;
 	}
 
-	/** @type {'task' | 'note' | 'project' | 'enterprise' | 'mail' | null} */
+	/** @type {'task' | 'note' | 'project' | 'enterprise' | 'mail' | 'file' | null} */
 	let kind = null;
 	if (ref.type === 'task') kind = 'task';
 	else if (ref.type === 'note') kind = 'note';
 	else if (ref.type === 'project') kind = 'project';
 	else if (ref.type === 'enterprise') kind = 'enterprise';
 	else if (ref.type === 'mail') kind = 'mail';
+	else if (ref.type === 'file') kind = 'file';
 	if (!kind) return;
 
 	selectEntity(kind, ref.id);

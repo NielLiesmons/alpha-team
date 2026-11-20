@@ -202,7 +202,11 @@
 
 	/** Comment-thread kinds CommentThread can open. */
 	function commentableRefType(/** @type {string | undefined} */ type) {
-		return type === 'task' || type === 'note' || type === 'project' || type === 'mail'
+		return type === 'task' ||
+			type === 'note' ||
+			type === 'project' ||
+			type === 'mail' ||
+			type === 'file'
 			? type
 			: null;
 	}
@@ -283,7 +287,7 @@
 		for (const key of keys) {
 			const [type, id] = key.split(':');
 			if (commentsByKey[key] != null) continue;
-			void loadComments(/** @type {'task' | 'note' | 'project' | 'mail'} */ (type), id).catch(
+			void loadComments(/** @type {'task' | 'note' | 'project' | 'mail' | 'file'} */ (type), id).catch(
 				() => {}
 			);
 		}

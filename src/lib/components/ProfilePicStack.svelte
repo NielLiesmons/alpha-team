@@ -21,6 +21,8 @@
 
 	const displayed = $derived(profiles.slice(0, 3));
 	const metrics = $derived(sizeMap[size] ?? sizeMap.xs);
+	/* Keep numeric 0 — `{#if text}` is false for number 0. */
+	const pillLabel = $derived(text == null || text === '' ? '' : String(text));
 </script>
 
 {#if onclick}
@@ -43,13 +45,13 @@
 				{/each}
 			</div>
 		{/if}
-		{#if text}
+		{#if pillLabel}
 			<div
 				class="pill"
 				style:height="{metrics.height}px"
 				style:margin-left={displayed.length ? `-${metrics.overlap}px` : '0'}
 			>
-				<span>{text}</span>
+				<span>{pillLabel}</span>
 			</div>
 		{/if}
 	</button>
@@ -73,13 +75,13 @@
 				{/each}
 			</div>
 		{/if}
-		{#if text}
+		{#if pillLabel}
 			<div
 				class="pill"
 				style:height="{metrics.height}px"
 				style:margin-left={displayed.length ? `-${metrics.overlap}px` : '0'}
 			>
-				<span>{text}</span>
+				<span>{pillLabel}</span>
 			</div>
 		{/if}
 	</div>
@@ -135,6 +137,8 @@
 		min-width: 0;
 		overflow: hidden;
 		box-sizing: border-box;
+		/* Parents (e.g. FAB .pill-stack) may set line-height: 0 for avatar hug. */
+		line-height: 1;
 	}
 
 	/* Overlap into the last avatar when stack is present. */
@@ -147,6 +151,7 @@
 		z-index: 1;
 		font-size: 0.8125rem;
 		font-weight: 600;
+		line-height: 1;
 		font-variant-numeric: tabular-nums;
 		color: var(--white66, var(--fg-66, color-mix(in srgb, var(--fg, var(--ink)) 66%, transparent)));
 		white-space: nowrap;
