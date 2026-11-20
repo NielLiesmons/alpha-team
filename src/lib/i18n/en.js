@@ -268,6 +268,7 @@ export default {
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'To',
+	'mail.cc': 'Cc',
 	'mail.thread': 'Mail Thread',
 	'mail.reply': 'Reply',
 	'mail.replyAll': 'Reply all',

@@ -270,6 +270,7 @@ export default {
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'Para',
+	'mail.cc': 'Cc',
 	'mail.thread': 'Hilo de correo',
 	'mail.reply': 'Responder',
 	'mail.replyAll': 'Responder a todos',

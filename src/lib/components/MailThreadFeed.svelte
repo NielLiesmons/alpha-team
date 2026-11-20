@@ -90,6 +90,15 @@
 	/** @type {HTMLElement | null} */
 	let replyMenuAnchor = $state(null);
 	const menuMail = $derived(mails.find((m) => String(m?.id || '') === replyMenuId) || null);
+	/** Which message’s To/Cc recipients popover is open. */
+	let recipientsMenuId = $state('');
+	/** @type {HTMLElement | null} */
+	let recipientsMenuAnchor = $state(null);
+	const recipientsMail = $derived(
+		mails.find((m) => String(m?.id || '') === recipientsMenuId) || null
+	);
+	const recipientsTo = $derived(recipientsMail ? mailRecipientPeople(recipientsMail, 'to') : []);
+	const recipientsCc = $derived(recipientsMail ? mailRecipientPeople(recipientsMail, 'cc') : []);
 
 	$effect(() => {
 		const id = threadId;
@@ -102,6 +111,8 @@
 		quoteOpen = {};
 		replyMenuId = '';
 		replyMenuAnchor = null;
+		recipientsMenuId = '';
+		recipientsMenuAnchor = null;
 		queueMicrotask(() => {
 			const el = feedEl;
 			if (el) el.scrollTop = 0;
@@ -113,6 +124,46 @@
 		const at = String(email || '').indexOf('@');
 		if (at < 0) return '';
 		return String(email).slice(at);
+	}
+
+	/**
+	 * Resolve To/Cc people for the recipients popover (name + email).
+	 * @param {any} m
+	 * @param {'to' | 'cc'} field
+	 * @returns {{ email: string, name: string }[]}
+	 */
+	function mailRecipientPeople(m, field) {
+		/** @type {{ email: string, name: string }[]} */
+		const out = [];
+		const seen = new Set();
+		/** @param {string} email @param {string} [name] */
+		const push = (email, name = '') => {
+			const e = String(email || '')
+				.trim()
+				.toLowerCase();
+			if (!e || seen.has(e)) return;
+			seen.add(e);
+			const n = String(name || '').trim() || displayNameFromEmail(e);
+			out.push({ email: e, name: n });
+		};
+
+		if (field === 'to') {
+			const people = Array.isArray(m?.to_people) ? m.to_people : [];
+			if (people.length) {
+				for (const p of people) push(p?.email, p?.name);
+				return out;
+			}
+			for (const e of m?.to || []) push(e);
+			return out;
+		}
+
+		const jmapCc = Array.isArray(m?._jmap?.cc) ? m._jmap.cc : [];
+		if (jmapCc.length) {
+			for (const a of jmapCc) push(a?.email, a?.name);
+			return out;
+		}
+		for (const e of m?.cc || []) push(e);
+		return out;
 	}
 
 	/**
@@ -145,6 +196,7 @@
 	 */
 	function composeAction(m, mode) {
 		closeReplyMenu();
+		closeRecipientsMenu();
 		openComposer(
 			'mail',
 			`act:${mode}:${m.id}`,
@@ -176,6 +228,7 @@
 	 * @param {HTMLElement | null} anchor
 	 */
 	function toggleReplyMenu(id, anchor) {
+		closeRecipientsMenu();
 		if (replyMenuId === id) {
 			replyMenuId = '';
 			replyMenuAnchor = null;
@@ -188,6 +241,29 @@
 	function closeReplyMenu() {
 		replyMenuId = '';
 		replyMenuAnchor = null;
+	}
+
+	/**
+	 * @param {string} id
+	 * @param {HTMLElement | null} anchor
+	 * @param {MouseEvent | PointerEvent} [e]
+	 */
+	function toggleRecipientsMenu(id, anchor, e) {
+		e?.stopPropagation?.();
+		e?.preventDefault?.();
+		closeReplyMenu();
+		if (recipientsMenuId === id) {
+			recipientsMenuId = '';
+			recipientsMenuAnchor = null;
+			return;
+		}
+		recipientsMenuId = id;
+		recipientsMenuAnchor = anchor;
+	}
+
+	function closeRecipientsMenu() {
+		recipientsMenuId = '';
+		recipientsMenuAnchor = null;
 	}
 </script>
 
@@ -240,13 +316,15 @@
 				{@const fromEmail = String(m.from || '').toLowerCase()}
 				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
 				{@const domain = emailDomain(fromEmail)}
-				{@const toLine = (m.to || []).map(displayNameFromEmail).filter(Boolean).join(', ')}
+				{@const toPeople = mailRecipientPeople(m, 'to')}
+				{@const toLine = toPeople.map((p) => p.name).filter(Boolean).join(', ')}
 				{@const parts = splitMailQuote(m.body || '')}
 				{@const rich = isHtmlMailBody(m.body) && !parts.collapsible}
 				{@const quoteId = String(m.id || '')}
 				{@const mailKey = quoteId}
 				{@const msgReplyAll = preferReplyAll(m, me)}
 				{@const menuFor = replyMenuId === quoteId}
+				{@const recipientsOpen = recipientsMenuId === quoteId}
 				{@const hasQuote = Boolean(parts.collapsible && parts.quoted)}
 				<article
 					class="mail-panel"
@@ -273,10 +351,26 @@
 								</span>
 							</div>
 							<div class="mail-panel-row2">
-								<p class="mail-panel-to">
-									<span class="to-label">{t('mail.to')}:</span>
-									{toLine || '—'}
-								</p>
+								{#if toPeople.length}
+									<button
+										type="button"
+										class="mail-panel-to"
+										class:open={recipientsOpen}
+										data-no-swipe-reply
+										aria-label={`${t('mail.to')}: ${toLine}`}
+										aria-expanded={recipientsOpen}
+										aria-haspopup="dialog"
+										onclick={(e) => toggleRecipientsMenu(quoteId, e.currentTarget, e)}
+									>
+										<span class="to-label">{t('mail.to')}:</span>
+										{toLine}
+									</button>
+								{:else}
+									<p class="mail-panel-to static">
+										<span class="to-label">{t('mail.to')}:</span>
+										—
+									</p>
+								{/if}
 							</div>
 						</div>
 						<div class="mail-panel-trail" data-no-swipe-reply>
@@ -390,6 +484,49 @@
 				<ArrowRight size={14} strokeWidth={1.45} />
 				<span>{t('mail.forward')}</span>
 			</button>
+		</div>
+	{/if}
+</DropdownMenu>
+
+<DropdownMenu
+	open={Boolean(recipientsMail)}
+	anchor={recipientsMenuAnchor}
+	placement="below"
+	align="start"
+	width={280}
+	maxHeight={360}
+	onclose={closeRecipientsMenu}
+>
+	{#if recipientsMail}
+		<div class="recipients-popover" role="dialog" aria-label={t('mail.to')}>
+			<section class="recipients-section">
+				<p class="recipients-heading">{t('mail.to')}</p>
+				<ul class="recipients-list">
+					{#each recipientsTo as person (person.email)}
+						<li class="recipient-row">
+							<span class="recipient-name">{person.name}</span>
+							{#if person.email && person.name.toLowerCase() !== person.email}
+								<span class="recipient-email">{person.email}</span>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			</section>
+			{#if recipientsCc.length}
+				<section class="recipients-section">
+					<p class="recipients-heading">{t('mail.cc')}</p>
+					<ul class="recipients-list">
+						{#each recipientsCc as person (person.email)}
+							<li class="recipient-row">
+								<span class="recipient-name">{person.name}</span>
+								{#if person.email && person.name.toLowerCase() !== person.email}
+									<span class="recipient-email">{person.email}</span>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
 		</div>
 	{/if}
 </DropdownMenu>
@@ -649,19 +786,100 @@
 		min-width: 0;
 		margin: 0;
 		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		font: inherit;
 		font-size: 12px;
 		font-weight: 450;
 		color: var(--fg-33);
 		line-height: 1.25;
+		text-align: left;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		box-sizing: border-box;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.mail-panel-to.static {
+		cursor: default;
+	}
+
+	.mail-panel-to:not(.static):hover,
+	.mail-panel-to.open {
+		color: var(--fg-66);
 	}
 
 	.to-label {
 		font-weight: 550;
+		color: inherit;
+	}
+
+	.recipients-popover {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 10px 0;
+		min-width: 0;
+	}
+
+	.recipients-section {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.recipients-heading {
+		margin: 0;
+		padding: 2px 14px 4px;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
 		color: var(--fg-33);
+	}
+
+	.recipients-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.recipient-row {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+		padding: 8px 14px;
+		box-sizing: border-box;
+	}
+
+	.recipient-row:not(:last-child) {
+		border-bottom: 0.33px solid var(--fg-8);
+	}
+
+	.recipient-name {
+		font-size: 0.9375rem;
+		font-weight: 500;
+		color: var(--fg);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.recipient-email {
+		font-size: 12px;
+		font-weight: 450;
+		color: var(--fg-33);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.mail-panel-rule {
