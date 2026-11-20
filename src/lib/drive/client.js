@@ -57,6 +57,21 @@ export function peekCachedTip(session) {
 }
 
 /**
+ * In-memory tip + root dir — no network. Used to skip a getTip RTT on chat send.
+ * @param {DriveSession} session
+ * @returns {{ tip: string, dir: any } | null}
+ */
+export function peekCachedRootDir(session) {
+	if (!session || !rootDirCache) return null;
+	if (rootDirCache.key !== sessionCacheKey(session)) return null;
+	if (!rootDirCache.dir) return null;
+	return {
+		tip: rootDirCache.tip || '',
+		dir: structuredClone(rootDirCache.dir)
+	};
+}
+
+/**
  * Last known root dir (memory, then IDB) — never invent an empty tree on tip failure.
  * @param {DriveSession} session
  */
@@ -285,6 +300,8 @@ export async function putPath(session, logicalPath, kind, plaintext) {
  * @param {{
  *   mergeFirst?: boolean,
  *   skipTipProbe?: boolean,
+ *   baseTip?: string,
+ *   baseDir?: any,
  *   prePrepared?: Record<string, { hash: string, wrapped_key: string, kind: string, display_name?: string }>,
  *   rematerialize?: (
  *     dir: any,
@@ -313,8 +330,27 @@ export async function putPaths(session, entries, opts = {}) {
 
 	let dir = /** @type {any} */ (null);
 	let dirHash = '';
+	let casRetries = 0;
+	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	for (let attempt = 0; attempt < 3; attempt++) {
-		const { tip: tipAtLoad, dir: fresh } = await loadRootDirWithTip(session);
+		let tipAtLoad = '';
+		let fresh = /** @type {any} */ (null);
+		/*
+		 * Chat send already resolved tip+dir — reuse on attempt 0 to skip a getTip RTT
+		 * (~400–700ms on admin.bley.farm). Retries always re-load.
+		 */
+		if (
+			attempt === 0 &&
+			opts.baseTip &&
+			opts.baseDir &&
+			typeof opts.baseDir === 'object' &&
+			peekCachedTip(session) === opts.baseTip
+		) {
+			tipAtLoad = String(opts.baseTip);
+			fresh = structuredClone(opts.baseDir);
+		} else {
+			({ tip: tipAtLoad, dir: fresh } = await loadRootDirWithTip(session));
+		}
 		if ((attempt > 0 || opts.mergeFirst) && typeof opts.rematerialize === 'function') {
 			current = await opts.rematerialize(fresh, current);
 		}
@@ -381,12 +417,19 @@ export async function putPaths(session, entries, opts = {}) {
 				/* proceed */
 			}
 			if (tipNow && tipAtLoad && tipNow !== tipAtLoad) {
+				casRetries += 1;
 				continue;
 			}
 		}
 
 		await putTip(session, dirHash);
 		break;
+	}
+	if (typeof console !== 'undefined' && console.debug) {
+		const ms = Math.round(
+			(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
+		);
+		console.debug('[chat-latency] putPaths', { ms, casRetries, children: Object.keys(dir?.children || {}).length });
 	}
 
 	rememberRootDir(dir, dirHash, session);

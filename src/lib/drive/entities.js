@@ -8,6 +8,7 @@ import {
 	getTip,
 	loadRootDir,
 	loadRootDirWithTip,
+	peekCachedRootDir,
 	peekCachedTip,
 	putBlock,
 	putPath,
@@ -2229,6 +2230,7 @@ export async function listFeedIds(session) {
  * @param {{ onPartial?: (rows: any[]) => void, seedRows?: any[] }} [opts]
  */
 export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
+	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	const { tip, dir } = await loadRootDirWithTip(session);
 	const ids = (await listFeedIdsFromDir(session, dir)).slice(0, limit);
 	rememberFeedIds(tip, ids);
@@ -2252,25 +2254,32 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	/** @type {(any | null)[]} */
 	const slots = new Array(entries.length).fill(null);
 
-	/* IndexedDB first (cheap), then seed rows — network only for true misses. */
-	await mapPool(entries, 16, async (entry, i) => {
-		if (entry.hash) {
-			const hit = await getCachedLeaf(entry.hash);
-			if (hit) {
-				slots[i] = hit;
-				return;
-			}
-		}
-		const seed = seedById.get(entry.id);
+	/*
+	 * Prefer seed rows for ids we already have — tip-wake should only network-fetch
+	 * new leaves. IDB only for unseeded ids (avoids 200× IDB on every peer tip).
+	 */
+	/** @type {number[]} */
+	const needIdb = [];
+	for (let i = 0; i < entries.length; i++) {
+		const seed = seedById.get(entries[i].id);
 		if (seed) slots[i] = seed;
-	});
+		else needIdb.push(i);
+	}
+	if (needIdb.length) {
+		await mapPool(needIdb, 16, async (i) => {
+			const entry = entries[i];
+			if (!entry.hash) return;
+			const hit = await getCachedLeaf(entry.hash);
+			if (hit) slots[i] = hit;
+		});
+	}
 
 	const partial = () => {
 		if (typeof opts.onPartial !== 'function') return;
 		/* Newest-first by leaf time — never trust tip-raced ids[] order for UI. */
 		opts.onPartial(sortChatMessagesNewestFirst(slots.filter(Boolean)));
 	};
-	/* Paint IndexedDB hits immediately — hard refresh should not wait on network. */
+	/* Paint seed/IDB hits immediately — hard refresh should not wait on network. */
 	if (slots.some(Boolean)) partial();
 
 	/** @type {number[]} */
@@ -2302,6 +2311,16 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 		}
 	});
 	partial();
+	if (typeof console !== 'undefined' && console.debug) {
+		console.debug('[chat-latency] listFeed', {
+			ms: Math.round(
+				(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
+			),
+			ids: ids.length,
+			seeded: seedById.size,
+			netMisses: missIdx.length
+		});
+	}
 	return sortChatMessagesNewestFirst(slots.filter(Boolean));
 }
 
@@ -2495,43 +2514,76 @@ export async function createChatMessage(session, input, opts = {}) {
 
 	/*
 	 * Fast leaf + durable tip:
-	 * 1) Encrypt + putBlock the leaf → onLeafStored (UI may adopt server id, still “sending”).
+	 * 1) Encrypt + putBlock the leaf in parallel with tip/dir prep → onLeafStored.
 	 * 2) Tip/dir update (feed.json) — only then is the message discoverable / durable.
 	 */
 	const leafPath = `chat/messages/${id}.json`;
 	const root = parseRootKey(session.rootKey);
 	const leafBytes = new TextEncoder().encode(leafPlain);
-	const { ciphertext: leafCt, fileKeyHex: leafKey } = await encrypt(root, leafPath, leafBytes);
-	const leafHash = await sha256Hex(leafCt);
-	await putBlock(session, leafHash, leafCt);
-	try {
-		opts.onLeafStored?.(msg);
-	} catch {
-		/* UI settle must never break the tip write */
-	}
+	const tSend = typeof performance !== 'undefined' ? performance.now() : Date.now();
+	const leafPrep = (async () => {
+		const { ciphertext: leafCt, fileKeyHex: leafKey } = await encrypt(root, leafPath, leafBytes);
+		const leafHash = await sha256Hex(leafCt);
+		const tLeaf0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+		await putBlock(session, leafHash, leafCt);
+		const leafPutMs = Math.round(
+			(typeof performance !== 'undefined' ? performance.now() : Date.now()) - tLeaf0
+		);
+		try {
+			opts.onLeafStored?.(msg);
+		} catch {
+			/* UI settle must never break the tip write */
+		}
+		return { leafHash, leafKey, leafPutMs };
+	})();
 
 	/** @type {string[]} */
-	let feedIds;
+	let feedIds = [];
 	/** @type {string[]} */
 	let commentIds = [];
-	let tipNow = peekCachedTip(session) || '';
-	if (!tipNow || tipNow !== cachedFeedTip) {
-		try {
-			tipNow = await getTip(session);
-		} catch {
-			tipNow = tipNow || '';
+	/** @type {string} */
+	let tipAtPrep = '';
+	/** @type {any} */
+	let dirAtPrep = null;
+
+	const indexPrep = (async () => {
+		const mem = peekCachedRootDir(session);
+		let tipNow = mem?.tip || peekCachedTip(session) || '';
+		if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments && mem?.dir) {
+			/* Fully warm — no getTip RTT; putPaths reuses baseTip/baseDir. */
+			feedIds = [id, ...cachedFeedIds, ...known]
+				.filter((x, i, arr) => x && arr.indexOf(x) === i)
+				.slice(0, FEED_MAX);
+			tipAtPrep = tipNow;
+			dirAtPrep = mem.dir;
+			return;
 		}
-	}
-	if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments) {
-		/* Warm id list only — putPaths still probes tip (see skipTipProbe: false). */
-		feedIds = [id, ...cachedFeedIds, ...known]
-			.filter((x, i, arr) => x && arr.indexOf(x) === i)
-			.slice(0, FEED_MAX);
-	} else {
+		if (!tipNow || tipNow !== cachedFeedTip) {
+			try {
+				tipNow = await getTip(session);
+			} catch {
+				tipNow = tipNow || '';
+			}
+		}
+		if (tipNow && tipNow === cachedFeedTip && cachedFeedIds.length && !wantsComments && mem?.dir) {
+			feedIds = [id, ...cachedFeedIds, ...known]
+				.filter((x, i, arr) => x && arr.indexOf(x) === i)
+				.slice(0, FEED_MAX);
+			tipAtPrep = tipNow;
+			dirAtPrep = mem.dir;
+			return;
+		}
 		const { tip: tipAtStart, dir: dirAtStart } = await loadRootDirWithTip(session);
+		tipAtPrep = tipAtStart;
+		dirAtPrep = dirAtStart;
 		feedIds = await resolveFeedIds(dirAtStart, tipAtStart);
 		commentIds = await resolveCommentIds(dirAtStart);
-	}
+	})();
+
+	const [{ leafHash, leafKey, leafPutMs }] = await Promise.all([leafPrep, indexPrep]);
+	const prepMs = Math.round(
+		(typeof performance !== 'undefined' ? performance.now() : Date.now()) - tSend
+	);
 
 	/** Rematerialize may replace feed ids — cache what we actually commit. */
 	let committedFeedIds = feedIds;
@@ -2541,6 +2593,8 @@ export async function createChatMessage(session, input, opts = {}) {
 			prePrepared: {
 				[leafPath]: { hash: leafHash, wrapped_key: leafKey, kind: 'chat_message' }
 			},
+			/* Skip redundant getTip when prep just loaded this tip+dir. */
+			...(tipAtPrep && dirAtPrep ? { baseTip: tipAtPrep, baseDir: dirAtPrep } : {}),
 			/*
 			 * Always probe tip for chat feed writes. Skipping under tipWarm raced with
 			 * concurrent tip moves and could commit a feed.json missing this id —
@@ -2548,13 +2602,15 @@ export async function createChatMessage(session, input, opts = {}) {
 			 */
 			skipTipProbe: false,
 			rematerialize: async (dir) => {
+				/*
+				 * Cheap prepend-union only — UI sorts by leaf created_at+id.
+				 * orderFeedIdsNewestFirst here used to fetch dozens of leaves on conflict
+				 * and turn a tip race into multi-second peer stalls.
+				 */
 				const liveFeed = await listFeedIdsFromDir(session, dir);
-				const nextFeed = await orderFeedIdsNewestFirst(
-					session,
-					dir,
-					[id, ...liveFeed, ...known],
-					{ [id]: created }
-				);
+				const nextFeed = [id, ...liveFeed, ...known]
+					.filter((x, i, arr) => x && arr.indexOf(x) === i)
+					.slice(0, FEED_MAX);
 				committedFeedIds = nextFeed;
 				const nextComments = await resolveCommentIds(dir);
 				return buildWrites(nextFeed, nextComments);
@@ -2562,6 +2618,17 @@ export async function createChatMessage(session, input, opts = {}) {
 		});
 	const tipAfter = await (chatTipWriteChain = chatTipWriteChain.then(runTipWrite, runTipWrite));
 	if (tipAfter) rememberFeedIds(String(tipAfter), committedFeedIds);
+	if (typeof console !== 'undefined' && console.debug) {
+		const totalMs = Math.round(
+			(typeof performance !== 'undefined' ? performance.now() : Date.now()) - tSend
+		);
+		console.debug('[chat-latency] createChatMessage', {
+			totalMs,
+			prepMs,
+			leafPutMs,
+			tip: tipAfter ? String(tipAfter).slice(0, 12) : ''
+		});
+	}
 	try {
 		if (tipAfter) opts.onTipWritten?.(String(tipAfter));
 	} catch {
@@ -2623,7 +2690,11 @@ export async function markChatMessagesRead(session, messages, readerEmail) {
 		updated.push(next);
 	}
 	if (!writes.length) return [];
-	await putPaths(session, writes);
+	/* Same tip chain as chat sends — receipt tip writes must not CAS-storm message commits. */
+	await (chatTipWriteChain = chatTipWriteChain.then(
+		() => putPaths(session, writes),
+		() => putPaths(session, writes)
+	));
 	return updated;
 }
 

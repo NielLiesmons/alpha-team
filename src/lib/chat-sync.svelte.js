@@ -8,9 +8,17 @@ import { refreshChatFeed, chatUi, markIncomingMessagesRead } from './chat.svelte
 import { getTip, peekCachedTip } from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
 
-const POLL_MS = 1500;
+/*
+ * Focused chat: tip-only poll. Interval starts after the previous getTip finishes
+ * so a ~500ms tip RTT does not stampede /v1/tip (setInterval would overlap).
+ */
+const POLL_MS = 500;
+/** Coalesce bursts without delaying tip-change detection by a full poll. */
+const PULL_COALESCE_MS = 80;
+/** Keep read-receipt tip writes off the message tip critical path. */
+const READ_RECEIPT_DELAY_MS = 2_500;
 
-let pollTimer = /** @type {ReturnType<typeof setInterval> | null} */ (null);
+let pollTimer = /** @type {ReturnType<typeof setTimeout> | null} */ (null);
 let lastTip = '';
 let lastChatPull = 0;
 let watching = false;
@@ -19,6 +27,20 @@ let inFlight = false;
 let pendingBusTip = /** @type {string | null} */ (null);
 /** Poll/force arrived while inFlight — run another tip check after. */
 let pendingRepull = false;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let readReceiptTimer = null;
+
+function scheduleReadReceipts() {
+	if (readReceiptTimer != null) clearTimeout(readReceiptTimer);
+	readReceiptTimer = setTimeout(() => {
+		readReceiptTimer = null;
+		if (chatUi.posting) {
+			scheduleReadReceipts();
+			return;
+		}
+		void markIncomingMessagesRead();
+	}, READ_RECEIPT_DELAY_MS);
+}
 
 export async function pullChatIfNeeded(force = false) {
 	const session = activeSession();
@@ -33,8 +55,9 @@ export async function pullChatIfNeeded(force = false) {
 		return;
 	}
 	const now = Date.now();
-	if (!force && now - lastChatPull < 400) return;
+	if (!force && now - lastChatPull < PULL_COALESCE_MS) return;
 	inFlight = true;
+	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	try {
 		let tip = '';
 		try {
@@ -52,8 +75,18 @@ export async function pullChatIfNeeded(force = false) {
 			if (tip) lastTip = tip;
 			await refreshChatFeed();
 			lastChatPull = Date.now();
-			void markIncomingMessagesRead();
+			/* Receipt tip writes compete with message tip CAS — defer. */
+			scheduleReadReceipts();
 			if (tipChanged || force) void refreshMembersAndAvatars().catch(() => {});
+			if (typeof console !== 'undefined' && console.debug) {
+				console.debug('[chat-latency] pullChat', {
+					ms: Math.round(
+						(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
+					),
+					tipChanged,
+					force
+				});
+			}
 		}
 	} finally {
 		inFlight = false;
@@ -108,6 +141,7 @@ export async function wakeChatFromTip(tip) {
 		return;
 	}
 	inFlight = true;
+	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	try {
 		await refreshChatFeed();
 		/*
@@ -116,8 +150,16 @@ export async function wakeChatFromTip(tip) {
 		 */
 		lastTip = peekCachedTip(session) || t;
 		lastChatPull = Date.now();
-		void markIncomingMessagesRead();
+		scheduleReadReceipts();
 		void refreshMembersAndAvatars().catch(() => {});
+		if (typeof console !== 'undefined' && console.debug) {
+			console.debug('[chat-latency] tipWake', {
+				ms: Math.round(
+					(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
+				),
+				tip: t.slice(0, 12)
+			});
+		}
 	} finally {
 		inFlight = false;
 		const queued = pendingBusTip;
@@ -147,23 +189,31 @@ function onSwMessage(/** @type {MessageEvent} */ ev) {
 	}
 }
 
+function armChatTipPoll() {
+	if (!watching) return;
+	if (pollTimer != null) clearTimeout(pollTimer);
+	pollTimer = setTimeout(async () => {
+		pollTimer = null;
+		if (!watching) return;
+		if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+			/* Tip poll only — full feed reload happens when tip hash moves. */
+			await pullChatIfNeeded(false);
+		}
+		armChatTipPoll();
+	}, POLL_MS);
+}
+
 /** Call when ChatChannelPanel mounts / chat route focused. */
 export function startChatTipPoll() {
 	watching = true;
 	if (pollTimer != null) return;
-	void pullChatIfNeeded(true);
-	pollTimer = setInterval(() => {
-		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-		if (!watching) return;
-		/* Tip poll only — full feed reload happens when tip hash moves. */
-		void pullChatIfNeeded(false);
-	}, POLL_MS);
+	void pullChatIfNeeded(true).finally(() => armChatTipPoll());
 }
 
 export function stopChatTipPoll() {
 	watching = false;
 	if (pollTimer != null) {
-		clearInterval(pollTimer);
+		clearTimeout(pollTimer);
 		pollTimer = null;
 	}
 }
