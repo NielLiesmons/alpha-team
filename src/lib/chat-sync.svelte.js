@@ -95,7 +95,8 @@ export async function pullChatIfNeeded(force = false) {
 		const repull = pendingRepull;
 		pendingRepull = false;
 		if (queued) void wakeChatFromTip(queued);
-		else if (repull) void pullChatIfNeeded(true);
+		/* Tip-check only — force:true here stampeded full feed reloads every poll. */
+		else if (repull) void pullChatIfNeeded(false);
 	}
 }
 
@@ -167,7 +168,7 @@ export async function wakeChatFromTip(tip) {
 		const repull = pendingRepull;
 		pendingRepull = false;
 		if (queued && queued !== lastTip) void wakeChatFromTip(queued);
-		else if (repull) void pullChatIfNeeded(true);
+		else if (repull) void pullChatIfNeeded(false);
 	}
 }
 
