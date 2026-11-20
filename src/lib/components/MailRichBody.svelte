@@ -1,8 +1,9 @@
 <script>
 	/**
 	 * Renders mail plain text with nested quote rails colored by author email.
+	 * Applies light Gmail-plain formatting (*bold*, lists, links) inside segments.
 	 */
-	import { nestMailSegments, parseMailSegments } from '$lib/mail-body.js';
+	import { nestMailSegments, parseMailSegments, plainMailToSafeHtml } from '$lib/mail-body.js';
 	import { profileAccentCss } from '$lib/color.js';
 
 	/** @type {{ text?: string, fallbackEmail?: string, minDepth?: number }} */
@@ -24,7 +25,7 @@
 	{#each list as node, i (i)}
 		{#if node.depth <= 0}
 			{#if node.text}
-				<pre class="plain">{node.text}</pre>
+				<div class="plain">{@html plainMailToSafeHtml(node.text)}</div>
 			{/if}
 			{#if node.children?.length}
 				{@render nodes(node.children)}
@@ -35,7 +36,7 @@
 				style:border-left-color={barColor(node.email, node.depth)}
 			>
 				{#if node.text}
-					<pre class="quote-text">{node.text}</pre>
+					<div class="quote-text">{@html plainMailToSafeHtml(node.text)}</div>
 				{/if}
 				{#if node.children?.length}
 					{@render nodes(node.children)}
@@ -69,8 +70,48 @@
 		font-size: 15px;
 		line-height: 1.55;
 		color: var(--fg-83);
-		white-space: pre-wrap;
 		word-break: break-word;
+		overflow-wrap: anywhere;
+	}
+
+	.plain :global(.plain-line),
+	.quote-text :global(.plain-line) {
+		white-space: pre-wrap;
+	}
+
+	.plain :global(ul),
+	.quote-text :global(ul) {
+		margin: 0.25em 0 0.5em;
+		padding-left: 1.25rem;
+	}
+
+	.plain :global(li),
+	.quote-text :global(li) {
+		margin: 0.15em 0;
+		white-space: normal;
+	}
+
+	.plain :global(strong),
+	.quote-text :global(strong) {
+		font-weight: 600;
+		color: var(--fg);
+	}
+
+	.plain :global(em),
+	.quote-text :global(em) {
+		font-style: italic;
+	}
+
+	.plain :global(a),
+	.quote-text :global(a) {
+		color: var(--link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.plain :global(a:hover),
+	.quote-text :global(a:hover) {
+		color: var(--link-hover);
 	}
 
 	.quote {

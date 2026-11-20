@@ -1,14 +1,24 @@
 /**
  * Space hostname helpers — customer-agnostic.
- * Derive api/drive/mail/player URLs and project slug from the Admin host
- * (admin.{apex}) or PUBLIC_* env overrides. No hard-coded customer domains.
+ * Derive api/drive/mail/player URLs and project slug from the control-plane host
+ * (team.{apex}; legacy admin.{apex} still recognized) or PUBLIC_* env overrides.
+ * No hard-coded customer domains.
  */
 
 /** Known product subdomain labels on {apex}. */
-const PRODUCT_SUBS = new Set(['admin', 'player', 'api', 'drive', 'mail', 'www', 'chat']);
+const PRODUCT_SUBS = new Set([
+	'team',
+	'admin', // legacy alias → redirect to team.*
+	'player',
+	'api',
+	'drive',
+	'mail',
+	'www',
+	'chat'
+]);
 
 /**
- * @returns {string} apex like `example.com` from `admin.example.com`
+ * @returns {string} apex like `example.com` from `team.example.com`
  */
 export function parentDomain() {
 	if (typeof location === 'undefined') return '';
@@ -19,7 +29,7 @@ export function parentDomain() {
 	const parts = host.split('.').filter(Boolean);
 	if (parts.length < 2) return host;
 	if (PRODUCT_SUBS.has(parts[0]) && parts.length >= 3) return parts.slice(1).join('.');
-	/* admin.example.com → example.com; bare example.com → example.com */
+	/* team.example.com → example.com; bare example.com → example.com */
 	if (PRODUCT_SUBS.has(parts[0]) && parts.length === 2) return parts.slice(1).join('.');
 	return parts.length > 2 ? parts.slice(-2).join('.') : host;
 }

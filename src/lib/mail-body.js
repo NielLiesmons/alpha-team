@@ -45,16 +45,105 @@ export function isHtmlMailBody(text) {
 }
 
 /**
- * TipTap / composer HTML safe to drop into the thread.
- * Strips scripts, styles, and inline event handlers.
+ * TipTap / composer / inbound HTML safe to drop into the thread.
+ * Strips scripts, styles, and inline event handlers; neuters javascript: URLs.
  * @param {string} html
  */
 export function safeMailHtml(html) {
 	return String(html || '')
 		.replace(/<script[\s\S]*?<\/script>/gi, '')
 		.replace(/<style[\s\S]*?<\/style>/gi, '')
+		.replace(/<\/?(?:base|object|embed|iframe|form|input|button|textarea|select)\b[^>]*>/gi, '')
 		.replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
 		.replace(/\s(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, '');
+}
+
+/** @param {string} s */
+function escapeHtml(s) {
+	return String(s || '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+}
+
+/**
+ * Inline Gmail-ish plain markers + URLs inside an already-escaped line.
+ * Stashes anchors first so bare-URL / emphasis passes cannot nest inside hrefs.
+ * @param {string} escaped
+ */
+function formatPlainInline(escaped) {
+	/** @type {string[]} */
+	const links = [];
+	/** @param {string} href @param {string} [label] */
+	const stash = (href, label = href) => {
+		const i = links.length;
+		links.push(
+			`<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
+		);
+		return `\0L${i}\0`;
+	};
+
+	let s = String(escaped || '');
+	/* Angle-bracket URLs: <https://…> (escaped as &lt;…&gt;) */
+	s = s.replace(/&lt;(https?:\/\/[^&\s<>]+)&gt;/gi, (_, url) => stash(url));
+	/* Bare http(s) URLs */
+	s = s.replace(/(^|[\s([{\"'])(https?:\/\/[^\s<&]+)/g, (_, pre, url) => {
+		const href = url.replace(/[),.]+$/u, '');
+		const trail = url.slice(href.length);
+		return `${pre}${stash(href)}${trail}`;
+	});
+	/* *bold* (Gmail plain alternative) — skip lone list markers */
+	s = s.replace(
+		/(^|[\s(])\*([^*\n]{1,200})\*(?=[\s),.!?:;]|$)/g,
+		'$1<strong>$2</strong>'
+	);
+	/* _italic_ */
+	s = s.replace(
+		/(^|[\s(])_([^_\n]{1,200})_(?=[\s),.!?:;]|$)/g,
+		'$1<em>$2</em>'
+	);
+	return s.replace(/\0L(\d+)\0/g, (_, i) => links[Number(i)] || '');
+}
+
+/**
+ * Turn plain Gmail alternatives into safe HTML: *bold*, -/* lists, &lt;url&gt; / bare links.
+ * Used when only text/plain is available.
+ * @param {string} text
+ */
+export function plainMailToSafeHtml(text) {
+	const raw = String(text ?? '').replace(/\r\n/g, '\n');
+	if (!raw.trim()) return '';
+
+	const lines = raw.split('\n');
+	/** @type {string[]} */
+	const out = [];
+	/** @type {string[]} */
+	let listBuf = [];
+
+	const flushList = () => {
+		if (!listBuf.length) return;
+		out.push(
+			`<ul>${listBuf.map((item) => `<li>${formatPlainInline(item)}</li>`).join('')}</ul>`
+		);
+		listBuf = [];
+	};
+
+	for (const line of lines) {
+		const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+		if (bullet) {
+			listBuf.push(escapeHtml(bullet[1]));
+			continue;
+		}
+		flushList();
+		if (line.trim() === '') {
+			out.push('<br>');
+			continue;
+		}
+		out.push(`<div class="plain-line">${formatPlainInline(escapeHtml(line))}</div>`);
+	}
+	flushList();
+	return out.join('');
 }
 
 /** @param {string} html */
@@ -253,21 +342,24 @@ function splitViaLineScan(text) {
  */
 export function splitMailQuote(body) {
 	let text = String(body ?? '').replace(/\r\n/g, '\n');
-	if (!text.trim()) return { main: '', quoted: '', collapsible: false };
+	if (!text.trim()) return { main: '', quoted: '', collapsible: false, htmlMain: '' };
 
 	let main = text;
 	let quoted = '';
 	let fromHtml = false;
+	/** HTML slice before quote (when body is HTML) — keep rich main for rendering. */
+	let htmlMain = '';
 
 	if (isHtmlMailBody(text)) {
 		const qAt = findHtmlQuoteIndex(text);
 		if (qAt > 0) {
-			main = stripHtml(text.slice(0, qAt));
+			htmlMain = text.slice(0, qAt);
+			main = stripHtml(htmlMain);
 			quoted = stripHtml(text.slice(qAt));
 			fromHtml = true;
 		} else if (qAt === 0) {
 			/* Entire body is a quote container — don't collapse to empty. */
-			return { main: stripHtml(text), quoted: '', collapsible: false };
+			return { main: stripHtml(text), quoted: '', collapsible: false, htmlMain: '' };
 		} else {
 			text = stripHtml(text);
 			main = text;
@@ -280,13 +372,15 @@ export function splitMailQuote(body) {
 		if (viaScan) {
 			main = viaScan.main;
 			quoted = viaScan.quoted;
+			/* Plain split of a previously-stripped HTML body — htmlMain no longer matches. */
+			if (!fromHtml) htmlMain = '';
 		}
 	} else if (fromHtml && !quotedLooksLikeReply(quoted) && !/<blockquote/i.test(String(body || ''))) {
 		/* HTML wrapper without a real attribution — keep full body visible. */
-		return { main: stripHtml(String(body ?? '')), quoted: '', collapsible: false };
+		return { main: stripHtml(String(body ?? '')), quoted: '', collapsible: false, htmlMain: '' };
 	}
 
-	if (!quoted.trim()) return { main: text, quoted: '', collapsible: false };
+	if (!quoted.trim()) return { main: text, quoted: '', collapsible: false, htmlMain: '' };
 
 	const firstQuoted = quoted
 		.split('\n')
@@ -299,12 +393,12 @@ export function splitMailQuote(body) {
 			!quotedLooksLikeReply(quoted));
 
 	if (pureForward) {
-		return { main: text, quoted: '', collapsible: false };
+		return { main: text, quoted: '', collapsible: false, htmlMain: '' };
 	}
 	if (!main.trim()) {
-		return { main: text, quoted: '', collapsible: false };
+		return { main: text, quoted: '', collapsible: false, htmlMain: '' };
 	}
-	return { main, quoted, collapsible: true };
+	return { main, quoted, collapsible: true, htmlMain };
 }
 
 /**

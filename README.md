@@ -1,6 +1,6 @@
 # Alpha Admin
 
-Operator dashboard for a **Space** (team / family / SMB). Hostname picks the apex (`admin.{apex}`).
+Operator dashboard for a **Space** (team / family / SMB). Hostname picks the apex (`team.{apex}`; legacy `admin.{apex}` redirects).
 
 ## What it is
 

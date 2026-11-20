@@ -75,7 +75,7 @@ export function activeWebsite() {
 }
 
 /**
- * Derive Space name + default www.{apex} site from `admin.{apex}`.
+ * Derive Space name + default www.{apex} site from `team.{apex}`.
  * Later: users can add more sites on the same apex; www stays the default one.
  */
 export function syncSpaceFromHost() {

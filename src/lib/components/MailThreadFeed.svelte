@@ -308,7 +308,9 @@
 						{#if rich}
 							<div class="mail-prose">{@html safeMailHtml(m.body || '')}</div>
 						{:else if parts.collapsible}
-							{#if parts.main}
+							{#if parts.htmlMain}
+								<div class="mail-prose">{@html safeMailHtml(parts.htmlMain)}</div>
+							{:else if parts.main}
 								<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 							{/if}
 							{#if hasQuote && quoteOpen[mailKey]}
@@ -786,6 +788,21 @@
 		padding-left: 1.25rem;
 	}
 
+	.mail-prose :global(li) {
+		margin: 0.2em 0;
+	}
+
+	.mail-prose :global(strong),
+	.mail-prose :global(b) {
+		font-weight: 600;
+		color: var(--fg);
+	}
+
+	.mail-prose :global(em),
+	.mail-prose :global(i) {
+		font-style: italic;
+	}
+
 	.mail-prose :global(blockquote) {
 		margin: 0 0 0.65em;
 		padding-left: 0.85rem;
@@ -803,6 +820,12 @@
 
 	.mail-prose :global(a) {
 		color: var(--link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.mail-prose :global(a:hover) {
+		color: var(--link-hover);
 	}
 
 	.mail-prose :global(img) {

@@ -1,0 +1,33 @@
+# Alpha VPS Caddy — Team control plane for bley.farm
+# Primary: team.bley.farm → /var/www/admin (same static build path)
+# Legacy:  admin.bley.farm → permanent redirect to team.bley.farm
+# Chat entry: chat.bley.farm → team.bley.farm/chat
+#
+# Apply (as root):
+#   1. Merge/replace the admin.bley.farm + chat.bley.farm blocks in /etc/caddy/Caddyfile
+#   2. caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# DNS: A team.bley.farm → 37.27.152.36 (keep admin.bley.farm A during migration)
+
+chat.bley.farm {
+	redir https://team.bley.farm/chat{uri} permanent
+}
+
+team.bley.farm {
+	encode gzip zstd
+	root * /var/www/admin
+
+	# Same-origin JMAP for Team Mail (browser cannot CORS to mail.bley.farm)
+	handle /jmap* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	route {
+		try_files {path} {path}.html {path}/index.html
+		file_server
+	}
+}
+
+admin.bley.farm {
+	redir https://team.bley.farm{uri} permanent
+}

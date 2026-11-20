@@ -18,7 +18,6 @@ import {
 } from './return-to.js';
 import { ensureEggsExample } from './seed-eggs-forecast.js';
 import { syncSpaceFromHost } from './sections.js';
-import { parentDomain } from './space-host.js';
 import { hydrateWorkspaceFromCache, ui } from './workspace.svelte.js';
 
 /** @type {{ ready: boolean, listsReady: boolean }} */
@@ -118,8 +117,11 @@ export async function bootApp() {
 			await refreshChatFeed();
 			void refreshMembersAndAvatars().catch((e) => console.warn('members/avatars', e));
 			void refreshBackgroundDrive().then(() => {
-				/* Eggs demo is Bley-only — never auto-seed other Spaces. */
-				if (parentDomain() === 'bley.farm') {
+				/* Opt-in demo seed only — never auto-seed customer Spaces. */
+				const seedEggs =
+					typeof import.meta !== 'undefined' &&
+					String(import.meta.env?.PUBLIC_SEED_EGGS_EXAMPLE || '').trim() === '1';
+				if (seedEggs) {
 					void ensureEggsExample().catch((e) => console.warn('ensureEggsExample', e));
 				}
 			});

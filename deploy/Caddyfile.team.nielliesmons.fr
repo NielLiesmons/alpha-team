@@ -1,0 +1,26 @@
+# Alpha VPS Caddy — Team control plane for nielliesmons.fr
+# Primary: team.nielliesmons.fr → /var/www/admin (shared Admin/Team build)
+# Legacy:  admin.nielliesmons.fr → permanent redirect to team.nielliesmons.fr
+#
+# Apply (as root): merge into /etc/caddy/Caddyfile, then
+#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# DNS: A team.nielliesmons.fr → 37.27.152.36 (keep admin. A during migration)
+
+team.nielliesmons.fr {
+	encode gzip zstd
+	root * /var/www/admin
+
+	handle /jmap* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	route {
+		try_files {path} {path}.html {path}/index.html
+		file_server
+	}
+}
+
+admin.nielliesmons.fr {
+	redir https://team.nielliesmons.fr{uri} permanent
+}

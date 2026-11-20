@@ -84,6 +84,19 @@
 		menuThread = null;
 	}
 
+	/** @param {string} name */
+	function shortAttachName(name) {
+		const n = String(name || 'attachment').trim() || 'attachment';
+		if (n.length <= 22) return n;
+		const dot = n.lastIndexOf('.');
+		if (dot > 0 && n.length - dot <= 6) {
+			const ext = n.slice(dot);
+			const stem = n.slice(0, Math.max(1, 18 - ext.length));
+			return `${stem}…${ext}`;
+		}
+		return `${n.slice(0, 19)}…`;
+	}
+
 	/** @param {'reply' | 'replyAll' | 'forward'} mode */
 	function menuCompose(mode) {
 		const thread = menuThread;
@@ -292,6 +305,7 @@
 				{@const hasComments = comments.length > 0}
 				{@const convo = threadParticipantProfiles(thread)}
 				{@const linkedTask = taskByMailThreadId(thread.id)}
+				{@const attachments = Array.isArray(thread.attachments) ? thread.attachments : []}
 				<button
 					type="button"
 					class="row"
@@ -392,6 +406,14 @@
 							</span>
 						{:else}
 							<span class="team-row team-row-empty" aria-hidden="true"></span>
+						{/if}
+						{#if attachments.length}
+							<span class="attach-rule" aria-hidden="true"></span>
+							<span class="attach-row">
+								{#each attachments as att, i (`${att.blobId || att.name}-${i}`)}
+									<span class="attach-pill" title={att.name}>{shortAttachName(att.name)}</span>
+								{/each}
+							</span>
 						{/if}
 					</span>
 				</button>
@@ -728,6 +750,38 @@
 		min-width: 0;
 		font-size: 12px;
 		font-weight: 400;
+		line-height: 1.3;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.attach-rule {
+		display: block;
+		width: 100%;
+		height: 1px;
+		margin: 6px 0 4px;
+		background: var(--fg-8);
+	}
+
+	.attach-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.attach-pill {
+		display: inline-flex;
+		align-items: center;
+		max-width: 100%;
+		padding: 3px 9px;
+		border-radius: 999px;
+		background: var(--fg-8);
+		font-size: 11px;
+		font-weight: 500;
 		line-height: 1.3;
 		color: var(--fg-66);
 		overflow: hidden;

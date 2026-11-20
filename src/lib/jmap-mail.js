@@ -2,7 +2,7 @@
  * Stalwart JMAP client for Space mailboxes.
  * Auth: HTTP Basic with mailbox email + password (or app password).
  *
- * Browser calls are same-origin `/jmap/*` (Vite proxy in dev; Caddy on admin.{apex}
+ * Browser calls are same-origin `/jmap/*` (Vite proxy in dev; Caddy on team.{apex}
  * in prod). Direct mail.{apex} fetch fails with NetworkError — no CORS.
  */
 
@@ -191,8 +191,9 @@ function addrDisplayName(addr) {
 }
 
 /**
- * Full message text from JMAP bodyValues (plain preferred, else HTML).
- * Falls back to preview only when bodies weren't fetched.
+ * Full message text from JMAP bodyValues.
+ * Prefer HTML when present (Gmail rich / multipart) so bold, lists, and links survive;
+ * fall back to plain, then preview when bodies weren't fetched.
  * @param {any} email
  */
 function bodyFromEmail(email) {
@@ -209,11 +210,33 @@ function bodyFromEmail(email) {
 		}
 		return chunks.join('\n').trim();
 	};
-	const plain = fromParts(email?.textBody);
-	if (plain) return plain;
 	const html = fromParts(email?.htmlBody);
 	if (html) return html;
+	const plain = fromParts(email?.textBody);
+	if (plain) return plain;
 	return String(email?.preview || '').trim();
+}
+
+/**
+ * File attachments from JMAP Email (skips inline body parts).
+ * @param {any} email
+ * @returns {{ name: string, type: string, size: number, blobId: string }[]}
+ */
+export function attachmentsFromEmail(email) {
+	const raw = Array.isArray(email?.attachments) ? email.attachments : [];
+	/** @type {{ name: string, type: string, size: number, blobId: string }[]} */
+	const out = [];
+	const seen = new Set();
+	for (const part of raw) {
+		const blobId = String(part?.blobId || '').trim();
+		if (!blobId || seen.has(blobId)) continue;
+		const name = String(part?.name || part?.cid || 'attachment').trim() || 'attachment';
+		const type = String(part?.type || part?.contentType || 'application/octet-stream');
+		const size = Number(part?.size) || 0;
+		seen.add(blobId);
+		out.push({ name, type, size, blobId });
+	}
+	return out;
 }
 
 /**
@@ -226,6 +249,7 @@ export function toUiMessage(email) {
 	const to = toAddrs.map((a) => a?.email).filter(Boolean);
 	const created = email?.receivedAt || email?.sentAt || new Date().toISOString();
 	const fromNorm = String(from).toLowerCase();
+	const attachments = attachmentsFromEmail(email);
 	return {
 		schema: 'alpha.mail_message/1',
 		id: email.id,
@@ -244,6 +268,8 @@ export function toUiMessage(email) {
 		created_at: created,
 		transport: 'jmap',
 		messageId: normalizeMessageId(email.messageId),
+		attachments,
+		hasAttachment: Boolean(email?.hasAttachment) || attachments.length > 0,
 		read_by: email.keywords?.$seen ? [fromNorm] : [],
 		_jmap: email,
 		_unread: !email.keywords?.$seen,
@@ -382,6 +408,17 @@ export function groupMailThreads(messages, me) {
 				}
 			}
 		}
+		/** @type {{ name: string, type: string, size: number, blobId: string }[]} */
+		const attachments = [];
+		const seenBlob = new Set();
+		for (const m of msgs) {
+			for (const a of Array.isArray(m.attachments) ? m.attachments : []) {
+				const id = String(a?.blobId || a?.name || '');
+				if (!id || seenBlob.has(id)) continue;
+				seenBlob.add(id);
+				attachments.push(a);
+			}
+		}
 		threads.push({
 			...latest,
 			id: threadId,
@@ -391,6 +428,8 @@ export function groupMailThreads(messages, me) {
 			_latestFrom: latest.from,
 			messages: msgs,
 			count: msgs.length,
+			attachments,
+			hasAttachment: attachments.length > 0,
 			_unread: msgs.some((m) => m._unread && m.from !== meN),
 			_flagged: msgs.some((m) => m._flagged),
 			created_at: latest.created_at,
@@ -417,7 +456,9 @@ const EMAIL_PROPS = [
 	'textBody',
 	'htmlBody',
 	'bodyValues',
-	'messageId'
+	'messageId',
+	'hasAttachment',
+	'attachments'
 ];
 
 /**

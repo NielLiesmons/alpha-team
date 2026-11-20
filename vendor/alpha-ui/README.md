@@ -111,9 +111,9 @@ export const primaryNav = [
 
 Admin passes its own `sections` from `sections.js` (Tasks, Notes, …) into the same `UiShell`.
 
-## Shared `.bley.farm` session
+## Shared parent-domain session
 
-Admin (`admin.bley.farm`) and Player (`player.bley.farm`) share Drive auth on the parent `.bley.farm` cookie domain so deep-linking does not re-login.
+Admin (`admin.customer.example`) and Player (`player.customer.example`) share Drive auth on the parent `.customer.example` cookie domain so deep-linking does not re-login.
 
 ## Design rules
 

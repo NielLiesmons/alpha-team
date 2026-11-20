@@ -63,6 +63,15 @@ function thinMailMessage(msg) {
 		transport: msg.transport,
 		messageId: msg.messageId,
 		read_by: Array.isArray(msg.read_by) ? msg.read_by : undefined,
+		attachments: Array.isArray(msg.attachments)
+			? msg.attachments.map((a) => ({
+					name: a?.name || 'attachment',
+					type: a?.type || '',
+					size: Number(a?.size) || 0,
+					blobId: a?.blobId || ''
+				}))
+			: undefined,
+		hasAttachment: Boolean(msg.hasAttachment),
 		_unread: Boolean(msg._unread),
 		_flagged: Boolean(msg._flagged),
 		...(msg._priority != null ? { _priority: msg._priority } : {}),

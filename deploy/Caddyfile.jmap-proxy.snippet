@@ -1,8 +1,10 @@
-# Merge into the admin.{apex} site block on the Alpha VPS.
-# Browser Admin cannot call mail.{apex} directly (no CORS) — proxy JMAP same-origin.
+# Merge into the team.{apex} site block on the Alpha VPS.
+# Browser Team UI cannot call mail.{apex} directly (no CORS) — proxy JMAP same-origin.
 #
 # Keep the /jmap path prefix (do not use handle_path) so Stalwart still sees /jmap/session.
 # Replace {apex} with the Space domain (e.g. customer.example).
+#
+# Prefer dual-host during migration: serve team.{apex}; redirect admin.{apex} → team.{apex}.
 
 handle /jmap* {
 	reverse_proxy https://mail.{apex} {
