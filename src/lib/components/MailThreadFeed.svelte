@@ -352,7 +352,7 @@
 			</button>
 		</div>
 	</div>
-	<div class="mail-top-fade" aria-hidden="true"></div>
+	<!-- Top fade: DetailColumn .detail-top::after / ChromeMobileBar (scroll-driven --chrome-scroll-fade) -->
 	<div class="mail-bottom-fade" aria-hidden="true"></div>
 </div>
 
@@ -419,23 +419,6 @@
 		box-sizing: border-box;
 	}
 
-	/* Always-on top veil — same language as bottom fade / detail-top zone */
-	.mail-top-fade {
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: 0;
-		z-index: 2;
-		height: 72px;
-		pointer-events: none;
-		background: linear-gradient(
-			to bottom,
-			var(--bg) 0%,
-			color-mix(in srgb, var(--bg) 80%, transparent) 50%,
-			transparent 100%
-		);
-	}
-
 	.mail-bottom-fade {
 		position: absolute;
 		left: 0;
@@ -466,14 +449,9 @@
 				);
 		}
 
-		.mail-top-fade {
-			height: calc(88px + env(safe-area-inset-top, 0px));
-			background: linear-gradient(
-				to bottom,
-				var(--shell, var(--bg)) 0%,
-				color-mix(in srgb, var(--shell, var(--bg)) 80%, transparent) 50%,
-				transparent 100%
-			);
+		.mail-thread-title-row {
+			/* Match DetailColumn .title-row mobile top pad */
+			padding-top: 10px;
 		}
 
 		.mail-bottom-fade {
@@ -496,8 +474,9 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 10px;
-		margin: 0 0 12px;
-		padding: 0 2px;
+		/* Match DetailColumn .title-row desktop top pad (4px) */
+		margin: 0;
+		padding: 4px 2px 10px;
 		min-width: 0;
 	}
 

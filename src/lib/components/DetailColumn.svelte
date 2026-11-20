@@ -2780,7 +2780,8 @@
 	}
 
 	.title-row {
-		padding-top: 8px;
+		/* Desktop: 4px under control row (was 8 — ~4px too much air) */
+		padding-top: 4px;
 		padding-bottom: 10px;
 	}
 
