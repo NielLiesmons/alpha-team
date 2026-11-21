@@ -141,6 +141,21 @@ function rememberMailboxFeed(session, tip, messages) {
 }
 
 /**
+ * Drop warm mailbox feed materialization so the next walk rebuilds from tip → prev.
+ * Used after bulk remigrate / repair appends (append cache prepend order is not chronological).
+ * @param {DriveSession} [session]
+ */
+export function invalidateMailboxFeedCache(session) {
+	if (!session) {
+		mailboxFeedCache = null;
+		return;
+	}
+	const key = sessionCacheKey(session);
+	if (mailboxFeedCache?.key === key) mailboxFeedCache = null;
+	void idbSet(mailboxFeedIdbKey(session), { at: Date.now(), tip: '', messages: [] }).catch(() => {});
+}
+
+/**
  * Last known root dir (memory, then IDB) — never invent an empty tree on tip failure.
  * @param {DriveSession} session
  */
@@ -518,7 +533,8 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
  * @returns {Promise<{ tip: string, messages: any[] }>}
  */
 export async function loadMailboxMessages(session, opts = {}) {
-	const limit = Math.max(1, Math.min(500, Number(opts.limit) || 200));
+	/* High ceiling: tip→prev must be able to surface full history after remigrate. */
+	const limit = Math.max(1, Math.min(5000, Number(opts.limit) || 2000));
 	const stopAt = String(opts.stopAt || '');
 	const cacheKey = sessionCacheKey(session);
 	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();

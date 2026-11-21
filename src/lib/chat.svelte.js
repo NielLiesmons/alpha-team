@@ -186,7 +186,7 @@ export function isCommentEntityType(type) {
 }
 
 const CHAT_CACHE_KEY = 'alpha.chat.feed.v1';
-const CHAT_FEED_LIMIT = 200;
+const CHAT_FEED_LIMIT = 2000;
 /** Keep recently settled sends that a stale tip fetch has not listed yet. */
 const SETTLE_GRACE_MS = 180_000;
 /** Allow small device clock skew so “recent” rows are not dropped. */

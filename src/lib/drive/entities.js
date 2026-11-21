@@ -7,6 +7,7 @@ import {
 	getNamedTip,
 	getPath,
 	getPathFromDir,
+	invalidateMailboxFeedCache,
 	loadMailboxMessages,
 	loadRootDir,
 	loadRootDirWithTip,
@@ -18,7 +19,10 @@ import {
 import { sha256Hex } from './crypto.js';
 import { putMediaBlob } from './media.js';
 
-const LEGACY_CHAT_MIGRATE_KEY = 'alpha.chat.mailboxMigrate.v1';
+/** v2: remigrate missing Space leaves even when mailbox tip already exists. */
+const LEGACY_CHAT_MIGRATE_KEY = 'alpha.chat.mailboxMigrate.v2';
+/** In-flight repair so tip-wake / multi-panel open don't double-append. */
+let legacyChatMigrateInflight = null;
 
 function nowRfc3339() {
 	return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -2042,7 +2046,8 @@ export async function putView(session, view) {
 
 /* ── Chat messages + per-entity comment indexes ── */
 
-const FEED_MAX = 200;
+/** Chat / comment history window (mailbox tip→prev + local cache). */
+const FEED_MAX = 2000;
 
 /**
  * Durable chat order: created_at, then id (lexicographic).
@@ -2170,7 +2175,7 @@ export async function listCommentIds(session, type, entityId) {
  */
 export async function listComments(session, type, entityId) {
 	const ids = await listCommentIds(session, type, entityId);
-	if (!ids.length) return [];
+	const tid = String(entityId || '');
 	/*
 	 * One mailbox walk (cached after tip-wake) — never N× getChatMessage, which
 	 * each re-entered loadMailboxMessages and made comment FAB/panels feel cold.
@@ -2182,14 +2187,40 @@ export async function listComments(session, type, entityId) {
 		const id = String(m?.id || '');
 		if (id) byId.set(id, m);
 	}
-	/** @type {any[]} */
-	const out = [];
+	/** @type {Map<string, any>} */
+	const outById = new Map();
+	/** Prefer comments.json ids when present. */
+	/** @type {string[]} */
+	const missing = [];
 	for (const id of ids) {
-		const hit = byId.get(String(id));
-		if (hit) out.push(hit);
+		const sid = String(id);
+		const hit = byId.get(sid);
+		if (hit) outById.set(sid, hit);
+		else if (sid) missing.push(sid);
+	}
+	/*
+	 * Also keep mailbox rows that reference this entity — covers indexes that
+	 * never got a comments.json write, and remigrated history not yet indexed.
+	 */
+	for (const m of messages) {
+		if (!m || m.kind === 'reaction' || m.kind === 'event') continue;
+		if (m.ref?.type !== type || String(m.ref?.id || '') !== tid) continue;
+		const id = String(m.id || '');
+		if (id) outById.set(id, m);
+	}
+	/* Space leaves still hold pre-mailbox comment bodies when mailbox walk missed them. */
+	for (const id of missing) {
+		if (outById.has(id)) continue;
+		try {
+			const bytes = await getPath(session, `chat/messages/${id}.json`);
+			const doc = JSON.parse(new TextDecoder().decode(bytes));
+			if (doc?.id) outById.set(String(doc.id), doc);
+		} catch {
+			/* leaf gone */
+		}
 	}
 	/* comments.json order is tip-race fragile — leaves define chronology. */
-	return sortChatMessagesOldestFirst(out);
+	return sortChatMessagesOldestFirst([...outById.values()]);
 }
 
 /**
@@ -2223,16 +2254,21 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 		stopAt,
 		onPartial: opts.onPartial
 	});
-	/* Empty mailbox → one-shot migrate from Space chat/feed.json + message leaves. */
-	if (!messages.length && !stopAt) {
-		try {
-			const migrated = await migrateLegacyChatToMailbox(session);
-			if (migrated > 0) {
-				({ messages } = await loadMailboxMessages(session, { limit }));
-			}
-		} catch {
-			/* legacy missing / mailbox API not deployed yet */
+	/*
+	 * Remigrate missing Space chat/feed.json + leaves into the mailbox.
+	 * Runs even when tip already exists (cutover often created a short tip
+	 * from post-mailbox sends and abandoned older Space history).
+	 */
+	try {
+		const migrated = await migrateLegacyChatToMailbox(session);
+		if (migrated > 0) {
+			({ messages } = await loadMailboxMessages(session, {
+				limit,
+				onPartial: opts.onPartial
+			}));
 		}
+	} catch {
+		/* legacy missing / mailbox API not deployed yet */
 	}
 	if (!seedRows.length) return messages;
 	/** Merge seed so optimistic / in-flight locals survive a tip-wake. */
@@ -2255,12 +2291,15 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 
 /**
  * Best-effort: Space `chat/feed.json` + `chat/messages/{id}.json` → mailbox append chain.
- * Skips when mailbox tip already set or this browser already migrated.
+ * Safe with an existing tip: only appends message ids not already in the mailbox
+ * (does not rewrite or drop newer mailbox-only rows).
  * @param {import('./client.js').DriveSession} session
  * @returns {Promise<number>} messages appended
  */
 export async function migrateLegacyChatToMailbox(session) {
 	if (!session) return 0;
+	if (legacyChatMigrateInflight) return legacyChatMigrateInflight;
+
 	const gateKey = `${LEGACY_CHAT_MIGRATE_KEY}:${session.url}|${String(session.token || '').slice(0, 12)}`;
 	try {
 		if (typeof localStorage !== 'undefined' && localStorage.getItem(gateKey) === '1') {
@@ -2269,82 +2308,102 @@ export async function migrateLegacyChatToMailbox(session) {
 	} catch {
 		/* ignore */
 	}
-	let existing = '';
-	try {
-		existing = await getNamedTip(session, CHAT_TIP_NAME);
-	} catch {
-		existing = '';
-	}
-	if (existing) {
-		try {
-			if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
-		} catch {
-			/* ignore */
-		}
-		return 0;
-	}
 
-	/** @type {string[]} */
-	let ids = [];
-	try {
-		const bytes = await getPath(session, 'chat/feed.json');
-		const doc = JSON.parse(new TextDecoder().decode(bytes));
-		if (Array.isArray(doc)) ids = doc.map(String);
-		else if (Array.isArray(doc?.ids)) ids = doc.ids.map(String);
-	} catch {
-		/* no legacy feed */
-	}
-	if (!ids.length) {
+	legacyChatMigrateInflight = (async () => {
+		/** @type {string[]} */
+		let ids = [];
 		try {
-			const dir = await loadRootDir(session);
-			const children = dir?.children && typeof dir.children === 'object' ? dir.children : {};
-			ids = Object.keys(children)
-				.filter((p) => /^chat\/messages\/[^/]+\.json$/.test(p))
-				.map((p) => p.replace(/^chat\/messages\//, '').replace(/\.json$/, ''));
-		} catch {
-			ids = [];
-		}
-	}
-	ids = ids.filter((x, i, a) => x && a.indexOf(x) === i);
-	if (!ids.length) {
-		try {
-			if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
-		} catch {
-			/* ignore */
-		}
-		return 0;
-	}
-
-	/** @type {any[]} */
-	const msgs = [];
-	for (const id of ids) {
-		try {
-			const bytes = await getPath(session, `chat/messages/${id}.json`);
+			const bytes = await getPath(session, 'chat/feed.json');
 			const doc = JSON.parse(new TextDecoder().decode(bytes));
-			if (doc?.id) msgs.push(doc);
+			if (Array.isArray(doc)) ids = doc.map(String);
+			else if (Array.isArray(doc?.ids)) ids = doc.ids.map(String);
 		} catch {
-			/* skip missing leaf */
+			/* no legacy feed */
 		}
-	}
-	const ordered = sortChatMessagesOldestFirst(msgs);
-	let n = 0;
-	for (const message of ordered) {
+		if (!ids.length) {
+			try {
+				const dir = await loadRootDir(session);
+				const children = dir?.children && typeof dir.children === 'object' ? dir.children : {};
+				ids = Object.keys(children)
+					.filter((p) => /^chat\/messages\/[^/]+\.json$/.test(p))
+					.map((p) => p.replace(/^chat\/messages\//, '').replace(/\.json$/, ''));
+			} catch {
+				ids = [];
+			}
+		}
+		ids = ids.filter((x, i, a) => x && a.indexOf(x) === i);
+		if (!ids.length) {
+			try {
+				if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
+			} catch {
+				/* ignore */
+			}
+			return 0;
+		}
+
+		/** @type {Set<string>} */
+		let have = new Set();
 		try {
-			await appendMailboxEntry(session, { kind: 'message', message });
-			n += 1;
-		} catch (e) {
-			/* Mailbox API missing (pre-deploy) — abort; retry next open. */
-			const msg = e instanceof Error ? e.message : String(e);
-			if (/404|mailboxes/i.test(msg)) return n;
-			throw e;
+			const { messages } = await loadMailboxMessages(session, { limit: FEED_MAX });
+			for (const m of messages) {
+				const id = String(m?.id || '');
+				if (id) have.add(id);
+			}
+		} catch {
+			have = new Set();
 		}
-	}
+
+		const missingIds = ids.filter((id) => !have.has(String(id)));
+		if (!missingIds.length) {
+			try {
+				if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
+			} catch {
+				/* ignore */
+			}
+			return 0;
+		}
+
+		/** @type {any[]} */
+		const msgs = [];
+		for (const id of missingIds) {
+			try {
+				const bytes = await getPath(session, `chat/messages/${id}.json`);
+				const doc = JSON.parse(new TextDecoder().decode(bytes));
+				if (doc?.id) msgs.push(doc);
+			} catch {
+				/* skip missing leaf */
+			}
+		}
+		const ordered = sortChatMessagesOldestFirst(msgs);
+		let n = 0;
+		for (const message of ordered) {
+			try {
+				await appendMailboxEntry(session, { kind: 'message', message });
+				n += 1;
+			} catch (e) {
+				/* Mailbox API missing (pre-deploy) — abort; retry next open. */
+				const msg = e instanceof Error ? e.message : String(e);
+				if (/404|mailboxes/i.test(msg)) {
+					if (n > 0) invalidateMailboxFeedCache(session);
+					return n;
+				}
+				throw e;
+			}
+		}
+		if (n > 0) invalidateMailboxFeedCache(session);
+		try {
+			if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
+		} catch {
+			/* ignore */
+		}
+		return n;
+	})();
+
 	try {
-		if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
-	} catch {
-		/* ignore */
+		return await legacyChatMigrateInflight;
+	} finally {
+		legacyChatMigrateInflight = null;
 	}
-	return n;
 }
 
 /**
