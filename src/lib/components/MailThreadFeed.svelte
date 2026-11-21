@@ -48,6 +48,19 @@
 	const me = $derived((activePerson().email || '').trim().toLowerCase());
 	const mails = $derived(threadMessages(mailMsg));
 	const firstMail = $derived(mails[0] || mailMsg);
+
+	/** @param {string} name */
+	function shortAttachName(name) {
+		const n = String(name || 'attachment').trim() || 'attachment';
+		if (n.length <= 22) return n;
+		const dot = n.lastIndexOf('.');
+		if (dot > 0 && n.length - dot <= 6) {
+			const ext = n.slice(dot);
+			const stem = n.slice(0, Math.max(1, 18 - ext.length));
+			return `${stem}…${ext}`;
+		}
+		return `${n.slice(0, 19)}…`;
+	}
 	const threadTitle = $derived(
 		String(firstMail?.subject || mailMsg?.subject || '').trim() || t('common.noSubject')
 	);
@@ -326,6 +339,7 @@
 				{@const menuFor = replyMenuId === quoteId}
 				{@const recipientsOpen = recipientsMenuId === quoteId}
 				{@const hasQuote = Boolean(parts.collapsible && parts.quoted)}
+				{@const attachments = Array.isArray(m.attachments) ? m.attachments : []}
 				<article
 					class="mail-panel"
 					class:draft={isDraft(m)}
@@ -432,6 +446,14 @@
 							</div>
 						{/if}
 					</div>
+					{#if attachments.length}
+						<div class="mail-panel-rule" aria-hidden="true"></div>
+						<div class="mail-attach">
+							{#each attachments as att, i (`${att.blobId || att.name}-${i}`)}
+								<span class="attach-pill" title={att.name}>{shortAttachName(att.name)}</span>
+							{/each}
+						</div>
+					{/if}
 				</article>
 			{/each}
 
@@ -887,6 +909,33 @@
 		margin: 0;
 		width: 100%;
 		background: color-mix(in srgb, var(--fg) 8%, transparent);
+	}
+
+	.mail-attach {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		min-width: 0;
+		padding: 10px 14px 12px;
+		box-sizing: border-box;
+	}
+
+	.attach-pill {
+		display: inline-flex;
+		align-items: center;
+		max-width: 100%;
+		padding: 3px 9px;
+		border-radius: 999px;
+		background: var(--fg-8);
+		font-size: 11px;
+		font-weight: 500;
+		line-height: 1.3;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.mail-panel-content {

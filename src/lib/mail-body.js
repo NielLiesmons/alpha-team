@@ -212,11 +212,13 @@ function isReplyHeaderLike(line) {
 }
 
 /**
- * Earliest HTML quote container (blockquote or gmail/outlook quote wrappers).
+ * Earliest HTML quote container (attribution + blockquote / gmail/outlook wrappers).
+ * Include `gmail_attr` so “Le … a écrit :” is not left in the unexpanded main.
  * @param {string} html
  */
 function findHtmlQuoteIndex(html) {
 	const patterns = [
+		/<div\b[^>]*class\s*=\s*["'][^"']*gmail_attr[^"']*["'][^>]*>/i,
 		/<blockquote\b/i,
 		/<div\b[^>]*class\s*=\s*["'][^"']*gmail_quote[^"']*["'][^>]*>/i,
 		/<div\b[^>]*class\s*=\s*["'][^"']*gmail_extra[^"']*["'][^>]*>/i,
@@ -229,6 +231,53 @@ function findHtmlQuoteIndex(html) {
 		if (m >= 0 && (best < 0 || m < best)) best = m;
 	}
 	return best;
+}
+
+/**
+ * Move a trailing “On … wrote:” / “Le … a écrit :” line (or soft-wrapped pair)
+ * from main into quoted so attribution never stays in the collapsed preview.
+ * @param {string} main
+ * @param {string} quoted
+ * @returns {{ main: string, quoted: string } | null}
+ */
+function peelTrailingReplyHeader(main, quoted) {
+	const lines = String(main ?? '')
+		.replace(/\r\n/g, '\n')
+		.split('\n');
+	while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+	if (!lines.length) return null;
+
+	let start = -1;
+	const last = lines[lines.length - 1].trim();
+	if (isReplyHeaderLine(last) || REPLY_HEADER_PREFIX.test(last)) {
+		start = lines.length - 1;
+	} else if (
+		lines.length >= 2 &&
+		WROTE_ONLY.test(last) &&
+		REPLY_HEADER_START.test(lines[lines.length - 2].trim())
+	) {
+		start = lines.length - 2;
+	}
+	if (start < 0) return null;
+
+	const peeled = lines.slice(start).join('\n');
+	const nextMain = lines.slice(0, start).join('\n').replace(/\s+$/u, '');
+	const nextQuoted = quoted ? `${peeled}\n${quoted}` : peeled;
+	return { main: nextMain, quoted: nextQuoted };
+}
+
+/**
+ * Drop a trailing Gmail/Outlook attribution block from htmlMain after a plain peel.
+ * @param {string} html
+ * @returns {string}
+ */
+function peelHtmlTrailingAttr(html) {
+	const s = String(html || '');
+	const re =
+		/(?:(?:<br\s*\/?>)|\s)*<div\b[^>]*class\s*=\s*["'][^"']*(?:gmail_attr|OutlookMessageHeader)[^"']*["'][^>]*>[\s\S]*$/i;
+	const m = s.match(re);
+	if (m && m.index != null && m.index > 0) return s.slice(0, m.index);
+	return s;
 }
 
 /**
@@ -390,9 +439,32 @@ export function splitMailQuote(body) {
 			/* Plain split of a previously-stripped HTML body — htmlMain no longer matches. */
 			if (!fromHtml) htmlMain = '';
 		}
-	} else if (fromHtml && !quotedLooksLikeReply(quoted) && !/<blockquote/i.test(String(body || ''))) {
-		/* HTML wrapper without a real attribution — keep full body visible. */
-		return { main: stripHtml(String(body ?? '')), quoted: '', collapsible: false, htmlMain: '' };
+	} else if (fromHtml && !quotedLooksLikeReply(quoted)) {
+		/* Attribution often sits just before the quote container — fold it in. */
+		const peeled = peelTrailingReplyHeader(main, quoted);
+		if (peeled && quotedLooksLikeReply(peeled.quoted)) {
+			main = peeled.main;
+			quoted = peeled.quoted;
+			htmlMain = htmlMain ? peelHtmlTrailingAttr(htmlMain) : '';
+			if (htmlMain && stripHtml(htmlMain).trim() !== main.trim()) htmlMain = '';
+		} else if (!/<blockquote/i.test(String(body || ''))) {
+			/* HTML wrapper without a real attribution — keep full body visible. */
+			return { main: stripHtml(String(body ?? '')), quoted: '', collapsible: false, htmlMain: '' };
+		}
+	}
+
+	/* Even when the quote container already looked like a reply, peel a stray
+	 * attribution left in main (e.g. text before <blockquote> without gmail_attr). */
+	if (quoted.trim()) {
+		const peeled = peelTrailingReplyHeader(main, quoted);
+		if (peeled) {
+			main = peeled.main;
+			quoted = peeled.quoted;
+			if (htmlMain) {
+				htmlMain = peelHtmlTrailingAttr(htmlMain);
+				if (stripHtml(htmlMain).trim() !== main.trim()) htmlMain = '';
+			}
+		}
 	}
 
 	if (!quoted.trim()) return { main: text, quoted: '', collapsible: false, htmlMain: '' };
