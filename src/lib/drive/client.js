@@ -3,7 +3,7 @@
  * Root key stays in the browser; server never sees plaintext.
  */
 
-import { idbGet, idbSet } from '../local-db.js';
+import { idbDel, idbGet, idbSet } from '../local-db.js';
 import {
 	bytesToHex,
 	decrypt,
@@ -148,11 +148,14 @@ function rememberMailboxFeed(session, tip, messages) {
 export function invalidateMailboxFeedCache(session) {
 	if (!session) {
 		mailboxFeedCache = null;
+		mailboxTipCache = null;
 		return;
 	}
 	const key = sessionCacheKey(session);
 	if (mailboxFeedCache?.key === key) mailboxFeedCache = null;
-	void idbSet(mailboxFeedIdbKey(session), { at: Date.now(), tip: '', messages: [] }).catch(() => {});
+	if (mailboxTipCache?.key === key) mailboxTipCache = null;
+	/* Delete — never persist tip+[] or a later stopAt===tip resume will poison the feed. */
+	void idbDel(mailboxFeedIdbKey(session)).catch(() => {});
 }
 
 /**
@@ -558,7 +561,8 @@ export async function loadMailboxMessages(session, opts = {}) {
 		mailboxFeedCache &&
 		mailboxFeedCache.key === cacheKey &&
 		mailboxFeedCache.tip === (stopAt || priorTip) &&
-		Array.isArray(mailboxFeedCache.messages)
+		Array.isArray(mailboxFeedCache.messages) &&
+		mailboxFeedCache.messages.length > 0
 			? mailboxFeedCache.messages
 			: null;
 
@@ -567,11 +571,16 @@ export async function loadMailboxMessages(session, opts = {}) {
 		rememberMailboxFeed(session, '', []);
 		return { tip: '', messages: [] };
 	}
+	/*
+	 * Warm hit only when we actually have rows. tip+[] is never authoritative —
+	 * it happens when stopAt===tip with no priorFeed and would hide full history.
+	 */
 	if (
 		mailboxFeedCache &&
 		mailboxFeedCache.key === cacheKey &&
 		mailboxFeedCache.tip === tip &&
-		Array.isArray(mailboxFeedCache.messages)
+		Array.isArray(mailboxFeedCache.messages) &&
+		mailboxFeedCache.messages.length > 0
 	) {
 		return {
 			tip,
@@ -582,7 +591,12 @@ export async function loadMailboxMessages(session, opts = {}) {
 	const root = parseRootKey(session.rootKey);
 	/** @type {{ hash: string, prev?: string | null, entry?: any }[]} */
 	const newestFirst = [];
-	const walkStop = stopAt || (priorFeed ? priorTip : '');
+	/*
+	 * Incremental tip→stopAt only when we can merge a non-empty prior feed.
+	 * stopAt===tip with no priorFeed must full-walk (otherwise we cache []).
+	 */
+	let walkStop = stopAt || (priorFeed ? priorTip : '');
+	if (walkStop && walkStop === tip && !priorFeed) walkStop = '';
 	let hash = tip;
 	let netFetches = 0;
 	let msgCount = 0;
@@ -605,7 +619,13 @@ export async function loadMailboxMessages(session, opts = {}) {
 		}
 	}
 	const messages = materializeMailboxMessages(newestFirst, limit, priorFeed || []);
-	rememberMailboxFeed(session, tip, messages);
+	/*
+	 * Never persist tip+[] from a truncated incremental walk — that becomes a
+	 * permanent warm hit and hides remigrated history until hard cache wipe.
+	 */
+	if (messages.length > 0 || !walkStop) {
+		rememberMailboxFeed(session, tip, messages);
+	}
 	if (typeof opts.onPartial === 'function') opts.onPartial(messages);
 	if (typeof console !== 'undefined' && console.debug) {
 		console.debug('[chat-latency] listFeed', {
