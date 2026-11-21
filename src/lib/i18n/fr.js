@@ -20,6 +20,11 @@ export default {
 	'common.loading': 'Chargement…',
 	'common.working': 'En cours…',
 	'common.connecting': 'Connexion…',
+	'boot.troubleTitle': 'Impossible de démarrer Alpha',
+	'boot.troubleBody':
+		'Cet appareil est peut‑être bloqué sur une ancienne version en cache. Rechargez l’app, ou réinitialisez les données locales et reconnectez‑vous avec votre invitation.',
+	'boot.reloadApp': 'Recharger l’app',
+	'boot.resetLocal': 'Réinitialiser les données locales',
 	'common.open': 'Ouvrir',
 	'common.upload': 'Téléverser',
 	'common.uploading': 'Téléversement…',
@@ -265,6 +270,8 @@ export default {
 	'settings.inviteModalHint':
 		'Chiffrez un QR d’invitation Drive pour cette personne. Chuchotez la phrase séparément.',
 	'settings.inviteCodeReady': 'Invitation prête pour {email}. Partagez QR + phrase.',
+	'settings.inviteMissingMailbox':
+		'Aucun mot de passe boîte pour ce profil. Enregistrez-le une fois dans Réglages → Mail, puis partagez à nouveau.',
 	'settings.inviteQrAlt': 'QR d’invitation au profil',
 	'settings.passphrase': 'Phrase secrète',
 	'settings.passphraseTooShort': 'La phrase doit contenir au moins 6 caractères.',
@@ -370,6 +377,7 @@ export default {
 	'chat.jumpToMessage': 'Aller au message',
 	'chat.read': 'Lu',
 	'chat.sent': 'Envoyé',
+	'chat.seenBy': 'Vu par',
 	'chat.react': 'Réagir',
 	'chat.reactions': 'Réactions',
 	'chat.messageActions': 'Actions du message',

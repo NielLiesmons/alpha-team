@@ -20,8 +20,8 @@ import { ensureEggsExample } from './seed-eggs-forecast.js';
 import { syncSpaceFromHost } from './sections.js';
 import { hydrateWorkspaceFromCache, ui } from './workspace.svelte.js';
 
-/** @type {{ ready: boolean, listsReady: boolean }} */
-export const appBoot = $state({ ready: false, listsReady: false });
+/** @type {{ ready: boolean, listsReady: boolean, error: string, stuck: boolean }} */
+export const appBoot = $state({ ready: false, listsReady: false, error: '', stuck: false });
 
 /** Drive connected and identity chosen — show the operator shell. */
 export function isSignedIn() {
@@ -41,92 +41,153 @@ function isOffline() {
  * Call once from the root layout.
  */
 export async function bootApp() {
-	absorbReturnToFromLocation();
-	syncSpaceFromHost();
-	loadActor();
-	loadDeviceProfiles();
-	loadSessionFromStorage();
-	try {
-		const { refreshApprovedContacts } = await import('./mail-contacts.svelte.js');
-		refreshApprovedContacts();
-	} catch {
-		/* ignore */
-	}
-	try {
-		const { hydrateMailTipCache, hydrateMailFromCache } = await import('./mail.svelte.js');
-		hydrateMailTipCache();
-		hydrateMailFromCache();
-	} catch {
-		/* ignore */
-	}
-	try {
-		const { refreshCustomEmojis } = await import('./custom-emoji.svelte.js');
-		void refreshCustomEmojis().catch(() => {});
-	} catch {
-		/* ignore */
-	}
-
-	if (!activeSessionSafe()) {
-		appBoot.listsReady = true;
-		appBoot.ready = true;
-		return;
-	}
-
-	// Player handoff: cookies already written — bounce back same-tab.
-	if (isSignedIn() && redirectToReturnToIfAny()) {
-		appBoot.listsReady = true;
-		appBoot.ready = true;
-		return;
-	}
-
-	// Shell chrome first; lists wait on hydrate so we never flash empty offline.
-	ui.source = 'drive';
-	hydrateChatFeedFromCache();
-	hydrateMembersFromCache(activeSession());
-	appBoot.ready = true;
-	driveSession.loading = false;
-	void ensurePersistentStorage();
+	appBoot.error = '';
+	appBoot.stuck = false;
+	/** Never leave BootSplash forever — blank dark shell after crash. */
+	const stuckTimer =
+		typeof window !== 'undefined'
+			? window.setTimeout(() => {
+					if (!appBoot.ready) {
+						appBoot.stuck = true;
+						appBoot.error =
+							appBoot.error ||
+							'Startup is taking too long. Reload or reset the local shell.';
+					}
+				}, 10_000)
+			: null;
 
 	try {
-		await hydrateWorkspaceFromCache();
-	} catch {
-		/* ignore */
-	}
-	/* Warm PFPs from IndexedDB before unlocking lists — small team, few blobs. */
-	try {
-		await warmAvatarUrlsFromCache();
-	} catch {
-		/* ignore */
-	}
-	appBoot.listsReady = true;
-
-	if (isOffline()) {
-		driveSession.syncing = false;
-		return;
-	}
-
-	void (async () => {
+		absorbReturnToFromLocation();
+		syncSpaceFromHost();
+		loadActor();
+		loadDeviceProfiles();
+		loadSessionFromStorage();
 		try {
-			/* Session is up — pull Primary approvals from Drive so phone/desktop match. */
-			try {
-				const { syncApprovedContactsFromDrive } = await import('./mail-contacts.svelte.js');
-				await syncApprovedContactsFromDrive();
-			} catch (e) {
-				console.warn('mail approved sync', e);
-			}
-			await refreshChatFeed();
-			void refreshMembersAndAvatars().catch((e) => console.warn('members/avatars', e));
-			void refreshBackgroundDrive().then(() => {
-				/* Opt-in demo seed only — never auto-seed customer Spaces. */
-				const seedEggs =
-					typeof import.meta !== 'undefined' &&
-					String(import.meta.env?.PUBLIC_SEED_EGGS_EXAMPLE || '').trim() === '1';
-				if (seedEggs) {
-					void ensureEggsExample().catch((e) => console.warn('ensureEggsExample', e));
-				}
-			});
+			const { refreshApprovedContacts } = await import('./mail-contacts.svelte.js');
+			refreshApprovedContacts();
 		} catch {
-			/* errors land on driveSession / chatUi — local data stays */
+			/* ignore */
 		}
-	})();
+		try {
+			const { hydrateMailTipCache, hydrateMailFromCache } = await import('./mail.svelte.js');
+			hydrateMailTipCache();
+			hydrateMailFromCache();
+		} catch {
+			/* ignore */
+		}
+		try {
+			const { refreshCustomEmojis } = await import('./custom-emoji.svelte.js');
+			void refreshCustomEmojis().catch(() => {});
+		} catch {
+			/* ignore */
+		}
+
+		if (!activeSessionSafe()) {
+			appBoot.listsReady = true;
+			appBoot.stuck = false;
+			appBoot.ready = true;
+			return;
+		}
+
+		// Player handoff: cookies already written — bounce back same-tab.
+		if (isSignedIn() && redirectToReturnToIfAny()) {
+			appBoot.listsReady = true;
+			appBoot.stuck = false;
+			appBoot.ready = true;
+			return;
+		}
+
+		// Shell chrome first; lists wait on hydrate so we never flash empty offline.
+		ui.source = 'drive';
+		try {
+			hydrateChatFeedFromCache();
+		} catch (e) {
+			console.warn('chat cache hydrate', e);
+		}
+		try {
+			hydrateMembersFromCache(activeSession());
+		} catch (e) {
+			console.warn('members cache hydrate', e);
+		}
+		appBoot.stuck = false;
+		appBoot.ready = true;
+		driveSession.loading = false;
+		void ensurePersistentStorage();
+
+		try {
+			await hydrateWorkspaceFromCache();
+		} catch {
+			/* ignore */
+		}
+		/* Warm PFPs from IndexedDB before unlocking lists — small team, few blobs. */
+		try {
+			await warmAvatarUrlsFromCache();
+		} catch {
+			/* ignore */
+		}
+		appBoot.listsReady = true;
+
+		/* After Drive is up, sync space secrets so Mail/pubs work without Settings. */
+		try {
+			const email = String(actor.email || '')
+				.trim()
+				.toLowerCase();
+			if (email.includes('@')) {
+				const { hydrateDeviceFromSpaceSecrets, upsertAdminTokenSecret, upsertMailboxSecret } =
+					await import('./drive/space-secrets.js');
+				const { getMailboxPassword, setMailboxPassword } = await import('./jmap-mail.js');
+				const { getAdminToken, setAdminToken } = await import('./mail-api.js');
+				const session = activeSession();
+				const localPw = getMailboxPassword(email);
+				const localTok = getAdminToken();
+				/* Push this device’s secrets up so invites/reinstall stay complete. */
+				if (localPw) void upsertMailboxSecret(email, localPw, session).catch(() => {});
+				if (localTok) void upsertAdminTokenSecret(localTok, session).catch(() => {});
+				await hydrateDeviceFromSpaceSecrets(session, email, {
+					setMailboxPassword,
+					setAdminToken,
+					getAdminToken
+				});
+			}
+		} catch (e) {
+			console.warn('space secrets hydrate', e);
+		}
+
+		if (isOffline()) {
+			driveSession.syncing = false;
+			return;
+		}
+
+		void (async () => {
+			try {
+				/* Session is up — pull Primary approvals from Drive so phone/desktop match. */
+				try {
+					const { syncApprovedContactsFromDrive } = await import('./mail-contacts.svelte.js');
+					await syncApprovedContactsFromDrive();
+				} catch (e) {
+					console.warn('mail approved sync', e);
+				}
+				await refreshChatFeed();
+				void refreshMembersAndAvatars().catch((e) => console.warn('members/avatars', e));
+				void refreshBackgroundDrive().then(() => {
+					/* Opt-in demo seed only — never auto-seed customer Spaces. */
+					const seedEggs =
+						typeof import.meta !== 'undefined' &&
+						String(import.meta.env?.PUBLIC_SEED_EGGS_EXAMPLE || '').trim() === '1';
+					if (seedEggs) {
+						void ensureEggsExample().catch((e) => console.warn('ensureEggsExample', e));
+					}
+				});
+			} catch {
+				/* errors land on driveSession / chatUi — local data stays */
+			}
+		})();
+	} catch (e) {
+		console.error('bootApp', e);
+		appBoot.error = e instanceof Error ? e.message : String(e);
+		appBoot.ready = true;
+		appBoot.listsReady = true;
+	} finally {
+		if (stuckTimer != null) clearTimeout(stuckTimer);
+	}
 }

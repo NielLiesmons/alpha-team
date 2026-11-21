@@ -108,7 +108,8 @@ export async function snapFeedToBottomSoon(getEl, opts = {}) {
 }
 
 /**
- * While pinned, keep the scroller at true bottom whenever the body box resizes.
+ * While pinned, keep the scroller at true bottom whenever the body box resizes
+ * or its child list mutates (tip-wake / keyed each remounts that briefly collapse height).
  * Skips while `isLocked` (smooth jump in flight).
  * @param {HTMLElement} scroller
  * @param {HTMLElement} body
@@ -116,10 +117,32 @@ export async function snapFeedToBottomSoon(getEl, opts = {}) {
  * @param {() => boolean} [isLocked]
  */
 export function attachFeedPinResize(scroller, body, isPinned, isLocked) {
-	const ro = new ResizeObserver(() => {
+	let raf = 0;
+	const snap = () => {
 		if (isLocked?.()) return;
-		if (isPinned()) snapFeedToBottom(scroller);
-	});
+		if (!isPinned()) return;
+		snapFeedToBottom(scroller);
+	};
+	const schedule = () => {
+		if (raf) return;
+		raf = requestAnimationFrame(() => {
+			raf = 0;
+			snap();
+			/* Second frame catches late layout after keyed remounts. */
+			requestAnimationFrame(snap);
+		});
+	};
+	const ro = new ResizeObserver(schedule);
 	ro.observe(body);
-	return () => ro.disconnect();
+	ro.observe(scroller);
+	const mo =
+		typeof MutationObserver !== 'undefined'
+			? new MutationObserver(schedule)
+			: null;
+	mo?.observe(body, { childList: true, subtree: true });
+	return () => {
+		if (raf) cancelAnimationFrame(raf);
+		ro.disconnect();
+		mo?.disconnect();
+	};
 }

@@ -1,7 +1,8 @@
 /**
  * Passphrase-wrapped member invite (QR / share link).
- * Schema: alpha.drive.invite/2 — Drive session + email + role + mailbox password.
- * Legacy /1 (Drive only) still decodes. See ADR-identity-chat-drive-comments.
+ * Schema: alpha.drive.invite/3 — Drive session + email + role + mailbox password
+ * + optional publications adminToken (one code bootstraps Team).
+ * Legacy /2 and /1 still decode. See ADR-identity-chat-drive-comments.
  *
  * Share as a URL: https://admin…/join?i=<payload>
  * Opener only needs the passphrase when email is embedded.
@@ -61,7 +62,8 @@ async function deriveKey(passphrase, salt) {
  *   email?: string,
  *   displayName?: string,
  *   role?: 'owner' | 'admin' | 'member',
- *   mailboxPassword?: string
+ *   mailboxPassword?: string,
+ *   adminToken?: string
  * }} InviteSession
  */
 
@@ -86,7 +88,7 @@ export async function encodeInvite(session, passphrase) {
 	const key = await deriveKey(pass, salt);
 	/** @type {Record<string, unknown>} */
 	const body = {
-		schema: 'alpha.drive.invite/2',
+		schema: 'alpha.drive.invite/3',
 		url,
 		token,
 		rootKey
@@ -100,6 +102,9 @@ export async function encodeInvite(session, passphrase) {
 		if (session.mailboxPassword?.trim()) {
 			body.mailboxPassword = session.mailboxPassword.trim();
 		}
+	}
+	if (session.adminToken?.trim()) {
+		body.adminToken = session.adminToken.trim();
 	}
 	const plain = new TextEncoder().encode(JSON.stringify(body));
 	const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain));
@@ -236,6 +241,9 @@ export async function decodeInvite(payloadOrUrl, passphrase) {
 	}
 	if (typeof doc.mailboxPassword === 'string' && doc.mailboxPassword.trim()) {
 		out.mailboxPassword = doc.mailboxPassword.trim();
+	}
+	if (typeof doc.adminToken === 'string' && doc.adminToken.trim()) {
+		out.adminToken = doc.adminToken.trim();
 	}
 	return out;
 }

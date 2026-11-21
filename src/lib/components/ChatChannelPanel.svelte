@@ -93,6 +93,13 @@
 	let mountedChannel = $state('');
 	/** Skip measure while we are programmatically snapping. */
 	let snapLock = 0;
+	/**
+	 * Only clear pinBottom after intentional leave-bottom gestures (wheel up / touch drag).
+	 * Tip-wake remounts clamp scrollTop→0 and must not unpin — that was the jump-to-top bug.
+	 */
+	let leaveBottomIntent = false;
+	/** @type {number | null} */
+	let touchY0 = null;
 	/** Briefly highlight a jumped-to quoted message. */
 	let highlightId = $state(/** @type {string | null} */ (null));
 	/** @type {ReturnType<typeof setTimeout> | null} */
@@ -264,9 +271,9 @@
 		}
 		void refreshChatFeed().then(() => {
 			const nextTail = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
-			const grew = Boolean(nextTail && nextTail !== lastTailId);
 			lastTailId = nextTail;
-			if (pinBottom && grew) void goBottom(false, true);
+			/* Always re-pin after hydrate — splice remounts can leave scrollTop at 0. */
+			if (pinBottom) void goBottom(false, false);
 		});
 		return () => {
 			stopChatTipPoll();
@@ -338,6 +345,8 @@
 		}
 		if (!lastTailId) {
 			lastTailId = tailId;
+			/* First paint after open/hydrate — land on bottom without waiting for a new tip. */
+			if (pinBottom) void goBottom(false, false);
 			return;
 		}
 		if (tailId === lastTailId) return;
@@ -354,11 +363,49 @@
 		}
 	});
 
+	/* Typing rows grow the stack — keep pinned feeds on the bottom. */
+	$effect(() => {
+		const n = presence.length;
+		if (!n || !pinBottom) return;
+		void goBottom(false, false);
+	});
+
+	/** @param {WheelEvent} e */
+	function onFeedWheel(e) {
+		if (e.deltaY < 0) leaveBottomIntent = true;
+	}
+
+	/** @param {TouchEvent} e */
+	function onFeedTouchStart(e) {
+		touchY0 = e.touches[0]?.clientY ?? null;
+	}
+
+	/** @param {TouchEvent} e */
+	function onFeedTouchMove(e) {
+		const y = e.touches[0]?.clientY;
+		if (touchY0 == null || y == null) return;
+		/* Finger down → content scrolls up (away from bottom). */
+		if (y - touchY0 > 10) leaveBottomIntent = true;
+	}
+
+	function onFeedTouchEnd() {
+		touchY0 = null;
+	}
+
 	function measureScroll() {
 		if (snapLock > 0) return;
 		const el = messagesEl;
 		if (!el) return;
 		const near = isFeedNearBottom(el);
+		if (pinBottom && !near && !leaveBottomIntent) {
+			/*
+			 * Tip-wake / keyed remounts clamp scrollTop→0. Stay pinned; ResizeObserver
+			 * + MutationObserver in attachFeedPinResize snap back — do not unpin here.
+			 */
+			showScrollFab = false;
+			return;
+		}
+		if (near) leaveBottomIntent = false;
 		pinBottom = near;
 		showScrollFab = !near && el.scrollHeight > el.clientHeight + 40;
 		if (near) pendingNewCount = 0;
@@ -373,6 +420,7 @@
 		if (!force && !pinBottom) return;
 		snapLock++;
 		pinBottom = true;
+		leaveBottomIntent = false;
 		showScrollFab = false;
 		pendingNewCount = 0;
 		try {
@@ -659,15 +707,25 @@
 
 <div class="chat" class:compact class:was-compact={wasCompact} bind:this={chatRootEl}>
 	<!-- class "feed" required for list-top chrome scroll fade; app.css excludes .messages from feed-pad -->
-	<div class="feed messages" bind:this={messagesEl} onscroll={measureScroll}>
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<div
+		class="feed messages"
+		bind:this={messagesEl}
+		onscroll={measureScroll}
+		onwheel={onFeedWheel}
+		ontouchstart={onFeedTouchStart}
+		ontouchmove={onFeedTouchMove}
+		ontouchend={onFeedTouchEnd}
+		ontouchcancel={onFeedTouchEnd}
+	>
 		<div class="feed-body" bind:this={feedBodyEl}>
 			{#if driveSession.error}
 				<p class="banner"><span class="err">{driveSession.error}</span></p>
 			{/if}
 
-			{#if chronological.length === 0 && (!chatUi.settled || chatUi.loading)}
+			{#if chronological.length === 0 && (!chatUi.settled || chatUi.loading) && !presence.length}
 				<FeedSkeleton rows={6} />
-			{:else if chronological.length === 0}
+			{:else if chronological.length === 0 && !presence.length}
 				<div class="empty">
 					<p class="empty-title">{t('chat.noMessages')}</p>
 					<p class="empty-body">{t('chat.writeBelow')}</p>
@@ -820,6 +878,29 @@
 							{/each}
 						{/if}
 					{/each}
+					{#each presence as e (e.actor + e.state)}
+						<div
+							class="bubble-anchor typing-anchor"
+							aria-live="polite"
+							aria-label={presenceLabel(e)}
+						>
+							<article class="typing-card">
+								<div class="typing-avatar">
+									<ProfilePic
+										name={displayNameFromEmail(e.actor)}
+										email={e.actor}
+										pictureUrl={pictureUrlFor(e.actor)}
+										size={34}
+									/>
+								</div>
+								<div class="typing-bubble" aria-hidden="true">
+									<span class="typing-wave">
+										<i></i><i></i><i></i>
+									</span>
+								</div>
+							</article>
+						</div>
+					{/each}
 				</div>
 			{/if}
 		</div>
@@ -851,22 +932,6 @@
 
 	<div class="composer-fade" aria-hidden="true"></div>
 	<div class="composer-dock" bind:this={composerDockEl}>
-		{#if presence.length}
-			<div class="presence-row" aria-live="polite">
-				{#each presence as e (e.actor + e.state)}
-					<div class="presence-item">
-						<ProfilePic
-							name={displayNameFromEmail(e.actor)}
-							email={e.actor}
-							pictureUrl={pictureUrlFor(e.actor)}
-							size={22}
-						/>
-						<span class="presence-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-						<span class="presence-label">{presenceLabel(e)}</span>
-					</div>
-				{/each}
-			</div>
-		{/if}
 		<!-- Suggest sits outside the pill so overflow:hidden / shine mask cannot clip it -->
 		<div class="composer-stack">
 			<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
@@ -1290,47 +1355,65 @@
 		white-space: nowrap;
 	}
 
-	.presence-row {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		padding: 0 18px 6px;
+	/* Ephemeral typing — mirrors incoming ChatFeedCard row; fixed bubble box. */
+	.typing-anchor {
+		margin-top: 2px;
 		pointer-events: none;
 	}
 
-	.presence-item {
+	.typing-card {
 		display: flex;
-		align-items: center;
-		gap: 8px;
-		color: var(--fg-33);
-		font-size: 12px;
-		font-weight: 500;
+		gap: 6px;
+		align-items: flex-end;
+		width: 100%;
 	}
 
-	.presence-dots {
+	.typing-avatar {
+		flex-shrink: 0;
+		width: 34px;
+		line-height: 0;
+	}
+
+	.typing-bubble {
+		box-sizing: border-box;
+		width: 56px;
+		height: 34px;
+		padding: 0;
+		border-radius: 16px 16px 16px 4px;
+		background: var(--bubble-bg, color-mix(in srgb, var(--fg) 12%, transparent));
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+	}
+
+	.typing-wave {
 		display: inline-flex;
-		gap: 3px;
 		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		height: 14px;
+		width: 28px;
 	}
 
-	.presence-dots i {
-		width: 4px;
-		height: 4px;
+	.typing-wave i {
+		display: block;
+		width: 5px;
+		height: 5px;
 		border-radius: 50%;
-		background: currentColor;
-		opacity: 0.45;
-		animation: presence-bounce 1.2s ease-in-out infinite;
+		background: var(--fg-33);
+		/* Animate inside fixed box — never change bubble height. */
+		animation: typing-wave 1.15s ease-in-out infinite;
 	}
 
-	.presence-dots i:nth-child(2) {
+	.typing-wave i:nth-child(2) {
 		animation-delay: 0.15s;
 	}
 
-	.presence-dots i:nth-child(3) {
+	.typing-wave i:nth-child(3) {
 		animation-delay: 0.3s;
 	}
 
-	@keyframes presence-bounce {
+	@keyframes typing-wave {
 		0%,
 		80%,
 		100% {
@@ -1338,13 +1421,9 @@
 			opacity: 0.35;
 		}
 		40% {
-			transform: translateY(-3px);
-			opacity: 0.9;
+			transform: translateY(-4px);
+			opacity: 0.95;
 		}
-	}
-
-	.presence-label {
-		color: var(--fg-33);
 	}
 
 	.scroll-fabs {

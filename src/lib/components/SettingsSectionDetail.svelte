@@ -251,9 +251,15 @@
 		}
 	}
 
-	function saveApiToken() {
+	async function saveApiToken() {
 		setAdminToken(apiTokenDraft);
 		apiTokenMsg = t('settings.tokenSaved');
+		try {
+			const { upsertAdminTokenSecret } = await import('$lib/drive/space-secrets.js');
+			await upsertAdminTokenSecret(apiTokenDraft);
+		} catch (e) {
+			console.warn('persist admin token', e);
+		}
 	}
 
 	async function saveMailboxPw() {
@@ -267,6 +273,12 @@
 			if (mailboxPw.trim()) {
 				await testMailboxLogin(actor.email, mailboxPw.trim());
 				setMailboxPassword(actor.email, mailboxPw.trim());
+				try {
+					const { upsertMailboxSecret } = await import('$lib/drive/space-secrets.js');
+					await upsertMailboxSecret(actor.email, mailboxPw.trim());
+				} catch (err) {
+					console.warn('persist mailbox secret', err);
+				}
 				await refreshMail();
 				mailboxMsg = t('settings.mailboxConnected');
 			} else {

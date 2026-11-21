@@ -39,6 +39,49 @@
 				} catch (e) {}
 			})();
 		</script>
+		<script>
+			/* Escape hatch when the PWA shell never hydrates (stale SW / missing chunks). */
+			(function () {
+				var started = false;
+				var mark = function () {
+					started = true;
+					var el = document.getElementById('alpha-boot-fallback');
+					if (el && el.parentNode) el.parentNode.removeChild(el);
+				};
+				window.addEventListener('alpha-boot-started', mark, { once: true });
+				document.addEventListener(
+					'DOMContentLoaded',
+					function () {
+						setTimeout(function () {
+							if (started) return;
+							if (document.querySelector('.shell, .welcome, .splash .recover')) {
+								mark();
+								return;
+							}
+							if (document.getElementById('alpha-boot-fallback')) return;
+							var wrap = document.createElement('div');
+							wrap.id = 'alpha-boot-fallback';
+							wrap.setAttribute('role', 'alert');
+							wrap.style.cssText =
+								'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#090909;color:#eee;font:500 15px/1.4 system-ui,sans-serif;text-align:center';
+							wrap.innerHTML =
+								'<div style="max-width:320px">' +
+								'<p style="margin:0 0 12px;font-size:18px;font-weight:650">Couldn’t start Alpha</p>' +
+								'<p style="margin:0 0 16px;color:#aaa">Cached shell looks stuck. Reload, or open with ?recover=1</p>' +
+								'<button type="button" id="alpha-boot-reload" style="height:44px;padding:0 18px;border:0;border-radius:14px;background:#eee;color:#111;font:650 14px system-ui;cursor:pointer">Reload app</button>' +
+								'</div>';
+							document.body.appendChild(wrap);
+							var btn = document.getElementById('alpha-boot-reload');
+							if (btn)
+								btn.onclick = function () {
+									location.href = '/?recover=1';
+								};
+						}, 8000);
+					},
+					{ once: true }
+				);
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

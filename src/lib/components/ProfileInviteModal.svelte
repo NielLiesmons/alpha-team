@@ -8,7 +8,7 @@
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { getMailboxPassword } from '$lib/jmap-mail.js';
+	import { buildInviteSession } from '$lib/invite-bootstrap.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { memberFor } from '$lib/members.svelte.js';
 
@@ -66,19 +66,16 @@
 		busy = true;
 		try {
 			const role = member?.role === 'owner' ? 'admin' : member?.role || 'member';
-			const mailboxPassword = getMailboxPassword(e);
-			const payload = await encodeInvite(
-				{
-					url: driveSession.url,
-					token: driveSession.token,
-					rootKey: driveSession.rootKey,
-					email: e,
-					displayName: name,
-					role,
-					...(mailboxPassword ? { mailboxPassword } : {})
-				},
-				pass
-			);
+			const inviteSession = await buildInviteSession({
+				email: e,
+				displayName: name,
+				role
+			});
+			if (!inviteSession.mailboxPassword) {
+				msg = t('settings.inviteMissingMailbox');
+				return;
+			}
+			const payload = await encodeInvite(inviteSession, pass);
 			link = inviteShareUrl(payload);
 			qr = await QRCode.toDataURL(link, {
 				errorCorrectionLevel: 'L',

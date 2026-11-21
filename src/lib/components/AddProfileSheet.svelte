@@ -10,8 +10,12 @@
 	import { addDeviceProfile } from '$lib/device-profiles.svelte.js';
 	import { health } from '$lib/drive/client.js';
 	import { decodeInvite, encodeInvite, inviteShareUrl, isInvitePayload } from '$lib/drive/invite.js';
+	import {
+		applyInviteBootstrap,
+		buildInviteSession,
+		persistInviteSecrets
+	} from '$lib/invite-bootstrap.js';
 	import { driveSession, saveSession } from '$lib/drive/session.svelte.js';
-	import { setMailboxPassword } from '$lib/jmap-mail.js';
 	import { canInvite, markMemberJoined, upsertMember } from '$lib/members.svelte.js';
 	import { generateMailboxPassword, provisionMailbox } from '$lib/stalwart-provision.js';
 	import { mailDomain as spaceMailDomain } from '$lib/space-host.js';
@@ -97,9 +101,7 @@
 				name: session.displayName || session.email.split('@')[0]
 			});
 			setActiveEmail(session.email);
-			if (session.mailboxPassword) {
-				setMailboxPassword(session.email, session.mailboxPassword);
-			}
+			await applyInviteBootstrap(session);
 			await refreshFromDrive();
 			await markMemberJoined(session.email);
 			onclose();
@@ -152,18 +154,14 @@
 				password: mailboxPassword,
 				displayName: createName.trim()
 			});
-			const payload = await encodeInvite(
-				{
-					url: driveSession.url,
-					token: driveSession.token,
-					rootKey: driveSession.rootKey,
-					email: createEmail,
-					displayName: createName.trim(),
-					role: createRole,
-					mailboxPassword
-				},
-				createPass
-			);
+			await persistInviteSecrets(createEmail, mailboxPassword);
+			const inviteSession = await buildInviteSession({
+				email: createEmail,
+				displayName: createName.trim(),
+				role: createRole,
+				mailboxPassword
+			});
+			const payload = await encodeInvite(inviteSession, createPass);
 			inviteLink = inviteShareUrl(payload);
 			mailboxPw = mailboxPassword;
 			qr = await QRCode.toDataURL(inviteLink, {

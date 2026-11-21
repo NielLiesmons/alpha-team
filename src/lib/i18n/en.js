@@ -20,6 +20,11 @@ export default {
 	'common.loading': 'Loading…',
 	'common.working': 'Working…',
 	'common.connecting': 'Connecting…',
+	'boot.troubleTitle': 'Couldn’t start Alpha',
+	'boot.troubleBody':
+		'This device may be stuck on an old cached shell. Reload the app, or reset local caches and sign in again with your invite.',
+	'boot.reloadApp': 'Reload app',
+	'boot.resetLocal': 'Reset local data',
 	'common.open': 'Open',
 	'common.upload': 'Upload',
 	'common.uploading': 'Uploading…',
@@ -262,6 +267,8 @@ export default {
 	'settings.inviteModalHint':
 		'Encrypt a Drive invite QR for this person. Whisper the passphrase separately.',
 	'settings.inviteCodeReady': 'Invite ready for {email}. Share QR + passphrase.',
+	'settings.inviteMissingMailbox':
+		'No mailbox password stored for this profile yet. Save Mail password in Settings once, then share again.',
 	'settings.inviteQrAlt': 'Profile invite QR',
 	'settings.passphrase': 'Passphrase',
 	'settings.passphraseTooShort': 'Passphrase must be at least 6 characters.',
@@ -367,6 +374,7 @@ export default {
 	'chat.jumpToMessage': 'Jump to message',
 	'chat.read': 'Read',
 	'chat.sent': 'Sent',
+	'chat.seenBy': 'Seen by',
 	'chat.react': 'React',
 	'chat.reactions': 'Reactions',
 	'chat.messageActions': 'Message actions',

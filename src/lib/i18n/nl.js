@@ -20,6 +20,11 @@ export default {
 	'common.loading': 'Laden…',
 	'common.working': 'Bezig…',
 	'common.connecting': 'Verbinden…',
+	'boot.troubleTitle': 'Alpha kon niet starten',
+	'boot.troubleBody':
+		'Dit apparaat zit mogelijk vast op een oude cache. Herlaad de app, of wis lokale caches en meld je opnieuw aan met je uitnodiging.',
+	'boot.reloadApp': 'App herladen',
+	'boot.resetLocal': 'Lokale gegevens wissen',
 	'common.open': 'Openen',
 	'common.upload': 'Uploaden',
 	'common.uploading': 'Uploaden…',
@@ -264,6 +269,8 @@ export default {
 	'settings.inviteModalHint':
 		'Versleutel een Drive-uitnodigings-QR voor deze persoon. Fluister de wachtzin apart.',
 	'settings.inviteCodeReady': 'Uitnodiging klaar voor {email}. Deel QR + wachtzin.',
+	'settings.inviteMissingMailbox':
+		'Nog geen mailboxwachtwoord voor dit profiel. Bewaar het Mail-wachtwoord één keer in Instellingen, deel daarna opnieuw.',
 	'settings.inviteQrAlt': 'Profieluitnodiging QR',
 	'settings.passphrase': 'Wachtzin',
 	'settings.passphraseTooShort': 'Wachtzin moet minstens 6 tekens zijn.',
@@ -369,6 +376,7 @@ export default {
 	'chat.jumpToMessage': 'Naar bericht springen',
 	'chat.read': 'Gelezen',
 	'chat.sent': 'Verzonden',
+	'chat.seenBy': 'Gezien door',
 	'chat.react': 'Reageren',
 	'chat.reactions': 'Reacties',
 	'chat.messageActions': 'Berichtacties',

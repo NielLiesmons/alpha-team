@@ -95,7 +95,10 @@
 	/** Threaded layout (smaller left avatar) is incoming-only — never flip outgoing. */
 	const useThreaded = $derived(Boolean(threaded) && !isMine);
 	const reactions = $derived(reactionsForMessage(msg.id));
-	/** sending = not on Drive yet (no check); sent = single ✓; read = double ✓✓ (other account). */
+	/**
+	 * sending = not on Drive yet (no check); sent = single ✓; read = double ✓✓ (other account).
+	 * Self never counts toward ✓✓.
+	 */
 	const delivery = $derived.by(() => {
 		if (msg._failed) return 'failed';
 		if (msg._pending || msg.delivery === 'sending' || String(msg.id || '').startsWith('local-')) {
@@ -105,13 +108,31 @@
 		const readBy = Array.isArray(msg.read_by)
 			? msg.read_by.map((e) => String(e).trim().toLowerCase()).filter(Boolean)
 			: [];
-		/* Double-check only when at least one *other* account is in read_by. */
 		if (readBy.some((e) => e && e !== me)) return 'read';
 		return 'sent';
 	});
+	/** Outgoing receipt: ✓ after server ack, ✓✓ when another account has seen. */
 	const showReceipt = $derived(
 		isMine && stackLast && (delivery === 'sent' || delivery === 'read')
 	);
+	/** Peers who have this message in their read_by (excludes self). */
+	const seenByProfiles = $derived.by(() => {
+		const me = (actor.email || '').trim().toLowerCase();
+		const readBy = Array.isArray(msg.read_by) ? msg.read_by : [];
+		/** @type {{ name: string, email: string }[]} */
+		const out = [];
+		const seen = new Set();
+		for (const raw of readBy) {
+			const email = String(raw || '')
+				.trim()
+				.toLowerCase();
+			if (!email || email === me || seen.has(email)) continue;
+			seen.add(email);
+			const p = asPerson(email);
+			out.push({ email, name: p?.name || displayNameFromEmail(email) });
+		}
+		return out;
+	});
 
 	const hasAttachments = $derived(
 		Array.isArray(msg.attachments) && msg.attachments.length > 0
@@ -612,6 +633,7 @@
 	x={overlayX}
 	y={overlayY}
 	canDelete={isMine}
+	seenBy={seenByProfiles}
 	onclose={() => (overlayOpen = false)}
 	onreact={(emoji) => void onReact(emoji)}
 	onreply={handleReply}

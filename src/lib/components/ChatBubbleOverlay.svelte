@@ -5,6 +5,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
+	import ProfilePicStack from './ProfilePicStack.svelte';
 	import Forward from './icons/Forward.svelte';
 	import Reply from './icons/Reply.svelte';
 	import Trash from './icons/Trash.svelte';
@@ -18,6 +19,7 @@
 	 *   x?: number,
 	 *   y?: number,
 	 *   canDelete?: boolean,
+	 *   seenBy?: Array<{ name?: string, email?: string }>,
 	 *   onclose?: () => void,
 	 *   onreact?: (emoji: string) => void,
 	 *   onreply?: () => void,
@@ -30,12 +32,16 @@
 		x = 0,
 		y = 0,
 		canDelete = false,
+		seenBy = [],
 		onclose = () => {},
 		onreact = () => {},
 		onreply = () => {},
 		onforward = null,
 		ondelete = null
 	} = $props();
+
+	const seenProfiles = $derived(Array.isArray(seenBy) ? seenBy : []);
+	const seenCount = $derived(seenProfiles.length);
 
 	let emojiPickerOpen = $state(false);
 	/** @type {HTMLDivElement | undefined} */
@@ -50,6 +56,7 @@
 			emojiPickerOpen = false;
 			return;
 		}
+		seenCount; /* re-layout when Seen by appears */
 		quick = quickReactionEmojis(24);
 		queueMicrotask(() => layout());
 	});
@@ -59,9 +66,14 @@
 		const pad = 16;
 		const reactW = 280;
 		const reactH = 44;
-		const actionsW = 168;
+		const actionsW = seenCount > 0 ? 220 : 168;
 		const gap = 12;
-		const actionsH = canDelete ? (onforward ? 120 : 88) : onforward ? 88 : 56;
+		const rowH = 36;
+		const seenH = seenCount > 0 ? 40 : 0;
+		let rows = 1; /* reply */
+		if (onforward) rows += 1;
+		if (canDelete && ondelete) rows += 1;
+		const actionsH = seenH + rows * rowH + 8;
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 		actionsAbove = y >= vh * (2 / 3);
@@ -79,7 +91,11 @@
 		}
 		placeX = rx;
 		placeY = ry;
-		rootEl?.style.setProperty('--actions-x', `${Math.min(Math.max(pad, x - actionsW / 2), vw - pad - actionsW)}px`);
+		rootEl?.style.setProperty('--actions-w', `${actionsW}px`);
+		rootEl?.style.setProperty(
+			'--actions-x',
+			`${Math.min(Math.max(pad, x - actionsW / 2), vw - pad - actionsW)}px`
+		);
 		rootEl?.style.setProperty('--actions-y', `${ay}px`);
 	}
 
@@ -159,11 +175,20 @@
 
 		<div
 			class="actions-panel"
+			class:has-seen={seenCount > 0}
 			role="menu"
 			aria-label={t('chat.messageActions')}
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
+			{#if seenCount > 0}
+				<div class="seen-row" role="menuitem" aria-label={`${t('chat.seenBy')}: ${seenCount}`}>
+					<span class="seen-label">{t('chat.seenBy')}</span>
+					<span class="seen-people">
+						<ProfilePicStack profiles={seenProfiles} size="xxs" text={String(seenCount)} />
+					</span>
+				</div>
+			{/if}
 			<button
 				type="button"
 				class="action-row"
@@ -348,7 +373,7 @@
 		left: var(--actions-x, 16px);
 		top: var(--actions-y, 72px);
 		z-index: 2;
-		width: 168px;
+		width: var(--actions-w, 168px);
 		padding: 4px 0;
 		border-radius: 14px;
 		border: 1px solid var(--glass-border, var(--fg-8));
@@ -359,6 +384,34 @@
 		overflow: hidden;
 		pointer-events: auto;
 		box-sizing: border-box;
+	}
+
+	.seen-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		width: 100%;
+		min-height: 36px;
+		padding: 6px 14px;
+		border: 0;
+		border-bottom: 1px solid var(--fg-8);
+		box-sizing: border-box;
+		pointer-events: none;
+	}
+
+	.seen-label {
+		flex-shrink: 0;
+		font-size: 13.5px;
+		font-weight: 550;
+		color: var(--fg-66);
+	}
+
+	.seen-people {
+		min-width: 0;
+		display: flex;
+		justify-content: flex-end;
+		line-height: 0;
 	}
 
 	.action-row {

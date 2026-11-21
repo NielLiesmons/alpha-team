@@ -12,7 +12,7 @@
 	import { health } from '$lib/drive/client.js';
 	import { decodeInvite, invitePayloadFromLocation, isInvitePayload } from '$lib/drive/invite.js';
 	import { driveSession, saveSession } from '$lib/drive/session.svelte.js';
-	import { setMailboxPassword } from '$lib/jmap-mail.js';
+	import { applyInviteBootstrap } from '$lib/invite-bootstrap.js';
 	import { markMemberJoined, upsertMember } from '$lib/members.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
@@ -110,10 +110,8 @@
 				name: session.displayName || session.email.split('@')[0]
 			});
 			setActiveEmail(session.email);
-			if (session.mailboxPassword) {
-				setMailboxPassword(session.email, session.mailboxPassword);
-			}
 			await connectSession(session);
+			await applyInviteBootstrap(session);
 			/* Genesis / first invite: directory may be empty — upsert from the invite itself. */
 			const role =
 				session.role === 'owner' || session.role === 'admin' || session.role === 'member'

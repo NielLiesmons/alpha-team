@@ -20,6 +20,11 @@ export default {
 	'common.loading': 'Cargando…',
 	'common.working': 'Trabajando…',
 	'common.connecting': 'Conectando…',
+	'boot.troubleTitle': 'No se pudo iniciar Alpha',
+	'boot.troubleBody':
+		'Este dispositivo puede estar atrapado en una caché antigua. Recarga la app, o borra los datos locales e inicia sesión de nuevo con tu invitación.',
+	'boot.reloadApp': 'Recargar app',
+	'boot.resetLocal': 'Restablecer datos locales',
 	'common.open': 'Abrir',
 	'common.upload': 'Subir',
 	'common.uploading': 'Subiendo…',
@@ -264,6 +269,8 @@ export default {
 	'settings.inviteModalHint':
 		'Cifra un QR de invitación de Drive para esta persona. Comparte la frase por separado.',
 	'settings.inviteCodeReady': 'Invitación lista para {email}. Comparte QR + frase.',
+	'settings.inviteMissingMailbox':
+		'Aún no hay contraseña de buzón para este perfil. Guárdala una vez en Ajustes → Correo y vuelve a compartir.',
 	'settings.inviteQrAlt': 'QR de invitación al perfil',
 	'settings.passphrase': 'Frase de acceso',
 	'settings.passphraseTooShort': 'La frase debe tener al menos 6 caracteres.',
@@ -369,6 +376,7 @@ export default {
 	'chat.jumpToMessage': 'Ir al mensaje',
 	'chat.read': 'Leído',
 	'chat.sent': 'Enviado',
+	'chat.seenBy': 'Visto por',
 	'chat.react': 'Reaccionar',
 	'chat.reactions': 'Reacciones',
 	'chat.messageActions': 'Acciones del mensaje',

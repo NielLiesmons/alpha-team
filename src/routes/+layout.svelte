@@ -39,17 +39,37 @@
 		initBrand();
 		initTheme();
 		initLocale();
-		bootApp();
+		try {
+			window.dispatchEvent(new Event('alpha-boot-started'));
+		} catch {
+			/* ignore */
+		}
+		void bootApp().catch((e) => {
+			console.error('bootApp', e);
+			appBoot.error = e instanceof Error ? e.message : String(e);
+			appBoot.stuck = true;
+		});
 
-		// Light SW registration — avoid hammering iOS with update checks.
-		// (Must run before cleanup return — previously this was dead code after `return`.)
+		/* Stale hashed chunks after deploy → blank shell; force a clean reload once. */
+		/** @param {Event} e */
+		function onPreloadError(e) {
+			e.preventDefault?.();
+			if (sessionStorage.getItem('alpha.chunk-reload') === '1') return;
+			sessionStorage.setItem('alpha.chunk-reload', '1');
+			location.reload();
+		}
+		window.addEventListener('vite:preloadError', onPreloadError);
+
+		// Light SW registration — auto-activate new workers so phones leave blank shells.
 		if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 			void import('virtual:pwa-register').then(({ registerSW }) => {
-				registerSW({
+				const updateSW = registerSW({
 					immediate: true,
+					onNeedRefresh() {
+						void updateSW?.(true);
+					},
 					onRegisteredSW(_swUrl, registration) {
 						if (!registration) return;
-						/* Check for deploys on load + whenever the tab becomes visible. */
 						void registration.update();
 						document.addEventListener('visibilitychange', () => {
 							if (document.visibilityState !== 'visible') return;
@@ -60,10 +80,23 @@
 			});
 		}
 
+		/* Deep-link recovery: /?recover=1 or /?reset=1 */
+		try {
+			const q = new URLSearchParams(location.search);
+			if (q.has('recover') || q.has('reset')) {
+				void import('$lib/boot-recovery.js').then(({ recoverAppShell }) =>
+					recoverAppShell({ full: q.has('reset') })
+				);
+			}
+		} catch {
+			/* ignore */
+		}
+
 		return () => {
 			stopVv();
 			stopPwa?.();
 			stopChatWake?.();
+			window.removeEventListener('vite:preloadError', onPreloadError);
 		};
 	});
 </script>
@@ -74,7 +107,7 @@
 	{/if}
 </svelte:head>
 
-{#if !appBoot.ready}
+{#if !appBoot.ready || appBoot.stuck}
 	<BootSplash />
 {:else if !signedIn}
 	<WelcomeGate />

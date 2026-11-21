@@ -4,6 +4,7 @@
 	import { actor } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { buildInviteSession, persistInviteSecrets } from '$lib/invite-bootstrap.js';
 	import {
 		canInvite,
 		canManageMembers,
@@ -107,15 +108,13 @@
 				password: mailboxPassword,
 				displayName: inviteName.trim()
 			});
-			const session = {
-				url: driveSession.url,
-				token: driveSession.token,
-				rootKey: driveSession.rootKey,
+			await persistInviteSecrets(inviteEmail, mailboxPassword);
+			const session = await buildInviteSession({
 				email: inviteEmail,
 				displayName: inviteName.trim(),
 				role: inviteRole,
 				mailboxPassword
-			};
+			});
 			const payload = await encodeInvite(session, sharePass);
 			inviteLink = inviteShareUrl(payload);
 			lastMailboxPw = mailboxPassword;
@@ -241,18 +240,18 @@
 		}
 		reshareBusy = true;
 		try {
-			/* Existing account — Drive session + profile only. No new mailbox / member row. */
-			const payload = await encodeInvite(
-				{
-					url: driveSession.url,
-					token: driveSession.token,
-					rootKey: driveSession.rootKey,
-					email: m.email,
-					displayName: m.name,
-					role: m.role === 'owner' ? 'admin' : m.role
-				},
-				resharePass
-			);
+			/* Existing account — full Team bootstrap (Drive + mailbox + pubs). */
+			const session = await buildInviteSession({
+				email: m.email,
+				displayName: m.name,
+				role: m.role === 'owner' ? 'admin' : m.role
+			});
+			if (!session.mailboxPassword) {
+				reshareMsg =
+					'No mailbox password on Drive for this member yet — open their profile Mail settings once, or create a fresh invite.';
+				return;
+			}
+			const payload = await encodeInvite(session, resharePass);
 			reshareLink = inviteShareUrl(payload);
 			reshareQr = await QRCode.toDataURL(reshareLink, {
 				errorCorrectionLevel: 'L',
