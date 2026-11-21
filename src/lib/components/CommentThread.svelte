@@ -30,7 +30,7 @@
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 
 	/**
 	 * @type {{
@@ -166,7 +166,8 @@
 		function onMove(ev) {
 			const dy = startY - ev.clientY;
 			const next = Math.round(startH + dy);
-			/* Allow undershoot so drag-under-min can dismiss. */
+			/* Allow undershoot so drag-under-min can dismiss.
+			 * Only sheetHeight → panelStyle; comment list does not read this. */
 			sheetHeight = Math.min(maxSheetHeight(), Math.max(96, next));
 		}
 
@@ -194,7 +195,11 @@
 		target.addEventListener('pointercancel', onUp);
 	}
 
-	/* Seed before paint so inbox-card comment preview → FAB count is instant. */
+	/*
+	 * Seed before paint so inbox-card comment preview → FAB count is instant.
+	 * Track type/id + chatFeed (via seed) so new matching feed tips update the
+	 * FAB; seed is write-idempotent so we don't self-invalidate into a loop.
+	 */
 	$effect.pre(() => {
 		const kind = type;
 		const id = entityId;
@@ -202,14 +207,19 @@
 		seedCommentsFromFeed(kind, id);
 	});
 
+	/*
+	 * Network reconcile once per entity — untrack so loadComments/session work
+	 * doesn't re-subscribe to commentsByKey writes (morph/drag thrash).
+	 */
 	$effect(() => {
 		const kind = type;
 		const id = entityId;
 		if (!id) return;
 		error = null;
-		/* Seeds again + reconciles from comments.json / mailbox (deduped). */
-		loadComments(kind, id).catch((e) => {
-			error = e instanceof Error ? e.message : String(e);
+		untrack(() => {
+			loadComments(kind, id).catch((e) => {
+				error = e instanceof Error ? e.message : String(e);
+			});
 		});
 	});
 

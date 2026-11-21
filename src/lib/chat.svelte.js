@@ -2,6 +2,7 @@
  * Family Chat — Drive-backed feed + comments (Chatmail notify later).
  */
 
+import { untrack } from 'svelte';
 import { activePerson, displayNameFromEmail } from './actor.svelte.js';
 import {
 	compareChatMessageAsc,
@@ -405,28 +406,40 @@ function stampCommentSeq(list) {
 /**
  * Paint comments already on the chat feed (inbox/card preview) into the
  * entity cache so FAB + CommentThread never cold-start from [].
+ * Write-idempotent: keep the existing array reference when nothing new is
+ * merged — callers in `$effect` must not rewrite `commentsByKey` every run or
+ * they self-invalidate and thrash FAB morph / drag-resize.
  * @param {'task' | 'note' | 'project' | 'mail' | 'file' | string} type
  * @param {string} entityId
  * @returns {any[]}
  */
 export function seedCommentsFromFeed(type, entityId) {
 	const key = commentKey(type, entityId);
+	const prev = commentsByKey[key];
 	/** @type {Map<string, any>} */
 	const byId = new Map();
-	for (const m of commentsByKey[key] ?? []) {
-		const id = String(m?.id || '');
-		if (id) byId.set(id, m);
+	if (prev) {
+		for (const m of prev) {
+			const id = String(m?.id || '');
+			if (id) byId.set(id, m);
+		}
 	}
 	const tid = String(entityId || '');
+	let added = false;
 	for (const m of chatFeed) {
 		if (!m || m._failed) continue;
 		if (m.kind === 'reaction' || m.kind === 'event') continue;
 		if (m.ref?.type !== type || String(m.ref?.id || '') !== tid) continue;
 		const id = String(m.id || '');
 		if (!id) continue;
-		if (!byId.has(id)) byId.set(id, m);
+		if (!byId.has(id)) {
+			byId.set(id, m);
+			added = true;
+		}
 	}
-	if (!byId.size) return commentsByKey[key] ?? [];
+	if (!byId.size) return prev ?? [];
+	/* Nothing new from feed — keep prior reference so effects don't loop. */
+	if (!added && prev) return prev;
 	const list = sortChatMessagesOldestFirst([...byId.values()]);
 	commentsByKey[key] = list;
 	return list;
@@ -444,8 +457,15 @@ export function commentsSettled(type, entityId) {
 export async function loadComments(type, entityId) {
 	const session = activeSession();
 	const key = commentKey(type, entityId);
-	/* Instant paint from inbox/feed card seed before any Drive round-trip. */
-	seedCommentsFromFeed(type, entityId);
+	/*
+	 * Instant paint from inbox/feed card seed before any Drive round-trip.
+	 * `untrack`: seed reads chatFeed + commentsByKey; without this, every
+	 * `$effect(() => loadComments(...))` re-subscribes to those writes and
+	 * re-fetches / re-seeds on every feed poll (janky FAB morph + drag).
+	 */
+	untrack(() => {
+		seedCommentsFromFeed(type, entityId);
+	});
 
 	if (!session) {
 		if (commentsByKey[key] == null) commentsByKey[key] = [];

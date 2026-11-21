@@ -1,5 +1,5 @@
 <script>
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import AlphaLogo from '$lib/components/icons/AlphaLogo.svelte';
 	import ArrowDown from '$lib/components/icons/ArrowDown.svelte';
 	import Voice from '$lib/components/icons/Voice.svelte';
@@ -296,9 +296,13 @@
 			const [type, id] = key.split(':');
 			/* Skip only when a full load already settled — seed alone still needs reconcile. */
 			if (commentsByKey[key] != null && commentsSettledByKey[key]) continue;
-			void loadComments(/** @type {'task' | 'note' | 'project' | 'mail' | 'file'} */ (type), id).catch(
-				() => {}
-			);
+			/* untrack: loadComments must not re-subscribe this effect to commentsByKey writes. */
+			untrack(() => {
+				void loadComments(
+					/** @type {'task' | 'note' | 'project' | 'mail' | 'file'} */ (type),
+					id
+				).catch(() => {});
+			});
 		}
 	});
 
