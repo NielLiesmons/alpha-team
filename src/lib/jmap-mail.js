@@ -424,20 +424,22 @@ export function groupMailThreads(messages, me) {
 	const threads = [];
 	for (const [threadId, msgs] of by) {
 		msgs.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+		const first = msgs[0];
 		const latest = msgs[msgs.length - 1];
-		/* Author focus: other party when possible — keep their real display name */
-		let authorEmail = latest.from;
-		let authorName = latest.from_name || '';
+		/* Card avatar/name: original first sender — not the latest reply author.
+		 * If we started the thread, prefer the first To recipient (or first inbound). */
+		let authorEmail = first.from;
+		let authorName = first.from_name || '';
 		if (meN && authorEmail === meN) {
-			const other = (latest.to || []).find((e) => e !== meN);
+			const other = (first.to || []).find((e) => e !== meN);
 			if (other) {
 				authorEmail = other;
-				authorName = mailPersonName(latest, other);
+				authorName = mailPersonName(first, other);
 			} else {
-				const earlier = [...msgs].reverse().find((m) => m.from && m.from !== meN);
-				if (earlier) {
-					authorEmail = earlier.from;
-					authorName = earlier.from_name || '';
+				const inbound = msgs.find((m) => m.from && m.from !== meN);
+				if (inbound) {
+					authorEmail = inbound.from;
+					authorName = inbound.from_name || '';
 				}
 			}
 		}
