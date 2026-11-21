@@ -68,7 +68,25 @@
 					onclick={() => selectEntity('note', note.id)}
 				>
 					<span class="title-row">
-						<span class="title">{note.title}</span>
+						<span class="title">{note.title || t('common.untitled')}</span>
+						{#if note._pending}
+							<span class="local-only" title={t('common.localOnly')} aria-label={t('common.localOnly')}>
+								<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<path
+										d="M4.5 12.5h7.2c1.7 0 3.1-1.3 3.1-3 0-1.5-1.1-2.7-2.5-2.9A4 4 0 0 0 4.8 5.2 3.2 3.2 0 0 0 2 8.3c0 1.8 1.3 3.2 2.5 3.2Z"
+										stroke="currentColor"
+										stroke-width="1.4"
+										stroke-linejoin="round"
+									/>
+									<path
+										d="M3 3.5 13 13.5"
+										stroke="currentColor"
+										stroke-width="1.4"
+										stroke-linecap="round"
+									/>
+								</svg>
+							</span>
+						{/if}
 						{#if creator}
 							<span class="creator" aria-hidden="true">
 								<ProfilePic
@@ -164,6 +182,15 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.local-only {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--fg-33);
+		line-height: 0;
 	}
 
 	.creator {

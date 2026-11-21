@@ -22,6 +22,7 @@ import { refreshMail } from './mail.svelte.js';
 import { beginSync, endSync, setSyncRatio } from './sync-progress.svelte.js';
 import {
 	enterprises,
+	flushPendingWorkspace,
 	notes,
 	projects,
 	refreshFromDrive,
@@ -39,6 +40,27 @@ function hasLocalWorkspace() {
 
 function isOffline() {
 	return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+let pendingFlushListenersBound = false;
+
+/**
+ * Flush deferred offline Notes/Tasks when the device returns online or foregrounds.
+ * Call once from boot (idempotent).
+ */
+export function ensurePendingFlushListeners() {
+	if (pendingFlushListenersBound || typeof window === 'undefined') return;
+	pendingFlushListenersBound = true;
+	window.addEventListener('online', () => {
+		void flushPendingWorkspace()
+			.then(() => refreshBackgroundDrive())
+			.catch((e) => console.warn('online pending flush', e));
+	});
+	document.addEventListener('visibilitychange', () => {
+		if (document.visibilityState !== 'visible') return;
+		if (isOffline()) return;
+		void flushPendingWorkspace().catch((e) => console.warn('visibility pending flush', e));
+	});
 }
 
 /** @returns {import('./drive/change-summary.svelte.js').SyncSection | null} */
@@ -98,6 +120,9 @@ export async function refreshBackgroundDrive() {
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		if (mailUi.sending) return;
+
+		/* Offline creates must upload even when tip is unchanged (no peer crawl yet). */
+		await flushPendingWorkspace();
 
 		let tip = '';
 		try {
@@ -165,6 +190,9 @@ export async function refreshAllDrive() {
 	driveSession.error = null;
 
 	try {
+		/* Push deferred offline Notes/Tasks before tip short-circuit. */
+		await flushPendingWorkspace();
+
 		let tip = '';
 		try {
 			tip = await getTip(session);

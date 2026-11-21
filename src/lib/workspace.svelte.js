@@ -376,6 +376,148 @@ export function scheduleWorkspacePersist() {
 }
 
 /**
+ * Snapshot local-only rows so a Drive replaceArray does not orphan them.
+ * @returns {{ notes: any[], tasks: any[], moments: any[] }}
+ */
+function snapshotPendingLocals() {
+	return {
+		notes: notes.filter((n) => n?._pending),
+		tasks: tasks.filter((t) => t?._pending),
+		moments: moments.filter((m) => m?._pending)
+	};
+}
+
+/**
+ * Re-attach pending locals after a server crawl (by id; skip if server already has it).
+ * @param {{ notes: any[], tasks: any[], moments: any[] }} snap
+ */
+function reapplyPendingLocals(snap) {
+	if (!snap) return;
+	for (const n of snap.notes || []) {
+		const id = String(n?.id || '');
+		if (!id || notes.some((x) => x.id === id)) continue;
+		notes.unshift({ ...n, _pending: true });
+	}
+	for (const t of snap.tasks || []) {
+		const id = String(t?.id || '');
+		if (!id || tasks.some((x) => x.id === id)) continue;
+		tasks.unshift({ ...t, _pending: true });
+	}
+	for (const m of snap.moments || []) {
+		const id = String(m?.id || '');
+		if (!id || moments.some((x) => x.id === id)) continue;
+		moments.push({ ...m, _pending: true });
+	}
+}
+
+/** @type {Promise<void> | null} */
+let flushPendingInflight = null;
+
+/**
+ * Upload deferred offline Notes / Tasks / Moments. Uses put* with the local id so
+ * chat “created” events and selection stay valid (create* would mint a new id).
+ * Retries on next online / visibility / refresh if a write fails.
+ */
+export async function flushPendingWorkspace() {
+	if (isOffline()) return;
+	const session = activeSession();
+	if (!session) return;
+	if (flushPendingInflight) return flushPendingInflight;
+
+	flushPendingInflight = (async () => {
+		const plist = () => projects.map((p) => p._drive ?? p);
+
+		for (const note of [...notes].filter((n) => n?._pending)) {
+			const idx = notes.findIndex((n) => n.id === note.id);
+			if (idx < 0) continue;
+			try {
+				const saved = await putNote(session, fromUiNote(notes[idx]));
+				const uiNote = {
+					...toUiNote(saved, plist()),
+					assignees: notes[idx].assignees ?? [],
+					author: notes[idx].author ?? saved.author ?? null
+				};
+				const i = notes.findIndex((n) => n.id === note.id || n.id === saved.id);
+				const local = i >= 0 ? notes[i] : notes[idx];
+				const confirmed = mergeConfirmed(local, uiNote);
+				delete confirmed._syncError;
+				if (i >= 0) notes[i] = confirmed;
+				if (ui.noteId === note.id) ui.noteId = confirmed.id;
+				if (ui.selection?.kind === 'note' && ui.selection.id === note.id) {
+					ui.selection = { kind: 'note', id: confirmed.id };
+				}
+			} catch (e) {
+				const i = notes.findIndex((n) => n.id === note.id);
+				if (i >= 0) {
+					notes[i]._pending = true;
+					notes[i]._syncError = e instanceof Error ? e.message : String(e);
+				}
+				console.warn('flushPending note', e);
+			}
+		}
+
+		for (const task of [...tasks].filter((t) => t?._pending)) {
+			const idx = tasks.findIndex((t) => t.id === task.id);
+			if (idx < 0) continue;
+			try {
+				const saved = await putTask(session, fromUiTask(tasks[idx]));
+				const local = tasks[idx];
+				await syncTaskScheduleMoment(session, saved.id, local._schedule, local.assignees ?? []);
+				const uiTask = {
+					...toUiTask(saved, plist()),
+					author: local.author ?? saved.author ?? null,
+					assignees: local.assignees ?? [],
+					commenters: local.commenters ?? [],
+					mail_thread_id: saved.mail_thread_id ?? local.mail_thread_id ?? null
+				};
+				const i = tasks.findIndex((t) => t.id === task.id || t.id === saved.id);
+				const confirmed = mergeConfirmed(i >= 0 ? tasks[i] : local, uiTask);
+				delete confirmed._syncError;
+				if (i >= 0) tasks[i] = confirmed;
+				if (ui.selection?.kind === 'task' && ui.selection.id === task.id) {
+					ui.selection = { kind: 'task', id: confirmed.id };
+				}
+			} catch (e) {
+				const i = tasks.findIndex((t) => t.id === task.id);
+				if (i >= 0) {
+					tasks[i]._pending = true;
+					tasks[i]._syncError = e instanceof Error ? e.message : String(e);
+				}
+				console.warn('flushPending task', e);
+			}
+		}
+
+		for (const moment of [...moments].filter((m) => m?._pending)) {
+			const idx = moments.findIndex((m) => m.id === moment.id);
+			if (idx < 0) continue;
+			try {
+				const saved = await drivePutMoment(session, moments[idx]);
+				const i = moments.findIndex((m) => m.id === moment.id || m.id === saved.id);
+				const confirmed = mergeConfirmed(i >= 0 ? moments[i] : moments[idx], saved);
+				delete confirmed._syncError;
+				if (i >= 0) moments[i] = confirmed;
+				syncTaskStatusFromMoments(saved.task_id ?? moment.task_id);
+			} catch (e) {
+				const i = moments.findIndex((m) => m.id === moment.id);
+				if (i >= 0) {
+					moments[i]._pending = true;
+					moments[i]._syncError = e instanceof Error ? e.message : String(e);
+				}
+				console.warn('flushPending moment', e);
+			}
+		}
+
+		scheduleWorkspacePersist();
+	})();
+
+	try {
+		await flushPendingInflight;
+	} finally {
+		flushPendingInflight = null;
+	}
+}
+
+/**
  * Hydrate UI from local cache before Drive round-trip (home-screen PWA).
  * @returns {Promise<boolean>} true if cache applied
  */
@@ -454,6 +596,8 @@ export async function refreshFromDrive(opts = {}) {
 			}
 		}
 
+		/* Keep deferred offline rows across the crawl — flush uploads them when online. */
+		const pendingLocals = snapshotPendingLocals();
 		await ensureSpace(session, 'Space');
 		const [{ buckets, tip }, alist] = await Promise.all([
 			loadWorkspaceLeaves(session, undefined, {
@@ -497,6 +641,7 @@ export async function refreshFromDrive(opts = {}) {
 			notes,
 			buckets.note.map((n) => toUiNote(n, plist))
 		);
+		reapplyPendingLocals(pendingLocals);
 		replaceArray(accounts, alist.length ? alist : buckets.account);
 		replaceArray(
 			ledgerEntries,

@@ -115,6 +115,7 @@
 						assignees={task.assignees ?? []}
 						momentAssignees={momentAssigneeEmails(task.id)}
 						fromMail={Boolean(mailThreadId)}
+						pending={Boolean(task._pending)}
 						onclick={() => selectEntity('task', task.id)}
 						selected={ui.selection?.kind === 'task' && ui.selection.id === task.id}
 					/>

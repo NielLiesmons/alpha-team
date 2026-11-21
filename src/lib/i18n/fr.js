@@ -42,6 +42,7 @@ export default {
 	'common.noSubject': '(sans objet)',
 	'common.deleteConfirm': 'Supprimer cet élément ({label}) ? Cette action est irréversible.',
 	'common.someone': 'Quelqu’un',
+	'common.localOnly': 'Sur cet appareil seulement — en attente de sync',
 
 	/* ── nav ──────────────────────────────────────────── */
 	'nav.settings': 'Réglages',

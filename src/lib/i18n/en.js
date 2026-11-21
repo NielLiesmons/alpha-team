@@ -42,6 +42,7 @@ export default {
 	'common.noSubject': '(no subject)',
 	'common.deleteConfirm': 'Delete this {label}? This cannot be undone.',
 	'common.someone': 'Someone',
+	'common.localOnly': 'On this device only — waiting to sync',
 
 	/* ── nav ──────────────────────────────────────────── */
 	'nav.settings': 'Settings',

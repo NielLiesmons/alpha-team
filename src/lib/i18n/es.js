@@ -42,6 +42,7 @@ export default {
 	'common.noSubject': '(sin asunto)',
 	'common.deleteConfirm': '¿Eliminar este elemento ({label})? Esta acción no se puede deshacer.',
 	'common.someone': 'Alguien',
+	'common.localOnly': 'Solo en este dispositivo — esperando sincronizar',
 
 	/* ── nav ──────────────────────────────────────────── */
 	'nav.settings': 'Ajustes',

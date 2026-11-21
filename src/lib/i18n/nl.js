@@ -42,6 +42,7 @@ export default {
 	'common.noSubject': '(geen onderwerp)',
 	'common.deleteConfirm': 'Dit item ({label}) verwijderen? Dit kan niet ongedaan worden gemaakt.',
 	'common.someone': 'Iemand',
+	'common.localOnly': 'Alleen op dit apparaat — wacht op sync',
 
 	/* ── nav ──────────────────────────────────────────── */
 	'nav.settings': 'Instellingen',

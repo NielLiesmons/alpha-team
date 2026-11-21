@@ -8,7 +8,7 @@ import { actor, loadActor } from './actor.svelte.js';
 import { refreshMembersAndAvatars, warmAvatarUrlsFromCache } from './avatar.svelte.js';
 import { hydrateChatFeedFromCache, refreshChatFeed } from './chat.svelte.js';
 import { loadDeviceProfiles } from './device-profiles.svelte.js';
-import { refreshBackgroundDrive } from './drive-refresh.js';
+import { ensurePendingFlushListeners, refreshBackgroundDrive } from './drive-refresh.js';
 import { driveSession, loadSessionFromStorage, activeSession } from './drive/session.svelte.js';
 import { hydrateMembersFromCache } from './members.svelte.js';
 import { ensurePersistentStorage } from './offline-store.js';
@@ -126,6 +126,7 @@ export async function bootApp() {
 			/* ignore */
 		}
 		appBoot.listsReady = true;
+		ensurePendingFlushListeners();
 
 		/* After Drive is up, sync space secrets so Mail/pubs work without Settings. */
 		try {
