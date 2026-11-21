@@ -16,8 +16,10 @@
 	import {
 		chatUi,
 		commentsByKey,
+		commentsSettledByKey,
 		loadComments,
 		postChatMessage,
+		seedCommentsFromFeed,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
 	import { compareChatMessageAsc } from '$lib/drive/entities.js';
@@ -61,7 +63,6 @@
 	let draft = $state('');
 	/** @type {any | null} */
 	let replyTo = $state(null);
-	let loading = $state(false);
 	/** @type {string | null} */
 	let error = $state(null);
 	/** @type {HTMLDivElement | undefined} */
@@ -85,11 +86,14 @@
 	let swiping = $state(false);
 
 	const key = $derived(`${type}:${entityId}`);
+	const settled = $derived(Boolean(commentsSettledByKey[key]));
 	const allMessages = $derived(commentsByKey[key] ?? []);
 	const messages = $derived(
 		[...visibleChatMessages(allMessages)].sort(compareChatMessageAsc)
 	);
 	const byId = $derived(new Map(messages.map((m) => [m.id, m])));
+	/** Unknown/loading with no seed — spinner, never a lying 0. */
+	const commentsPending = $derived(!settled && messages.length === 0);
 
 	const canSend = $derived(Boolean(draft.trim()));
 
@@ -190,19 +194,23 @@
 		target.addEventListener('pointercancel', onUp);
 	}
 
+	/* Seed before paint so inbox-card comment preview → FAB count is instant. */
+	$effect.pre(() => {
+		const kind = type;
+		const id = entityId;
+		if (!id) return;
+		seedCommentsFromFeed(kind, id);
+	});
+
 	$effect(() => {
 		const kind = type;
 		const id = entityId;
 		if (!id) return;
-		loading = true;
 		error = null;
-		loadComments(kind, id)
-			.catch((e) => {
-				error = e instanceof Error ? e.message : String(e);
-			})
-			.finally(() => {
-				loading = false;
-			});
+		/* Seeds again + reconciles from comments.json / mailbox (deduped). */
+		loadComments(kind, id).catch((e) => {
+			error = e instanceof Error ? e.message : String(e);
+		});
 	});
 
 	$effect(() => {
@@ -560,6 +568,7 @@
 	/** Hide count pill when empty — collapsed FAB is chat icon only. */
 	const fabCountLabel = $derived(messages.length > 0 ? String(messages.length) : '');
 	const showFabStack = $derived(messages.length > 0);
+	const showFabSpinner = $derived(commentsPending);
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -582,8 +591,9 @@
 		<button
 			type="button"
 			class="chat-pill"
-			class:icon-only={!showFabStack}
+			class:icon-only={!showFabStack && !showFabSpinner}
 			aria-label={t('comments.title')}
+			aria-busy={showFabSpinner ? 'true' : undefined}
 			onclick={() => void openSheet()}
 		>
 			<svg
@@ -601,7 +611,9 @@
 					d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
 				/>
 			</svg>
-			{#if showFabStack}
+			{#if showFabSpinner}
+				<span class="count spin" aria-hidden="true"></span>
+			{:else if showFabStack}
 				<span class="pill-stack">
 					<ProfilePicStack
 						profiles={commentatorProfiles}
@@ -645,7 +657,7 @@
 
 		<div class="sheet-body">
 			<div class="list" bind:this={listEl}>
-				{#if loading && messages.length === 0}
+				{#if commentsPending}
 					<p class="hint">{t('common.loading')}</p>
 				{:else if messages.length === 0}
 					<p class="hint">{t('comments.empty')}</p>
@@ -866,6 +878,22 @@
 
 	.chat-pill:hover {
 		color: var(--fg);
+	}
+
+	.count.spin {
+		width: 12px;
+		height: 12px;
+		min-width: 12px;
+		border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
+		border-top-color: currentColor;
+		border-radius: 50%;
+		animation: comments-fab-spin 0.65s linear infinite;
+	}
+
+	@keyframes comments-fab-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.pill-stack {

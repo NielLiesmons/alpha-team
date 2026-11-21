@@ -2170,14 +2170,23 @@ export async function listCommentIds(session, type, entityId) {
  */
 export async function listComments(session, type, entityId) {
 	const ids = await listCommentIds(session, type, entityId);
+	if (!ids.length) return [];
+	/*
+	 * One mailbox walk (cached after tip-wake) — never N× getChatMessage, which
+	 * each re-entered loadMailboxMessages and made comment FAB/panels feel cold.
+	 */
+	const { messages } = await loadMailboxMessages(session, { limit: FEED_MAX });
+	/** @type {Map<string, any>} */
+	const byId = new Map();
+	for (const m of messages) {
+		const id = String(m?.id || '');
+		if (id) byId.set(id, m);
+	}
 	/** @type {any[]} */
 	const out = [];
 	for (const id of ids) {
-		try {
-			out.push(await getChatMessage(session, id));
-		} catch {
-			/* missing leaf — skip */
-		}
+		const hit = byId.get(String(id));
+		if (hit) out.push(hit);
 	}
 	/* comments.json order is tip-race fragile — leaves define chronology. */
 	return sortChatMessagesOldestFirst(out);

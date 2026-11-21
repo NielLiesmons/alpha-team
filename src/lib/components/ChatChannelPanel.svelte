@@ -23,6 +23,7 @@
 		chatProjectBoxProps,
 		chatStatusText,
 		commentsByKey,
+		commentsSettledByKey,
 		findChatParent,
 		hydrateChatFeedFromCache,
 		isChatStatusEvent,
@@ -293,7 +294,8 @@
 		}
 		for (const key of keys) {
 			const [type, id] = key.split(':');
-			if (commentsByKey[key] != null) continue;
+			/* Skip only when a full load already settled — seed alone still needs reconcile. */
+			if (commentsByKey[key] != null && commentsSettledByKey[key]) continue;
 			void loadComments(/** @type {'task' | 'note' | 'project' | 'mail' | 'file'} */ (type), id).catch(
 				() => {}
 			);

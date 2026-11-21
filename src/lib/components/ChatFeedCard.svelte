@@ -412,6 +412,14 @@
 					{#each bodyTokens as tok, i (`${tok.type}-${i}`)}
 						{#if tok.type === 'text'}
 							{tok.value}
+						{:else if tok.type === 'link'}
+							<a
+								class="msg-link"
+								href={tok.href}
+								target="_blank"
+								rel="noopener noreferrer"
+								>{tok.value}</a
+							>
 						{:else if tok.type === 'mention'}
 							<span
 								class="mention"
@@ -1039,6 +1047,17 @@
 	.mention {
 		font-weight: 600;
 		/* Keep account color even inside outgoing white text */
+	}
+
+	.msg-link {
+		color: inherit;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		word-break: break-all;
+	}
+
+	.msg-link:hover {
+		opacity: 0.88;
 	}
 
 	.text.emoji-only-text {

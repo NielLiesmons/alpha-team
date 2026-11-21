@@ -11,7 +11,8 @@ import {
 	listFeedMessages,
 	markChatMessagesRead,
 	softDeleteChatMessage,
-	sortChatMessagesNewestFirst
+	sortChatMessagesNewestFirst,
+	sortChatMessagesOldestFirst
 } from './drive/entities.js';
 import { recentEmojis, rememberEmoji } from './emoji.js';
 import { activeSession } from './drive/session.svelte.js';
@@ -47,6 +48,17 @@ export const chatFeed = $state([]);
 /** Cache: `${type}:${id}` → messages */
 /** @type {Record<string, any[]>} */
 export const commentsByKey = $state({});
+
+/**
+ * Keys that finished at least one network load — FAB/panel treat unset as
+ * “unknown” (spinner), never a lying empty/0 before settle.
+ * @type {Record<string, boolean>}
+ */
+export const commentsSettledByKey = $state({});
+
+/** In-flight dedupe for loadComments (`type:id` → promise). */
+/** @type {Record<string, Promise<any[]>>} */
+const commentsInflight = {};
 
 export const chatUi = $state({
 	loading: false,
@@ -390,22 +402,95 @@ function stampCommentSeq(list) {
 	return list;
 }
 
+/**
+ * Paint comments already on the chat feed (inbox/card preview) into the
+ * entity cache so FAB + CommentThread never cold-start from [].
+ * @param {'task' | 'note' | 'project' | 'mail' | 'file' | string} type
+ * @param {string} entityId
+ * @returns {any[]}
+ */
+export function seedCommentsFromFeed(type, entityId) {
+	const key = commentKey(type, entityId);
+	/** @type {Map<string, any>} */
+	const byId = new Map();
+	for (const m of commentsByKey[key] ?? []) {
+		const id = String(m?.id || '');
+		if (id) byId.set(id, m);
+	}
+	const tid = String(entityId || '');
+	for (const m of chatFeed) {
+		if (!m || m._failed) continue;
+		if (m.kind === 'reaction' || m.kind === 'event') continue;
+		if (m.ref?.type !== type || String(m.ref?.id || '') !== tid) continue;
+		const id = String(m.id || '');
+		if (!id) continue;
+		if (!byId.has(id)) byId.set(id, m);
+	}
+	if (!byId.size) return commentsByKey[key] ?? [];
+	const list = sortChatMessagesOldestFirst([...byId.values()]);
+	commentsByKey[key] = list;
+	return list;
+}
+
+/**
+ * True after the first loadComments settle for this entity (network or no-session).
+ * @param {string} type
+ * @param {string} entityId
+ */
+export function commentsSettled(type, entityId) {
+	return Boolean(commentsSettledByKey[commentKey(type, entityId)]);
+}
+
 export async function loadComments(type, entityId) {
 	const session = activeSession();
 	const key = commentKey(type, entityId);
+	/* Instant paint from inbox/feed card seed before any Drive round-trip. */
+	seedCommentsFromFeed(type, entityId);
+
 	if (!session) {
-		commentsByKey[key] = [];
-		return [];
+		if (commentsByKey[key] == null) commentsByKey[key] = [];
+		commentsSettledByKey[key] = true;
+		return commentsByKey[key] ?? [];
 	}
-	try {
-		const list = await listComments(session, type, entityId);
-		stampCommentSeq(list);
-		commentsByKey[key] = list;
-		return list;
-	} catch (e) {
-		commentsByKey[key] = [];
-		throw e;
-	}
+
+	const existing = commentsInflight[key];
+	if (existing) return existing;
+
+	const pending = (async () => {
+		try {
+			const list = await listComments(session, type, entityId);
+			/** @type {Map<string, any>} */
+			const byId = new Map();
+			for (const m of list) {
+				const id = String(m?.id || '');
+				if (id) byId.set(id, m);
+			}
+			/* Keep seed / optimistic locals the tip has not listed yet. */
+			for (const m of commentsByKey[key] ?? []) {
+				const id = String(m?.id || '');
+				if (!id) continue;
+				if (id.startsWith('local-') || m._pending || m._failed) {
+					byId.set(id, m);
+					continue;
+				}
+				if (!byId.has(id)) byId.set(id, m);
+			}
+			const merged = sortChatMessagesOldestFirst([...byId.values()]);
+			stampCommentSeq(merged);
+			commentsByKey[key] = merged;
+			return merged;
+		} catch (e) {
+			/* Do not wipe a warm seed on fetch failure. */
+			if (commentsByKey[key] == null) commentsByKey[key] = [];
+			throw e;
+		} finally {
+			commentsSettledByKey[key] = true;
+			delete commentsInflight[key];
+		}
+	})();
+
+	commentsInflight[key] = pending;
+	return pending;
 }
 
 /** Quick-react defaults — matches Alpha Chat `MessageReactions.DEFAULT_EMOJI`. */

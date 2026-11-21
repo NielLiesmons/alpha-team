@@ -69,12 +69,50 @@ export function emojiOnlyInfo(body) {
 /**
  * @typedef {{ email: string, name?: string }} MentionPerson
  * @typedef {{
- *   type: 'text' | 'emoji' | 'custom' | 'mention',
+ *   type: 'text' | 'emoji' | 'custom' | 'mention' | 'link',
  *   value: string,
  *   email?: string,
- *   label?: string
+ *   label?: string,
+ *   href?: string
  * }} ChatBodyToken
  */
+
+const URL_START_RE = /^https?:\/\//i;
+/** Bare http(s) URL — trim common trailing punctuation after the match. */
+const URL_BODY_RE = /^https?:\/\/[^\s<>"'`]+/i;
+
+/**
+ * Safe http(s) href only — rejects javascript: and other schemes.
+ * @param {string} raw
+ * @returns {string | null}
+ */
+export function safeHttpHref(raw) {
+	const s = String(raw || '').trim();
+	if (!URL_START_RE.test(s)) return null;
+	try {
+		const u = new URL(s);
+		if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+		return u.href;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * @param {string} matched
+ */
+function trimUrlMatch(matched) {
+	let url = String(matched || '');
+	/* Drop trailing sentence punctuation not part of the URL. */
+	url = url.replace(/[.,;:!?]+$/g, '');
+	while (url.endsWith(')')) {
+		const opens = (url.match(/\(/g) || []).length;
+		const closes = (url.match(/\)/g) || []).length;
+		if (closes <= opens) break;
+		url = url.slice(0, -1);
+	}
+	return url;
+}
 
 /**
  * Build compact-name → person lookup for `@Mentions` (spaces stripped on insert).
@@ -118,6 +156,20 @@ export function tokenizeChatBody(body, opts = {}) {
 			out.push({ type: 'custom', value: short[0].toLowerCase() });
 			i += short[0].length;
 			continue;
+		}
+
+		/* http(s) URLs → link tokens (never javascript:) */
+		if (raw[i] === 'h' || raw[i] === 'H') {
+			const m = raw.slice(i).match(URL_BODY_RE);
+			if (m) {
+				const matched = trimUrlMatch(m[0]);
+				const href = safeHttpHref(matched);
+				if (href) {
+					out.push({ type: 'link', value: matched, href });
+					i += matched.length;
+					continue;
+				}
+			}
 		}
 
 		/* @mention — only when it resolves to a known person */
