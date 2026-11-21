@@ -2707,6 +2707,20 @@ export async function createMailMessage(session, input) {
 	const created = nowRfc3339();
 	const to = [...new Set((input.to || []).map((e) => e.trim().toLowerCase()).filter(Boolean))];
 	if (!to.length) throw new Error('Add at least one recipient');
+	const toSet = new Set(to);
+	const cc = [
+		...new Set(
+			(input.cc || []).map((e) => e.trim().toLowerCase()).filter((e) => e && !toSet.has(e))
+		)
+	];
+	const ccSet = new Set(cc);
+	const bcc = [
+		...new Set(
+			(input.bcc || [])
+				.map((e) => e.trim().toLowerCase())
+				.filter((e) => e && !toSet.has(e) && !ccSet.has(e))
+		)
+	];
 	const from = (input.from || '').trim().toLowerCase();
 	if (!from) throw new Error('Sender required');
 
@@ -2715,6 +2729,8 @@ export async function createMailMessage(session, input) {
 		id,
 		from,
 		to,
+		...(cc.length ? { cc } : {}),
+		...(bcc.length ? { bcc } : {}),
 		subject: (input.subject || '').trim() || '(no subject)',
 		body: input.body ?? '',
 		created_at: created,

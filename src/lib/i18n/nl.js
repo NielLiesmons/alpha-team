@@ -279,6 +279,9 @@ export default {
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'Aan',
 	'mail.cc': 'Cc',
+	'mail.bcc': 'Bcc',
+	'mail.ccCount': 'CC {count}',
+	'mail.bccCount': 'BCC {count}',
 	'mail.thread': 'Mailthread',
 	'mail.reply': 'Beantwoorden',
 	'mail.replyAll': 'Allen beantwoorden',

@@ -242,11 +242,36 @@ export function attachmentsFromEmail(email) {
 /**
  * @param {any} email
  */
+/**
+ * @param {any[]} addrs
+ * @returns {{ emails: string[], people: { email: string, name: string }[] }}
+ */
+function peopleFromAddrs(addrs) {
+	const list = Array.isArray(addrs) ? addrs : [];
+	/** @type {{ email: string, name: string }[]} */
+	const people = [];
+	/** @type {string[]} */
+	const emails = [];
+	/** @type {Set<string>} */
+	const seen = new Set();
+	for (const a of list) {
+		const email = String(a?.email || '')
+			.trim()
+			.toLowerCase();
+		if (!email || seen.has(email)) continue;
+		seen.add(email);
+		emails.push(email);
+		people.push({ email, name: addrDisplayName(a) });
+	}
+	return { emails, people };
+}
+
 export function toUiMessage(email) {
 	const fromAddr = email?.from?.[0] || email?.sender?.[0] || null;
 	const from = fromAddr?.email || '';
-	const toAddrs = Array.isArray(email?.to) ? email.to : [];
-	const to = toAddrs.map((a) => a?.email).filter(Boolean);
+	const toPeople = peopleFromAddrs(email?.to);
+	const ccPeople = peopleFromAddrs(email?.cc);
+	const bccPeople = peopleFromAddrs(email?.bcc);
 	const created = email?.receivedAt || email?.sentAt || new Date().toISOString();
 	const fromNorm = String(from).toLowerCase();
 	const attachments = attachmentsFromEmail(email);
@@ -256,13 +281,11 @@ export function toUiMessage(email) {
 		threadId: email.threadId || email.id,
 		from: fromNorm,
 		from_name: addrDisplayName(fromAddr),
-		to: to.map((e) => String(e).toLowerCase()),
-		to_people: toAddrs
-			.filter((a) => a?.email)
-			.map((a) => ({
-				email: String(a.email).toLowerCase(),
-				name: addrDisplayName(a)
-			})),
+		to: toPeople.emails,
+		to_people: toPeople.people,
+		cc: ccPeople.emails,
+		cc_people: ccPeople.people,
+		bcc: bccPeople.emails,
 		subject: email.subject || '(no subject)',
 		body: bodyFromEmail(email),
 		created_at: created,
@@ -361,14 +384,24 @@ export function mailPersonName(msg, email) {
 		.toLowerCase();
 	if (!e || !msg) return '';
 	if (msg.from === e && msg.from_name) return msg.from_name;
-	const hit = Array.isArray(msg.to_people)
-		? msg.to_people.find((p) => p.email === e)
-		: null;
-	if (hit?.name) return hit.name;
+	/** @param {any} row */
+	const named = (row) => {
+		const toHit = Array.isArray(row?.to_people)
+			? row.to_people.find((p) => p.email === e)
+			: null;
+		if (toHit?.name) return toHit.name;
+		const ccHit = Array.isArray(row?.cc_people)
+			? row.cc_people.find((p) => p.email === e)
+			: null;
+		if (ccHit?.name) return ccHit.name;
+		return '';
+	};
+	const direct = named(msg);
+	if (direct) return direct;
 	for (const m of msg.messages || []) {
 		if (m.from === e && m.from_name) return m.from_name;
-		const p = Array.isArray(m.to_people) ? m.to_people.find((x) => x.email === e) : null;
-		if (p?.name) return p.name;
+		const n = named(m);
+		if (n) return n;
 	}
 	return '';
 }
@@ -447,6 +480,8 @@ const EMAIL_PROPS = [
 	'subject',
 	'from',
 	'to',
+	'cc',
+	'bcc',
 	'sender',
 	'receivedAt',
 	'sentAt',
@@ -597,6 +632,8 @@ function htmlToPlain(html) {
  * @param {string} password
  * @param {{
  *   to: string[],
+ *   cc?: string[],
+ *   bcc?: string[],
  *   subject: string,
  *   body: string,
  *   fromName?: string,
@@ -613,6 +650,22 @@ export async function sendJmapMail(email, password, input) {
 	const apiUrl = session.apiUrl || `${jmapBase()}/`;
 	const to = [...new Set((input.to || []).map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
 	if (!to.length) throw new Error('Add at least one recipient');
+	const toSet = new Set(to);
+	const cc = [
+		...new Set(
+			(input.cc || [])
+				.map((e) => String(e).trim().toLowerCase())
+				.filter((e) => e && !toSet.has(e))
+		)
+	];
+	const ccSet = new Set(cc);
+	const bcc = [
+		...new Set(
+			(input.bcc || [])
+				.map((e) => String(e).trim().toLowerCase())
+				.filter((e) => e && !toSet.has(e) && !ccSet.has(e))
+		)
+	];
 	const subject = String(input.subject || '').trim() || '(no subject)';
 	const body = String(input.body || '');
 	const fromEmail = String(email || '')
@@ -643,6 +696,8 @@ export async function sendJmapMail(email, password, input) {
 		subject,
 		'header:Message-ID:asText': ourMessageId
 	};
+	if (cc.length) draft.cc = cc.map((e) => ({ email: e }));
+	if (bcc.length) draft.bcc = bcc.map((e) => ({ email: e }));
 
 	if (looksHtml) {
 		const plain = htmlToPlain(body) || ' ';

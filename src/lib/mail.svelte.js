@@ -57,6 +57,9 @@ function thinMailMessage(msg) {
 		from_name: msg.from_name,
 		to: Array.isArray(msg.to) ? msg.to : [],
 		to_people: Array.isArray(msg.to_people) ? msg.to_people : undefined,
+		cc: Array.isArray(msg.cc) ? msg.cc : undefined,
+		cc_people: Array.isArray(msg.cc_people) ? msg.cc_people : undefined,
+		bcc: Array.isArray(msg.bcc) ? msg.bcc : undefined,
 		subject: msg.subject,
 		body,
 		created_at: msg.created_at,
@@ -395,17 +398,57 @@ export function isOtherMail(thread) {
 }
 
 /**
+ * External From addresses across a thread (excludes me).
+ * Used so follow-ups from a new multi-recipient sender stay with an
+ * already-accepted conversation instead of bouncing back to Requests.
+ * @param {any} thread
+ * @returns {string[]}
+ */
+function threadAuthorEmails(thread) {
+	const me = mailActorEmail();
+	/** @type {Set<string>} */
+	const out = new Set();
+	/** @param {unknown} raw */
+	const add = (raw) => {
+		const e = normEmail(raw);
+		if (e && e !== me) out.add(e);
+	};
+	add(thread?.from);
+	add(thread?._latestFrom);
+	for (const m of threadMessages(thread)) add(m?.from);
+	return [...out];
+}
+
+/**
  * Triage category for a thread.
  * Explicit contact buckets win. Uncategorized people stay in Requests (`new`);
  * newsletter heuristics only suggest the Accept CTA (see isUpdatesMail).
  * Transactional senders still auto-file to Other.
+ *
+ * Multi-recipient follow-ups: if *any* prior author on the thread is already
+ * bucketed (Accept / News / Other), inherit that bucket — do not re-file the
+ * conversation into Requests when a different participant replies.
  * @param {any} thread
  * @returns {import('./mail-view.svelte.js').MailCategory}
  */
 export function mailCategoryFor(thread) {
-	const contact = normEmail(thread?.from || thread?._latestFrom);
-	const bucket = contact ? contactBucket(contact) : null;
-	if (bucket === 'primary' || bucket === 'updates' || bucket === 'other') return bucket;
+	const focus = normEmail(thread?.from || thread?._latestFrom);
+	const focusBucket = focus ? contactBucket(focus) : null;
+	if (focusBucket === 'primary' || focusBucket === 'updates' || focusBucket === 'other') {
+		return focusBucket;
+	}
+
+	/** @type {import('./mail-view.svelte.js').MailCategory | null} */
+	let inherited = null;
+	for (const email of threadAuthorEmails(thread)) {
+		const bucket = contactBucket(email);
+		if (bucket === 'primary') return 'primary';
+		if (bucket === 'updates' || bucket === 'other') {
+			if (!inherited || (bucket === 'updates' && inherited === 'other')) inherited = bucket;
+		}
+	}
+	if (inherited) return inherited;
+
 	if (isOtherMail(thread)) return 'other';
 	return 'new';
 }
@@ -1006,11 +1049,13 @@ const recentSendFp = new Map();
 const SEND_DEDUP_MS = 20_000;
 
 /**
- * @param {{ to: string[], subject: string, body: string, threadId?: string }} input
+ * @param {{ to: string[], cc?: string[], bcc?: string[], subject: string, body: string, threadId?: string }} input
  */
 function sendFingerprint(input) {
 	return [
 		(input.to || []).map(normEmail).filter(Boolean).sort().join(','),
+		(input.cc || []).map(normEmail).filter(Boolean).sort().join(','),
+		(input.bcc || []).map(normEmail).filter(Boolean).sort().join(','),
 		String(input.subject || '')
 			.trim()
 			.toLowerCase(),
@@ -1027,6 +1072,8 @@ function sendFingerprint(input) {
  * Guaranteed single network submission per fingerprint.
  * @param {{
  *   to: string[],
+ *   cc?: string[],
+ *   bcc?: string[],
  *   subject: string,
  *   body: string,
  *   threadId?: string,
@@ -1040,11 +1087,21 @@ export function sendMail(input) {
 	if (!from) throw new Error('Pick who you are in Settings first');
 	const to = [...new Set((input.to || []).map(normEmail).filter(Boolean))];
 	if (!to.length) throw new Error('Add at least one recipient');
+	const toSet = new Set(to);
+	const cc = [
+		...new Set((input.cc || []).map(normEmail).filter((e) => e && !toSet.has(e)))
+	];
+	const ccSet = new Set(cc);
+	const bcc = [
+		...new Set(
+			(input.bcc || []).map(normEmail).filter((e) => e && !toSet.has(e) && !ccSet.has(e))
+		)
+	];
 	const subject = (input.subject || '').trim();
 	const body = (input.body || '').trim();
 	if (!subject && !body) throw new Error('Write a subject or body');
 
-	const fp = sendFingerprint({ to, subject, body, threadId: input.threadId });
+	const fp = sendFingerprint({ to, cc, bcc, subject, body, threadId: input.threadId });
 	const recentAt = recentSendFp.get(fp) || 0;
 	if (sendInflight.has(fp) || Date.now() - recentAt < SEND_DEDUP_MS) {
 		/* Same send already in flight / just completed — do not submit again. */
@@ -1076,6 +1133,8 @@ export function sendMail(input) {
 		from: normEmail(from),
 		from_name: fromName,
 		to,
+		cc,
+		bcc,
 		subject: subject || '(no subject)',
 		body,
 		created_at: scheduled ? new Date(scheduleMs).toISOString() : now,
@@ -1101,6 +1160,8 @@ export function sendMail(input) {
 			if (me && pw) {
 				created = await sendJmapMail(me, pw, {
 					to,
+					cc,
+					bcc,
 					subject: subject || '(no subject)',
 					body,
 					fromName,
@@ -1125,6 +1186,8 @@ export function sendMail(input) {
 					created = await createMailMessage(session, {
 						from,
 						to,
+						cc,
+						bcc,
 						subject: subject || '(no subject)',
 						body
 					});
@@ -1310,6 +1373,31 @@ export function mailComposeSubject(subject, kind) {
 }
 
 /**
+ * Cc addresses on a message (UI list or raw JMAP).
+ * @param {any} msg
+ * @returns {string[]}
+ */
+export function mailCcEmails(msg) {
+	/** @type {string[]} */
+	const out = [];
+	/** @type {Set<string>} */
+	const seen = new Set();
+	/** @param {unknown} raw */
+	const push = (raw) => {
+		const e = normEmail(raw);
+		if (!e || seen.has(e)) return;
+		seen.add(e);
+		out.push(e);
+	};
+	if (Array.isArray(msg?.cc)) {
+		for (const e of msg.cc) push(e);
+	}
+	const jmapCc = Array.isArray(msg?._jmap?.cc) ? msg._jmap.cc : [];
+	for (const a of jmapCc) push(a?.email);
+	return out;
+}
+
+/**
  * Reply-all is the default when the message has more than one other party (to/cc + from).
  * @param {any} msg
  * @param {string} [meEmail]
@@ -1319,7 +1407,7 @@ export function preferReplyAll(msg, meEmail = '') {
 	const parties = new Set();
 	const from = normEmail(msg?.from);
 	if (from && from !== me) parties.add(from);
-	for (const e of [...(msg?.to || []), ...(msg?.cc || [])]) {
+	for (const e of [...(msg?.to || []), ...mailCcEmails(msg)]) {
 		const n = normEmail(e);
 		if (n && n !== me) parties.add(n);
 	}
@@ -1328,6 +1416,8 @@ export function preferReplyAll(msg, meEmail = '') {
 
 /**
  * Seed fields for Reply / Reply all / Forward composers.
+ * Reply-all mirrors normal clients: To = From (or original To if from me),
+ * Cc = everyone else on To/Cc except me.
  * @param {any} thread
  * @param {'reply' | 'replyAll' | 'forward'} mode
  */
@@ -1364,6 +1454,8 @@ export function mailComposeSeed(thread, mode) {
 			.join('\n');
 		return {
 			to: '',
+			cc: '',
+			bcc: '',
 			subject: mailComposeSubject(subject, 'fwd'),
 			body: quoted,
 			threadId: '',
@@ -1374,20 +1466,33 @@ export function mailComposeSeed(thread, mode) {
 
 	/** @type {string[]} */
 	let to = [];
+	/** @type {string[]} */
+	let cc = [];
+	const lastCc = mailCcEmails(last);
+
 	if (mode === 'replyAll') {
-		if (from && from !== me) to.push(from);
-		for (const e of last?.to || []) {
+		if (from && from !== me) {
+			to = [from];
+		} else {
+			to = (last?.to || []).map(normEmail).filter((e) => e && e !== me);
+		}
+		/** @type {Set<string>} */
+		const toSet = new Set(to);
+		for (const e of [...(last?.to || []), ...lastCc]) {
 			const n = normEmail(e);
-			if (n && n !== me && !to.includes(n)) to.push(n);
+			if (n && n !== me && !toSet.has(n) && !cc.includes(n)) cc.push(n);
 		}
 	} else if (from === me) {
 		to = (last?.to || []).map(normEmail).filter((e) => e && e !== me);
+		cc = lastCc.filter((e) => e && e !== me && !to.includes(e));
 	} else if (from) {
 		to = [from];
 	}
 
 	return {
 		to: to.join(', '),
+		cc: cc.join(', '),
+		bcc: '',
 		subject: mailComposeSubject(subject, 're'),
 		body: '',
 		threadId,

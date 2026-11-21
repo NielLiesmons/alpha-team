@@ -21,6 +21,7 @@
 	import {
 		formatMailWhen,
 		mailAuthorLabel,
+		mailCcEmails,
 		mailComposeSeed,
 		mailLatestMessage,
 		mailPriorityFor,
@@ -170,12 +171,17 @@
 			return out;
 		}
 
+		const ccPeople = Array.isArray(m?.cc_people) ? m.cc_people : [];
+		if (ccPeople.length) {
+			for (const p of ccPeople) push(p?.email, p?.name);
+			return out;
+		}
 		const jmapCc = Array.isArray(m?._jmap?.cc) ? m._jmap.cc : [];
 		if (jmapCc.length) {
 			for (const a of jmapCc) push(a?.email, a?.name);
 			return out;
 		}
-		for (const e of m?.cc || []) push(e);
+		for (const e of mailCcEmails(m)) push(e);
 		return out;
 	}
 
@@ -221,6 +227,8 @@
 					from: m.from,
 					from_name: m.from_name,
 					to: m.to,
+					cc: m.cc || mailCcEmails(m),
+					cc_people: m.cc_people,
 					subject: m.subject,
 					body: m.body,
 					created_at: m.created_at,
@@ -330,6 +338,7 @@
 				{@const fromName = mailAuthorLabel(m) || displayNameFromEmail(m.from)}
 				{@const domain = emailDomain(fromEmail)}
 				{@const toPeople = mailRecipientPeople(m, 'to')}
+				{@const ccPeople = mailRecipientPeople(m, 'cc')}
 				{@const toLine = toPeople.map((p) => p.name).filter(Boolean).join(', ')}
 				{@const parts = splitMailQuote(m.body || '')}
 				{@const rich = isHtmlMailBody(m.body) && !parts.collapsible}
@@ -365,19 +374,28 @@
 								</span>
 							</div>
 							<div class="mail-panel-row2">
-								{#if toPeople.length}
+								{#if toPeople.length || ccPeople.length}
 									<button
 										type="button"
 										class="mail-panel-to"
 										class:open={recipientsOpen}
 										data-no-swipe-reply
-										aria-label={`${t('mail.to')}: ${toLine}`}
+										aria-label={`${t('mail.to')}: ${toLine}${
+											ccPeople.length
+												? `, ${t('mail.ccCount', { count: ccPeople.length })}`
+												: ''
+										}`}
 										aria-expanded={recipientsOpen}
 										aria-haspopup="dialog"
 										onclick={(e) => toggleRecipientsMenu(quoteId, e.currentTarget, e)}
 									>
 										<span class="to-label">{t('mail.to')}:</span>
-										{toLine}
+										{toLine || '—'}
+										{#if ccPeople.length}
+											<span class="cc-count"
+												>{t('mail.ccCount', { count: ccPeople.length })}</span
+											>
+										{/if}
 									</button>
 								{:else}
 									<p class="mail-panel-to static">
@@ -837,6 +855,19 @@
 	.to-label {
 		font-weight: 550;
 		color: inherit;
+	}
+
+	.cc-count {
+		margin-left: 0.35em;
+		font-weight: 550;
+		color: inherit;
+		opacity: 0.9;
+	}
+
+	.cc-count::before {
+		content: '·';
+		margin-right: 0.35em;
+		opacity: 0.7;
 	}
 
 	.recipients-popover {
