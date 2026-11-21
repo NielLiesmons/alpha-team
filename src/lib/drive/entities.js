@@ -2260,7 +2260,7 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	 * from post-mailbox sends and abandoned older Space history).
 	 */
 	try {
-		const migrated = await migrateLegacyChatToMailbox(session);
+		const migrated = await migrateLegacyChatToMailbox(session, { knownMessages: messages });
 		if (migrated > 0) {
 			({ messages } = await loadMailboxMessages(session, {
 				limit,
@@ -2294,9 +2294,10 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
  * Safe with an existing tip: only appends message ids not already in the mailbox
  * (does not rewrite or drop newer mailbox-only rows).
  * @param {import('./client.js').DriveSession} session
+ * @param {{ knownMessages?: any[] }} [opts]
  * @returns {Promise<number>} messages appended
  */
-export async function migrateLegacyChatToMailbox(session) {
+export async function migrateLegacyChatToMailbox(session, opts = {}) {
 	if (!session) return 0;
 	if (legacyChatMigrateInflight) return legacyChatMigrateInflight;
 
@@ -2343,9 +2344,13 @@ export async function migrateLegacyChatToMailbox(session) {
 
 		/** @type {Set<string>} */
 		let have = new Set();
+		const known = Array.isArray(opts.knownMessages) ? opts.knownMessages : null;
 		try {
-			const { messages } = await loadMailboxMessages(session, { limit: FEED_MAX });
-			for (const m of messages) {
+			const rows =
+				known && known.length
+					? known
+					: (await loadMailboxMessages(session, { limit: FEED_MAX })).messages;
+			for (const m of rows) {
 				const id = String(m?.id || '');
 				if (id) have.add(id);
 			}

@@ -541,13 +541,40 @@ export async function loadMailboxMessages(session, opts = {}) {
 	const stopAt = String(opts.stopAt || '');
 	const cacheKey = sessionCacheKey(session);
 	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+	/* Cold boot: rehydrate durable chatmail snapshot before any tip walk. */
+	if (!mailboxFeedCache || mailboxFeedCache.key !== cacheKey) {
+		try {
+			const snap = await idbGet(mailboxFeedIdbKey(session));
+			if (
+				snap &&
+				typeof snap === 'object' &&
+				Array.isArray(snap.messages) &&
+				snap.messages.length > 0
+			) {
+				mailboxFeedCache = {
+					key: cacheKey,
+					tip: String(snap.tip || ''),
+					messages: snap.messages.map((m) => structuredClone(m))
+				};
+				if (mailboxFeedCache.tip) {
+					mailboxTipCache = { key: cacheKey, tip: mailboxFeedCache.tip };
+				}
+			}
+		} catch {
+			/* ignore */
+		}
+	}
 	let tip = opts.tip != null ? String(opts.tip) : '';
 	if (!tip) {
 		try {
 			tip = await getNamedTip(session, CHAT_TIP_NAME, opts.signal);
 		} catch (e) {
 			if (e?.name === 'AbortError') throw e;
-			if (mailboxFeedCache && mailboxFeedCache.key === cacheKey) {
+			if (
+				mailboxFeedCache &&
+				mailboxFeedCache.key === cacheKey &&
+				mailboxFeedCache.messages.length > 0
+			) {
 				return {
 					tip: mailboxFeedCache.tip || '',
 					messages: mailboxFeedCache.messages.map((m) => structuredClone(m))
