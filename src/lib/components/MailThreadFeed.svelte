@@ -891,7 +891,6 @@
 		font-size: 11px;
 		font-weight: 600;
 		letter-spacing: 0.02em;
-		text-transform: uppercase;
 		color: var(--fg-33);
 	}
 

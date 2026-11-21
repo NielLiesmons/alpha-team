@@ -469,7 +469,7 @@
 		</div>
 
 		{#if ccOpen}
-			<div class="recipients-row sub">
+			<div class="recipients-row extra" class:suggesting={menuOpen && activeField === 'cc'}>
 				<span class="field-label">{t('mail.cc')}</span>
 				<div class="recipients-field">
 					{#each ccRecipients as email (email)}
@@ -551,7 +551,7 @@
 		{/if}
 
 		{#if bccOpen}
-			<div class="recipients-row sub">
+			<div class="recipients-row extra" class:suggesting={menuOpen && activeField === 'bcc'}>
 				<span class="field-label">{t('mail.bcc')}</span>
 				<div class="recipients-field">
 					{#each bccRecipients as email (email)}
@@ -745,9 +745,13 @@
 		padding: 10px 16px 8px;
 	}
 
-	.recipients-row.sub {
+	.recipients-row.extra {
 		padding-top: 0;
 		z-index: 3;
+	}
+
+	.recipients-row.extra.suggesting {
+		z-index: 5;
 	}
 
 	.field-label {
