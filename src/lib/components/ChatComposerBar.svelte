@@ -958,7 +958,7 @@
 	.composer-body.voice-on .send-span {
 		grid-column: 2;
 		grid-row: 1 / -1;
-		align-self: stretch;
+		align-self: center;
 		justify-self: end;
 	}
 
@@ -1016,16 +1016,22 @@
 		color: #fff;
 	}
 
-	/* Square send that matches both voice rows in height (not a tall portrait pill). */
+	/*
+	 * Voice send: hard square. Do NOT use aspect-ratio + stretch — grid
+	 * `align-self: stretch` on row 1/-1 wins height while width stays content-sized → portrait.
+	 */
 	.side-btn.send.send-span {
-		width: auto;
-		height: auto;
-		min-width: 0;
-		min-height: 0;
-		aspect-ratio: 1 / 1;
+		width: 52px;
+		height: 52px;
+		min-width: 52px;
+		min-height: 52px;
+		max-width: 52px;
+		max-height: 52px;
+		flex-shrink: 0;
+		align-self: center;
 		margin: 7px 7px 7px 0;
 		border-radius: 14px;
-		align-self: stretch;
+		box-sizing: border-box;
 	}
 
 	.side-btn.send .send-ico {
