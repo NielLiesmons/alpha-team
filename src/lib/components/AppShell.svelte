@@ -1,6 +1,5 @@
 <script>
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
-	import { page } from '$app/stores';
 	import {
 		activeWebsite,
 		mobileNavForRole,
@@ -85,13 +84,19 @@
 
 	let { children } = $props();
 
-	/* `$page` store — `$app/state` page.url lagged behind location on mobile nav switches. */
-	const path = $derived($page.url.pathname);
+	/**
+	 * Path for chrome — updated from before/afterNavigate (not $page / $app/state).
+	 * Those lagged behind location.pathname during mobile drawer section switches,
+	 * leaving list-chat / titles stuck on Chat while Mail was on screen.
+	 */
+	let path = $state(
+		typeof window !== 'undefined' ? window.location.pathname : '/'
+	);
 	const chatList = $derived(path.startsWith('/chat'));
 	const mailList = $derived(path.startsWith('/mail'));
 	/**
 	 * Mobile section switch: blank the list pane immediately so the previous
-	 * page never flashes (and so a mid-nav trap race can’t paint stale UI).
+	 * page never flashes.
 	 */
 	let listBlank = $state(false);
 
@@ -108,12 +113,15 @@
 	}
 
 	beforeNavigate(({ from, to }) => {
+		if (to?.url?.pathname) path = to.url.pathname;
 		if (!isMobileNav() || !from || !to) return;
 		if (sectionRoot(from.url.pathname) === sectionRoot(to.url.pathname)) return;
 		listBlank = true;
 	});
 
-	afterNavigate(() => {
+	afterNavigate(({ to }) => {
+		if (to?.url?.pathname) path = to.url.pathname;
+		else if (typeof window !== 'undefined') path = window.location.pathname;
 		listBlank = false;
 	});
 	const commsFeed = $derived(chatList || mailList);
@@ -724,13 +732,7 @@
 		<MediaLightbox />
 	{/snippet}
 
-	<!--
-		Key by section root so a failed/partial mobile nav never reuses a stale
-		page instance; listBlank CSS-hides during the swap so the old UI never flashes.
-	-->
-	{#key sectionRoot(path)}
-		{@render children()}
-	{/key}
+	{@render children()}
 </UiShell>
 
 <style>

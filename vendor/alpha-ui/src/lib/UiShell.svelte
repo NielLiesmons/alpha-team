@@ -165,8 +165,6 @@
 	let lastNavHref = '';
 	/** Detail pane covering the list — hide the menu chrome so back stays usable. */
 	let detailCovering = $state(false);
-	/** @type {ReturnType<typeof setTimeout> | null} */
-	let navTrapTimer = null;
 	/**
 	 * Chat width morph only after a compact↔wide toggle on Chat —
 	 * never when first landing on the section (wide is the default).
@@ -375,24 +373,8 @@
 		const useHistory = opts.history !== false;
 		menuDrag = null;
 		mobileNavOpen = true;
-		if (useHistory && typeof history !== 'undefined' && !history.state?.alphaNav) {
-			ignoreNavPop = true;
-			/*
-			 * Do not clone sveltekit:navigation ids onto this entry — that raced
-			 * SvelteKit goto and left the list pane empty on every other switch.
-			 */
-			history.pushState(
-				{
-					alphaShell: true,
-					alphaPath: window.location.pathname,
-					alphaNav: true
-				},
-				''
-			);
-			queueMicrotask(() => {
-				ignoreNavPop = false;
-			});
-		}
+		/* Never pushState for the drawer — it raced SvelteKit section goto. */
+		void useHistory;
 	}
 
 	function toggleMobileNav() {
@@ -473,66 +455,19 @@
 	});
 
 	/**
-	 * Arm a same-URL history entry so Android back opens the nav instead of
-	 * leaving. MUST NOT run synchronously during SvelteKit goto — copying
-	 * `sveltekit:navigation` onto a duplicate pushState left the list pane
-	 * empty ~50% of the time when switching sections (Chat especially).
+	 * Android-back “trap” pushState is DISABLED — it raced SvelteKit goto and
+	 * left the list pane empty ~50% of the time on section switches (live repro).
+	 * Same-URL back still opens the drawer via popstate without pushing.
 	 */
 	function rearmNavTrap() {
-		if (typeof window === 'undefined' || typeof history === 'undefined') return;
-		if (!isMobileShell()) return;
-		if (detailOpen()) return;
-		if (history.state?.alphaNav || history.state?.alphaNavTrap) return;
-		const path = window.location.pathname;
-		ignoreNavPop = true;
-		/*
-		 * Mark the current SK entry, then push a trap entry WITHOUT cloning
-		 * sveltekit:history / sveltekit:navigation ids (those must stay unique).
-		 */
-		const cur = history.state || {};
-		history.replaceState(
-			{ ...cur, alphaShell: true, alphaPath: path },
-			''
-		);
-		history.pushState(
-			{ alphaShell: true, alphaPath: path, alphaNavTrap: true },
-			''
-		);
-		queueMicrotask(() => {
-			ignoreNavPop = false;
-		});
+		/* no-op — see comment above */
 	}
 
-	/*
-	 * Do NOT rearm the Android-back trap on every activeHref change.
-	 * pushState during/after SvelteKit goto left the list pane empty ~50% of
-	 * the time (Chat especially). Trap is re-armed only after popstate consumes
-	 * it (rearmNavTrap) and once on first mobile paint below.
-	 */
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		if (!isMobileViewport) return;
 		activeHref;
 		navArmedPath = window.location.pathname;
-	});
-
-	/* One initial trap after mobile shell is known — never on section switches. */
-	$effect(() => {
-		if (typeof window === 'undefined') return;
-		if (!isMobileViewport) return;
-		if (navTrapTimer != null) clearTimeout(navTrapTimer);
-		navTrapTimer = setTimeout(() => {
-			navTrapTimer = null;
-			if (!isMobileShell()) return;
-			if (history.state?.alphaNav || history.state?.alphaNavTrap) return;
-			rearmNavTrap();
-		}, 100);
-		return () => {
-			if (navTrapTimer != null) {
-				clearTimeout(navTrapTimer);
-				navTrapTimer = null;
-			}
-		};
 	});
 
 	/* Android / browser back: sync drawer to history, or open when still on this list. */
