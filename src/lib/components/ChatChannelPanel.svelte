@@ -85,7 +85,7 @@
 	let fileInputEl = $state();
 	let attachOpen = $state(false);
 	const attachItems = $derived([
-		{ kind: 'photo', label: t('nav.photos'), icon: 'albums' },
+		{ kind: 'photo', label: t('nav.photos'), icon: 'photos' },
 		{ kind: 'file', label: t('chat.file'), icon: 'folder' },
 		{ kind: 'note', label: t('create.note'), icon: 'notes' },
 		{ kind: 'task', label: t('create.task'), icon: 'tasks' },

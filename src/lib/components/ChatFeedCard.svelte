@@ -80,12 +80,19 @@
 	let overlayOpen = $state(false);
 	let overlayX = $state(0);
 	let overlayY = $state(0);
+	/** Explicit Select action — default bubbles suppress selection / callout. */
+	let textSelectable = $state(false);
+	/** @type {HTMLElement | undefined} */
+	let bubbleEl = $state();
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let holdTimer = null;
-	let holdFired = false;
+	/** Long-press armed; overlay opens on pointerup (never under a still-down finger). */
+	let holdArmed = false;
 	let moved = false;
 	/** @type {{ x: number, y: number } | null} */
 	let holdOrigin = null;
+	/** @type {number | null} */
+	let activePointerId = null;
 	const isDeleted = $derived(Boolean(msg?.deleted || msg?.deleted_at));
 
 	const isDark = $derived.by(() => {
@@ -210,6 +217,7 @@
 	/** @param {number} x @param {number} y */
 	function openOverlayAt(x, y) {
 		if (isDeleted) return;
+		textSelectable = false;
 		overlayX = x;
 		overlayY = y;
 		overlayOpen = true;
@@ -235,53 +243,96 @@
 		}
 	}
 
+	function resetGesture() {
+		clearHold();
+		holdOrigin = null;
+		holdArmed = false;
+		moved = false;
+		activePointerId = null;
+	}
+
 	/** @param {PointerEvent} e */
 	function onBubblePointerDown(e) {
 		if (isDeleted) return;
 		if (isBubbleInteractiveTarget(e.target)) return;
 		if (e.pointerType === 'mouse') return;
-		holdFired = false;
+		if (textSelectable) return;
+		holdArmed = false;
 		moved = false;
 		holdOrigin = { x: e.clientX, y: e.clientY };
+		activePointerId = e.pointerId;
+		try {
+			e.currentTarget?.setPointerCapture?.(e.pointerId);
+		} catch {
+			/* ignore */
+		}
 		clearHold();
+		const sx = e.clientX;
+		const sy = e.clientY;
 		holdTimer = setTimeout(() => {
-			holdFired = true;
-			openOverlayAt(e.clientX, e.clientY);
+			holdArmed = true;
 			holdTimer = null;
-		}, 450);
+			/* Suppress iOS callout / selection — open happens on pointerup. */
+			try {
+				window.getSelection()?.removeAllRanges();
+			} catch {
+				/* ignore */
+			}
+			if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+				try {
+					navigator.vibrate(8);
+				} catch {
+					/* ignore */
+				}
+			}
+			/* Keep last coords if finger drifted slightly while holding. */
+			holdOrigin = { x: sx, y: sy };
+		}, 420);
 	}
 
 	/** @param {PointerEvent} e */
 	function onBubblePointerUp(e) {
-		const wasHold = holdFired;
+		if (activePointerId != null && e.pointerId !== activePointerId) return;
+		const wasHold = holdArmed;
 		const wasMoved = moved;
-		clearHold();
-		holdOrigin = null;
+		const ox = holdOrigin?.x ?? e.clientX;
+		const oy = holdOrigin?.y ?? e.clientY;
+		try {
+			e.currentTarget?.releasePointerCapture?.(e.pointerId);
+		} catch {
+			/* ignore */
+		}
+		resetGesture();
 		if (e.pointerType === 'mouse' || isDeleted) return;
+		if (textSelectable) return;
 		if (isBubbleInteractiveTarget(e.target)) return;
-		/* Short tap (no hold, no drag) opens overlay — Alpha Chat BubbleSwiper. */
-		if (!wasHold && !wasMoved) openOverlayAt(e.clientX, e.clientY);
+		/*
+		 * Open on pointerup only — tap OR long-press. Never open under a still-down
+		 * finger (that was landing accidental reactions on the first release).
+		 */
+		if (wasHold || !wasMoved) openOverlayAt(ox, oy);
 	}
 
 	/** @param {PointerEvent} e */
 	function onBubblePointerMove(e) {
 		if (!holdOrigin) return;
+		if (activePointerId != null && e.pointerId !== activePointerId) return;
 		const dx = e.clientX - holdOrigin.x;
 		const dy = e.clientY - holdOrigin.y;
 		if (dx * dx + dy * dy > 100) {
 			moved = true;
 			clearHold();
+			holdArmed = false;
 		}
 	}
 
 	function onBubblePointerCancel() {
-		clearHold();
-		holdOrigin = null;
-		moved = false;
+		resetGesture();
 	}
 
 	/** @param {MouseEvent} e */
 	function onBubbleContextMenu(e) {
+		if (textSelectable) return;
 		if (isBubbleInteractiveTarget(e.target)) return;
 		e.preventDefault();
 		if (isDeleted) return;
@@ -291,6 +342,43 @@
 	function handleReply() {
 		overlayOpen = false;
 		onReply?.();
+	}
+
+	async function handleCopy() {
+		const text = String(msg?.body || '').trim();
+		if (!text) return;
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			/* fallback */
+			try {
+				const ta = document.createElement('textarea');
+				ta.value = text;
+				ta.setAttribute('readonly', '');
+				ta.style.position = 'fixed';
+				ta.style.opacity = '0';
+				document.body.appendChild(ta);
+				ta.select();
+				document.execCommand('copy');
+				ta.remove();
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+
+	function handleSelect() {
+		textSelectable = true;
+		overlayOpen = false;
+		queueMicrotask(() => {
+			const el = bubbleEl;
+			if (!el) return;
+			const range = document.createRange();
+			range.selectNodeContents(el);
+			const sel = window.getSelection();
+			sel?.removeAllRanges();
+			sel?.addRange(range);
+		});
 	}
 
 	async function handleDelete() {
@@ -388,6 +476,7 @@
 			{:else}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
+				bind:this={bubbleEl}
 				class="bubble"
 				class:quoted={isReply}
 				class:mine={isMine}
@@ -395,14 +484,15 @@
 				class:stack-first={stackFirst}
 				class:stack-last={stackLast}
 				class:stack-mid={!stackFirst && !stackLast}
-			onpointerdown={onBubblePointerDown}
-			onpointerup={onBubblePointerUp}
-			onpointermove={onBubblePointerMove}
-			onpointercancel={onBubblePointerCancel}
-			oncontextmenu={onBubbleContextMenu}
-			role="group"
-			aria-label={isMine ? t('chat.yourMessage') : t('chat.messageFrom', { name })}
-		>
+				class:selectable={textSelectable}
+				onpointerdown={onBubblePointerDown}
+				onpointerup={onBubblePointerUp}
+				onpointermove={onBubblePointerMove}
+				onpointercancel={onBubblePointerCancel}
+				oncontextmenu={onBubbleContextMenu}
+				role="group"
+				aria-label={isMine ? t('chat.yourMessage') : t('chat.messageFrom', { name })}
+			>
 			{#if showAuthor && stackFirst && !emojiOnly && !isMine}
 				<div class="bubble-head">
 					<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
@@ -724,6 +814,8 @@
 	onclose={() => (overlayOpen = false)}
 	onreact={(emoji) => void onReact(emoji)}
 	onreply={handleReply}
+	oncopy={String(msg?.body || '').trim() ? () => void handleCopy() : null}
+	onselect={() => handleSelect()}
 	ondelete={isMine ? () => void handleDelete() : null}
 />
 
@@ -848,8 +940,15 @@
 		text-align: left;
 		font: inherit;
 		-webkit-touch-callout: none;
-		user-select: text;
+		-webkit-user-select: none;
+		user-select: none;
 		touch-action: manipulation;
+	}
+
+	.bubble.selectable {
+		-webkit-touch-callout: default;
+		-webkit-user-select: text;
+		user-select: text;
 	}
 
 	.bubble.mine {

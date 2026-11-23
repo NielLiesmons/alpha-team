@@ -19,9 +19,9 @@
 	import { openChatRef } from '$lib/chat.svelte.js';
 	import { profileNameCss } from '$lib/color.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import { hydratePersonCursorsLocal, personCursors } from '$lib/person-cursors.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { selectEntity } from '$lib/workspace.svelte.js';
-	import { onMount } from 'svelte';
 
 	/**
 	 * @type {{
@@ -31,8 +31,13 @@
 	 */
 	let { filter = 'all', embedded = false } = $props();
 
-	/** Seen watermark when the feed opened — unread chrome stays for this visit. */
-	let seenAtOpen = $state(readActivitySeenAt());
+	/**
+	 * Visit-scoped unread boundary. null until cursors hydrate — never freeze at 0
+	 * (hard refresh used to paint every row unread before localStorage applied).
+	 * @type {number | null}
+	 */
+	let seenAtOpen = $state(/** @type {number | null} */ (null));
+	let markedThisVisit = $state(false);
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -51,9 +56,17 @@
 
 	const groups = $derived(groupActivityByTime(items));
 
-	onMount(() => {
+	$effect(() => {
+		hydratePersonCursorsLocal();
+		const ready = personCursors.ready;
+		const email = personCursors.email;
+		if (!ready || !email) return;
+		if (seenAtOpen != null) return;
 		seenAtOpen = readActivitySeenAt();
-		markActivitySeen();
+		if (!markedThisVisit) {
+			markedThisVisit = true;
+			markActivitySeen();
+		}
 	});
 
 	/** @param {import('$lib/chat-activity.svelte.js').ChatActivityItem} item */
@@ -97,6 +110,8 @@
 
 	/** @param {import('$lib/chat-activity.svelte.js').ChatActivityItem} item */
 	function isUnread(item) {
+		/* While hydrating, do not claim unread — avoids hard-refresh all-unread flash. */
+		if (seenAtOpen == null) return false;
 		return item.at > seenAtOpen;
 	}
 

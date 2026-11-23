@@ -243,10 +243,6 @@ export function rebuildHasCommentsIndex(list = chatFeed) {
 
 const CHAT_CACHE_KEY = 'alpha.chat.feed.v1';
 const CHAT_FEED_LIMIT = 2000;
-/** Keep recently settled sends that a stale tip fetch has not listed yet. */
-const SETTLE_GRACE_MS = 180_000;
-/** Allow small device clock skew so “recent” rows are not dropped. */
-const SETTLE_SKEW_MS = 60_000;
 
 /** Bumped on each refresh / settle so stale fetches cannot clobber newer state. */
 let feedFetchGen = 0;
@@ -345,7 +341,6 @@ function mergeFeedRows(list, prev) {
 		const key = `${String(m.reply_to || '')}|${String(m.reaction || m.body || '').trim()}|${String(m.author || '').trim().toLowerCase()}`;
 		durableReactionKeys.add(key);
 	}
-	const now = Date.now();
 	for (const m of prev) {
 		const id = String(m?.id || '');
 		if (!id) continue;
@@ -371,23 +366,12 @@ function mergeFeedRows(list, prev) {
 			const key = `${String(m.reply_to || '')}|${String(m.reaction || m.body || '').trim()}|${String(m.author || '').trim().toLowerCase()}`;
 			if (durableReactionKeys.has(key)) continue;
 		}
-		const pending =
-			Boolean(m?._local || m?._pending || m?._failed || m?._hint) ||
-			String(id).startsWith('local-') ||
-			String(id).startsWith('hint-') ||
-			m?.delivery === 'sending' ||
-			m?.delivery === 'failed';
-		const settledAt = Date.parse(m._settledAt || '');
-		const created = Date.parse(m.created_at || '');
-		const anchor = Number.isFinite(settledAt)
-			? settledAt
-			: Number.isFinite(created)
-				? created
-				: NaN;
-		const age = Number.isFinite(anchor) ? now - anchor : Infinity;
-		/* Keep until listed on tip — tolerate mild future clock skew. */
-		const recent = age < SETTLE_GRACE_MS && age > -SETTLE_SKEW_MS;
-		if (pending || recent) byId.set(id, m);
+		/*
+		 * Always retain durable prev rows. Partial/incomplete tip walks and
+		 * early onPartial batches used to drop warm localStorage history and
+		 * leave the notifications feed looking empty/incomplete.
+		 */
+		byId.set(id, m);
 	}
 
 	/*

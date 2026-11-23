@@ -269,7 +269,8 @@
 	--selection: color-mix(in srgb, var(--fg) 4%, transparent);
 	--link: color-mix(in srgb, var(--accent) 78%, #000000);
 	--link-hover: color-mix(in srgb, var(--accent) 62%, #000000);
-	--float-panel-bg: color-mix(in srgb, #ffffff 78%, transparent);
+	/* Match chat scroll-FAB / composer — opaque enough over near-white feed. */
+	--float-panel-bg: var(--composer-bg, #ffffff);
 	--float-trigger-on: color-mix(in srgb, #ffffff 78%, transparent);
 	--surface: #f6f6f6;
 	/* Elevated chrome = white (not ink-into-bg) */
@@ -291,7 +292,7 @@
 	--feed-bg: #ececec;
 	--bubble-bg: #ffffff;
 	--mail-panel-bg: #ffffff;
-	--popover: var(--glass-panel);
+	--popover: var(--composer-bg, var(--glass-panel));
 	--modal-bg: var(--glass-panel);
 	--hairline: var(--fg-11);
 	--shell: #e2e2e2;
@@ -358,7 +359,7 @@
 		--glass: color-mix(in srgb, var(--lift) 66%, transparent);
 		--glass-panel: color-mix(in srgb, var(--lift) 88%, transparent);
 		--composer-bg: #ffffff;
-		--float-panel-bg: color-mix(in srgb, #ffffff 82%, transparent);
+		--float-panel-bg: var(--composer-bg, #ffffff);
 		--float-trigger-on: color-mix(in srgb, #ffffff 82%, transparent);
 		--scrim: color-mix(in srgb, var(--fg) 42%, transparent);
 	}

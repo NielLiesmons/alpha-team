@@ -126,7 +126,7 @@ export function navForRole() {
 		{ href: '/chat', label: 'Chat', icon: 'chat', countKey: 'chat' },
 		{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
 		{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
-		{ href: '/photos', label: 'Photos', icon: 'albums', createKind: 'photo' },
+		{ href: '/photos', label: 'Photos', icon: 'photos', createKind: 'photo' },
 		{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
 		{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
 		{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
@@ -185,7 +185,7 @@ export const mobileNav = [
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
 	{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
-	{ href: '/photos', label: 'Photos', icon: 'albums', createKind: 'photo' },
+	{ href: '/photos', label: 'Photos', icon: 'photos', createKind: 'photo' },
 	{ href: '/settings', label: 'Settings', icon: 'settings' }
 ];
 

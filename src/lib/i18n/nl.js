@@ -368,6 +368,8 @@ export default {
 	'chat.unreadCount': '{n} ongelezen',
 	'chat.message': 'Bericht',
 	'chat.reply': 'Beantwoorden',
+	'chat.copy': 'Kopiëren',
+	'chat.select': 'Selecteren',
 	'chat.forward': 'Doorsturen',
 	'chat.moreReactions': 'Meer reacties',
 	'chat.deletedMessage': 'Bericht Verwijderd',

@@ -11,6 +11,7 @@ import { loadDeviceProfiles } from './device-profiles.svelte.js';
 import { ensurePendingFlushListeners, refreshBackgroundDrive } from './drive-refresh.js';
 import { driveSession, loadSessionFromStorage, activeSession } from './drive/session.svelte.js';
 import { hydrateMembersFromCache } from './members.svelte.js';
+import { hydratePersonCursorsLocal, loadPersonCursors } from './person-cursors.svelte.js';
 import { ensurePersistentStorage } from './offline-store.js';
 import {
 	absorbReturnToFromLocation,
@@ -139,6 +140,13 @@ export async function bootApp() {
 			hydrateChatFeedFromCache();
 		} catch (e) {
 			console.warn('chat cache hydrate', e);
+		}
+		try {
+			/* Sync before any notifications UI — hard refresh must not see seenAt=0. */
+			hydratePersonCursorsLocal();
+			void loadPersonCursors(activeSession());
+		} catch (e) {
+			console.warn('person cursors hydrate', e);
 		}
 		try {
 			hydrateMembersFromCache(activeSession());

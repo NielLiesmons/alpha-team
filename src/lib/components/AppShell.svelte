@@ -387,7 +387,7 @@
 			{ kind: 'project', label: t('create.project'), icon: 'projects' },
 			{ kind: 'note', label: t('create.note'), icon: 'notes' },
 			{ kind: 'newsletter', label: t('create.newsletter'), icon: 'publications' },
-			{ kind: 'photo', label: t('create.photo'), icon: 'albums' },
+			{ kind: 'photo', label: t('create.photo'), icon: 'photos' },
 			{ kind: 'file', label: t('create.file'), icon: 'folder' },
 			{ kind: 'ledger', label: t('create.ledger'), icon: 'accounting' },
 			{ kind: 'cost', label: t('create.cost'), icon: 'accounting' },

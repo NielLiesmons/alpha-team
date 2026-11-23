@@ -300,7 +300,7 @@
 			enterprise: 'enterprise',
 			mail: 'mail',
 			file: 'folder',
-			photo: 'albums',
+			photo: 'photos',
 			poll: 'chat',
 			website: 'website'
 		};

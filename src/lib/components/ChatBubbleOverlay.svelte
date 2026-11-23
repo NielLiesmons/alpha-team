@@ -2,10 +2,14 @@
 	/**
 	 * Alpha Chat–style bubble overlay: stadium reaction row (MRU + defaults, + picker)
 	 * stacked with a narrower frosted actions panel.
+	 *
+	 * Opens stay until an explicit act (react / action / scrim). First pointer
+	 * release after open is ignored so the open gesture never hits a reaction.
 	 */
 	import { onMount } from 'svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
+	import Copy from './icons/Copy.svelte';
 	import Forward from './icons/Forward.svelte';
 	import Reply from './icons/Reply.svelte';
 	import Trash from './icons/Trash.svelte';
@@ -24,6 +28,8 @@
 	 *   onreact?: (emoji: string) => void,
 	 *   onreply?: () => void,
 	 *   onforward?: (() => void) | null,
+	 *   oncopy?: (() => void) | null,
+	 *   onselect?: (() => void) | null,
 	 *   ondelete?: (() => void) | null
 	 * }}
 	 */
@@ -37,6 +43,8 @@
 		onreact = () => {},
 		onreply = () => {},
 		onforward = null,
+		oncopy = null,
+		onselect = null,
 		ondelete = null
 	} = $props();
 
@@ -44,6 +52,8 @@
 	const seenCount = $derived(seenProfiles.length);
 
 	let emojiPickerOpen = $state(false);
+	/** Blocks reaction/action hits until the opening pointer is fully done. */
+	let interactive = $state(false);
 	/** @type {HTMLDivElement | undefined} */
 	let rootEl = $state();
 	let placeX = $state(0);
@@ -54,11 +64,22 @@
 	$effect(() => {
 		if (!open) {
 			emojiPickerOpen = false;
+			interactive = false;
 			return;
 		}
 		seenCount; /* re-layout when Seen by appears */
 		quick = quickReactionEmojis(24);
+		interactive = false;
 		queueMicrotask(() => layout());
+
+		/*
+		 * Keep panels + scrim inert briefly so the open gesture’s residual
+		 * click/pointerup (iOS after long-press) cannot dismiss or react.
+		 */
+		const fallback = window.setTimeout(() => {
+			interactive = true;
+		}, 280);
+		return () => window.clearTimeout(fallback);
 	});
 
 	function layout() {
@@ -66,11 +87,13 @@
 		const pad = 16;
 		const reactW = 280;
 		const reactH = 44;
-		const actionsW = seenCount > 0 ? 220 : 168;
+		const actionsW = seenCount > 0 ? 220 : 180;
 		const gap = 12;
 		const rowH = 36;
 		const seenH = seenCount > 0 ? 40 : 0;
 		let rows = 1; /* reply */
+		if (oncopy) rows += 1;
+		if (onselect) rows += 1;
 		if (onforward) rows += 1;
 		if (canDelete && ondelete) rows += 1;
 		const actionsH = seenH + rows * rowH + 8;
@@ -113,6 +136,7 @@
 
 	/** @param {string} emoji */
 	function pickReact(emoji) {
+		if (!interactive) return;
 		rememberEmoji(emoji);
 		onreact(emoji);
 		onclose();
@@ -125,28 +149,51 @@
 		onreact(emoji);
 		onclose();
 	}
+
+	/** @param {() => void} act */
+	function runAction(act) {
+		if (!interactive) return;
+		act();
+		onclose();
+	}
 </script>
 
 {#if open}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div
 		class="overlay-root"
+		class:armed={interactive}
 		bind:this={rootEl}
 		style:--react-x="{placeX}px"
 		style:--react-y="{placeY}px"
 	>
-		<button type="button" class="scrim" aria-label={t('common.close')} onclick={onclose}></button>
+		<button
+			type="button"
+			class="scrim"
+			aria-label={t('common.close')}
+			onclick={() => {
+				if (!interactive) return;
+				onclose();
+			}}
+		></button>
 
 		<div
-			class="reactions-pill"
+			class="reactions-pill alpha-popover"
 			role="listbox"
 			aria-label={t('chat.reactions')}
+			aria-disabled={!interactive}
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<div class="emoji-scroll">
 				{#each quick as emoji (emoji)}
-					<button type="button" class="emoji-hit" role="option" onclick={() => pickReact(emoji)}>
+					<button
+						type="button"
+						class="emoji-hit"
+						role="option"
+						tabindex={interactive ? 0 : -1}
+						onclick={() => pickReact(emoji)}
+					>
 						{emoji}
 					</button>
 				{/each}
@@ -157,8 +204,10 @@
 				class="plus-hit"
 				aria-label={t('chat.moreReactions')}
 				aria-expanded={emojiPickerOpen}
+				tabindex={interactive ? 0 : -1}
 				onclick={(e) => {
 					e.stopPropagation();
+					if (!interactive) return;
 					emojiPickerOpen = !emojiPickerOpen;
 				}}
 			>
@@ -174,10 +223,11 @@
 		</div>
 
 		<div
-			class="actions-panel"
+			class="actions-panel alpha-popover"
 			class:has-seen={seenCount > 0}
 			role="menu"
 			aria-label={t('chat.messageActions')}
+			aria-disabled={!interactive}
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
@@ -193,23 +243,61 @@
 				type="button"
 				class="action-row"
 				role="menuitem"
-				onclick={() => {
-					onreply();
-					onclose();
-				}}
+				tabindex={interactive ? 0 : -1}
+				onclick={() => runAction(onreply)}
 			>
 				<span class="action-ico"><Reply size={16} /></span>
 				<span>{t('chat.reply')}</span>
 			</button>
+			{#if oncopy}
+				<button
+					type="button"
+					class="action-row"
+					role="menuitem"
+					tabindex={interactive ? 0 : -1}
+					onclick={() =>
+						runAction(() => {
+							oncopy?.();
+						})}
+				>
+					<span class="action-ico"><Copy size={15} /></span>
+					<span>{t('chat.copy')}</span>
+				</button>
+			{/if}
+			{#if onselect}
+				<button
+					type="button"
+					class="action-row"
+					role="menuitem"
+					tabindex={interactive ? 0 : -1}
+					onclick={() =>
+						runAction(() => {
+							onselect?.();
+						})}
+				>
+					<span class="action-ico" aria-hidden="true">
+						<svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+							<path
+								d="M3.5 3.5h4M3.5 3.5v4M12.5 3.5h-4M12.5 3.5v4M3.5 12.5h4M3.5 12.5v-4M12.5 12.5h-4M12.5 12.5v-4"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</span>
+					<span>{t('chat.select')}</span>
+				</button>
+			{/if}
 			{#if onforward}
 				<button
 					type="button"
 					class="action-row"
 					role="menuitem"
-					onclick={() => {
-						onforward?.();
-						onclose();
-					}}
+					tabindex={interactive ? 0 : -1}
+					onclick={() =>
+						runAction(() => {
+							onforward?.();
+						})}
 				>
 					<span class="action-ico"><Forward size={16} /></span>
 					<span>{t('chat.forward')}</span>
@@ -220,10 +308,11 @@
 					type="button"
 					class="action-row danger"
 					role="menuitem"
-					onclick={() => {
-						ondelete?.();
-						onclose();
-					}}
+					tabindex={interactive ? 0 : -1}
+					onclick={() =>
+						runAction(() => {
+							ondelete?.();
+						})}
 				>
 					<span class="action-ico"><Trash size={15} /></span>
 					<span>{t('common.delete')}</span>
@@ -232,11 +321,8 @@
 		</div>
 
 		{#if emojiPickerOpen}
-			<div class="emoji-sheet" role="dialog" aria-label={t('chat.reactions')}>
-				<EmojiPicker
-					onselect={pickFromSheet}
-					allowCustom={true}
-				/>
+			<div class="emoji-sheet alpha-popover" role="dialog" aria-label={t('chat.reactions')}>
+				<EmojiPicker onselect={pickFromSheet} allowCustom={true} />
 			</div>
 		{/if}
 	</div>
@@ -256,7 +342,8 @@
 		border: 0;
 		padding: 0;
 		margin: 0;
-		background: color-mix(in srgb, #000 28%, transparent);
+		/* Same modal scrim token as Modal / CreateSheet */
+		background: var(--scrim);
 		cursor: default;
 		pointer-events: auto;
 	}
@@ -271,14 +358,15 @@
 		width: 280px;
 		height: 44px;
 		border-radius: 999px;
-		border: 1px solid var(--glass-border, var(--fg-8));
-		background: var(--glass-panel, var(--glass, var(--bg)));
-		backdrop-filter: blur(var(--glass-blur, 22px));
-		-webkit-backdrop-filter: blur(var(--glass-blur, 22px));
-		box-shadow: 0 10px 32px color-mix(in srgb, #000 22%, transparent);
 		overflow: hidden;
-		pointer-events: auto;
+		pointer-events: none;
 		box-sizing: border-box;
+	}
+
+	.overlay-root.armed .reactions-pill,
+	.overlay-root.armed .actions-panel,
+	.overlay-root.armed .emoji-sheet {
+		pointer-events: auto;
 	}
 
 	.emoji-scroll {
@@ -328,11 +416,12 @@
 		background: linear-gradient(
 			to right,
 			transparent,
-			var(--glass-panel, var(--glass, var(--bg)))
+			var(--composer-bg, var(--modal-bg, var(--glass-panel, var(--bg))))
 		);
 	}
 
 	.plus-hit {
+		position: relative;
 		flex-shrink: 0;
 		width: 44px;
 		height: 44px;
@@ -355,10 +444,6 @@
 		background: var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
 	}
 
-	.plus-hit {
-		position: relative;
-	}
-
 	.plus-hit svg {
 		position: relative;
 		z-index: 1;
@@ -373,16 +458,11 @@
 		left: var(--actions-x, 16px);
 		top: var(--actions-y, 72px);
 		z-index: 2;
-		width: var(--actions-w, 168px);
+		width: var(--actions-w, 180px);
 		padding: 4px 0;
 		border-radius: 14px;
-		border: 1px solid var(--glass-border, var(--fg-8));
-		background: var(--glass-panel, var(--glass, var(--bg)));
-		backdrop-filter: blur(var(--glass-blur, 22px));
-		-webkit-backdrop-filter: blur(var(--glass-blur, 22px));
-		box-shadow: 0 10px 32px color-mix(in srgb, #000 22%, transparent);
 		overflow: hidden;
-		pointer-events: auto;
+		pointer-events: none;
 		box-sizing: border-box;
 	}
 
@@ -466,12 +546,7 @@
 		max-height: min(55vh, 420px);
 		overflow: auto;
 		border-radius: 18px;
-		border: 1px solid var(--glass-border, var(--fg-8));
-		background: var(--glass-panel, var(--glass, var(--bg)));
-		backdrop-filter: blur(var(--glass-blur, 22px));
-		-webkit-backdrop-filter: blur(var(--glass-blur, 22px));
-		box-shadow: 0 12px 40px color-mix(in srgb, #000 28%, transparent);
-		pointer-events: auto;
+		pointer-events: none;
 		padding: 8px;
 		box-sizing: border-box;
 	}

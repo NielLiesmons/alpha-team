@@ -29,7 +29,8 @@ const ALIAS = {
 	projects: 'project',
 	inbox: 'mail',
 	message: 'mail',
-	messages: 'chat'
+	messages: 'chat',
+	photo: 'photos'
 };
 
 /**

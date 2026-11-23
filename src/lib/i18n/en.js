@@ -366,6 +366,8 @@ export default {
 	'chat.unreadCount': '{n} unread',
 	'chat.message': 'Message',
 	'chat.reply': 'Reply',
+	'chat.copy': 'Copy',
+	'chat.select': 'Select',
 	'chat.forward': 'Forward',
 	'chat.moreReactions': 'More reactions',
 	'chat.deletedMessage': 'Deleted Message',
