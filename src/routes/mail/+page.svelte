@@ -20,6 +20,8 @@
 		mailLatestMessage,
 		mailMessages,
 		mailPreview,
+		mailPriorityFor,
+		mailTipCache,
 		mailThreadsForCurrentView,
 		mailUi,
 		mailUnreadCountForCategory,
@@ -293,6 +295,22 @@
 				{@const hasComments = entityHasComments('mail', thread.id) || comments.length > 0}
 				{@const convo = threadParticipantProfiles(thread)}
 				{@const linkedTask = taskByMailThreadId(thread.id)}
+				{@const mailOnlyPriority = (() => {
+					mailTipCache;
+					return mailPriorityFor(thread.id, thread);
+				})()}
+				{@const mailPromoteSeed = !linkedTask
+					? {
+							id: thread.id,
+							subject: thread.subject,
+							body: '',
+							flagged: Boolean(thread._flagged),
+							_priority: mailOnlyPriority
+						}
+					: null}
+				{@const showMailOnlyTrail = Boolean(
+					mailPromoteSeed && mailOnlyPriority && mailOnlyPriority !== 'none'
+				)}
 				<button
 					type="button"
 					class="row"
@@ -349,6 +367,29 @@
 											value={linkedTask.priority || 'none'}
 											size={16}
 											align="right"
+										/>
+									</span>
+								{:else if showMailOnlyTrail && mailPromoteSeed}
+									<!--
+										Mail-only urgency (tip cache) — same status/priority trail as a
+										linked Task, without requiring Task conversion. Empty TaskBox
+										remains the promote path; priority stays mail-only until then.
+									-->
+									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
+										<TaskFieldPicker
+											field="status"
+											value="open"
+											size={16}
+											mailThread={mailPromoteSeed}
+										/>
+									</span>
+									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
+										<TaskFieldPicker
+											field="priority"
+											value={mailOnlyPriority}
+											size={16}
+											align="right"
+											mailThread={mailPromoteSeed}
 										/>
 									</span>
 								{/if}

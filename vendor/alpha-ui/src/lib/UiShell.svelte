@@ -2248,7 +2248,8 @@
 		}
 
 		.shell.feed-pad {
-			--feed-pad-top: calc(60px + env(safe-area-inset-top, 0px));
+			/* Eyebrow headers (Tasks / Files / …): +2px above prior 60px mobile pad */
+			--feed-pad-top: calc(62px + env(safe-area-inset-top, 0px));
 		}
 
 		/*

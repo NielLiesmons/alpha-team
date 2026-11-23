@@ -398,7 +398,11 @@
 
 	@media (max-width: 767px) {
 		.activity {
-			padding: calc(88px + env(safe-area-inset-top, 0px)) 0
+			/*
+			 * Match Tasks/Files .shell.feed-pad eyebrow clearance — not inherited
+			 * --feed-pad-top (chat list uses the tighter 52px shell pad).
+			 */
+			padding: calc(62px + env(safe-area-inset-top, 0px)) 0
 				calc(16px + env(safe-area-inset-bottom, 0px));
 		}
 	}
