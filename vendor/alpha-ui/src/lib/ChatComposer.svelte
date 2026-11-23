@@ -93,17 +93,15 @@
 
 <style>
 	.composer-pill {
-		/* Fixed radii — never a full pill (multi-line drafts look broken with 9999). */
+		/* Fixed equal radii — never a full pill (multi-line drafts look broken with 9999). */
 		--composer-radius: 23.5px;
-		--composer-radius-top: var(--composer-radius);
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
 		gap: 0;
 		min-height: 47px;
 		padding: 0;
-		border-radius: var(--composer-radius-top) var(--composer-radius-top) var(--composer-radius)
-			var(--composer-radius);
+		border-radius: var(--composer-radius);
 		box-sizing: border-box;
 		position: relative;
 		isolation: isolate;
@@ -138,11 +136,6 @@
 			linear-gradient(#fff 0 0);
 		-webkit-mask-composite: xor;
 		mask-composite: exclude;
-	}
-
-	.composer-pill.chrome-expanded {
-		/* Quote / voice / media chrome: tighter top corners. */
-		--composer-radius-top: 16px;
 	}
 
 	.composer-quote-wrap {

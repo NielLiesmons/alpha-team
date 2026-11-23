@@ -55,6 +55,7 @@
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
 	import Pause from '@alpha/ui/icons/Pause.svelte';
 	import Play from '@alpha/ui/icons/Play.svelte';
+	import Trash from '@alpha/ui/icons/Trash.svelte';
 	import ChatAttachModal from '$lib/components/ChatAttachModal.svelte';
 	import ChatMediaStage from '$lib/components/ChatMediaStage.svelte';
 	import { createVoiceRecorder } from '$lib/voice-recorder.js';
@@ -102,8 +103,15 @@
 	let voiceMode = $state(/** @type {VoiceMode} */ ('idle'));
 	let voiceMs = $state(0);
 	let voicePaused = $state(false);
+	/** Live waveform bars (ring) — small count, throttled updates. */
+	const VOICE_BAR_COUNT = 28;
+	/** @type {number[]} */
+	let voiceBars = $state(Array.from({ length: VOICE_BAR_COUNT }, () => 0.14));
 	/** @type {ReturnType<typeof setInterval> | null} */
 	let voiceTimer = null;
+	/** @type {number | null} */
+	let voiceMeterRaf = null;
+	let voiceMeterLast = 0;
 	const voiceRecorder = createVoiceRecorder();
 	const VOICE_MIN_MS = 1000;
 	const VOICE_MIN_BYTES = 800;
@@ -916,6 +924,30 @@
 		}
 	}
 
+	function stopVoiceMeter() {
+		if (voiceMeterRaf != null) {
+			cancelAnimationFrame(voiceMeterRaf);
+			voiceMeterRaf = null;
+		}
+		voiceMeterLast = 0;
+	}
+
+	function startVoiceMeter() {
+		stopVoiceMeter();
+		const tick = (/** @type {number} */ now) => {
+			voiceMeterRaf = requestAnimationFrame(tick);
+			if (voicePaused) return;
+			/* ~12 fps — enough for a live feel without thrashing Svelte. */
+			if (now - voiceMeterLast < 80) return;
+			voiceMeterLast = now;
+			const level = voiceRecorder.sampleLevel();
+			const next = voiceBars.slice(1);
+			next.push(0.12 + level * 0.88);
+			voiceBars = next;
+		};
+		voiceMeterRaf = requestAnimationFrame(tick);
+	}
+
 	function startVoiceTick() {
 		stopVoiceTick();
 		voiceTimer = setInterval(() => {
@@ -927,7 +959,9 @@
 		voiceMode = 'idle';
 		voiceMs = 0;
 		voicePaused = false;
+		voiceBars = Array.from({ length: VOICE_BAR_COUNT }, () => 0.14);
 		stopVoiceTick();
+		stopVoiceMeter();
 		signalRecording(channelId, false);
 	}
 
@@ -938,8 +972,10 @@
 			voiceMode = 'recording';
 			voiceMs = 0;
 			voicePaused = false;
+			voiceBars = Array.from({ length: VOICE_BAR_COUNT }, () => 0.14);
 			signalRecording(channelId, true);
 			startVoiceTick();
+			startVoiceMeter();
 		} catch (e) {
 			resetVoiceUi();
 			voiceRecorder.cancel();
@@ -1431,20 +1467,26 @@
 				{/if}
 				{#if voiceRecording}
 					<div class="voice-row" class:paused={voicePaused} aria-live="polite">
-						<span class="voice-dot" aria-hidden="true"></span>
-						<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
-						<span class="voice-row-grow" aria-hidden="true"></span>
-						<button type="button" class="voice-cancel" onclick={cancelVoiceRecording}>{t('chat.cancel')}</button>
-						<button
-							type="button"
-							class="voice-pause-btn"
-							aria-label={voicePaused ? t('chat.resumeVoice') : t('chat.pauseVoice')}
-							onclick={toggleVoicePause}
-						>
+						<div class="voice-pill">
+							<span class="voice-dot" aria-hidden="true"></span>
+							<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
+							<div class="voice-wave" aria-hidden="true">
+								{#each voiceBars as h, i (i)}
+									<span class="voice-bar" style:height="{Math.round(8 + h * 16)}px"></span>
+								{/each}
+							</div>
+						</div>
+						<button type="button" class="voice-action delete" onclick={cancelVoiceRecording}>
+							<Trash size={14} />
+							<span>{t('common.delete')}</span>
+						</button>
+						<button type="button" class="voice-action pause" onclick={toggleVoicePause}>
 							{#if voicePaused}
-								<Play size={14} />
+								<Play size={13} />
+								<span>{t('chat.resumeVoice')}</span>
 							{:else}
-								<Pause size={14} />
+								<Pause size={13} />
+								<span>{t('chat.pauseVoice')}</span>
 							{/if}
 						</button>
 					</div>
@@ -1504,11 +1546,11 @@
 							aria-label={t('chat.send')}
 							onclick={() => void finishVoiceRecording(true)}
 						>
-							<AlphaLogo size={17} />
+							<span class="send-ico"><AlphaLogo size={18} /></span>
 						</button>
 					{:else if canSend}
 						<button type="button" class="side-btn send" aria-label={t('chat.send')} onclick={() => void send()}>
-							<AlphaLogo size={17} />
+							<span class="send-ico"><AlphaLogo size={18} /></span>
 						</button>
 					{:else}
 						<button
@@ -2316,23 +2358,33 @@
 	}
 
 	.voice-row {
-		/* Top radius matches ChatComposer --composer-radius-top (16px when expanded). */
-		--voice-corner: 16px;
 		--voice-dot: 10px;
-		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		min-height: calc(var(--voice-corner) * 2);
-		padding: 10px 10px 2px;
+		gap: 7px;
+		/* Match main composer-row inset (7px); +4px under the row before the main row. */
+		padding: 7px 7px 4px;
 		box-sizing: border-box;
+		position: relative;
 		z-index: 2;
 	}
 
+	.voice-pill {
+		flex: 1 1 auto;
+		min-width: 0;
+		height: 33px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		/* Left pad ≈ half pill height so the glowing dot reads concentric to the pill. */
+		padding: 0 12px 0 11.5px;
+		border-radius: 999px;
+		background: var(--fg-8);
+		box-sizing: border-box;
+	}
+
 	.voice-dot {
-		position: absolute;
-		top: calc(var(--voice-corner) - var(--voice-dot) / 2);
-		left: calc(var(--voice-corner) - var(--voice-dot) / 2);
+		flex: 0 0 auto;
 		width: var(--voice-dot);
 		height: var(--voice-dot);
 		border-radius: 50%;
@@ -2342,11 +2394,8 @@
 			var(--accent-3, #c44) 55%,
 			color-mix(in srgb, var(--accent-3, #c44) 70%, #000) 100%
 		);
-		box-shadow:
-			0 0 0 0 color-mix(in srgb, var(--accent-3, #c44) 45%, transparent),
-			0 0 10px 2px color-mix(in srgb, var(--accent-3, #c44) 40%, transparent);
+		box-shadow: 0 0 8px 2px color-mix(in srgb, var(--accent-3, #c44) 40%, transparent);
 		animation: voice-glow 1.05s ease-in-out infinite alternate;
-		pointer-events: none;
 	}
 
 	.voice-row.paused .voice-dot {
@@ -2357,40 +2406,56 @@
 
 	@keyframes voice-glow {
 		from {
-			transform: scale(0.86);
-			box-shadow:
-				0 0 0 0 color-mix(in srgb, var(--accent-3, #c44) 18%, transparent),
-				0 0 6px 1px color-mix(in srgb, var(--accent-3, #c44) 28%, transparent);
+			transform: scale(0.88);
+			box-shadow: 0 0 5px 1px color-mix(in srgb, var(--accent-3, #c44) 28%, transparent);
 		}
 		to {
-			transform: scale(1.12);
-			box-shadow:
-				0 0 0 6px color-mix(in srgb, var(--accent-3, #c44) 0%, transparent),
-				0 0 14px 4px color-mix(in srgb, var(--accent-3, #c44) 48%, transparent);
+			transform: scale(1.1);
+			box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent-3, #c44) 48%, transparent);
 		}
 	}
 
 	.voice-time {
-		/* Sit after the concentric corner dot — not mono. */
-		margin-left: calc(var(--voice-corner) + var(--voice-dot) / 2 + 6px);
 		flex: 0 0 auto;
 		font: inherit;
-		font-size: 14px;
+		font-family: inherit;
+		font-size: 13px;
 		font-weight: 500;
 		letter-spacing: 0.01em;
 		color: var(--fg-66);
-		font-family: inherit;
 	}
 
-	.voice-row-grow {
+	.voice-wave {
 		flex: 1 1 auto;
 		min-width: 0;
+		height: 24px;
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		overflow: hidden;
 	}
 
-	.voice-cancel {
+	.voice-bar {
+		flex: 1 1 0;
+		min-width: 2px;
+		max-width: 3px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--fg) 28%, transparent);
+		align-self: center;
+	}
+
+	.voice-row.paused .voice-bar {
+		opacity: 0.55;
+	}
+
+	.voice-action {
 		flex: 0 0 auto;
-		height: 30px;
-		padding: 0 14px;
+		height: 33px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		padding: 0 12px;
 		border: 0;
 		border-radius: 999px;
 		background: var(--fg-8);
@@ -2400,21 +2465,24 @@
 		font-weight: 600;
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
+		box-sizing: border-box;
+		white-space: nowrap;
 	}
 
-	.voice-pause-btn {
-		flex: 0 0 auto;
-		width: 33px;
-		height: 33px;
-		display: grid;
-		place-items: center;
-		padding: 0;
-		border: 0;
-		border-radius: 999px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		cursor: pointer;
-		-webkit-tap-highlight-color: transparent;
+	.voice-action.delete {
+		color: var(--accent-3, var(--destructive, #c44));
+	}
+
+	.voice-action :global(.icon),
+	.voice-action :global(svg) {
+		flex-shrink: 0;
+	}
+
+	.side-btn.send .send-ico {
+		display: inline-flex;
+		/* Optical center for the Alpha triangle in the round CTA. */
+		padding-bottom: 2px;
+		line-height: 0;
 	}
 
 	.side-btn.mic {

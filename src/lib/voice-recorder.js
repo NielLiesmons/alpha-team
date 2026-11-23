@@ -1,5 +1,5 @@
 /**
- * Browser MediaRecorder for chat voice notes — hold / lock / pause.
+ * Browser MediaRecorder for chat voice notes — tap to record / pause / send.
  */
 
 const PREFERRED = [
@@ -27,7 +27,8 @@ export function pickVoiceMime() {
  *   stop: () => Promise<{ file: File, blob: Blob, durationMs: number, bytes: number } | null>,
  *   cancel: () => void,
  *   isPaused: () => boolean,
- *   elapsedMs: () => number
+ *   elapsedMs: () => number,
+ *   sampleLevel: () => number
  * }}
  */
 export function createVoiceRecorder() {
@@ -43,10 +44,68 @@ export function createVoiceRecorder() {
 	let pausedAt = 0;
 	let pausedTotal = 0;
 
+	/** @type {AudioContext | null} */
+	let audioCtx = null;
+	/** @type {AnalyserNode | null} */
+	let analyser = null;
+	/** @type {MediaStreamAudioSourceNode | null} */
+	let sourceNode = null;
+	/** @type {Uint8Array | null} */
+	let levelBuf = null;
+
 	function elapsedMs() {
 		if (!startedAt) return 0;
 		const now = paused && pausedAt ? pausedAt : Date.now();
 		return Math.max(0, now - startedAt - pausedTotal);
+	}
+
+	function tearDownAnalyser() {
+		try {
+			sourceNode?.disconnect();
+		} catch {
+			/* ignore */
+		}
+		sourceNode = null;
+		analyser = null;
+		levelBuf = null;
+		if (audioCtx) {
+			try {
+				void audioCtx.close();
+			} catch {
+				/* ignore */
+			}
+			audioCtx = null;
+		}
+	}
+
+	function attachAnalyser() {
+		tearDownAnalyser();
+		if (!stream || typeof AudioContext === 'undefined') return;
+		try {
+			audioCtx = new AudioContext();
+			analyser = audioCtx.createAnalyser();
+			analyser.fftSize = 64;
+			analyser.smoothingTimeConstant = 0.55;
+			sourceNode = audioCtx.createMediaStreamSource(stream);
+			sourceNode.connect(analyser);
+			levelBuf = new Uint8Array(analyser.fftSize);
+		} catch {
+			tearDownAnalyser();
+		}
+	}
+
+	/** 0..1 RMS-ish level for live waveform bars (cheap). */
+	function sampleLevel() {
+		if (!analyser || !levelBuf || paused) return 0;
+		analyser.getByteTimeDomainData(levelBuf);
+		let sum = 0;
+		const n = levelBuf.length;
+		for (let i = 0; i < n; i++) {
+			const v = (levelBuf[i] - 128) / 128;
+			sum += v * v;
+		}
+		const rms = Math.sqrt(sum / n);
+		return Math.min(1, Math.max(0, rms * 3.2));
 	}
 
 	async function start() {
@@ -70,6 +129,7 @@ export function createVoiceRecorder() {
 			if (e.data && e.data.size > 0) chunks.push(e.data);
 		};
 		recorder.start(250);
+		attachAnalyser();
 	}
 
 	function pause() {
@@ -85,6 +145,9 @@ export function createVoiceRecorder() {
 		pausedAt = 0;
 		paused = false;
 		recorder.resume();
+		if (audioCtx?.state === 'suspended') {
+			void audioCtx.resume();
+		}
 	}
 
 	function tearDownTracks() {
@@ -108,6 +171,7 @@ export function createVoiceRecorder() {
 		startedAt = 0;
 		pausedAt = 0;
 		pausedTotal = 0;
+		tearDownAnalyser();
 		tearDownTracks();
 	}
 
@@ -118,6 +182,7 @@ export function createVoiceRecorder() {
 		const rec = recorder;
 		const durationMs = elapsedMs();
 		if (!rec || rec.state === 'inactive') {
+			tearDownAnalyser();
 			tearDownTracks();
 			recorder = null;
 			return Promise.resolve(null);
@@ -127,6 +192,7 @@ export function createVoiceRecorder() {
 				const blob = new Blob(chunks, { type: mime || 'audio/webm' });
 				chunks = [];
 				recorder = null;
+				tearDownAnalyser();
 				tearDownTracks();
 				paused = false;
 				startedAt = 0;
@@ -146,6 +212,7 @@ export function createVoiceRecorder() {
 				if (rec.state === 'paused') rec.resume();
 				rec.stop();
 			} catch {
+				tearDownAnalyser();
 				tearDownTracks();
 				resolve(null);
 			}
@@ -159,6 +226,7 @@ export function createVoiceRecorder() {
 		stop,
 		cancel,
 		isPaused: () => paused,
-		elapsedMs
+		elapsedMs,
+		sampleLevel
 	};
 }
