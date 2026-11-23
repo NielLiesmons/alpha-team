@@ -10,8 +10,9 @@ import { parentDomain } from './space-host.js';
  *   label: string,
  *   icon?: string,
  *   faviconUrl?: string,
+ *   spaceBrand?: boolean,
  *   countKey?: 'chat' | 'tasks' | 'projects' | 'notes' | 'enterprises' | 'ledger',
- *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'file',
+ *   createKind?: 'task' | 'project' | 'note' | 'newsletter' | 'ledger' | 'cost' | 'sales' | 'enterprise' | 'mail' | 'file' | 'photo',
  *   children?: NavItem[],
  *   active?: boolean
  * }} NavItem
@@ -60,11 +61,13 @@ export const websiteChildren = [
  */
 export const websites = [];
 
-/** Display labels for the signed-in Space — override from brand.json later. */
+/** Display labels for the signed-in Space — brand icon from meta/brand.json. */
 export const space = {
 	name: 'Space',
 	description: '',
 	siteUrl: '',
+	/** Object URL or https/path for welcome / favicon / PWA / nav. */
+	iconUrl: '/icons/icon-192.png',
 	/** Active website id in Admin (default www). */
 	activeSiteId: 'www'
 };
@@ -107,6 +110,10 @@ export function syncSpaceFromHost() {
 		faviconUrl: `${siteUrl}/favicon.ico`,
 		isDefault: true
 	});
+	/* Prefill from public site favicon until Drive brand loads. */
+	if (!space.iconUrl || space.iconUrl === '/icons/icon-192.png') {
+		space.iconUrl = `${siteUrl}/favicon.ico`;
+	}
 }
 
 /**
@@ -119,6 +126,7 @@ export function navForRole() {
 		{ href: '/chat', label: 'Chat', icon: 'chat', countKey: 'chat' },
 		{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
 		{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
+		{ href: '/photos', label: 'Photos', icon: 'albums', createKind: 'photo' },
 		{ href: '/projects', label: 'Projects', icon: 'projects', countKey: 'projects', createKind: 'project' },
 		{ href: '/tasks', label: 'Tasks', icon: 'tasks', countKey: 'tasks', createKind: 'task' },
 		{ href: '/notes', label: 'Notes', icon: 'notes', countKey: 'notes', createKind: 'note' },
@@ -132,6 +140,7 @@ export function navForRole() {
 		{ href: '/planning', label: 'Planning', icon: 'planning' }
 	];
 
+	const brandIcon = String(space.iconUrl || '').trim();
 	if (websites.length > 0) {
 		items.push({
 			type: 'group',
@@ -142,13 +151,21 @@ export function navForRole() {
 			items: websites.map((w) => ({
 				href: '/website',
 				label: w.host,
-				faviconUrl: w.faviconUrl,
+				/* Space icon in front of website rows (round + stroke in shell). */
+				faviconUrl: brandIcon || w.faviconUrl,
+				spaceBrand: Boolean(brandIcon),
 				icon: 'website',
 				id: w.id
 			}))
 		});
 	} else {
-		items.push({ href: '/website', label: 'Websites', icon: 'website' });
+		items.push({
+			href: '/website',
+			label: 'Websites',
+			icon: 'website',
+			faviconUrl: brandIcon || undefined,
+			spaceBrand: Boolean(brandIcon)
+		});
 	}
 
 	return items;
@@ -168,6 +185,7 @@ export const mobileNav = [
 	{ href: '/chat', label: 'Chat', icon: 'chat' },
 	{ href: '/mail', label: 'Mail', icon: 'mail', createKind: 'mail' },
 	{ href: '/drive', label: 'Files', icon: 'folder', createKind: 'file' },
+	{ href: '/photos', label: 'Photos', icon: 'albums', createKind: 'photo' },
 	{ href: '/settings', label: 'Settings', icon: 'settings' }
 ];
 

@@ -3,6 +3,11 @@
 /// <reference types="vite-plugin-pwa/info" />
 /// <reference types="vite-plugin-pwa/client" />
 
+interface Window {
+	/** Set by inline app.html recovery before modules load. */
+	__ALPHA_RECOVERING?: boolean;
+}
+
 declare module 'virtual:pwa-info' {
 	export const pwaInfo: {
 		webManifest?: { linkTag?: string; href?: string };

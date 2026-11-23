@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+		/>
+		<meta name="theme-color" content="#090909" />
+		<meta name="color-scheme" content="dark" />
+		<meta name="robots" content="noindex" />
+		<title>Reset Alpha</title>
+		<style>
+			html,
+			body {
+				margin: 0;
+				min-height: 100%;
+				background: #090909;
+				color: #eee;
+				font: 500 15px/1.45 system-ui, -apple-system, sans-serif;
+			}
+			main {
+				min-height: 100dvh;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 24px;
+				box-sizing: border-box;
+				text-align: center;
+			}
+			h1 {
+				margin: 0 0 10px;
+				font-size: 18px;
+				font-weight: 650;
+			}
+			p {
+				margin: 0 0 12px;
+				color: #aaa;
+			}
+			button {
+				height: 44px;
+				padding: 0 18px;
+				border: 0;
+				border-radius: 14px;
+				background: #eee;
+				color: #111;
+				font: 650 14px system-ui, -apple-system, sans-serif;
+				cursor: pointer;
+			}
+			button:disabled {
+				opacity: 0.55;
+				cursor: wait;
+			}
+			.note {
+				margin-top: 18px;
+				font-size: 13px;
+				color: #777;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<div style="max-width: 320px">
+				<h1 id="title">Resetting Alpha…</h1>
+				<p id="body">Clearing the cached app shell on this phone, then reloading.</p>
+				<button type="button" id="again" hidden>Try again</button>
+				<p class="note">
+					This page bypasses the service worker. Safe to open when the normal app is a blank
+					screen.
+				</p>
+			</div>
+		</main>
+		<script>
+			(function () {
+				/*
+				 * CRITICAL: /api/* is denylisted by the PWA NavigationRoute, so a poisoned
+				 * SW cannot intercept this document. Unregister + clear caches here, then
+				 * bounce to a cache-busted home URL.
+				 *
+				 * Never await SW APIs without a timeout — unregister/caches.delete can hang
+				 * on iOS while a controller is active.
+				 */
+				var title = document.getElementById('title');
+				var body = document.getElementById('body');
+				var again = document.getElementById('again');
+				var finished = false;
+
+				function withTimeout(promise, ms) {
+					return Promise.race([
+						Promise.resolve(promise).catch(function () {}),
+						new Promise(function (resolve) {
+							setTimeout(resolve, ms);
+						})
+					]);
+				}
+
+				function goHome() {
+					if (finished) return;
+					finished = true;
+					location.replace('/?_r=' + Date.now());
+				}
+
+				async function recover() {
+					await withTimeout(
+						(async function () {
+							if (typeof caches === 'undefined') return;
+							var keys = await caches.keys();
+							await Promise.all(
+								keys.map(function (k) {
+									return caches.delete(k);
+								})
+							);
+						})(),
+						2500
+					);
+
+					await withTimeout(
+						(async function () {
+							if (!('serviceWorker' in navigator)) return;
+							var regs = await navigator.serviceWorker.getRegistrations();
+							await Promise.all(
+								regs.map(function (r) {
+									return r.unregister();
+								})
+							);
+						})(),
+						2500
+					);
+
+					try {
+						sessionStorage.setItem('alpha.boot.recover.v1', String(Date.now()));
+					} catch (e) {}
+
+					title.textContent = 'Reloading…';
+					body.textContent = 'Opening a fresh copy of Alpha.';
+					goHome();
+				}
+
+				/* Hard deadline so a hung Cache/SW API never leaves a stuck screen. */
+				setTimeout(goHome, 6000);
+
+				recover().catch(function () {
+					title.textContent = 'Couldn’t clear cache';
+					body.textContent =
+						'Tap try again, or clear Website Data for team.bley.farm in Safari Settings.';
+					again.hidden = false;
+					again.onclick = function () {
+						again.disabled = true;
+						finished = false;
+						recover().catch(goHome);
+					};
+				});
+			})();
+		</script>
+	</body>
+</html>

@@ -5,8 +5,10 @@
 		activeWebsite,
 		mobileNavForRole,
 		navForRole,
+		space,
 		websites
 	} from '$lib/sections.js';
+	import { spaceBrand } from '$lib/space-brand.svelte.js';
 	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
@@ -37,6 +39,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
+	import { requestPhotosUpload } from '$lib/photos-upload.svelte.js';
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
 	import {
@@ -57,6 +60,8 @@
 	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
 	import { locale, t } from '$lib/i18n.svelte.js';
 	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
+	import ChatVoiceNowPlaying from '$lib/components/ChatVoiceNowPlaying.svelte';
+	import { chatVoicePlayer } from '$lib/chat-voice-player.svelte.js';
 	import UiShell from '@alpha/ui/UiShell.svelte';
 	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
@@ -170,6 +175,7 @@
 				'/chat': 'nav.chat',
 				'/mail': 'nav.mail',
 				'/drive': 'nav.drive',
+				'/photos': 'nav.photos',
 				'/projects': 'nav.projects',
 				'/tasks': 'nav.tasks',
 				'/notes': 'nav.notes',
@@ -221,12 +227,16 @@
 		locale.value;
 		mailView.folder;
 		websites.length;
+		spaceBrand.iconUrl;
+		space.iconUrl;
 		return navForRole().map(withMailChildren);
 	});
 	const roleMobileNav = $derived.by(() => {
 		locale.value;
 		mailView.folder;
 		websites.length;
+		spaceBrand.iconUrl;
+		space.iconUrl;
 		return mobileNavForRole().map(withMailChildren);
 	});
 
@@ -373,14 +383,16 @@
 	const createMenuItems = $derived.by(() => {
 		locale.value;
 		return [
-			{ kind: 'task', label: t('create.task') },
-			{ kind: 'project', label: t('create.project') },
-			{ kind: 'note', label: t('create.note') },
-			{ kind: 'newsletter', label: t('create.newsletter') },
-			{ kind: 'ledger', label: t('create.ledger') },
-			{ kind: 'cost', label: t('create.cost') },
-			{ kind: 'sales', label: t('create.sales') },
-			{ kind: 'enterprise', label: t('create.enterprise') }
+			{ kind: 'task', label: t('create.task'), icon: 'tasks' },
+			{ kind: 'project', label: t('create.project'), icon: 'projects' },
+			{ kind: 'note', label: t('create.note'), icon: 'notes' },
+			{ kind: 'newsletter', label: t('create.newsletter'), icon: 'publications' },
+			{ kind: 'photo', label: t('create.photo'), icon: 'albums' },
+			{ kind: 'file', label: t('create.file'), icon: 'folder' },
+			{ kind: 'ledger', label: t('create.ledger'), icon: 'accounting' },
+			{ kind: 'cost', label: t('create.cost'), icon: 'accounting' },
+			{ kind: 'sales', label: t('create.sales'), icon: 'accounting' },
+			{ kind: 'enterprise', label: t('create.enterprise'), icon: 'enterprise' }
 		];
 	});
 
@@ -405,6 +417,16 @@
 
 	/** @param {string} kind */
 	function create(kind) {
+		if (kind === 'file') {
+			if (!path.startsWith('/drive')) go('/drive');
+			requestDriveUpload();
+			return;
+		}
+		if (kind === 'photo') {
+			if (!path.startsWith('/photos')) go('/photos');
+			requestPhotosUpload();
+			return;
+		}
 		openComposer(/** @type {any} */ (kind));
 		if (kind === 'task') go('/tasks');
 		else if (kind === 'project') go('/projects');
@@ -437,6 +459,11 @@
 			requestDriveUpload();
 			return;
 		}
+		if (kind === 'photo') {
+			if (!path.startsWith('/photos')) go('/photos');
+			requestPhotosUpload();
+			return;
+		}
 		if (kind === 'website') {
 			alert(t('web.addSiteSoon'));
 			return;
@@ -465,6 +492,10 @@
 	function onListPlus() {
 		if (createKind === 'file') {
 			requestDriveUpload();
+			return;
+		}
+		if (createKind === 'photo') {
+			requestPhotosUpload();
 			return;
 		}
 		if (createKind) openComposer(/** @type {any} */ (createKind));
@@ -525,11 +556,16 @@
 		{#if mailList}
 			<MailFolderTitle />
 		{:else}
-			<ListTitleChrome
-				title={chromeTitle}
-				syncing={titleSyncing}
-				titleClass={planningList ? 'planning-title' : ''}
-			/>
+			<div class="list-title-stack" class:voice-on={chatList && chatVoicePlayer.status !== 'idle'}>
+				<ListTitleChrome
+					title={chromeTitle}
+					syncing={titleSyncing}
+					titleClass={planningList ? 'planning-title' : ''}
+				/>
+				{#if chatList}
+					<ChatVoiceNowPlaying />
+				{/if}
+			</div>
 		{/if}
 	{/snippet}
 
@@ -547,7 +583,11 @@
 				<button
 					type="button"
 					class="chrome-btn list-plus"
-					aria-label={createKind === 'file' ? t('create.file') : t('create.newKind', { kind: createKind })}
+					aria-label={createKind === 'file'
+						? t('create.file')
+						: createKind === 'photo'
+							? t('create.photo')
+							: t('create.newKind', { kind: createKind })}
 					onclick={onListPlus}
 				>
 					<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -618,6 +658,13 @@
 </UiShell>
 
 <style>
+	.list-title-stack {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		width: 100%;
+	}
+
 	/* Planning zoom chrome rendered into UiShell list actions */
 	.zoom-seg {
 		display: inline-flex;

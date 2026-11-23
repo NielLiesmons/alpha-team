@@ -19,6 +19,105 @@
 		<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 		<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
 		<script>
+			/* Inline recovery — must run before any module load (poisoned SW / missing chunks). */
+			(function () {
+				try {
+					var params = new URLSearchParams(location.search);
+					var wantRecover = params.has('recover') || params.has('reset');
+					if (!wantRecover) return;
+
+					var full = params.has('reset');
+					window.__ALPHA_RECOVERING = true;
+
+					/* Visible first paint — never leave a blank gray shell. */
+					document.documentElement.style.background = '#090909';
+					document.documentElement.style.color = '#eee';
+					var paint = function () {
+						if (!document.body) return;
+						document.body.innerHTML =
+							'<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:#090909;color:#eee;font:500 15px/1.45 system-ui,-apple-system,sans-serif;text-align:center">' +
+							'<div style="max-width:320px">' +
+							'<p style="margin:0 0 10px;font-size:18px;font-weight:650">Resetting Alpha…</p>' +
+							'<p style="margin:0;color:#aaa">Clearing cached shell, then reloading.</p>' +
+							'</div></div>';
+					};
+					if (document.body) paint();
+					else document.addEventListener('DOMContentLoaded', paint, { once: true });
+
+					var done = false;
+					var goClean = function () {
+						if (done) return;
+						done = true;
+						var url = new URL(location.href);
+						url.searchParams.delete('recover');
+						url.searchParams.delete('reset');
+						url.searchParams.set('_r', String(Date.now()));
+						location.replace(url.pathname + url.search + url.hash);
+					};
+
+					var withTimeout = function (promise, ms) {
+						return Promise.race([
+							Promise.resolve(promise).catch(function () {}),
+							new Promise(function (resolve) {
+								setTimeout(resolve, ms);
+							})
+						]);
+					};
+
+					var clearAndGo = async function () {
+						await withTimeout(
+							(async function () {
+								if (typeof caches === 'undefined') return;
+								var keys = await caches.keys();
+								await Promise.all(
+									keys.map(function (k) {
+										return caches.delete(k);
+									})
+								);
+							})(),
+							2500
+						);
+						await withTimeout(
+							(async function () {
+								if (!('serviceWorker' in navigator)) return;
+								var regs = await navigator.serviceWorker.getRegistrations();
+								await Promise.all(
+									regs.map(function (r) {
+										return r.unregister();
+									})
+								);
+							})(),
+							2500
+						);
+						if (full) {
+							try {
+								var keep = { 'alpha-admin-theme': 1, 'alpha-admin-theme.v1': 1 };
+								var doomed = [];
+								for (var i = 0; i < localStorage.length; i++) {
+									var k = localStorage.key(i);
+									if (!k || keep[k]) continue;
+									if (k.indexOf('alpha') === 0) doomed.push(k);
+								}
+								for (var j = 0; j < doomed.length; j++) localStorage.removeItem(doomed[j]);
+							} catch (e) {}
+						}
+						try {
+							sessionStorage.setItem('alpha.boot.recover.v1', String(Date.now()));
+						} catch (e) {}
+						goClean();
+					};
+
+					/* Hard deadline — iOS can hang on caches.delete / unregister. */
+					setTimeout(goClean, 6000);
+					clearAndGo().catch(goClean);
+				} catch (e) {
+					try {
+						location.replace('/api/recover');
+					} catch (e2) {}
+				}
+			})();
+		</script>
+		<script>
 			(function () {
 				try {
 					var saved = localStorage.getItem('alpha-admin-theme') || 'system';
@@ -42,6 +141,7 @@
 		<script>
 			/* Escape hatch when the PWA shell never hydrates (stale SW / missing chunks). */
 			(function () {
+				if (window.__ALPHA_RECOVERING) return;
 				var started = false;
 				var mark = function () {
 					started = true;
@@ -49,34 +149,67 @@
 					if (el && el.parentNode) el.parentNode.removeChild(el);
 				};
 				window.addEventListener('alpha-boot-started', mark, { once: true });
+
+				var showFallback = function () {
+					if (started || window.__ALPHA_RECOVERING) return;
+					if (document.querySelector('.shell, .welcome, .splash')) {
+						mark();
+						return;
+					}
+					if (document.getElementById('alpha-boot-fallback')) return;
+					var wrap = document.createElement('div');
+					wrap.id = 'alpha-boot-fallback';
+					wrap.setAttribute('role', 'alert');
+					wrap.style.cssText =
+						'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#090909;color:#eee;font:500 15px/1.45 system-ui,-apple-system,sans-serif;text-align:center';
+					wrap.innerHTML =
+						'<div style="max-width:320px">' +
+						'<p style="margin:0 0 12px;font-size:18px;font-weight:650">Couldn’t start Alpha</p>' +
+						'<p style="margin:0 0 16px;color:#aaa">Cached shell looks stuck. Clear it and reload.</p>' +
+						'<button type="button" id="alpha-boot-reload" style="height:44px;padding:0 18px;border:0;border-radius:14px;background:#eee;color:#111;font:650 14px system-ui;cursor:pointer">Reload app</button>' +
+						'<p style="margin:16px 0 0;font-size:13px;color:#888">If this stays blank, open<br><a href="/api/recover" style="color:#ccc">team.bley.farm/api/recover</a></p>' +
+						'</div>';
+					document.body.appendChild(wrap);
+					var btn = document.getElementById('alpha-boot-reload');
+					if (btn) {
+						btn.onclick = function () {
+							/* Inline clear — do not depend on the Svelte bundle. */
+							btn.disabled = true;
+							btn.textContent = 'Clearing…';
+							var finish = function () {
+								location.replace('/?_r=' + Date.now());
+							};
+							var run = async function () {
+								try {
+									if (typeof caches !== 'undefined') {
+										var keys = await caches.keys();
+										await Promise.all(keys.map(function (k) {
+											return caches.delete(k);
+										}));
+									}
+								} catch (e) {}
+								try {
+									if ('serviceWorker' in navigator) {
+										var regs = await navigator.serviceWorker.getRegistrations();
+										await Promise.all(
+											regs.map(function (r) {
+												return r.unregister();
+											})
+										);
+									}
+								} catch (e) {}
+								finish();
+							};
+							run().catch(finish);
+						};
+					}
+				};
+
 				document.addEventListener(
 					'DOMContentLoaded',
 					function () {
-						setTimeout(function () {
-							if (started) return;
-							if (document.querySelector('.shell, .welcome, .splash .recover')) {
-								mark();
-								return;
-							}
-							if (document.getElementById('alpha-boot-fallback')) return;
-							var wrap = document.createElement('div');
-							wrap.id = 'alpha-boot-fallback';
-							wrap.setAttribute('role', 'alert');
-							wrap.style.cssText =
-								'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#090909;color:#eee;font:500 15px/1.4 system-ui,sans-serif;text-align:center';
-							wrap.innerHTML =
-								'<div style="max-width:320px">' +
-								'<p style="margin:0 0 12px;font-size:18px;font-weight:650">Couldn’t start Alpha</p>' +
-								'<p style="margin:0 0 16px;color:#aaa">Cached shell looks stuck. Reload, or open with ?recover=1</p>' +
-								'<button type="button" id="alpha-boot-reload" style="height:44px;padding:0 18px;border:0;border-radius:14px;background:#eee;color:#111;font:650 14px system-ui;cursor:pointer">Reload app</button>' +
-								'</div>';
-							document.body.appendChild(wrap);
-							var btn = document.getElementById('alpha-boot-reload');
-							if (btn)
-								btn.onclick = function () {
-									location.href = '/?recover=1';
-								};
-						}, 8000);
+						/* Faster than 8s — blank dark feels broken immediately on phones. */
+						setTimeout(showFallback, 3500);
 					},
 					{ once: true }
 				);

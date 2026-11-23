@@ -36,15 +36,13 @@
 	} from '$lib/chat.svelte.js';
 	import { mailTipCache } from '$lib/mail.svelte.js';
 	import { startChatTipPoll, stopChatTipPoll } from '$lib/chat-sync.svelte.js';
-	import { ui } from '$lib/workspace.svelte.js';
+	import { openComposer, ui } from '$lib/workspace.svelte.js';
 	import { chatStackFlags } from '$lib/chat-stack.js';
-	import { compareChatMessageAsc } from '$lib/drive/entities.js';
+	import { compareChatMessageAsc, uploadChatAttachment } from '$lib/drive/entities.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
-	import { putPath } from '$lib/drive/client.js';
-	import { putMediaBlob } from '$lib/drive/media.js';
-	import { inferMediaKind, mimeFromNameAndType } from '$lib/drive/media-kind.js';
+	import { inferMediaKind } from '$lib/drive/media-kind.js';
 	import {
 		attachComposerClearPad,
 		attachFeedPinResize,
@@ -55,6 +53,10 @@
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
+	import ChatAttachModal from '$lib/components/ChatAttachModal.svelte';
+	import ChatMediaStage from '$lib/components/ChatMediaStage.svelte';
+	import { createVoiceRecorder } from '$lib/voice-recorder.js';
+	import { formatVoiceRecordTime } from '$lib/voice-waveform.js';
 
 	/** @type {{ channelId?: string }} */
 	let { channelId = 'general' } = $props();
@@ -76,13 +78,42 @@
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
 	/** @type {HTMLInputElement | undefined} */
+	let mediaInputEl = $state();
+	/** @type {HTMLInputElement | undefined} */
 	let fileInputEl = $state();
-	/** @type {any[]} */
+	let attachOpen = $state(false);
+	const attachItems = $derived([
+		{ kind: 'photo', label: t('nav.photos'), icon: 'albums' },
+		{ kind: 'file', label: t('chat.file'), icon: 'folder' },
+		{ kind: 'note', label: t('create.note'), icon: 'notes' },
+		{ kind: 'task', label: t('create.task'), icon: 'tasks' },
+		{ kind: 'poll', label: t('chat.poll'), icon: 'chat' }
+	]);
+	/**
+	 * Staged attachments — media items carry per-pic captions (WhatsApp-style).
+	 * @type {{ id: string, file: File, previewUrl: string | null, kind: string, caption: string }[]}
+	 */
 	let pendingFiles = $state([]);
-	let voiceOpen = $state(false);
-	let voiceSecs = $state(0);
+	/** Index into media-only subset for the stage hero / caption field. */
+	let mediaFocus = $state(0);
+	/** @typedef {'idle' | 'holding' | 'locked'} VoiceMode */
+	let voiceMode = $state(/** @type {VoiceMode} */ ('idle'));
+	let voiceMs = $state(0);
+	let voicePaused = $state(false);
+	let voiceCancelHint = $state(false);
+	let voiceDragX = $state(0);
+	let voiceDragY = $state(0);
 	/** @type {ReturnType<typeof setInterval> | null} */
 	let voiceTimer = null;
+	const voiceRecorder = createVoiceRecorder();
+	const VOICE_CANCEL_PX = 80;
+	const VOICE_LOCK_PX = 120;
+	const VOICE_MIN_MS = 1000;
+	const VOICE_MIN_BYTES = 800;
+	const voiceRecording = $derived(voiceMode !== 'idle');
+	const voiceLocked = $derived(voiceMode === 'locked');
+	/** True while the mic pointer is down (survives async getUserMedia). */
+	let voicePointerDown = false;
 
 	/** Sticky pin — cleared when user scrolls away; gates auto-follow + resize snap. */
 	let pinBottom = $state(true);
@@ -127,7 +158,39 @@
 		)
 	);
 	const stackMap = $derived(chatStackFlags(chronological, activePerson().email || ''));
+	const pendingMedia = $derived(
+		pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video')
+	);
+	const pendingDocs = $derived(
+		pendingFiles.filter((f) => f.kind !== 'image' && f.kind !== 'video')
+	);
 	const canSend = $derived(Boolean(draft.trim()) || pendingFiles.length > 0);
+
+	function flushActiveCaption() {
+		if (!pendingMedia.length) return;
+		const focus = Math.min(Math.max(0, mediaFocus), pendingMedia.length - 1);
+		const target = pendingMedia[focus];
+		if (!target) return;
+		const idx = pendingFiles.findIndex((f) => f.id === target.id);
+		if (idx < 0) return;
+		if (pendingFiles[idx].caption === draft) return;
+		pendingFiles = pendingFiles.map((f, i) => (i === idx ? { ...f, caption: draft } : f));
+	}
+
+	/** @param {number} i */
+	function setMediaFocus(i) {
+		flushActiveCaption();
+		const next = Math.min(Math.max(0, i), Math.max(0, pendingMedia.length - 1));
+		mediaFocus = next;
+		draft = pendingMedia[next]?.caption || '';
+		tick().then(() => {
+			if (inputEl) {
+				inputEl.style.height = 'auto';
+				inputEl.style.height = `${Math.min(inputEl.scrollHeight, 120)}px`;
+				updateInputFade();
+			}
+		});
+	}
 	const presence = $derived(
 		(chatEphemeral || []).filter((e) => e.channel_id === channelId && e.state !== 'idle')
 	);
@@ -293,7 +356,9 @@
 		return () => {
 			stopChatTipPoll();
 			if (highlightTimer != null) clearTimeout(highlightTimer);
-			if (voiceTimer != null) clearInterval(voiceTimer);
+			stopVoiceTick();
+			voiceRecorder.cancel();
+			signalRecording(channelId, false);
 		};
 	});
 
@@ -662,7 +727,30 @@
 	}
 
 	function openAttach() {
-		fileInputEl?.click();
+		attachOpen = true;
+	}
+
+	/** @param {string} kind */
+	function onAttachPick(kind) {
+		if (kind === 'photo') {
+			mediaInputEl?.click();
+			return;
+		}
+		if (kind === 'file') {
+			fileInputEl?.click();
+			return;
+		}
+		if (kind === 'note') {
+			openComposer('note');
+			return;
+		}
+		if (kind === 'task') {
+			openComposer('task');
+			return;
+		}
+		if (kind === 'poll') {
+			chatUi.error = t('chat.pollSoon');
+		}
 	}
 
 	/** @param {Event} e */
@@ -671,69 +759,121 @@
 		const files = [...(input.files || [])];
 		input.value = '';
 		if (!files.length) return;
-		pendingFiles = [
-			...pendingFiles,
-			...files.map((file) => {
-				const kind = inferMediaKind({
-					content_type: file.type,
-					name: file.name
-				});
-				return {
-					file,
-					previewUrl:
-						kind === 'image' || kind === 'video' ? URL.createObjectURL(file) : null,
-					kind
-				};
-			})
-		];
+		const hadMedia = pendingMedia.length > 0;
+		if (hadMedia) flushActiveCaption();
+		const seedCaption = !hadMedia && draft.trim() ? draft.trim() : '';
+		const added = files.map((file, i) => {
+			const kind = inferMediaKind({
+				content_type: file.type,
+				name: file.name
+			});
+			const isMedia = kind === 'image' || kind === 'video';
+			return {
+				id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${i}`,
+				file,
+				previewUrl: isMedia ? URL.createObjectURL(file) : null,
+				kind,
+				caption: isMedia && i === 0 ? seedCaption : ''
+			};
+		});
+		pendingFiles = [...pendingFiles, ...added];
+		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
+		if (!media.length) return;
+		const newMedia = added.filter((a) => a.kind === 'image' || a.kind === 'video');
+		if (!hadMedia) {
+			mediaFocus = 0;
+			draft = media[0]?.caption || '';
+		} else if (newMedia.length) {
+			const idx = media.findIndex((m) => m.id === newMedia[0].id);
+			mediaFocus = idx >= 0 ? idx : media.length - 1;
+			draft = media[mediaFocus]?.caption || '';
+		}
 	}
 
 	function clearPendingFiles() {
+		flushActiveCaption();
 		for (const f of pendingFiles) {
 			if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
 		}
 		pendingFiles = [];
+		mediaFocus = 0;
+		draft = '';
+	}
+
+	/** @param {number} mediaIndex */
+	function removePendingMedia(mediaIndex) {
+		flushActiveCaption();
+		const target = pendingMedia[mediaIndex];
+		if (!target) return;
+		if (target.previewUrl) URL.revokeObjectURL(target.previewUrl);
+		pendingFiles = pendingFiles.filter((f) => f.id !== target.id);
+		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
+		if (!media.length) {
+			mediaFocus = 0;
+			draft = '';
+			return;
+		}
+		mediaFocus = Math.min(mediaIndex, media.length - 1);
+		draft = media[mediaFocus]?.caption || '';
 	}
 
 	/**
-	 * @param {File} file
-	 * @param {string} msgId
+	 * @param {{
+	 *   body: string,
+	 *   files: typeof pendingFiles,
+	 *   parent: any | null,
+	 *   pubRef: { type: string, id: string } | null
+	 * }} opts
 	 */
-	async function uploadChatAttachment(file, msgId) {
+	async function sendOne(opts) {
 		const session = activeSession();
 		if (!session) throw new Error(t('settings.connectDriveFirst'));
-		const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'file';
-		const path = `chat/media/${msgId}/${safe}`;
-		const kind = inferMediaKind({ content_type: file.type, name: file.name });
-		const contentType = mimeFromNameAndType(file.name, file.type);
-		const bytes = new Uint8Array(await file.arrayBuffer());
-		if (file.size > 512 * 1024 || kind === 'video' || kind === 'voice') {
-			const mediaPath = `chat/media/${msgId}/media.json`;
-			await putMediaBlob(session, mediaPath, contentType, bytes);
-			return {
-				path: mediaPath,
-				content_type: contentType,
-				kind,
-				name: file.name,
-				bytes: file.size
-			};
-		}
-		await putPath(session, path, 'blob', bytes);
-		return {
-			path,
-			content_type: contentType,
-			kind,
-			name: file.name,
-			bytes: file.size
-		};
+		const files = opts.files;
+		const localAtt = files.map((f) => ({
+			kind: f.kind,
+			name: f.file.name,
+			bytes: f.file.size,
+			content_type: f.file.type,
+			previewUrl: f.previewUrl,
+			path: `local:${f.file.name}`,
+			...(f.caption?.trim() ? { caption: f.caption.trim() } : {})
+		}));
+		await postChatMessage({
+			body: opts.body,
+			kind: opts.pubRef ? 'comment' : 'chat',
+			ref: opts.pubRef,
+			reply_to: opts.parent?.id ?? null,
+			channel_id: channelId,
+			...(localAtt.length ? { attachments: localAtt } : {}),
+			...(files.length
+				? {
+						resolveAttachments: async () =>
+							Promise.all(
+								files.map(async (f) => {
+									const meta = await uploadChatAttachment(session, f.file);
+									return {
+										...meta,
+										previewUrl: f.previewUrl,
+										...(f.caption?.trim() ? { caption: f.caption.trim() } : {})
+									};
+								})
+							)
+					}
+				: {})
+		});
 	}
 
 	async function send() {
-		const body = draft.trim();
-		const files = pendingFiles;
-		if (!body && !files.length) return;
-		draft = '';
+		flushActiveCaption();
+		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
+		const docs = pendingFiles.filter((f) => f.kind !== 'image' && f.kind !== 'video');
+		const textOnly = draft.trim();
+		if (!textOnly && !media.length && !docs.length) return;
+
+		const filesSnapshot = pendingFiles;
 		pendingFiles = [];
+		mediaFocus = 0;
+		draft = '';
 		fieldTall = false;
 		fadeTop = false;
 		fadeBottom = false;
@@ -745,62 +885,224 @@
 				? { type: String(parent.ref.type), id: String(parent.ref.id) }
 				: null;
 
-		/** Optimistic local previews — upload runs after bubble paints; ✓ only after Drive settle. */
-		const localAtt = files.map((f) => ({
-			kind: f.kind,
-			name: f.file.name,
-			bytes: f.file.size,
-			content_type: f.file.type,
-			previewUrl: f.previewUrl,
-			path: `local:${f.file.name}`
-		}));
-
 		try {
 			pinBottom = true;
-			const uploadId = crypto.randomUUID().slice(0, 16);
+			/* One message per pic/vid so each caption stands alone (WhatsApp-style comments). */
+			for (const f of media) {
+				await sendOne({
+					body: (f.caption || '').trim(),
+					files: [f],
+					parent,
+					pubRef
+				});
+			}
+			if (docs.length) {
+				await sendOne({
+					body: media.length ? '' : textOnly,
+					files: docs,
+					parent,
+					pubRef
+				});
+			} else if (textOnly && !media.length) {
+				await sendOne({ body: textOnly, files: [], parent, pubRef });
+			}
+			inputEl?.focus();
+			void goBottom(true);
+		} catch (e) {
+			/* Restore stage so the user can retry without re-picking. */
+			pendingFiles = filesSnapshot;
+			chatUi.error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	function stopVoiceTick() {
+		if (voiceTimer != null) {
+			clearInterval(voiceTimer);
+			voiceTimer = null;
+		}
+	}
+
+	function startVoiceTick() {
+		stopVoiceTick();
+		voiceTimer = setInterval(() => {
+			if (!voicePaused) voiceMs = voiceRecorder.elapsedMs();
+		}, 100);
+	}
+
+	function resetVoiceUi() {
+		voiceMode = 'idle';
+		voiceMs = 0;
+		voicePaused = false;
+		voiceCancelHint = false;
+		voiceDragX = 0;
+		voiceDragY = 0;
+		stopVoiceTick();
+		signalRecording(channelId, false);
+	}
+
+	async function beginVoiceRecording() {
+		if (voiceMode !== 'idle' || canSend) return;
+		try {
+			await voiceRecorder.start();
+			if (!voicePointerDown) {
+				/* Released during permission prompt */
+				voiceRecorder.cancel();
+				resetVoiceUi();
+				return;
+			}
+			voiceMode = 'holding';
+			voiceMs = 0;
+			voicePaused = false;
+			voiceCancelHint = false;
+			voiceDragX = 0;
+			voiceDragY = 0;
+			signalRecording(channelId, true);
+			startVoiceTick();
+		} catch (e) {
+			resetVoiceUi();
+			voiceRecorder.cancel();
+			const msg = e instanceof Error ? e.message : String(e);
+			chatUi.error =
+				msg === 'voice.unsupported'
+					? t('chat.voiceUnsupported')
+					: t('chat.voiceMicDenied');
+		}
+	}
+
+	function cancelVoiceRecording() {
+		voiceRecorder.cancel();
+		resetVoiceUi();
+	}
+
+	function toggleVoicePause() {
+		if (!voiceLocked) return;
+		if (voicePaused) {
+			voiceRecorder.resume();
+			voicePaused = false;
+		} else {
+			voiceRecorder.pause();
+			voicePaused = true;
+			voiceMs = voiceRecorder.elapsedMs();
+		}
+	}
+
+	async function finishVoiceRecording(send) {
+		const elapsed = voiceRecorder.elapsedMs();
+		if (!send) {
+			voiceRecorder.cancel();
+			resetVoiceUi();
+			return;
+		}
+		const result = await voiceRecorder.stop();
+		resetVoiceUi();
+		if (!result || elapsed < VOICE_MIN_MS || result.bytes < VOICE_MIN_BYTES) {
+			chatUi.error = t('chat.voiceTooShort');
+			return;
+		}
+		const session = activeSession();
+		if (!session) {
+			chatUi.error = t('settings.connectDriveFirst');
+			return;
+		}
+		const parent = replyTo;
+		replyTo = null;
+		const pubRef =
+			parent && chatPublicationRefKey(parent) && parent.ref?.type && parent.ref?.id
+				? { type: String(parent.ref.type), id: String(parent.ref.id) }
+				: null;
+		const previewUrl = URL.createObjectURL(result.blob);
+		const localAtt = {
+			kind: 'voice',
+			name: result.file.name,
+			bytes: result.bytes,
+			content_type: result.file.type,
+			previewUrl,
+			path: `local:${result.file.name}`,
+			duration_ms: result.durationMs
+		};
+		try {
+			pinBottom = true;
 			await postChatMessage({
-				body,
+				body: '',
 				kind: pubRef ? 'comment' : 'chat',
 				ref: pubRef,
 				reply_to: parent?.id ?? null,
 				channel_id: channelId,
-				...(localAtt.length ? { attachments: localAtt } : {}),
-				...(files.length
-					? {
-							resolveAttachments: async () =>
-								Promise.all(
-									files.map(async (f) => {
-										const meta = await uploadChatAttachment(f.file, uploadId);
-										return { ...meta, previewUrl: f.previewUrl };
-									})
-								)
+				attachments: [localAtt],
+				resolveAttachments: async () => {
+					const meta = await uploadChatAttachment(session, result.file);
+					return [
+						{
+							...meta,
+							kind: 'voice',
+							previewUrl,
+							duration_ms: result.durationMs
 						}
-					: {})
+					];
+				}
 			});
-			inputEl?.focus();
 			void goBottom(true);
 		} catch (e) {
 			chatUi.error = e instanceof Error ? e.message : String(e);
 		}
 	}
 
-	function openVoiceShell() {
-		voiceOpen = true;
-		voiceSecs = 0;
-		signalRecording(channelId, true);
-		if (voiceTimer != null) clearInterval(voiceTimer);
-		voiceTimer = setInterval(() => {
-			voiceSecs += 1;
-		}, 1000);
+	/** @param {PointerEvent} e */
+	function onMicPointerDown(e) {
+		if (canSend || voiceMode === 'locked') return;
+		e.preventDefault();
+		const target = e.currentTarget;
+		if (!(target instanceof HTMLElement)) return;
+		voicePointerDown = true;
+		target.setPointerCapture(e.pointerId);
+		void beginVoiceRecording();
 	}
 
-	function cancelVoiceShell() {
-		voiceOpen = false;
-		voiceSecs = 0;
-		signalRecording(channelId, false);
-		if (voiceTimer != null) {
-			clearInterval(voiceTimer);
-			voiceTimer = null;
+	/** @param {PointerEvent} e */
+	function onMicPointerMove(e) {
+		if (voiceMode !== 'holding') return;
+		const target = e.currentTarget;
+		if (!(target instanceof HTMLElement)) return;
+		const rect = target.getBoundingClientRect();
+		const originX = rect.left + rect.width / 2;
+		const originY = rect.top + rect.height / 2;
+		const dx = e.clientX - originX;
+		const dy = e.clientY - originY;
+		if (Math.abs(dx) > Math.abs(dy)) {
+			voiceDragX = Math.min(0, dx);
+			voiceDragY = 0;
+			voiceCancelHint = voiceDragX < -VOICE_CANCEL_PX;
+		} else {
+			voiceDragY = Math.min(0, dy);
+			voiceDragX = 0;
+			voiceCancelHint = false;
+			if (voiceDragY < -VOICE_LOCK_PX) {
+				voiceMode = 'locked';
+				voiceDragX = 0;
+				voiceDragY = 0;
+				voiceCancelHint = false;
+				try {
+					navigator.vibrate?.(12);
+				} catch {
+					/* ignore */
+				}
+			}
+		}
+	}
+
+	/** @param {PointerEvent} e */
+	function onMicPointerUp(e) {
+		voicePointerDown = false;
+		const target = e.currentTarget;
+		if (target instanceof HTMLElement) {
+			try {
+				target.releasePointerCapture(e.pointerId);
+			} catch {
+				/* ignore */
+			}
+		}
+		if (voiceMode === 'holding') {
+			void finishVoiceRecording(!voiceCancelHint);
 		}
 	}
 
@@ -810,8 +1112,13 @@
 			e.preventDefault();
 			void send();
 		}
-		if (e.key === 'Escape' && replyTo) {
-			clearReply();
+		if (e.key === 'Escape') {
+			if (voiceRecording) {
+				e.preventDefault();
+				cancelVoiceRecording();
+				return;
+			}
+			if (replyTo) clearReply();
 		}
 	}
 
@@ -878,7 +1185,7 @@
 
 	/* Full capsule by default; squared top only for quote / media / voice — not tall text. */
 	const chromeExpanded = $derived(
-		Boolean(replyPreview) || pendingFiles.length > 0 || voiceOpen
+		Boolean(replyPreview) || pendingFiles.length > 0 || voiceRecording
 	);
 
 	function presenceLabel(/** @type {any} */ e) {
@@ -1166,18 +1473,27 @@
 						</div>
 					</div>
 				{/if}
-				{#if pendingFiles.length}
+				{#if pendingMedia.length}
+					<ChatMediaStage
+						items={pendingMedia}
+						activeIndex={Math.min(mediaFocus, pendingMedia.length - 1)}
+						onActiveIndex={setMediaFocus}
+						onRemove={removePendingMedia}
+						onAddMore={openAttach}
+					/>
+				{/if}
+				{#if pendingDocs.length}
 					<div class="attach-bar">
-						{#each pendingFiles as f, i (f.file.name + i)}
+						{#each pendingDocs as f (f.id)}
 							<span class="attach-chip">
-								{f.kind === 'image' ? t('chat.image') : f.kind === 'video' ? t('chat.video') : f.file.name}
+								{f.file.name}
 								<button
 									type="button"
 									class="attach-x"
 									aria-label={t('chat.remove')}
 									onclick={() => {
 										if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-										pendingFiles = pendingFiles.filter((_, j) => j !== i);
+										pendingFiles = pendingFiles.filter((x) => x.id !== f.id);
 									}}>×</button
 								>
 							</span>
@@ -1185,79 +1501,143 @@
 						<button type="button" class="attach-clear" onclick={clearPendingFiles}>{t('chat.clear')}</button>
 					</div>
 				{/if}
-				{#if voiceOpen}
-					<div class="voice-shell">
-						<span class="voice-pulse" aria-hidden="true"></span>
-						<span class="voice-label"
-							>{t('chat.recording', { name: displayNameFromEmail(activePerson().email) })}
-							{voiceSecs}s</span
+				<div class="composer-row" class:chrome-expanded={chromeExpanded} class:voice-on={voiceRecording}>
+					{#if voiceMode === 'holding'}
+						<div
+							class="voice-lock-pill"
+							class:hot={voiceDragY < -VOICE_LOCK_PX * 0.55}
+							aria-hidden="true"
 						>
-						<button type="button" class="voice-cancel" onclick={cancelVoiceShell}>{t('chat.cancel')}</button>
-						<button
-							type="button"
-							class="voice-send"
-							onclick={() => {
-								cancelVoiceShell();
-								chatUi.error = t('chat.voiceNext');
-							}}>{t('chat.send')}</button
-						>
-					</div>
-				{/if}
-				<div class="composer-row" class:chrome-expanded={chromeExpanded}>
+							<span class="lock-arrow">↑</span>
+							<svg class="lock-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+								<rect x="3.5" y="7" width="9" height="7" rx="1.5" stroke="currentColor" stroke-width="1.4" />
+								<path
+									d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"
+									stroke="currentColor"
+									stroke-width="1.4"
+									stroke-linecap="round"
+								/>
+							</svg>
+						</div>
+					{/if}
+					<input
+						bind:this={mediaInputEl}
+						type="file"
+						class="file-input"
+						multiple
+						accept="image/*,video/*"
+						onchange={onFilesPicked}
+					/>
 					<input
 						bind:this={fileInputEl}
 						type="file"
 						class="file-input"
 						multiple
-						accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip"
+						accept=".pdf,.doc,.docx,.txt,.zip,application/pdf"
 						onchange={onFilesPicked}
 					/>
-					<button type="button" class="side-btn plus" aria-label={t('chat.attach')} onclick={openAttach}>
-						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-							<path
-								d="M9 3.5v11M3.5 9h11"
-								stroke="currentColor"
-								stroke-width="1.7"
-								stroke-linecap="round"
-							/>
-						</svg>
-					</button>
-					<div
-						class="composer-field"
-						class:fade-top={fadeTop}
-						class:fade-bottom={fadeBottom}
-					>
-						<textarea
-							bind:this={inputEl}
-							class="composer-input"
-							rows="1"
-							placeholder={replyTo ? t('chat.reply') : t('chat.message')}
-							bind:value={draft}
-							onkeydown={onKey}
-							oninput={onInput}
-							onscroll={updateInputFade}
-							aria-label={t('chat.message')}
-						></textarea>
-					</div>
-					{#if canSend}
-						<button type="button" class="side-btn send" aria-label={t('chat.send')} onclick={() => void send()}>
-							<AlphaLogo size={15} />
-						</button>
+					{#if voiceRecording}
+						{#if voiceLocked}
+							<button type="button" class="side-btn plus" aria-label={t('chat.cancel')} onclick={cancelVoiceRecording}>
+								<span class="voice-x">×</span>
+							</button>
+						{:else}
+							<span class="side-btn plus ghost" aria-hidden="true"></span>
+						{/if}
+						<div class="voice-inline" class:cancel={voiceCancelHint}>
+							<span class="voice-pulse" class:paused={voicePaused} aria-hidden="true"></span>
+							<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
+							{#if voiceLocked}
+								<button type="button" class="voice-pause" onclick={toggleVoicePause}>
+									{voicePaused ? t('chat.resumeVoice') : t('chat.pauseVoice')}
+								</button>
+							{:else}
+								<span class="voice-slide" style:transform="translateX({Math.max(voiceDragX, -72) * 0.35}px)">
+									‹ {t('chat.slideToCancel')}
+								</span>
+							{/if}
+						</div>
+						{#if voiceLocked}
+							<button
+								type="button"
+								class="side-btn send"
+								aria-label={t('chat.send')}
+								onclick={() => void finishVoiceRecording(true)}
+							>
+								<AlphaLogo size={15} />
+							</button>
+						{:else}
+							<button
+								type="button"
+								class="side-btn mic active"
+								class:cancel={voiceCancelHint}
+								aria-label={t('chat.voiceMessage')}
+								style:transform="translate({voiceDragX}px, {voiceDragY}px)"
+								onpointerdown={onMicPointerDown}
+								onpointermove={onMicPointerMove}
+								onpointerup={onMicPointerUp}
+								onpointercancel={onMicPointerUp}
+							>
+								<Voice size={22} />
+							</button>
+						{/if}
 					{:else}
-						<button
-							type="button"
-							class="side-btn mic"
-							aria-label={t('chat.voiceMessage')}
-							title={t('chat.voiceMessage')}
-							onclick={openVoiceShell}
-						>
-							<Voice size={22} />
+						<button type="button" class="side-btn plus" aria-label={t('chat.attach')} onclick={openAttach}>
+							<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+								<path
+									d="M9 3.5v11M3.5 9h11"
+									stroke="currentColor"
+									stroke-width="1.7"
+									stroke-linecap="round"
+								/>
+							</svg>
 						</button>
+						<div
+							class="composer-field"
+							class:fade-top={fadeTop}
+							class:fade-bottom={fadeBottom}
+						>
+							<textarea
+								bind:this={inputEl}
+								class="composer-input"
+								rows="1"
+								placeholder={pendingMedia.length
+									? t('chat.addCaption')
+									: replyTo
+										? t('chat.reply')
+										: t('chat.message')}
+								bind:value={draft}
+								onkeydown={onKey}
+								oninput={onInput}
+								onscroll={updateInputFade}
+								aria-label={pendingMedia.length ? t('chat.addCaption') : t('chat.message')}
+							></textarea>
+						</div>
+						{#if canSend}
+							<button type="button" class="side-btn send" aria-label={t('chat.send')} onclick={() => void send()}>
+								<AlphaLogo size={15} />
+							</button>
+						{:else}
+							<button
+								type="button"
+								class="side-btn mic"
+								aria-label={t('chat.voiceMessage')}
+								title={t('chat.voiceMessage')}
+								onpointerdown={onMicPointerDown}
+								onpointermove={onMicPointerMove}
+								onpointerup={onMicPointerUp}
+								onpointercancel={onMicPointerUp}
+							>
+								<Voice size={22} />
+							</button>
+						{/if}
 					{/if}
 				</div>
 			</ChatComposer>
 		</div>
 	</div>
+
+	<ChatAttachModal bind:open={attachOpen} items={attachItems} onPick={onAttachPick} />
 </div>
 
 <style>
@@ -2046,55 +2426,130 @@
 		padding: 0 2px;
 	}
 
-	.voice-shell {
+	.composer-row.voice-on .side-btn.plus.ghost {
+		visibility: hidden;
+	}
+
+	.voice-lock-pill {
+		position: absolute;
+		right: 4px;
+		bottom: calc(100% + 10px);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		width: 44px;
+		height: 64px;
+		border-radius: 20px;
+		border: 1px solid var(--fg-8);
+		background: var(--fg);
+		color: var(--bg);
+		pointer-events: none;
+		opacity: 0.92;
+		transition: transform 0.18s ease, opacity 0.18s ease;
+	}
+
+	.voice-lock-pill.hot {
+		transform: translateY(-4px);
+	}
+
+	.lock-arrow {
+		font-size: 12px;
+		opacity: 0.7;
+	}
+
+	.lock-ico {
+		display: block;
+		opacity: 0.9;
+	}
+
+	.voice-inline {
+		flex: 1 1 auto;
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 8px 12px 0;
+		min-width: 0;
+		padding: 0 4px;
+	}
+
+	.voice-inline.cancel .voice-time {
+		color: var(--accent-3, #c44);
 	}
 
 	.voice-pulse {
+		flex: 0 0 auto;
 		width: 10px;
 		height: 10px;
 		border-radius: 50%;
-		background: #e44;
-		animation: voice-blink 1s ease infinite;
+		background: var(--accent-1, #6c5ce7);
+		animation: voice-blink 0.62s ease infinite alternate;
+	}
+
+	.voice-pulse.paused {
+		animation: none;
+		opacity: 0.35;
 	}
 
 	@keyframes voice-blink {
-		0%,
-		100% {
-			opacity: 0.35;
+		from {
+			opacity: 0.28;
 		}
-		50% {
+		to {
 			opacity: 1;
 		}
 	}
 
-	.voice-label {
-		flex: 1;
-		font-size: 13px;
-		color: var(--fg-66);
+	.voice-time {
+		flex: 0 0 auto;
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--fg);
+		font-variant-numeric: tabular-nums;
 	}
 
-	.voice-cancel,
-	.voice-send {
-		border: 0;
+	.voice-slide {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-33);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-align: end;
+	}
+
+	.voice-pause {
+		margin-left: auto;
+		border: none;
 		border-radius: 999px;
-		padding: 6px 12px;
+		padding: 6px 10px;
+		background: var(--fg-8);
+		color: var(--fg-66);
 		font: inherit;
 		font-size: 12px;
 		font-weight: 600;
 		cursor: pointer;
 	}
 
-	.voice-cancel {
-		background: var(--fg-8);
+	.voice-x {
+		font-size: 22px;
+		line-height: 1;
 		color: var(--fg-66);
 	}
 
-	.voice-send {
-		background: var(--gradient-accent-1);
+	.side-btn.mic {
+		touch-action: none;
+		user-select: none;
+	}
+
+	.side-btn.mic.active {
+		background: var(--accent-1, #6c5ce7);
 		color: #fff;
+	}
+
+	.side-btn.mic.active.cancel {
+		background: var(--accent-3, #c44);
 	}
 </style>

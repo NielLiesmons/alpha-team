@@ -28,6 +28,7 @@
     "@tiptap/extension-task-list": "^3.32.0",
     "@tiptap/pm": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",
+    "blurhash": "^2.0.5",
     "email-reply-parser": "^3.0.0",
     "qrcode": "^1.5.4"
   }

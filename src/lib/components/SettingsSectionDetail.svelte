@@ -38,6 +38,8 @@
 	import { clearLocalUiCache } from '$lib/ui-cache.js';
 	import { locale, localeChoices, setLocale, t } from '$lib/i18n.svelte.js';
 	import { setTheme, themeChoice } from '$lib/theme.svelte.js';
+	import { space } from '$lib/sections.js';
+	import { setSpaceIcon, spaceIconUrl } from '$lib/space-brand.svelte.js';
 	import { forceClearSelection, refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { formatBytes, storageEstimate } from '$lib/offline-store.js';
 
@@ -110,6 +112,11 @@
 
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput = $state();
+	/** @type {HTMLInputElement | undefined} */
+	let spaceIconInput = $state();
+	let spaceIconBusy = $state(false);
+	let spaceIconMsg = $state('');
+	const spaceIconSrc = $derived(spaceIconUrl() || space.iconUrl);
 
 	$effect(() => {
 		const m = memberFor(targetEmail);
@@ -248,6 +255,24 @@
 			picMsg = err instanceof Error ? err.message : String(err);
 		} finally {
 			picBusy = false;
+		}
+	}
+
+	/** @param {Event} e */
+	async function onSpaceIconPick(e) {
+		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		spaceIconBusy = true;
+		spaceIconMsg = '';
+		try {
+			await setSpaceIcon(file);
+			spaceIconMsg = t('settings.spaceIconUpdated');
+		} catch (err) {
+			spaceIconMsg = err instanceof Error ? err.message : String(err);
+		} finally {
+			spaceIconBusy = false;
 		}
 	}
 
@@ -487,6 +512,30 @@
 	</section>
 {:else if sectionId === 'appearance'}
 	<section class="block">
+		{#if isOperator}
+			<p class="field-label">{t('settings.spaceIcon')}</p>
+			<p class="hint">{t('settings.spaceIconHint')}</p>
+			<div class="space-icon-row">
+				<img class="space-icon-preview" src={spaceIconSrc} alt="" width="56" height="56" />
+				<div class="actions">
+					<PrimaryButton
+						size="sm"
+						disabled={spaceIconBusy}
+						onclick={() => spaceIconInput?.click()}
+					>
+						{spaceIconBusy ? t('common.uploading') : t('settings.changeSpaceIcon')}
+					</PrimaryButton>
+				</div>
+			</div>
+			<input
+				bind:this={spaceIconInput}
+				type="file"
+				accept="image/png,image/webp,image/jpeg"
+				hidden
+				onchange={onSpaceIconPick}
+			/>
+			{#if spaceIconMsg}<p class="status on">{spaceIconMsg}</p>{/if}
+		{/if}
 		<p class="field-label">{t('settings.language')}</p>
 		<div class="seg" role="radiogroup" aria-label={t('settings.language')}>
 			{#each localeChoices as lang (lang.id)}
@@ -728,6 +777,25 @@
 		margin-top: 0.25rem;
 		min-height: 2.75rem;
 		font-size: 15px;
+	}
+	.space-icon-row {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		margin: 0.35rem 0 1rem;
+	}
+	.space-icon-preview {
+		width: 56px;
+		height: 56px;
+		border-radius: 999px;
+		object-fit: cover;
+		box-sizing: border-box;
+		border: 1px solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
+		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
+		flex-shrink: 0;
+	}
+	.space-icon-row .actions {
+		margin: 0;
 	}
 	.actions {
 		display: flex;

@@ -7,10 +7,12 @@
 	import { initBrand } from '$lib/brand.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { initChatWakeListeners } from '$lib/chat-sync.svelte.js';
+	import { inviteFlow } from '$lib/invite-flow.svelte.js';
 	import { initPwa } from '$lib/pwa.svelte.js';
 	import { startRealtime, stopRealtime } from '$lib/realtime.svelte.js';
 	import { initLocale } from '$lib/i18n.svelte.js';
 	import { initTheme } from '$lib/theme.svelte.js';
+	import { syncSpaceBrandDefaults } from '$lib/space-brand.svelte.js';
 	import { startViewportBridge } from '$lib/viewport.svelte.js';
 	import AppShell from '$lib/components/AppShell.svelte';
 	import BootSplash from '$lib/components/BootSplash.svelte';
@@ -21,6 +23,7 @@
 
 	const signedIn = $derived(Boolean(driveSession.connected && actor.email));
 	const onboarding = $derived(Boolean(appBoot.onboarding?.active));
+	const inviteWarming = $derived(Boolean(inviteFlow.active));
 	const webManifestLink = $derived(pwaInfo?.webManifest?.linkTag ?? '');
 
 	/* Realtime bus: connect as soon as Drive creds exist (actor optional on the wire). */
@@ -41,6 +44,7 @@
 		initBrand();
 		initTheme();
 		initLocale();
+		syncSpaceBrandDefaults();
 		try {
 			window.dispatchEvent(new Event('alpha-boot-started'));
 		} catch {
@@ -117,7 +121,7 @@
 
 {#if !appBoot.ready || appBoot.stuck}
 	<BootSplash />
-{:else if !signedIn}
+{:else if !signedIn || inviteWarming}
 	<WelcomeGate />
 {:else if onboarding}
 	<SpaceOnboarding />

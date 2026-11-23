@@ -25,13 +25,32 @@
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { getAttachmentObjectUrl } from '$lib/drive/media-cache.js';
 	import { inferMediaKind } from '$lib/drive/media-kind.js';
+	import { paintBlurhash } from '$lib/drive/media-preview.js';
+	import ChatVoiceBubble from './ChatVoiceBubble.svelte';
 	import { swipeLeftReply } from '$lib/swipe-left-reply.js';
 
 	const REACTION_PFP_MAX = 3;
 	/** @type {Record<string, string>} path → object URL for remote attachments */
 	let attUrls = $state(/** @type {Record<string, string>} */ ({}));
-	/** @type {Record<string, boolean>} path → load failed */
-	let attFailed = $state(/** @type {Record<string, boolean>} */ ({}));
+	/** Soft fail counts — tip lag must not permanently stick on a filename chip. */
+	let attFailCount = $state(/** @type {Record<string, number>} */ ({}));
+	const ATT_FAIL_MAX = 6;
+
+	/** @param {unknown} url */
+	function isBlobPreview(url) {
+		return typeof url === 'string' && url.startsWith('blob:');
+	}
+
+	/** @param {HTMLCanvasElement} node @param {string} hash */
+	function mountBlurhash(node, hash) {
+		void paintBlurhash(node, hash);
+		return {
+			/** @param {string} next */
+			update(next) {
+				void paintBlurhash(node, next);
+			}
+		};
+	}
 
 	/**
 	 * @type {{
@@ -137,6 +156,15 @@
 	const hasAttachments = $derived(
 		Array.isArray(msg.attachments) && msg.attachments.length > 0
 	);
+	/** Body shown under media as caption — skip duplicate text block. */
+	const bodyMirroredInCaptions = $derived.by(() => {
+		const body = String(msg.body || '').trim();
+		if (!body || !Array.isArray(msg.attachments) || msg.attachments.length !== 1) return false;
+		const att = msg.attachments[0];
+		if (inferMediaKind(att) === 'file') return false;
+		const cap = String(att?.caption || '').trim();
+		return !cap || cap === body;
+	});
 	const emojiOnly = $derived.by(() => {
 		if (isReply || hasAttachments) return null;
 		return emojiOnlyInfo(msg.body);
@@ -280,21 +308,36 @@
 		const need = atts.filter((a) => {
 			const path = String(a?.path || '');
 			if (!path || path.startsWith('local:')) return false;
-			if (a.previewUrl || a.url || attUrls[path] || attFailed[path]) return false;
+			if (attUrls[path]) return false;
+			if ((attFailCount[path] || 0) >= ATT_FAIL_MAX) return false;
+			/* Non-blob remote URL already displayable — skip fetch. blob: still needs Drive resolve. */
+			if (a.url && !isBlobPreview(a.url)) return false;
 			return inferMediaKind(a) !== 'file';
 		});
 		if (!session || !need.length) return;
 		const ac = new AbortController();
 		for (const a of need) {
 			const path = String(a.path);
-			void getAttachmentObjectUrl(session, a, { signal: ac.signal }).then((res) => {
-				if (ac.signal.aborted) return;
-				if (res?.url) {
-					attUrls = { ...attUrls, [path]: res.url };
-				} else {
-					attFailed = { ...attFailed, [path]: true };
+			const run = async () => {
+				for (let attempt = attFailCount[path] || 0; attempt < ATT_FAIL_MAX; attempt++) {
+					if (ac.signal.aborted || attUrls[path]) return;
+					const res = await getAttachmentObjectUrl(session, a, { signal: ac.signal });
+					if (ac.signal.aborted) return;
+					if (res?.url) {
+						attUrls = { ...attUrls, [path]: res.url };
+						if (attFailCount[path]) {
+							const next = { ...attFailCount };
+							delete next[path];
+							attFailCount = next;
+						}
+						return;
+					}
+					attFailCount = { ...attFailCount, [path]: attempt + 1 };
+					const wait = Math.min(10_000, 400 * 2 ** attempt);
+					await new Promise((r) => setTimeout(r, wait));
 				}
-			});
+			};
+			void run();
 		}
 		return () => {
 			ac.abort();
@@ -401,13 +444,80 @@
 					</div>
 				</button>
 			{/if}
+			{#if Array.isArray(msg.attachments) && msg.attachments.length}
+				<div class="attachments">
+					{#each msg.attachments as att, ai (att.path || att.name || ai)}
+						{@const mediaKind = inferMediaKind(att)}
+						{@const src =
+							(att.path && attUrls[att.path]) || att.previewUrl || att.url || ''}
+						{@const exhausted =
+							Boolean(att.path) &&
+							(attFailCount[att.path] || 0) >= ATT_FAIL_MAX &&
+							!attUrls[att.path] &&
+							!att.previewUrl &&
+							!att.url}
+						{@const caption =
+							String(att.caption || '').trim() ||
+							(msg.attachments.length === 1 &&
+							mediaKind !== 'file' &&
+							bodyMirroredInCaptions
+								? String(msg.body || '').trim()
+								: '')}
+						<div class="att-block">
+							{#if mediaKind === 'image' && src}
+								<img class="att-image" src={src} alt={att.name || t('chat.image')} loading="lazy" />
+							{:else if mediaKind === 'video' && src}
+								<video class="att-video" src={src} controls playsinline></video>
+							{:else if mediaKind === 'voice' && src}
+								<ChatVoiceBubble
+									msgId={`${msg.id}:${att.path || ai}`}
+									{src}
+									isMine={isMine}
+									durationMs={typeof att.duration_ms === 'number' ? att.duration_ms : 0}
+									author={msg.author || ''}
+									name={att.name || t('chat.voiceMessage')}
+								/>
+							{:else if mediaKind === 'voice' && !exhausted}
+								<div class="att-media-loading voice" aria-busy="true" aria-label={t('chat.loadingMedia')}
+								></div>
+							{:else if mediaKind !== 'file' && !exhausted}
+								<div
+									class="att-media-loading"
+									class:image={mediaKind === 'image'}
+									class:video={mediaKind === 'video'}
+									aria-busy="true"
+									aria-label={t('chat.loadingMedia')}
+								>
+									{#if att.blurhash}
+										<canvas
+											class="att-blur"
+											aria-hidden="true"
+											use:mountBlurhash={att.blurhash}
+										></canvas>
+									{/if}
+								</div>
+							{:else}
+								<div class="att-file">
+									<span class="att-name">{att.name || att.kind || t('chat.file')}</span>
+									{#if att.bytes}
+										<span class="att-size">{Math.round(att.bytes / 1024)} KB</span>
+									{/if}
+								</div>
+							{/if}
+							{#if caption}
+								<p class="att-caption">{caption}</p>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
 			{#if emojiOnly}
 				<p class="text emoji-only-text" style:--emoji-size="{emojiOnlyPx}px">
 					{#each emojiOnly.tokens as tok, i (tok + i)}
 						<ChatEmoji token={tok} size={emojiOnlyPx} className="sticker" />
 					{/each}
 				</p>
-			{:else if msg.body}
+			{:else if msg.body && !bodyMirroredInCaptions}
 				<p class="text">
 					{#each bodyTokens as tok, i (`${tok.type}-${i}`)}
 						{#if tok.type === 'text'}
@@ -431,37 +541,6 @@
 						{/if}
 					{/each}
 				</p>
-			{/if}
-			{#if Array.isArray(msg.attachments) && msg.attachments.length}
-				<div class="attachments">
-					{#each msg.attachments as att, ai (att.path || att.name || ai)}
-						{@const mediaKind = inferMediaKind(att)}
-						{@const src = att.previewUrl || att.url || (att.path ? attUrls[att.path] : '')}
-						{@const failed = Boolean(att.path && attFailed[att.path])}
-						{#if mediaKind === 'image' && src}
-							<img class="att-image" src={src} alt={att.name || t('chat.image')} loading="lazy" />
-						{:else if mediaKind === 'video' && src}
-							<video class="att-video" src={src} controls playsinline></video>
-						{:else if mediaKind === 'voice' && src}
-							<audio class="att-voice" src={src} controls preload="metadata"></audio>
-						{:else if mediaKind !== 'file' && !failed}
-							<div
-								class="att-media-loading"
-								class:image={mediaKind === 'image'}
-								class:video={mediaKind === 'video'}
-								aria-busy="true"
-								aria-label={t('chat.loadingMedia')}
-							></div>
-						{:else}
-							<div class="att-file">
-								<span class="att-name">{att.name || att.kind || t('chat.file')}</span>
-								{#if att.bytes}
-									<span class="att-size">{Math.round(att.bytes / 1024)} KB</span>
-								{/if}
-							</div>
-						{/if}
-					{/each}
-				</div>
 			{/if}
 			{#if isMine && stackLast && !emojiOnly && (showReceipt || when)}
 				<div class="meta-out">
@@ -820,24 +899,58 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		padding: 4px 8px 6px;
+		/* No shell pad — pics/vids use quote-like inset; chips/captions pad themselves. */
+		padding: 0;
+	}
+
+	.att-block {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-width: 0;
 	}
 
 	.att-image,
 	.att-video {
 		display: block;
+		/* Match .quote horizontal inset (ChatQuoteBubblePadH = 6px). */
+		margin: 0 6px;
 		max-width: min(260px, 72vw);
 		max-height: 220px;
-		border-radius: 10px;
+		border-radius: 8px;
 		object-fit: cover;
 	}
 
+	.att-caption {
+		margin: 0;
+		/* Align with .text horizontal inset (11px). */
+		padding: 0 11px 2px;
+		font-size: 14px;
+		font-weight: 500;
+		line-height: 1.35;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
 	.att-media-loading {
+		position: relative;
+		overflow: hidden;
+		margin: 0 6px;
 		width: min(180px, 52vw);
 		height: 120px;
-		border-radius: 10px;
+		border-radius: 8px;
 		background: color-mix(in srgb, var(--fg) 8%, transparent);
 		animation: att-pulse 1.1s ease-in-out infinite;
+	}
+
+	.att-blur {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		transform: scale(1.1);
+		filter: blur(14px);
+		pointer-events: none;
 	}
 
 	.att-media-loading.video {
@@ -861,13 +974,15 @@
 	.att-voice {
 		display: block;
 		width: min(240px, 70vw);
-		margin: 2px 0;
+		/* Keep chip-like inset (paragraph pad), not media-flush. */
+		margin: 2px 11px;
 	}
 
 	.att-file {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		margin: 0 8px;
 		padding: 8px 10px;
 		border-radius: 10px;
 		background: color-mix(in srgb, var(--fg) 8%, transparent);

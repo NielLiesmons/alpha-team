@@ -329,7 +329,7 @@ export function sectionForPath(pathname) {
 	if (p.startsWith('/notes')) return 'notes';
 	if (p.startsWith('/projects') || p.startsWith('/entreprises')) return 'projects';
 	if (p.startsWith('/planning')) return 'moments';
-	if (p.startsWith('/drive')) return 'files';
+	if (p.startsWith('/drive') || p.startsWith('/photos')) return 'files';
 	if (p.startsWith('/mail')) return 'mail';
 	if (p.startsWith('/chat')) return 'chat';
 	return null;

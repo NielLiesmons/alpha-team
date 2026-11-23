@@ -6,6 +6,7 @@
 	import { attachChromeScrollFade } from './chrome-scroll-fade.js';
 	import { navPngUrl } from './nav-png.js';
 	import MetaballLoader from './MetaballLoader.svelte';
+	import Modal from './Modal.svelte';
 	import NavIcon from './NavIcon.svelte';
 	import UnreadMark from './UnreadMark.svelte';
 	import Search from './icons/Search.svelte';
@@ -25,6 +26,7 @@
 	 *   label: string,
 	 *   icon?: string,
 	 *   faviconUrl?: string,
+	 *   spaceBrand?: boolean,
 	 *   id?: string,
 	 *   countKey?: string,
 	 *   createKind?: string,
@@ -61,7 +63,7 @@
 	 *   feedPadClass?: string,
 	 *   filterOptions?: { id: string, label: string }[] | null,
 	 *   filterValue?: string,
-	 *   createMenuItems?: { kind: string, label: string }[],
+	 *   createMenuItems?: { kind: string, label: string, icon?: string }[],
 	 *   createKind?: string | undefined,
 	 *   onNavigate?: (href: string) => void,
 	 *   onNavChild?: (parentHref: string, childId: string) => void,
@@ -137,7 +139,7 @@
 	let listFade = $state(0);
 	let search = $state('');
 	let searchOpen = $state(false);
-	let createMenuOpen = $state(false);
+	let createOpen = $state(false);
 	let filterOpen = $state(false);
 	/** @type {HTMLInputElement | undefined} */
 	let searchInputEl = $state();
@@ -247,26 +249,62 @@
 	);
 	const filterActive = $derived(Boolean(filterOptions) && filterValue !== 'all');
 
-	const filteredNav = $derived.by(() => {
+	/** Flat nav hits for the Search modal (sidebar always shows full `sections`). */
+	const searchHits = $derived.by(() => {
 		const q = search.trim().toLowerCase();
-		if (!q) return sections;
-		/** @type {(ShellSection | ShellNavGroup)[]} */
+		/** @type {{ href: string, label: string, icon?: string, faviconUrl?: string, group?: string }[]} */
 		const out = [];
 		for (const entry of sections) {
 			if (isNavGroup(entry)) {
 				const group = /** @type {ShellNavGroup} */ (entry);
-				const items = group.items.filter(
-					(item) =>
-						item.label.toLowerCase().includes(q) || group.label.toLowerCase().includes(q)
-				);
-				if (items.length) out.push({ ...group, items });
+				for (const item of group.items) {
+					const hay = `${item.label} ${group.label}`.toLowerCase();
+					if (!q || hay.includes(q)) {
+						out.push({
+							href: item.href,
+							label: item.label,
+							icon: item.icon,
+							faviconUrl: item.faviconUrl,
+							group: group.label
+						});
+					}
+				}
 				continue;
 			}
 			const item = /** @type {ShellSection} */ (entry);
-			if (item.label.toLowerCase().includes(q)) out.push(item);
+			if (!q || item.label.toLowerCase().includes(q)) {
+				out.push({
+					href: item.href,
+					label: item.label,
+					icon: item.icon,
+					faviconUrl: item.faviconUrl
+				});
+			}
 		}
 		return out;
 	});
+
+	/** @param {string | undefined} kind */
+	function createIconFor(kind) {
+		const k = String(kind || '').toLowerCase();
+		/** @type {Record<string, string>} */
+		const map = {
+			task: 'tasks',
+			project: 'projects',
+			note: 'notes',
+			newsletter: 'publications',
+			ledger: 'accounting',
+			cost: 'accounting',
+			sales: 'accounting',
+			enterprise: 'enterprise',
+			mail: 'mail',
+			file: 'folder',
+			photo: 'albums',
+			poll: 'chat',
+			website: 'website'
+		};
+		return map[k] || k;
+	}
 
 	function isMobileShell() {
 		return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
@@ -351,13 +389,38 @@
 
 	/** @param {string} kind */
 	function create(kind) {
-		createMenuOpen = false;
+		createOpen = false;
 		onCreate(kind);
+	}
+
+	function openSearch() {
+		createOpen = false;
+		searchOpen = true;
+		closeMobileNav({ history: false });
+		queueMicrotask(() => searchInputEl?.focus());
+	}
+
+	function closeSearch() {
+		searchOpen = false;
+		search = '';
+	}
+
+	function openCreate() {
+		searchOpen = false;
+		search = '';
+		createOpen = true;
+		closeMobileNav({ history: false });
+	}
+
+	/** @param {string} href */
+	function pickSearchHit(href) {
+		closeSearch();
+		go(href);
 	}
 
 	function onListPlus() {
 		if (resolvedCreateKind) onNavPlus(resolvedCreateKind);
-		else if (createMenuItems.length) createMenuOpen = true;
+		else if (createMenuItems.length) openCreate();
 	}
 
 	$effect(() => {
@@ -642,99 +705,53 @@
 
 	{#snippet sidebarBody()}
 		<header class="side-top">
-			{#if searchOpen && searchEnabled}
-				<label class="search search-expanded">
-					<span class="sr-only">Search</span>
-					<span class="search-icon" aria-hidden="true"><Search size={16} /></span>
-					<input
-						bind:this={searchInputEl}
-						type="search"
-						placeholder="Search"
-						bind:value={search}
-						autocomplete="off"
-						onkeydown={(e) => {
-							if (e.key === 'Escape') {
-								search = '';
-								searchOpen = false;
-							}
-						}}
-						onblur={() => {
-							if (!search.trim()) searchOpen = false;
-						}}
-					/>
-				</label>
+			{#if sidebarLead || accountLabel}
+				<button
+					type="button"
+					class="account-pill"
+					class:on={active('/settings')}
+					aria-label="Settings"
+					aria-current={active('/settings') ? 'page' : undefined}
+					onclick={() => go('/settings')}
+				>
+					{#if sidebarLead}
+						<span class="account-pic">{@render sidebarLead()}</span>
+					{/if}
+					{#if accountLabel}
+						<span class="account-name">{accountLabel}</span>
+					{/if}
+				</button>
 			{:else}
-				{#if sidebarLead || accountLabel}
-					<button
-						type="button"
-						class="account-pill"
-						class:on={active('/settings')}
-						aria-label="Settings"
-						aria-current={active('/settings') ? 'page' : undefined}
-						onclick={() => go('/settings')}
-					>
-						{#if sidebarLead}
-							<span class="account-pic">{@render sidebarLead()}</span>
-						{/if}
-						{#if accountLabel}
-							<span class="account-name">{accountLabel}</span>
-						{/if}
-					</button>
-				{:else}
-					<span class="side-spacer"></span>
-				{/if}
 				<span class="side-spacer"></span>
-				{#if searchEnabled}
-					<button
-						type="button"
-						class="top-search"
-						aria-label="Search"
-						onclick={() => {
-							searchOpen = true;
-							queueMicrotask(() => searchInputEl?.focus());
-						}}
-					>
-						<Search size={13} />
-					</button>
-				{/if}
-				{#if createMenuItems.length}
-					<div class="create-wrap">
-						<button
-							type="button"
-							class="top-plus"
-							aria-label="Create"
-							aria-expanded={createMenuOpen}
-							onclick={() => (createMenuOpen = !createMenuOpen)}
-						>
-							<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<path
-									d="M8 3.25v9.5M3.25 8h9.5"
-									stroke="currentColor"
-									stroke-width="1.5"
-									stroke-linecap="round"
-								/>
-							</svg>
-						</button>
-						{#if createMenuOpen}
-							<button
-								type="button"
-								class="menu-scrim"
-								aria-label="Close"
-								onclick={() => (createMenuOpen = false)}
-							></button>
-							<div class="create-menu" role="menu">
-								{#each createMenuItems as item (item.kind)}
-									<button type="button" role="menuitem" onclick={() => create(item.kind)}>{item.label}</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				{/if}
+			{/if}
+			<span class="side-spacer"></span>
+			{#if searchEnabled}
+				<button type="button" class="top-search" aria-label="Search" onclick={openSearch}>
+					<Search size={13} />
+				</button>
+			{/if}
+			{#if createMenuItems.length}
+				<button
+					type="button"
+					class="top-plus"
+					aria-label="Create"
+					aria-expanded={createOpen}
+					onclick={openCreate}
+				>
+					<svg class="chrome-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M8 3.25v9.5M3.25 8h9.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
 			{/if}
 		</header>
 
 		<nav class="sidebar-nav" aria-label="Sections">
-			{#each filteredNav as entry (isNavGroup(entry) ? `g:${/** @type {ShellNavGroup} */ (entry).id}` : /** @type {ShellSection} */ (entry).href)}
+			{#each sections as entry (isNavGroup(entry) ? `g:${/** @type {ShellNavGroup} */ (entry).id}` : /** @type {ShellSection} */ (entry).href)}
 				{#if isNavGroup(entry)}
 					{@const group = /** @type {ShellNavGroup} */ (entry)}
 					<div class="nav-group" role="group" aria-label={group.label}>
@@ -765,6 +782,7 @@
 						{#each group.items as item (item.id || item.href)}
 							{@const rowActive = active(item.href)}
 							{@const fav = String(item.faviconUrl || '').trim()}
+							{@const brand = Boolean(item.spaceBrand)}
 							<div class="nav-block" class:active={rowActive}>
 								<div class="nav-row">
 									<button
@@ -773,10 +791,16 @@
 										class:active={rowActive}
 										onclick={() => go(item.href)}
 									>
-										<span class="icon-wrap" class:favicon={Boolean(fav)} class:empty={rowActive && !fav}>
+										<span
+											class="icon-wrap"
+											class:favicon={Boolean(fav)}
+											class:space-brand={brand}
+											class:empty={rowActive && !fav}
+										>
 											{#if fav}
 												<img
 													class="nav-favicon"
+													class:space-brand={brand}
 													src={fav}
 													alt=""
 													width="18"
@@ -1100,6 +1124,100 @@
 	{#if sheets}
 		{@render sheets()}
 	{/if}
+
+	{#if searchEnabled}
+		<Modal bind:open={searchOpen} label="Search">
+			<div class="shell-modal">
+				<header class="shell-modal-head">
+					<h2 class="shell-modal-title">Search</h2>
+					<button type="button" class="shell-modal-close" aria-label="Close" onclick={closeSearch}
+						>✕</button
+					>
+				</header>
+				<label class="shell-search-field">
+					<span class="sr-only">Search</span>
+					<span class="shell-search-ico" aria-hidden="true"><Search size={16} /></span>
+					<input
+						bind:this={searchInputEl}
+						type="search"
+						placeholder="Search"
+						bind:value={search}
+						autocomplete="off"
+						onkeydown={(e) => {
+							if (e.key === 'Escape') closeSearch();
+						}}
+					/>
+				</label>
+				<div class="shell-search-hits" role="listbox" aria-label="Results">
+					{#each searchHits as hit (hit.href + (hit.group || '') + hit.label)}
+						{@const fav = String(hit.faviconUrl || '').trim()}
+						{@const png = !fav && hit.icon ? navPngUrl(hit.icon) : null}
+						<button
+							type="button"
+							class="shell-search-hit"
+							role="option"
+							onclick={() => pickSearchHit(hit.href)}
+						>
+							<span class="shell-search-hit-ico" aria-hidden="true">
+								{#if fav}
+									<img class="nav-favicon" src={fav} alt="" width="18" height="18" />
+								{:else if png}
+									<img class="nav-png" src={png} alt="" width="18" height="18" />
+								{:else}
+									<NavIcon name={hit.icon || 'dot'} size={18} />
+								{/if}
+							</span>
+							<span class="shell-search-hit-text">
+								<span class="shell-search-hit-label">{hit.label}</span>
+								{#if hit.group}
+									<span class="shell-search-hit-group">{hit.group}</span>
+								{/if}
+							</span>
+						</button>
+					{:else}
+						<p class="shell-search-empty">No matches</p>
+					{/each}
+				</div>
+			</div>
+		</Modal>
+	{/if}
+
+	{#if createMenuItems.length}
+		<Modal bind:open={createOpen} label="Create">
+			<div class="shell-modal">
+				<header class="shell-modal-head">
+					<h2 class="shell-modal-title">Create</h2>
+					<button
+						type="button"
+						class="shell-modal-close"
+						aria-label="Close"
+						onclick={() => (createOpen = false)}>✕</button
+					>
+				</header>
+				<div class="create-grid" role="menu">
+					{#each createMenuItems as item (item.kind)}
+						{@const icon = item.icon || createIconFor(item.kind)}
+						{@const png = navPngUrl(icon)}
+						<button
+							type="button"
+							class="create-tile"
+							role="menuitem"
+							onclick={() => create(item.kind)}
+						>
+							<span class="create-tile-ico" aria-hidden="true">
+								{#if png}
+									<img class="create-tile-png" src={png} alt="" />
+								{:else}
+									<span class="create-tile-nav"><NavIcon name={icon} size={28} /></span>
+								{/if}
+							</span>
+							<span class="create-tile-label">{item.label}</span>
+						</button>
+					{/each}
+				</div>
+			</div>
+		</Modal>
+	{/if}
 </div>
 
 <style>
@@ -1255,7 +1373,225 @@
 		color: var(--fg-33);
 	}
 
-	.create-wrap,
+	.shell-modal {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		max-height: min(78vh, 640px);
+		padding: 4px 4px 8px;
+		box-sizing: border-box;
+	}
+
+	.shell-modal-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.shell-modal-title {
+		margin: 0;
+		font-size: 17px;
+		font-weight: 650;
+		color: var(--fg);
+	}
+
+	.shell-modal-close {
+		width: 2rem;
+		height: 2rem;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
+		cursor: pointer;
+		font: inherit;
+		line-height: 1;
+		flex-shrink: 0;
+	}
+
+	.shell-modal-close:hover {
+		color: var(--fg);
+	}
+
+	.shell-search-field {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 44px;
+		padding: 0 12px;
+		border-radius: 14px;
+		border: 1px solid var(--fg-8);
+		background: var(--fg-4);
+		color: var(--fg-66);
+		box-sizing: border-box;
+	}
+
+	.shell-search-field:focus-within {
+		border-color: var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
+		color: var(--fg);
+	}
+
+	.shell-search-ico {
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
+	}
+
+	.shell-search-field input {
+		flex: 1;
+		min-width: 0;
+		height: 40px;
+		border: 0;
+		background: transparent;
+		color: var(--fg);
+		font: inherit;
+		font-size: 15px;
+		font-weight: 500;
+		outline: none;
+	}
+
+	.shell-search-field input::placeholder {
+		color: var(--fg-33);
+		font-weight: 500;
+	}
+
+	.shell-search-hits {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-height: 0;
+		overflow-y: auto;
+		margin: 0 -4px;
+		padding: 0 4px;
+	}
+
+	.shell-search-hit {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 10px 10px;
+		border: 0;
+		border-radius: 12px;
+		background: transparent;
+		color: var(--fg);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		box-sizing: border-box;
+	}
+
+	.shell-search-hit:hover {
+		background: var(--fg-4);
+	}
+
+	.shell-search-hit-ico {
+		flex-shrink: 0;
+		width: 22px;
+		height: 22px;
+		display: grid;
+		place-items: center;
+		color: var(--fg-66);
+	}
+
+	.shell-search-hit-text {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
+	.shell-search-hit-label {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--fg);
+	}
+
+	.shell-search-hit-group {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	.shell-search-empty {
+		margin: 12px 4px;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--fg-33);
+		text-align: center;
+	}
+
+	.create-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 10px;
+	}
+
+	.create-tile {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		min-height: 96px;
+		padding: 14px 8px 12px;
+		border: 1px solid var(--fg-8);
+		border-radius: 18px;
+		background: var(--fg-4);
+		color: var(--fg);
+		font: inherit;
+		cursor: pointer;
+		box-sizing: border-box;
+		transition: transform 0.15s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+	}
+
+	.create-tile:hover {
+		background: var(--fg-8);
+		transform: scale(1.02);
+	}
+
+	.create-tile:active {
+		transform: scale(0.97);
+	}
+
+	.create-tile-ico {
+		width: 36px;
+		height: 36px;
+		display: grid;
+		place-items: center;
+		color: var(--fg-66);
+	}
+
+	.create-tile-png {
+		display: block;
+		width: 32px;
+		height: 32px;
+		object-fit: contain;
+		border-radius: 8px;
+	}
+
+	.create-tile-nav {
+		display: grid;
+		place-items: center;
+		color: var(--fg-66);
+	}
+
+	.create-tile-label {
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		text-align: center;
+		line-height: 1.25;
+		color: var(--fg);
+	}
+
+	@media (min-width: 480px) {
+		.create-grid {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
+	}
+
 	.filter-wrap {
 		position: relative;
 		flex-shrink: 0;
@@ -1479,9 +1815,20 @@
 		object-fit: cover;
 	}
 
+	.nav-favicon.space-brand {
+		border-radius: 999px;
+		box-sizing: border-box;
+		border: 1px solid var(--fg-16, color-mix(in srgb, var(--fg, var(--ink)) 16%, transparent));
+	}
+
 	.icon-wrap.favicon {
 		overflow: hidden;
 		border-radius: 4px;
+	}
+
+	.icon-wrap.favicon.space-brand {
+		overflow: visible;
+		border-radius: 999px;
 	}
 
 	.nav-sub {
@@ -2268,11 +2615,6 @@
 		}
 
 		.list-title-slot.mobile-pill-owns-title :global(.mobile-page-title) {
-			display: none !important;
-		}
-
-		/* Pill owns the section/folder label on mobile; keep MailFolderTitle for desktop only */
-		.list-title-slot.mobile-pill-owns-title :global(.mail-title) {
 			display: none !important;
 		}
 

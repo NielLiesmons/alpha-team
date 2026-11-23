@@ -50,12 +50,15 @@ export default defineConfig({
 				importScripts: ['/push-sw.js'],
 				/* SPA shell for deep links offline (URL stays /drive, /chat, …). */
 				navigateFallback: '/',
-				navigateFallbackDenylist: [/^\/api/, /^\/jmap/, /\/sw\.js$/],
+				/* /api/recover must stay network-only so poisoned SWs cannot trap phones. */
+				navigateFallbackDenylist: [/^\/api/, /^\/jmap/, /\/sw\.js$/, /^\/api\/recover/],
 				navigationPreload: false,
 				cleanupOutdatedCaches: true,
 				clientsClaim: true,
 				skipWaiting: true,
 				globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2,webmanifest}'],
+				/* Keep recover HTML network-only — never freeze an old escape hatch in precache. */
+				globIgnores: ['**/api/recover.html'],
 				runtimeCaching: [
 					{
 						urlPattern: ({ request }) => request.destination === 'font',

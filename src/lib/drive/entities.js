@@ -19,6 +19,8 @@ import {
 } from './client.js';
 import { sha256Hex } from './crypto.js';
 import { putMediaBlob } from './media.js';
+import { inferMediaKind, mimeFromNameAndType } from './media-kind.js';
+import { generateMediaPreview, previewJsonDoc } from './media-preview.js';
 
 /** v3: re-check remigrate when local mailbox cache was incomplete (truncated IDB). */
 const LEGACY_CHAT_MIGRATE_KEY = 'alpha.chat.mailboxMigrate.v3';
@@ -202,6 +204,147 @@ export async function uploadFile(session, folder, file) {
 		{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safeName }
 	]);
 	return path;
+}
+
+/**
+ * @typedef {{
+ *   path: string,
+ *   content_type: string,
+ *   kind: 'image' | 'video' | 'voice' | 'file',
+ *   name: string,
+ *   bytes: number,
+ *   duration_ms?: number,
+ *   caption?: string,
+ *   blurhash?: string,
+ *   thumb_path?: string,
+ *   width?: number,
+ *   height?: number
+ * }} ChatAttachmentMeta
+ */
+
+/**
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} folder  e.g. media/photos/{id}
+ * @param {File} file
+ * @param {'image' | 'video'} kind
+ * @returns {Promise<{ thumb_path?: string, blurhash?: string, width?: number, height?: number }>}
+ */
+async function putMediaSidecars(session, folder, file, kind) {
+	const preview = await generateMediaPreview(file, kind);
+	if (!preview) return {};
+	const thumbPath = `${folder}/thumb.jpg`;
+	const metaPath = `${folder}/preview.json`;
+	const doc = previewJsonDoc(preview);
+	await putPaths(session, [
+		{
+			path: thumbPath,
+			kind: 'blob',
+			plaintext: preview.thumbBytes,
+			display_name: 'thumb.jpg'
+		},
+		{
+			path: metaPath,
+			kind: 'blob',
+			plaintext: JSON.stringify(doc),
+			display_name: 'preview.json'
+		}
+	]);
+	return {
+		thumb_path: thumbPath,
+		blurhash: preview.blurhash,
+		width: preview.width,
+		height: preview.height
+	};
+}
+
+/**
+ * Store a chat/library attachment under the content-type tree:
+ * - image → media/photos/{id}/…
+ * - video → media/video/items/{id}/…
+ * - voice → media/audio/clips/{id}/…
+ * - other → files/{id}-{name}
+ * Large / streamable blobs use chunked media.json; small images stay whole-file.
+ * Image/video also write thumb.jpg + preview.json (blurhash) for the Photos grid.
+ *
+ * @param {import('./client.js').DriveSession} session
+ * @param {File} file
+ * @returns {Promise<ChatAttachmentMeta>}
+ */
+export async function uploadChatAttachment(session, file) {
+	const id = newId();
+	const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'file';
+	const kind = inferMediaKind({ content_type: file.type, name: file.name });
+	const contentType = mimeFromNameAndType(file.name, file.type);
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	const chunked = file.size > 512 * 1024 || kind === 'video' || kind === 'voice';
+
+	if (kind === 'image') {
+		const folder = `media/photos/${id}`;
+		/** @type {ChatAttachmentMeta} */
+		let meta;
+		if (chunked) {
+			const path = `${folder}/media.json`;
+			await putMediaBlob(session, path, contentType, bytes);
+			meta = { path, content_type: contentType, kind, name: file.name, bytes: file.size };
+		} else {
+			const path = `${folder}/${safe}`;
+			await putPaths(session, [
+				{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safe }
+			]);
+			meta = { path, content_type: contentType, kind, name: file.name, bytes: file.size };
+		}
+		const side = await putMediaSidecars(session, folder, file, 'image');
+		return { ...meta, ...side };
+	}
+
+	if (kind === 'video') {
+		const folder = `media/video/items/${id}`;
+		const path = `${folder}/media.json`;
+		await putMediaBlob(session, path, contentType, bytes);
+		const side = await putMediaSidecars(session, folder, file, 'video');
+		return {
+			path,
+			content_type: contentType,
+			kind,
+			name: file.name,
+			bytes: file.size,
+			...side
+		};
+	}
+
+	if (kind === 'voice') {
+		const path = `media/audio/clips/${id}/media.json`;
+		await putMediaBlob(session, path, contentType, bytes);
+		/** @type {ChatAttachmentMeta} */
+		const meta = {
+			path,
+			content_type: contentType,
+			kind: 'voice',
+			name: file.name,
+			bytes: file.size
+		};
+		return meta;
+	}
+
+	const path = `files/${id}-${safe}`;
+	await putPaths(session, [
+		{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safe }
+	]);
+	return { path, content_type: contentType, kind: 'file', name: file.name, bytes: file.size };
+}
+
+/**
+ * Upload image/video into the Photos library (same paths as chat media).
+ * @param {import('./client.js').DriveSession} session
+ * @param {File} file
+ * @returns {Promise<ChatAttachmentMeta>}
+ */
+export async function uploadLibraryMedia(session, file) {
+	const kind = inferMediaKind({ content_type: file.type, name: file.name });
+	if (kind !== 'image' && kind !== 'video') {
+		throw new Error('photos.imageOrVideoOnly');
+	}
+	return uploadChatAttachment(session, file);
 }
 
 /**
@@ -2579,7 +2722,18 @@ export async function createChatMessage(session, input, opts = {}) {
 						kind: a.kind === 'image' || a.kind === 'video' || a.kind === 'voice' ? a.kind : 'file',
 						...(a.name ? { name: String(a.name) } : {}),
 						...(typeof a.bytes === 'number' ? { bytes: a.bytes } : {}),
-						...(typeof a.duration_ms === 'number' ? { duration_ms: a.duration_ms } : {})
+						...(typeof a.duration_ms === 'number' ? { duration_ms: a.duration_ms } : {}),
+						...(typeof a.caption === 'string' && a.caption.trim()
+							? { caption: a.caption.trim().slice(0, 2000) }
+							: {}),
+						...(typeof a.blurhash === 'string' && a.blurhash
+							? { blurhash: String(a.blurhash).slice(0, 128) }
+							: {}),
+						...(typeof a.thumb_path === 'string' && a.thumb_path
+							? { thumb_path: String(a.thumb_path) }
+							: {}),
+						...(typeof a.width === 'number' ? { width: a.width } : {}),
+						...(typeof a.height === 'number' ? { height: a.height } : {})
 					}))
 				}
 			: {})

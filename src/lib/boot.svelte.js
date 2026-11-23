@@ -89,6 +89,12 @@ export async function bootApp() {
 	try {
 		absorbReturnToFromLocation();
 		syncSpaceFromHost();
+		try {
+			const { syncSpaceBrandDefaults } = await import('./space-brand.svelte.js');
+			syncSpaceBrandDefaults();
+		} catch {
+			/* ignore */
+		}
 		loadActor();
 		loadDeviceProfiles();
 		loadSessionFromStorage();
@@ -143,6 +149,13 @@ export async function bootApp() {
 		appBoot.ready = true;
 		driveSession.loading = false;
 		void ensurePersistentStorage();
+
+		try {
+			const { loadSpaceBrand } = await import('./space-brand.svelte.js');
+			void loadSpaceBrand().catch((e) => console.warn('space brand', e));
+		} catch {
+			/* ignore */
+		}
 
 		try {
 			await hydrateWorkspaceFromCache();

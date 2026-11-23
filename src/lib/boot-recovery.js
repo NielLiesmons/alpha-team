@@ -10,31 +10,53 @@ const RECOVER_FLAG = 'alpha.boot.recover.v1';
 /**
  * @param {{ full?: boolean }} [opts]
  */
+function withTimeout(promise, ms) {
+	return Promise.race([
+		Promise.resolve(promise).catch(() => {}),
+		new Promise((resolve) => setTimeout(resolve, ms))
+	]);
+}
+
 export async function recoverAppShell(opts = {}) {
 	const full = Boolean(opts.full);
+	let finished = false;
+	const go = () => {
+		if (finished) return;
+		finished = true;
+		const url = new URL(typeof location !== 'undefined' ? location.href : '/');
+		url.searchParams.delete('recover');
+		url.searchParams.delete('reset');
+		/* Bust any HTML shell still held by the HTTP cache. */
+		url.searchParams.set('_recover', String(Date.now()));
+		location.replace(url.pathname + url.search + url.hash);
+	};
+
+	/* iOS can hang on CacheStorage / unregister while a SW controls the page. */
+	const hard = setTimeout(go, 6000);
+
 	try {
 		await clearLocalUiCache();
 	} catch {
 		/* ignore */
 	}
 
-	if (typeof caches !== 'undefined') {
-		try {
+	await withTimeout(
+		(async () => {
+			if (typeof caches === 'undefined') return;
 			const keys = await caches.keys();
 			await Promise.all(keys.map((k) => caches.delete(k)));
-		} catch {
-			/* ignore */
-		}
-	}
+		})(),
+		2500
+	);
 
-	if ('serviceWorker' in navigator) {
-		try {
+	await withTimeout(
+		(async () => {
+			if (!('serviceWorker' in navigator)) return;
 			const regs = await navigator.serviceWorker.getRegistrations();
 			await Promise.all(regs.map((r) => r.unregister()));
-		} catch {
-			/* ignore */
-		}
-	}
+		})(),
+		2500
+	);
 
 	if (full && typeof localStorage !== 'undefined') {
 		try {
@@ -57,12 +79,8 @@ export async function recoverAppShell(opts = {}) {
 		/* ignore */
 	}
 
-	const url = new URL(typeof location !== 'undefined' ? location.href : '/');
-	url.searchParams.delete('recover');
-	url.searchParams.delete('reset');
-	/* Bust any HTML shell still held by the HTTP cache. */
-	url.searchParams.set('_recover', String(Date.now()));
-	location.replace(url.pathname + url.search + url.hash);
+	clearTimeout(hard);
+	go();
 }
 
 /** True when this load followed a recovery bounce (skip auto-loop). */
