@@ -99,12 +99,14 @@
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let highlightTimer = null;
 	/*
-	 * Touch length so remounts + splice merges always re-derive.
-	 * Passing chatFeed into a helper alone has left the feed empty on first
-	 * navigate-back until a second visit forced another evaluation.
+	 * Read length + a tip id so splice merges and remounts always re-derive.
+	 * (Module $state arrays + helper filters have painted empty on first
+	 * navigate-in when only the array ref was touched.)
 	 */
 	const chronological = $derived.by(() => {
-		chatFeed.length;
+		const len = chatFeed.length;
+		const tip = len ? chatFeed[0]?.id : '';
+		void tip;
 		return [
 			...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)
 		].sort(compareChatMessageAsc);

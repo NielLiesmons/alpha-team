@@ -12,17 +12,17 @@
 
 	/**
 	 * Intrinsic box — never grow/shrink in flex chrome.
-	 * sm = title pills; default = boot / empty states.
-	 * Number = height in px (width = 1.8×).
+	 * sm = title pills (~1.5× prior 18×10); default = boot / empty states.
+	 * Number = height in px (width = 1.7× — balls sit a hair closer than 1.8×).
 	 * @param {'sm' | 'default' | number} s
 	 */
 	function dims(s) {
 		if (typeof s === 'number' && Number.isFinite(s) && s > 0) {
 			const h = Math.max(8, Math.round(s));
-			return { w: Math.round(h * 1.8), h };
+			return { w: Math.round(h * 1.7), h };
 		}
-		if (s === 'sm') return { w: 18, h: 10 };
-		return { w: 28, h: 16 };
+		if (s === 'sm') return { w: 26, h: 15 };
+		return { w: 42, h: 24 };
 	}
 
 	const box = $derived(dims(size));
@@ -47,11 +47,12 @@
 		flex: 0 0 auto;
 		flex-shrink: 0;
 		box-sizing: border-box;
+		/* Optical vertical center in title chrome */
+		padding-top: 2px;
 		line-height: 0;
 		overflow: hidden;
 		vertical-align: middle;
 		color: var(--loader-ink, var(--fg-33));
-		/* Exact intrinsic size — ignore flex stretch */
 		min-width: inherit;
 		max-width: none;
 	}
@@ -59,7 +60,8 @@
 	.ball {
 		display: block;
 		flex: 0 0 auto;
-		width: 22%;
+		/* Slightly larger fraction + tighter track = balls a hair closer */
+		width: 24%;
 		aspect-ratio: 1;
 		border-radius: 50%;
 		background: currentColor;

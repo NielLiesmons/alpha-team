@@ -83,7 +83,8 @@
 	 *   detail?: import('svelte').Snippet,
 	 *   sheets?: import('svelte').Snippet,
 	 *   banners?: import('svelte').Snippet,
-	 *   children?: import('svelte').Snippet
+	 *   children?: import('svelte').Snippet,
+	 *   listBlank?: boolean
 	 * }}
 	 */
 	let {
@@ -111,6 +112,11 @@
 		createKind = undefined,
 		/** When false, only listActionsSlot is shown (Admin mail/planning chrome). */
 		defaultListActions = true,
+		/**
+		 * Mobile section switch: blank list pane so the previous page never flashes.
+		 * AppShell sets true before goto and clears afterNavigate.
+		 */
+		listBlank = false,
 		onNavigate = () => {},
 		onNavChild = () => {},
 		onCreate = () => {},
@@ -159,6 +165,8 @@
 	let lastNavHref = '';
 	/** Detail pane covering the list — hide the menu chrome so back stays usable. */
 	let detailCovering = $state(false);
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let navTrapTimer = null;
 	/**
 	 * Chat width morph only after a compact↔wide toggle on Chat —
 	 * never when first landing on the section (wide is the default).
@@ -369,7 +377,18 @@
 		mobileNavOpen = true;
 		if (useHistory && typeof history !== 'undefined' && !history.state?.alphaNav) {
 			ignoreNavPop = true;
-			history.pushState({ ...(history.state || {}), alphaNav: true }, '');
+			/*
+			 * Do not clone sveltekit:navigation ids onto this entry — that raced
+			 * SvelteKit goto and left the list pane empty on every other switch.
+			 */
+			history.pushState(
+				{
+					alphaShell: true,
+					alphaPath: window.location.pathname,
+					alphaNav: true
+				},
+				''
+			);
 			queueMicrotask(() => {
 				ignoreNavPop = false;
 			});
@@ -442,7 +461,12 @@
 		lastNavHref = href;
 	});
 
-	/** Re-push alphaNavTrap so the next Android back opens nav instead of exiting. */
+	/**
+	 * Arm a same-URL history entry so Android back opens the nav instead of
+	 * leaving. MUST NOT run synchronously during SvelteKit goto — copying
+	 * `sveltekit:navigation` onto a duplicate pushState left the list pane
+	 * empty ~50% of the time when switching sections (Chat especially).
+	 */
 	function rearmNavTrap() {
 		if (typeof window === 'undefined' || typeof history === 'undefined') return;
 		if (!isMobileShell()) return;
@@ -450,41 +474,46 @@
 		if (history.state?.alphaNav || history.state?.alphaNavTrap) return;
 		const path = window.location.pathname;
 		ignoreNavPop = true;
-		const base = {
-			...(history.state || {}),
-			alphaShell: true,
-			alphaPath: path
-		};
-		if (!(history.state?.alphaShell && history.state?.alphaPath === path)) {
-			history.replaceState(base, '');
-		}
-		history.pushState({ ...base, alphaNavTrap: true }, '');
+		/*
+		 * Mark the current SK entry, then push a trap entry WITHOUT cloning
+		 * sveltekit:history / sveltekit:navigation ids (those must stay unique).
+		 */
+		const cur = history.state || {};
+		history.replaceState(
+			{ ...cur, alphaShell: true, alphaPath: path },
+			''
+		);
+		history.pushState(
+			{ alphaShell: true, alphaPath: path, alphaNavTrap: true },
+			''
+		);
 		queueMicrotask(() => {
 			ignoreNavPop = false;
 		});
 	}
 
-	/* Arm one same-URL history entry so Android back can open the nav. */
+	/* Defer trap arm past SvelteKit’s navigation commit (see rearmNavTrap). */
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		if (!isMobileViewport) return;
 		activeHref;
 		const path = window.location.pathname;
 		navArmedPath = path;
-		/* Already have an open-nav or trap entry on this path — don't stack more. */
-		if (history.state?.alphaNav) return;
-		if (history.state?.alphaNavTrap && history.state?.alphaPath === path) return;
-		ignoreNavPop = true;
-		const base = {
-			...(history.state || {}),
-			alphaShell: true,
-			alphaPath: path
+		if (navTrapTimer != null) clearTimeout(navTrapTimer);
+		navTrapTimer = setTimeout(() => {
+			navTrapTimer = null;
+			if (!isMobileShell()) return;
+			if (window.location.pathname !== path) return;
+			if (history.state?.alphaNav) return;
+			if (history.state?.alphaNavTrap && history.state?.alphaPath === path) return;
+			rearmNavTrap();
+		}, 50);
+		return () => {
+			if (navTrapTimer != null) {
+				clearTimeout(navTrapTimer);
+				navTrapTimer = null;
+			}
 		};
-		history.replaceState(base, '');
-		history.pushState({ ...base, alphaNavTrap: true }, '');
-		queueMicrotask(() => {
-			ignoreNavPop = false;
-		});
 	});
 
 	/* Android / browser back: sync drawer to history, or open when still on this list. */
@@ -1105,13 +1134,17 @@
 				</header>
 				{#if onRefresh}
 					<PullToRefresh onRefresh={onRefresh}>
-						<div class="pane-inner">
-							{@render children?.()}
+						<div class="pane-inner" class:list-blank={listBlank}>
+							{#if !listBlank}
+								{@render children?.()}
+							{/if}
 						</div>
 					</PullToRefresh>
 				{:else}
-					<div class="pane-inner">
-						{@render children?.()}
+					<div class="pane-inner" class:list-blank={listBlank}>
+						{#if !listBlank}
+							{@render children?.()}
+						{/if}
 					</div>
 				{/if}
 				<div class="list-bottom-fade" aria-hidden="true"></div>
@@ -2099,7 +2132,8 @@
 	.list-title-row {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		/* Title ↔ loader breathing room on desktop */
+		gap: 10px;
 		min-width: 0;
 	}
 
@@ -2117,11 +2151,12 @@
 		align-items: center;
 		justify-content: center;
 		align-self: center;
-		flex: 0 0 18px;
-		width: 18px;
-		height: 10px;
+		flex: 0 0 auto;
+		margin-left: 2px;
 		line-height: 0;
-		overflow: hidden;
+		overflow: visible;
+		padding-top: 2px;
+		box-sizing: content-box;
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
@@ -2593,17 +2628,24 @@
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			flex: 0 0 18px;
-			width: 18px;
-			height: 10px;
+			flex: 0 0 auto;
+			margin-left: 2px;
 			line-height: 0;
-			overflow: hidden;
+			overflow: visible;
+			padding-top: 2px;
+			box-sizing: content-box;
 			--loader-ink: var(--fg-66);
 			color: var(--fg-66);
 			opacity: 0.85;
 		}
 
-		.list-title-slot.mobile-pill-owns-title :global(.mobile-page-title) {
+		/*
+		 * Pill owns the section/folder label on mobile — hide slotted centered
+		 * titles (ListTitleChrome + MailFolderTitle). CSS media (not JS class)
+		 * so first paint never shows a duplicate. Restored after 268b7a6 drop.
+		 */
+		.list-title-slot :global(.mobile-page-title),
+		.list-title-slot :global(.mail-title) {
 			display: none !important;
 		}
 

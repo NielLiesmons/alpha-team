@@ -1,5 +1,5 @@
 <script>
-	import { goto } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
 		activeWebsite,
@@ -88,6 +88,33 @@
 	const path = $derived(page.url.pathname);
 	const chatList = $derived(path.startsWith('/chat'));
 	const mailList = $derived(path.startsWith('/mail'));
+	/**
+	 * Mobile section switch: blank the list pane immediately so the previous
+	 * page never flashes (and so a mid-nav trap race can’t paint stale UI).
+	 */
+	let listBlank = $state(false);
+
+	/** @param {string | undefined} pathname */
+	function sectionRoot(pathname) {
+		const seg = String(pathname || '/')
+			.split('/')
+			.filter(Boolean)[0];
+		return seg || '';
+	}
+
+	function isMobileNav() {
+		return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+	}
+
+	beforeNavigate(({ from, to }) => {
+		if (!isMobileNav() || !from || !to) return;
+		if (sectionRoot(from.url.pathname) === sectionRoot(to.url.pathname)) return;
+		listBlank = true;
+	});
+
+	afterNavigate(() => {
+		listBlank = false;
+	});
 	const commsFeed = $derived(chatList || mailList);
 	/** Entity detail from chat tips — not the notifications synopsis. */
 	const chatCompact = $derived.by(() => {
@@ -442,6 +469,10 @@
 		forceClearSelection();
 		/* Fresh entry to Mail always lands on Inbox; in-section folder picks keep state. */
 		if (href === '/mail' && !path.startsWith('/mail')) setMailFolder('inbox');
+		/* Blank list pane on the tap — don’t wait for beforeNavigate. */
+		if (isMobileNav() && sectionRoot(href) !== sectionRoot(path)) {
+			listBlank = true;
+		}
 		goto(href, { replaceState: replace });
 	}
 
@@ -549,6 +580,7 @@
 	listSize={chatList ? 'chat' : 'default'}
 	listCompact={chatCompact}
 	{commsFeed}
+	{listBlank}
 	syncing={titleSyncing}
 	filterOptions={customChrome ? null : filterOptions}
 	filterValue={ui.listFilter}

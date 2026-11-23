@@ -90,7 +90,7 @@
 	.list-title-row {
 		display: flex;
 		align-items: center;
-		/* Match Admin DetailColumn detail-top-start (back ↔ title) */
+		/* Title ↔ loader breathing room (desktop) */
 		gap: 12px;
 		min-width: 0;
 	}
@@ -119,11 +119,12 @@
 		align-items: center;
 		justify-content: center;
 		align-self: center;
-		flex: 0 0 18px;
-		width: 18px;
-		height: 10px;
+		flex: 0 0 auto;
+		margin-left: 2px;
 		line-height: 0;
-		overflow: hidden;
+		overflow: visible;
+		padding-top: 2px;
+		box-sizing: content-box;
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
