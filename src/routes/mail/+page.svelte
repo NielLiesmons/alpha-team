@@ -371,18 +371,9 @@
 									</span>
 								{:else if showMailOnlyTrail && mailPromoteSeed}
 									<!--
-										Mail-only urgency (tip cache) — same status/priority trail as a
-										linked Task, without requiring Task conversion. Empty TaskBox
-										remains the promote path; priority stays mail-only until then.
+										Mail-only urgency (tip cache): status/priority mark alone —
+										no empty TaskBox. TaskBox appears only after a linked Task.
 									-->
-									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
-										<TaskFieldPicker
-											field="status"
-											value="open"
-											size={16}
-											mailThread={mailPromoteSeed}
-										/>
-									</span>
 									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
 										<TaskFieldPicker
 											field="priority"
