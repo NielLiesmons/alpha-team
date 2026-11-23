@@ -396,8 +396,14 @@
 	}
 
 	function toggleMobileNav() {
-		if (mobileNavOpen) closeMobileNav();
-		else openMobileNav();
+		/*
+		 * Pill / peek toggle must NOT pushState — an alphaNav history entry per
+		 * open left a duplicate same-URL frame that raced SvelteKit goto and
+		 * emptied the list pane every other section switch.
+		 * Android-back open still uses openMobileNav({ history: true }) in popstate.
+		 */
+		if (mobileNavOpen) closeMobileNav({ history: false });
+		else openMobileNav({ history: false });
 	}
 
 	/** @param {string} href */
@@ -699,8 +705,9 @@
 			}
 			const nextOpen = startOpen ? p > 1 - CLOSE_AT : p >= OPEN_AT;
 			menuDrag = null;
-			if (nextOpen) openMobileNav({ history: true });
-			else closeMobileNav({ history: true });
+			/* history:false — same as pill toggle; avoid duplicate same-URL frames. */
+			if (nextOpen) openMobileNav({ history: false });
+			else closeMobileNav({ history: false });
 			queueMicrotask(() => {
 				suppressToggleClick = false;
 			});
