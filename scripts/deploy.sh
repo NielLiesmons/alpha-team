@@ -35,7 +35,11 @@ ssh -i "$KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
 	"${USER}@${HOST}" "mkdir -p '${PATH_REMOTE}'"
 
 echo "==> rsync → ${USER}@${HOST}:${PATH_REMOTE}/"
+# Protect hashed bundles from --delete. Stale service workers keep serving the
+# previous HTML shell for a while; if those chunks are gone, installed PWAs blank.
+# New files still upload; obsolete non-immutable paths are removed as usual.
 rsync -az --delete \
+	--filter='P /_app/immutable/***' \
 	-e "ssh -i ${KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
 	./build/ \
 	"${USER}@${HOST}:${PATH_REMOTE}/"

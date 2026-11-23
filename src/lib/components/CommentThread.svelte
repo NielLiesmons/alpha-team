@@ -2,7 +2,7 @@
 	/**
 	 * FAB → chronological comment feed (same bubble language as chat panels).
 	 * Morphs from the floating comments pill (bottom-right inset). No scrim —
-	 * content behind stays scrollable. Close via chevron, drag-under-min,
+	 * content behind stays scrollable. Close via X, drag-under-min,
 	 * swipe-right, or Android/browser back.
 	 */
 	import AlphaLogo from './icons/AlphaLogo.svelte';
@@ -30,6 +30,7 @@
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
+	import Close from '@alpha/ui/icons/Close.svelte';
 	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 	import { tick, untrack } from 'svelte';
 
@@ -644,15 +645,7 @@
 				class="top-btn close"
 				onclick={() => void closeSheet()}
 			>
-				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-					<path
-						d="M6.5 3.5 12 9l-5.5 5.5"
-						stroke="currentColor"
-						stroke-width="1.7"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
+				<Close size={18} />
 			</ChromeActionButton>
 			<p class="sheet-title">{t('comments.title')}</p>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -782,10 +775,12 @@
 	 */
 	.panel {
 		/*
-		 * Fixed radius for FAB ↔ sheet morph: 22px = half of 44px FAB height,
-		 * so the collapsed host already reads as a pill. Only width/height animate.
+		 * Fixed radius for FAB ↔ sheet morph. 34px = mobile sheet hero
+		 * (12 pad + 22 half-btn) so expanded corners stay concentric with chrome
+		 * buttons; when collapsed to 44px height CSS clamps to a pill. Only
+		 * width/height animate — never transition border-radius.
 		 */
-		--comments-radius: 22px;
+		--comments-radius: 34px;
 		--fab-right: 20px;
 		--fab-bottom: max(20px, env(safe-area-inset-bottom));
 		/* Expose clearance for detail scroll padding (height + inset + gap). */
@@ -1266,6 +1261,12 @@
 			height: 68px;
 			grid-template-columns: 44px 1fr 44px;
 			padding: 12px;
+		}
+
+		.sheet-title {
+			/* Match ChromeMobileBar / page topbar titles. */
+			font-size: 17px;
+			line-height: 1.15;
 		}
 
 		.list {

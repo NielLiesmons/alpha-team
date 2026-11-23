@@ -8,6 +8,7 @@
 	import MetaballLoader from './MetaballLoader.svelte';
 	import Modal from './Modal.svelte';
 	import NavIcon from './NavIcon.svelte';
+	import SheetTopbar from './SheetTopbar.svelte';
 	import UnreadMark from './UnreadMark.svelte';
 	import Search from './icons/Search.svelte';
 	import PullToRefresh from './PullToRefresh.svelte';
@@ -1128,55 +1129,52 @@
 	{#if searchEnabled}
 		<Modal bind:open={searchOpen} label="Search">
 			<div class="shell-modal">
-				<header class="shell-modal-head">
-					<h2 class="shell-modal-title">Search</h2>
-					<button type="button" class="shell-modal-close" aria-label="Close" onclick={closeSearch}
-						>✕</button
-					>
-				</header>
-				<label class="shell-search-field">
-					<span class="sr-only">Search</span>
-					<span class="shell-search-ico" aria-hidden="true"><Search size={16} /></span>
-					<input
-						bind:this={searchInputEl}
-						type="search"
-						placeholder="Search"
-						bind:value={search}
-						autocomplete="off"
-						onkeydown={(e) => {
-							if (e.key === 'Escape') closeSearch();
-						}}
-					/>
-				</label>
-				<div class="shell-search-hits" role="listbox" aria-label="Results">
-					{#each searchHits as hit (hit.href + (hit.group || '') + hit.label)}
-						{@const fav = String(hit.faviconUrl || '').trim()}
-						{@const png = !fav && hit.icon ? navPngUrl(hit.icon) : null}
-						<button
-							type="button"
-							class="shell-search-hit"
-							role="option"
-							onclick={() => pickSearchHit(hit.href)}
-						>
-							<span class="shell-search-hit-ico" aria-hidden="true">
-								{#if fav}
-									<img class="nav-favicon" src={fav} alt="" width="18" height="18" />
-								{:else if png}
-									<img class="nav-png" src={png} alt="" width="18" height="18" />
-								{:else}
-									<NavIcon name={hit.icon || 'dot'} size={18} />
-								{/if}
-							</span>
-							<span class="shell-search-hit-text">
-								<span class="shell-search-hit-label">{hit.label}</span>
-								{#if hit.group}
-									<span class="shell-search-hit-group">{hit.group}</span>
-								{/if}
-							</span>
-						</button>
-					{:else}
-						<p class="shell-search-empty">No matches</p>
-					{/each}
+				<SheetTopbar title="Search" trailing="none" onclose={closeSearch} />
+				<div class="shell-modal-body">
+					<label class="shell-search-field">
+						<span class="sr-only">Search</span>
+						<span class="shell-search-ico" aria-hidden="true"><Search size={16} /></span>
+						<input
+							bind:this={searchInputEl}
+							type="search"
+							placeholder="Search"
+							bind:value={search}
+							autocomplete="off"
+							onkeydown={(e) => {
+								if (e.key === 'Escape') closeSearch();
+							}}
+						/>
+					</label>
+					<div class="shell-search-hits" role="listbox" aria-label="Results">
+						{#each searchHits as hit (hit.href + (hit.group || '') + hit.label)}
+							{@const fav = String(hit.faviconUrl || '').trim()}
+							{@const png = !fav && hit.icon ? navPngUrl(hit.icon) : null}
+							<button
+								type="button"
+								class="shell-search-hit"
+								role="option"
+								onclick={() => pickSearchHit(hit.href)}
+							>
+								<span class="shell-search-hit-ico" aria-hidden="true">
+									{#if fav}
+										<img class="nav-favicon" src={fav} alt="" width="18" height="18" />
+									{:else if png}
+										<img class="nav-png" src={png} alt="" width="18" height="18" />
+									{:else}
+										<NavIcon name={hit.icon || 'dot'} size={18} />
+									{/if}
+								</span>
+								<span class="shell-search-hit-text">
+									<span class="shell-search-hit-label">{hit.label}</span>
+									{#if hit.group}
+										<span class="shell-search-hit-group">{hit.group}</span>
+									{/if}
+								</span>
+							</button>
+						{:else}
+							<p class="shell-search-empty">No matches</p>
+						{/each}
+					</div>
 				</div>
 			</div>
 		</Modal>
@@ -1185,35 +1183,29 @@
 	{#if createMenuItems.length}
 		<Modal bind:open={createOpen} label="Create">
 			<div class="shell-modal">
-				<header class="shell-modal-head">
-					<h2 class="shell-modal-title">Create</h2>
-					<button
-						type="button"
-						class="shell-modal-close"
-						aria-label="Close"
-						onclick={() => (createOpen = false)}>✕</button
-					>
-				</header>
-				<div class="create-grid" role="menu">
-					{#each createMenuItems as item (item.kind)}
-						{@const icon = item.icon || createIconFor(item.kind)}
-						{@const png = navPngUrl(icon)}
-						<button
-							type="button"
-							class="create-tile"
-							role="menuitem"
-							onclick={() => create(item.kind)}
-						>
-							<span class="create-tile-ico" aria-hidden="true">
-								{#if png}
-									<img class="create-tile-png" src={png} alt="" />
-								{:else}
-									<span class="create-tile-nav"><NavIcon name={icon} size={28} /></span>
-								{/if}
-							</span>
-							<span class="create-tile-label">{item.label}</span>
-						</button>
-					{/each}
+				<SheetTopbar title="Create" trailing="none" onclose={() => (createOpen = false)} />
+				<div class="shell-modal-body">
+					<div class="create-grid" role="menu">
+						{#each createMenuItems as item (item.kind)}
+							{@const icon = item.icon || createIconFor(item.kind)}
+							{@const png = navPngUrl(icon)}
+							<button
+								type="button"
+								class="create-tile"
+								role="menuitem"
+								onclick={() => create(item.kind)}
+							>
+								<span class="create-tile-ico" aria-hidden="true">
+									{#if png}
+										<img class="create-tile-png" src={png} alt="" />
+									{:else}
+										<span class="create-tile-nav"><NavIcon name={icon} size={28} /></span>
+									{/if}
+								</span>
+								<span class="create-tile-label">{item.label}</span>
+							</button>
+						{/each}
+					</div>
 				</div>
 			</div>
 		</Modal>
@@ -1376,41 +1368,17 @@
 	.shell-modal {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
 		max-height: min(78vh, 640px);
-		padding: 4px 4px 8px;
 		box-sizing: border-box;
 	}
 
-	.shell-modal-head {
+	.shell-modal-body {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
+		flex-direction: column;
 		gap: 12px;
-	}
-
-	.shell-modal-title {
-		margin: 0;
-		font-size: 17px;
-		font-weight: 650;
-		color: var(--fg);
-	}
-
-	.shell-modal-close {
-		width: 2rem;
-		height: 2rem;
-		border: 0;
-		border-radius: 999px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		cursor: pointer;
-		font: inherit;
-		line-height: 1;
-		flex-shrink: 0;
-	}
-
-	.shell-modal-close:hover {
-		color: var(--fg);
+		padding: 4px 12px 16px;
+		box-sizing: border-box;
+		min-height: 0;
 	}
 
 	.shell-search-field {

@@ -48,18 +48,55 @@ export default defineConfig({
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
 				importScripts: ['/push-sw.js'],
-				/* SPA shell for deep links offline (URL stays /drive, /chat, …). */
-				navigateFallback: '/',
-				/* /api/recover must stay network-only so poisoned SWs cannot trap phones. */
-				navigateFallbackDenylist: [/^\/api/, /^\/jmap/, /\/sw\.js$/, /^\/api\/recover/],
+				/*
+				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
+				 * After rsync deploys, that served stale HTML pointing at deleted hashed
+				 * chunks and blanked installed PWAs until a hard refresh. NetworkFirst
+				 * prefers live HTML when online; offline falls back to last cached page
+				 * or precached `/`.
+				 */
+				/* null → no cache-only NavigationRoute (see NetworkFirst below). */
+				navigateFallback: null,
 				navigationPreload: false,
 				cleanupOutdatedCaches: true,
 				clientsClaim: true,
 				skipWaiting: true,
-				globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2,webmanifest}'],
-				/* Keep recover HTML network-only — never freeze an old escape hatch in precache. */
-				globIgnores: ['**/api/recover.html'],
+				/*
+				 * Never precache HTML shells. Precache matches before runtime routes, so
+				 * caching `/` / `chat` / … reintroduced cache-only navigations and blanked
+				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v3) instead.
+				 */
+				globPatterns: ['**/*.{js,css,ico,png,svg,webp,woff,woff2,webmanifest}'],
+				/* Kit appends prerendered HTML globs — ignore so SPA shells stay out of precache. */
+				globIgnores: ['**/api/recover.html', 'prerendered/**'],
 				runtimeCaching: [
+					{
+						urlPattern: ({ request, url }) =>
+							request.mode === 'navigate' &&
+							!url.pathname.startsWith('/api') &&
+							!url.pathname.startsWith('/jmap') &&
+							!url.pathname.endsWith('/sw.js'),
+						handler: 'NetworkFirst',
+						options: {
+							cacheName: 'alpha-pages-v3',
+							networkTimeoutSeconds: 3,
+							expiration: {
+								maxEntries: 64,
+								maxAgeSeconds: 60 * 60 * 24 * 14
+							},
+							cacheableResponse: { statuses: [200] },
+							plugins: [
+								{
+									handlerDidError: async () => {
+										const match =
+											(await caches.match('/', { ignoreSearch: true })) ||
+											(await caches.match('/index.html', { ignoreSearch: true }));
+										return match || Response.error();
+									}
+								}
+							]
+						}
+					},
 					{
 						urlPattern: ({ request }) => request.destination === 'font',
 						handler: 'CacheFirst',

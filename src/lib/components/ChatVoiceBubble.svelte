@@ -207,7 +207,7 @@
 		font-weight: 500;
 		color: var(--fg-33);
 		text-align: end;
-		font-variant-numeric: tabular-nums;
+		font-family: inherit;
 	}
 	.voice.mine .time {
 		color: color-mix(in srgb, #fff 66%, transparent);
@@ -222,7 +222,7 @@
 		font-size: 11px;
 		font-weight: 700;
 		cursor: pointer;
-		font-variant-numeric: tabular-nums;
+		font-family: inherit;
 	}
 	.voice.mine .speed {
 		background: rgba(255, 255, 255, 0.16);

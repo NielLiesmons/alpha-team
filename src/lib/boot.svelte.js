@@ -73,7 +73,7 @@ function isOffline() {
 export async function bootApp() {
 	appBoot.error = '';
 	appBoot.stuck = false;
-	/** Never leave BootSplash forever — blank dark shell after crash. */
+	/** Never leave BootSplash forever — blank dark/gray shell after crash. */
 	const stuckTimer =
 		typeof window !== 'undefined'
 			? window.setTimeout(() => {
@@ -83,7 +83,7 @@ export async function bootApp() {
 							appBoot.error ||
 							'Startup is taking too long. Reload or reset the local shell.';
 					}
-				}, 10_000)
+				}, 6_000)
 			: null;
 
 	try {

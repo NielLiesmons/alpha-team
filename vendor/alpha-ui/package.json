@@ -16,6 +16,8 @@
 		"./star-path.js": "./src/lib/star-path.js",
 		"./Modal.svelte": "./src/lib/Modal.svelte",
 		"./CreateSheet.svelte": "./src/lib/CreateSheet.svelte",
+		"./SheetTopbar.svelte": "./src/lib/SheetTopbar.svelte",
+		"./icons/Close.svelte": "./src/lib/icons/Close.svelte",
 		"./FloatPanel.svelte": "./src/lib/FloatPanel.svelte",
 		"./DropdownMenu.svelte": "./src/lib/DropdownMenu.svelte",
 		"./Spinner.svelte": "./src/lib/Spinner.svelte",

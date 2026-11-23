@@ -168,7 +168,8 @@
 	/* Chat expanded feed (~50% wider than prior); narrows to `--list` when detail opens */
 	--list-chat: clamp(480px, calc(var(--list) * 2.13), 780px);
 	--radius-16: 16px;
-	--radius-hero: 32px;
+	/* Mobile sheet top corners concentric with 44px chrome buttons (12 pad + 22). */
+	--radius-hero: 34px;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 	/*

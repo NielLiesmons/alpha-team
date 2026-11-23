@@ -143,7 +143,7 @@
 		font-size: 11px;
 		font-weight: 600;
 		color: var(--fg-33);
-		font-variant-numeric: tabular-nums;
+		font-family: inherit;
 	}
 	.speed {
 		padding: 4px 7px;

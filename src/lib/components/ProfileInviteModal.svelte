@@ -5,6 +5,7 @@
 	 */
 	import QRCode from 'qrcode';
 	import Modal from './Modal.svelte';
+	import SheetTopbar from '@alpha/ui/SheetTopbar.svelte';
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
@@ -96,47 +97,51 @@
 
 <Modal bind:open label={modalLabel}>
 	<div class="invite-sheet">
-		<header class="head">
-			<h2 class="title">{modalLabel}</h2>
-			<button type="button" class="icon-pill" aria-label={t('common.close')} onclick={close}>✕</button>
-		</header>
-		<p class="hint">
-			{isInvite ? t('settings.inviteModalHint') : t('settings.deviceModalHint')}
-		</p>
-		<div class="field-shell">
-			<input
-				class="bare"
-				type="password"
-				bind:value={pass}
-				autocomplete="new-password"
-				placeholder={t('settings.passphrase')}
-				onkeydown={(ev) => ev.key === 'Enter' && makeCode()}
-			/>
-			<button
-				type="button"
-				class="cta"
-				disabled={busy || pass.trim().length < 6}
-				onclick={() => void makeCode()}
-			>
-				{busy ? '…' : t('common.continue')}
-			</button>
-		</div>
-		{#if msg}
-			<p class="status">{msg}</p>
-		{/if}
-		{#if qr}
-			<figure class="qr-wrap">
-				<img
-					src={qr}
-					alt={isInvite ? t('settings.inviteQrAlt') : t('settings.deviceQrAlt')}
-					width="220"
-					height="220"
+		<SheetTopbar
+			title={modalLabel}
+			trailing="none"
+			closeLabel={t('common.close')}
+			onclose={close}
+		/>
+		<div class="invite-body">
+			<p class="hint">
+				{isInvite ? t('settings.inviteModalHint') : t('settings.deviceModalHint')}
+			</p>
+			<div class="field-shell">
+				<input
+					class="bare"
+					type="password"
+					bind:value={pass}
+					autocomplete="new-password"
+					placeholder={t('settings.passphrase')}
+					onkeydown={(ev) => ev.key === 'Enter' && makeCode()}
 				/>
-			</figure>
-		{/if}
-		{#if link}
-			<p class="link-out">{link}</p>
-		{/if}
+				<button
+					type="button"
+					class="cta"
+					disabled={busy || pass.trim().length < 6}
+					onclick={() => void makeCode()}
+				>
+					{busy ? '…' : t('common.continue')}
+				</button>
+			</div>
+			{#if msg}
+				<p class="status">{msg}</p>
+			{/if}
+			{#if qr}
+				<figure class="qr-wrap">
+					<img
+						src={qr}
+						alt={isInvite ? t('settings.inviteQrAlt') : t('settings.deviceQrAlt')}
+						width="220"
+						height="220"
+					/>
+				</figure>
+			{/if}
+			{#if link}
+				<p class="link-out">{link}</p>
+			{/if}
+		</div>
 	</div>
 </Modal>
 
@@ -144,37 +149,17 @@
 	.invite-sheet {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
 		max-height: min(78vh, 640px);
 		overflow: auto;
-		padding: 4px 4px 8px;
 		box-sizing: border-box;
 	}
 
-	.head {
+	.invite-body {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
+		flex-direction: column;
 		gap: 12px;
-	}
-
-	.title {
-		margin: 0;
-		font-size: 17px;
-		font-weight: 650;
-		color: var(--fg, var(--white));
-	}
-
-	.icon-pill {
-		width: 2rem;
-		height: 2rem;
-		border: 0;
-		border-radius: 999px;
-		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
-		color: var(--fg-66, var(--white66));
-		cursor: pointer;
-		font: inherit;
-		line-height: 1;
+		padding: 4px 12px 16px;
+		box-sizing: border-box;
 	}
 
 	.hint {

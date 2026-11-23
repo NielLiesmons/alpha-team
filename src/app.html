@@ -18,6 +18,92 @@
 		<link rel="apple-touch-icon" href="/icons/icon-180.png" />
 		<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 		<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
+		<style>
+			/* First paint before CSS/JS modules — never a blank gray/black void. */
+			html,
+			body {
+				margin: 0;
+				min-height: 100%;
+				background: #090909;
+				color: #eee;
+			}
+			#alpha-boot-shell {
+				position: fixed;
+				inset: 0;
+				z-index: 99998;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 24px;
+				box-sizing: border-box;
+				background: #090909;
+				color: #eee;
+				font: 500 15px/1.45 system-ui, -apple-system, sans-serif;
+				text-align: center;
+			}
+			#alpha-boot-shell[hidden] {
+				display: none !important;
+			}
+			#alpha-boot-shell .boot-copy {
+				max-width: 320px;
+			}
+			#alpha-boot-shell .boot-title {
+				margin: 0 0 10px;
+				font-size: 18px;
+				font-weight: 650;
+			}
+			#alpha-boot-shell .boot-body {
+				margin: 0;
+				color: #aaa;
+			}
+			#alpha-boot-shell .boot-actions {
+				margin-top: 16px;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 10px;
+			}
+			#alpha-boot-shell button {
+				height: 44px;
+				padding: 0 18px;
+				border: 0;
+				border-radius: 14px;
+				background: #eee;
+				color: #111;
+				font: 650 14px system-ui, -apple-system, sans-serif;
+				cursor: pointer;
+			}
+			#alpha-boot-shell button:disabled {
+				opacity: 0.55;
+				cursor: wait;
+			}
+			#alpha-boot-shell .boot-link {
+				font-size: 13px;
+				color: #888;
+			}
+			#alpha-boot-shell .boot-link a {
+				color: #ccc;
+			}
+			#alpha-boot-shell .boot-pulse {
+				width: 10px;
+				height: 10px;
+				margin: 0 auto 14px;
+				border-radius: 999px;
+				background: #666;
+				animation: alpha-boot-pulse 1s ease-in-out infinite;
+			}
+			@keyframes alpha-boot-pulse {
+				0%,
+				100% {
+					opacity: 0.35;
+					transform: scale(0.85);
+				}
+				50% {
+					opacity: 1;
+					transform: scale(1);
+				}
+			}
+		</style>
 		<script>
 			/* Inline recovery — must run before any module load (poisoned SW / missing chunks). */
 			(function () {
@@ -29,10 +115,19 @@
 					var full = params.has('reset');
 					window.__ALPHA_RECOVERING = true;
 
-					/* Visible first paint — never leave a blank gray shell. */
 					document.documentElement.style.background = '#090909';
 					document.documentElement.style.color = '#eee';
 					var paint = function () {
+						var shell = document.getElementById('alpha-boot-shell');
+						if (shell) {
+							shell.hidden = false;
+							shell.innerHTML =
+								'<div class="boot-copy">' +
+								'<p class="boot-title">Resetting Alpha…</p>' +
+								'<p class="boot-body">Clearing cached shell, then reloading.</p>' +
+								'</div>';
+							return;
+						}
 						if (!document.body) return;
 						document.body.innerHTML =
 							'<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:#090909;color:#eee;font:500 15px/1.45 system-ui,-apple-system,sans-serif;text-align:center">' +
@@ -135,89 +230,169 @@
 					if (meta) {
 						meta.setAttribute('content', theme === 'light' ? '#f6f6f6' : '#090909');
 					}
+					/* Light theme shell is gray — match first paint so it doesn’t flash black. */
+					if (theme === 'light') {
+						document.documentElement.style.background = '#e2e2e2';
+						document.documentElement.style.color = '#111';
+						document.addEventListener(
+							'DOMContentLoaded',
+							function () {
+								var shell = document.getElementById('alpha-boot-shell');
+								if (!shell || shell.getAttribute('role') === 'alert') return;
+								shell.style.background = '#e2e2e2';
+								shell.style.color = '#111';
+								var body = shell.querySelector('.boot-body');
+								if (body) body.style.color = '#666';
+								var pulse = shell.querySelector('.boot-pulse');
+								if (pulse) pulse.style.background = '#999';
+							},
+							{ once: true }
+						);
+					}
 				} catch (e) {}
 			})();
 		</script>
 		<script>
-			/* Escape hatch when the PWA shell never hydrates (stale SW / missing chunks). */
+			/*
+			 * Boot watchdog: keep a visible shell from first paint, then auto-recover
+			 * when hashed chunks 404 under a stale service worker (post-deploy blank PWA).
+			 */
 			(function () {
 				if (window.__ALPHA_RECOVERING) return;
-				var started = false;
-				var mark = function () {
-					started = true;
-					var el = document.getElementById('alpha-boot-fallback');
-					if (el && el.parentNode) el.parentNode.removeChild(el);
-				};
-				window.addEventListener('alpha-boot-started', mark, { once: true });
 
-				var showFallback = function () {
-					if (started || window.__ALPHA_RECOVERING) return;
-					if (document.querySelector('.shell, .welcome, .splash')) {
-						mark();
-						return;
+				var AUTO_KEY = 'alpha.boot.auto-recover.v1';
+				var started = false;
+				var escalated = false;
+
+				var hideShell = function () {
+					var el = document.getElementById('alpha-boot-shell');
+					if (el) el.hidden = true;
+				};
+
+				var markStarted = function () {
+					if (started) return;
+					started = true;
+					hideShell();
+					try {
+						sessionStorage.removeItem(AUTO_KEY);
+					} catch (e) {}
+				};
+
+				window.addEventListener('alpha-boot-started', markStarted, { once: true });
+
+				var goRecover = function () {
+					try {
+						location.replace('/api/recover');
+					} catch (e) {
+						location.href = '/api/recover';
 					}
-					if (document.getElementById('alpha-boot-fallback')) return;
-					var wrap = document.createElement('div');
-					wrap.id = 'alpha-boot-fallback';
-					wrap.setAttribute('role', 'alert');
-					wrap.style.cssText =
-						'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#090909;color:#eee;font:500 15px/1.45 system-ui,-apple-system,sans-serif;text-align:center';
-					wrap.innerHTML =
-						'<div style="max-width:320px">' +
-						'<p style="margin:0 0 12px;font-size:18px;font-weight:650">Couldn’t start Alpha</p>' +
-						'<p style="margin:0 0 16px;color:#aaa">Cached shell looks stuck. Clear it and reload.</p>' +
-						'<button type="button" id="alpha-boot-reload" style="height:44px;padding:0 18px;border:0;border-radius:14px;background:#eee;color:#111;font:650 14px system-ui;cursor:pointer">Reload app</button>' +
-						'<p style="margin:16px 0 0;font-size:13px;color:#888">If this stays blank, open<br><a href="/api/recover" style="color:#ccc">team.bley.farm/api/recover</a></p>' +
-						'</div>';
-					document.body.appendChild(wrap);
+				};
+
+				var paintTrouble = function (auto) {
+					var shell = document.getElementById('alpha-boot-shell');
+					if (!shell) return;
+					shell.hidden = false;
+					shell.setAttribute('role', 'alert');
+					shell.innerHTML =
+						'<div class="boot-copy">' +
+						'<p class="boot-title">Couldn’t start Alpha</p>' +
+						'<p class="boot-body">' +
+						(auto
+							? 'Clearing the cached shell automatically…'
+							: 'Cached shell looks stuck. Clear it and reload.') +
+						'</p>' +
+						'<div class="boot-actions">' +
+						'<button type="button" id="alpha-boot-reload">Reload app</button>' +
+						'<p class="boot-link">Or open <a href="/api/recover">team.bley.farm/api/recover</a></p>' +
+						'</div></div>';
 					var btn = document.getElementById('alpha-boot-reload');
 					if (btn) {
 						btn.onclick = function () {
-							/* Inline clear — do not depend on the Svelte bundle. */
 							btn.disabled = true;
 							btn.textContent = 'Clearing…';
-							var finish = function () {
-								location.replace('/?_r=' + Date.now());
-							};
-							var run = async function () {
-								try {
-									if (typeof caches !== 'undefined') {
-										var keys = await caches.keys();
-										await Promise.all(keys.map(function (k) {
-											return caches.delete(k);
-										}));
-									}
-								} catch (e) {}
-								try {
-									if ('serviceWorker' in navigator) {
-										var regs = await navigator.serviceWorker.getRegistrations();
-										await Promise.all(
-											regs.map(function (r) {
-												return r.unregister();
-											})
-										);
-									}
-								} catch (e) {}
-								finish();
-							};
-							run().catch(finish);
+							goRecover();
 						};
 					}
 				};
 
-				document.addEventListener(
-					'DOMContentLoaded',
-					function () {
-						/* Faster than 8s — blank dark feels broken immediately on phones. */
-						setTimeout(showFallback, 3500);
+				var autoRecoverOnce = function (reason) {
+					if (started || window.__ALPHA_RECOVERING || escalated) return;
+					escalated = true;
+					var already = false;
+					try {
+						already = sessionStorage.getItem(AUTO_KEY) === '1';
+					} catch (e) {}
+					if (already) {
+						paintTrouble(false);
+						return;
+					}
+					try {
+						sessionStorage.setItem(AUTO_KEY, '1');
+					} catch (e) {}
+					paintTrouble(true);
+					/* Give the UI a tick to paint, then bypass the SW via /api/recover. */
+					setTimeout(goRecover, 180);
+					try {
+						console.warn('alpha boot auto-recover', reason || '');
+					} catch (e) {}
+				};
+
+				var looksLikeChunkFailure = function (msg) {
+					return /Failed to fetch|Loading chunk|dynamically imported module|Importing a module script failed|error loading dynamically|404|MIME type|module script/i.test(
+						String(msg || '')
+					);
+				};
+
+				window.addEventListener('unhandledrejection', function (e) {
+					var reason = e && e.reason;
+					var msg =
+						reason && (reason.message || reason.name)
+							? String(reason.message || reason.name)
+							: String(reason || '');
+					if (looksLikeChunkFailure(msg)) autoRecoverOnce(msg);
+				});
+
+				window.addEventListener(
+					'error',
+					function (e) {
+						var msg = (e && (e.message || (e.error && e.error.message))) || '';
+						var src = (e && e.filename) || '';
+						if (looksLikeChunkFailure(msg) || /\/_app\/immutable\//.test(src)) {
+							autoRecoverOnce(msg || src);
+						}
 					},
-					{ once: true }
+					true
 				);
+
+				var watchHydration = function () {
+					/* If Svelte never mounts, don’t wait on a blank shell. */
+					setTimeout(function () {
+						if (started || window.__ALPHA_RECOVERING) return;
+						if (document.querySelector('.shell, .welcome, .splash')) {
+							markStarted();
+							return;
+						}
+						autoRecoverOnce('hydration-timeout');
+					}, 2800);
+				};
+
+				if (document.readyState === 'loading') {
+					document.addEventListener('DOMContentLoaded', watchHydration, { once: true });
+				} else {
+					watchHydration();
+				}
 			})();
 		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
+		<div id="alpha-boot-shell" aria-live="polite" aria-busy="true">
+			<div class="boot-copy">
+				<div class="boot-pulse" aria-hidden="true"></div>
+				<p class="boot-title">Starting Alpha…</p>
+				<p class="boot-body">Loading your space.</p>
+			</div>
+		</div>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>

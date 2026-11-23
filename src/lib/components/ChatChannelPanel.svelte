@@ -53,6 +53,8 @@
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
+	import Pause from '@alpha/ui/icons/Pause.svelte';
+	import Play from '@alpha/ui/icons/Play.svelte';
 	import ChatAttachModal from '$lib/components/ChatAttachModal.svelte';
 	import ChatMediaStage from '$lib/components/ChatMediaStage.svelte';
 	import { createVoiceRecorder } from '$lib/voice-recorder.js';
@@ -96,24 +98,16 @@
 	let pendingFiles = $state([]);
 	/** Index into media-only subset for the stage hero / caption field. */
 	let mediaFocus = $state(0);
-	/** @typedef {'idle' | 'holding' | 'locked'} VoiceMode */
+	/** @typedef {'idle' | 'recording'} VoiceMode */
 	let voiceMode = $state(/** @type {VoiceMode} */ ('idle'));
 	let voiceMs = $state(0);
 	let voicePaused = $state(false);
-	let voiceCancelHint = $state(false);
-	let voiceDragX = $state(0);
-	let voiceDragY = $state(0);
 	/** @type {ReturnType<typeof setInterval> | null} */
 	let voiceTimer = null;
 	const voiceRecorder = createVoiceRecorder();
-	const VOICE_CANCEL_PX = 80;
-	const VOICE_LOCK_PX = 120;
 	const VOICE_MIN_MS = 1000;
 	const VOICE_MIN_BYTES = 800;
-	const voiceRecording = $derived(voiceMode !== 'idle');
-	const voiceLocked = $derived(voiceMode === 'locked');
-	/** True while the mic pointer is down (survives async getUserMedia). */
-	let voicePointerDown = false;
+	const voiceRecording = $derived(voiceMode === 'recording');
 
 	/** Sticky pin — cleared when user scrolls away; gates auto-follow + resize snap. */
 	let pinBottom = $state(true);
@@ -933,9 +927,6 @@
 		voiceMode = 'idle';
 		voiceMs = 0;
 		voicePaused = false;
-		voiceCancelHint = false;
-		voiceDragX = 0;
-		voiceDragY = 0;
 		stopVoiceTick();
 		signalRecording(channelId, false);
 	}
@@ -944,18 +935,9 @@
 		if (voiceMode !== 'idle' || canSend) return;
 		try {
 			await voiceRecorder.start();
-			if (!voicePointerDown) {
-				/* Released during permission prompt */
-				voiceRecorder.cancel();
-				resetVoiceUi();
-				return;
-			}
-			voiceMode = 'holding';
+			voiceMode = 'recording';
 			voiceMs = 0;
 			voicePaused = false;
-			voiceCancelHint = false;
-			voiceDragX = 0;
-			voiceDragY = 0;
 			signalRecording(channelId, true);
 			startVoiceTick();
 		} catch (e) {
@@ -975,7 +957,7 @@
 	}
 
 	function toggleVoicePause() {
-		if (!voiceLocked) return;
+		if (!voiceRecording) return;
 		if (voicePaused) {
 			voiceRecorder.resume();
 			voicePaused = false;
@@ -1047,63 +1029,9 @@
 		}
 	}
 
-	/** @param {PointerEvent} e */
-	function onMicPointerDown(e) {
-		if (canSend || voiceMode === 'locked') return;
-		e.preventDefault();
-		const target = e.currentTarget;
-		if (!(target instanceof HTMLElement)) return;
-		voicePointerDown = true;
-		target.setPointerCapture(e.pointerId);
+	function onMicTap() {
+		if (canSend || voiceRecording) return;
 		void beginVoiceRecording();
-	}
-
-	/** @param {PointerEvent} e */
-	function onMicPointerMove(e) {
-		if (voiceMode !== 'holding') return;
-		const target = e.currentTarget;
-		if (!(target instanceof HTMLElement)) return;
-		const rect = target.getBoundingClientRect();
-		const originX = rect.left + rect.width / 2;
-		const originY = rect.top + rect.height / 2;
-		const dx = e.clientX - originX;
-		const dy = e.clientY - originY;
-		if (Math.abs(dx) > Math.abs(dy)) {
-			voiceDragX = Math.min(0, dx);
-			voiceDragY = 0;
-			voiceCancelHint = voiceDragX < -VOICE_CANCEL_PX;
-		} else {
-			voiceDragY = Math.min(0, dy);
-			voiceDragX = 0;
-			voiceCancelHint = false;
-			if (voiceDragY < -VOICE_LOCK_PX) {
-				voiceMode = 'locked';
-				voiceDragX = 0;
-				voiceDragY = 0;
-				voiceCancelHint = false;
-				try {
-					navigator.vibrate?.(12);
-				} catch {
-					/* ignore */
-				}
-			}
-		}
-	}
-
-	/** @param {PointerEvent} e */
-	function onMicPointerUp(e) {
-		voicePointerDown = false;
-		const target = e.currentTarget;
-		if (target instanceof HTMLElement) {
-			try {
-				target.releasePointerCapture(e.pointerId);
-			} catch {
-				/* ignore */
-			}
-		}
-		if (voiceMode === 'holding') {
-			void finishVoiceRecording(!voiceCancelHint);
-		}
 	}
 
 	/** @param {KeyboardEvent} e */
@@ -1501,25 +1429,27 @@
 						<button type="button" class="attach-clear" onclick={clearPendingFiles}>{t('chat.clear')}</button>
 					</div>
 				{/if}
-				<div class="composer-row" class:chrome-expanded={chromeExpanded} class:voice-on={voiceRecording}>
-					{#if voiceMode === 'holding'}
-						<div
-							class="voice-lock-pill"
-							class:hot={voiceDragY < -VOICE_LOCK_PX * 0.55}
-							aria-hidden="true"
+				{#if voiceRecording}
+					<div class="voice-row" class:paused={voicePaused} aria-live="polite">
+						<span class="voice-dot" aria-hidden="true"></span>
+						<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
+						<span class="voice-row-grow" aria-hidden="true"></span>
+						<button type="button" class="voice-cancel" onclick={cancelVoiceRecording}>{t('chat.cancel')}</button>
+						<button
+							type="button"
+							class="voice-pause-btn"
+							aria-label={voicePaused ? t('chat.resumeVoice') : t('chat.pauseVoice')}
+							onclick={toggleVoicePause}
 						>
-							<span class="lock-arrow">↑</span>
-							<svg class="lock-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<rect x="3.5" y="7" width="9" height="7" rx="1.5" stroke="currentColor" stroke-width="1.4" />
-								<path
-									d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"
-									stroke="currentColor"
-									stroke-width="1.4"
-									stroke-linecap="round"
-								/>
-							</svg>
-						</div>
-					{/if}
+							{#if voicePaused}
+								<Play size={14} />
+							{:else}
+								<Pause size={14} />
+							{/if}
+						</button>
+					</div>
+				{/if}
+				<div class="composer-row" class:chrome-expanded={chromeExpanded}>
 					<input
 						bind:this={mediaInputEl}
 						type="file"
@@ -1536,101 +1466,60 @@
 						accept=".pdf,.doc,.docx,.txt,.zip,application/pdf"
 						onchange={onFilesPicked}
 					/>
+					<button type="button" class="side-btn plus" aria-label={t('chat.attach')} onclick={openAttach}>
+						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+							<path
+								d="M9 3.5v11M3.5 9h11"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
+					<div
+						class="composer-field"
+						class:fade-top={fadeTop}
+						class:fade-bottom={fadeBottom}
+					>
+						<textarea
+							bind:this={inputEl}
+							class="composer-input"
+							rows="1"
+							placeholder={pendingMedia.length
+								? t('chat.addCaption')
+								: replyTo
+									? t('chat.reply')
+									: t('chat.message')}
+							bind:value={draft}
+							onkeydown={onKey}
+							oninput={onInput}
+							onscroll={updateInputFade}
+							aria-label={pendingMedia.length ? t('chat.addCaption') : t('chat.message')}
+						></textarea>
+					</div>
 					{#if voiceRecording}
-						{#if voiceLocked}
-							<button type="button" class="side-btn plus" aria-label={t('chat.cancel')} onclick={cancelVoiceRecording}>
-								<span class="voice-x">×</span>
-							</button>
-						{:else}
-							<span class="side-btn plus ghost" aria-hidden="true"></span>
-						{/if}
-						<div class="voice-inline" class:cancel={voiceCancelHint}>
-							<span class="voice-pulse" class:paused={voicePaused} aria-hidden="true"></span>
-							<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
-							{#if voiceLocked}
-								<button type="button" class="voice-pause" onclick={toggleVoicePause}>
-									{voicePaused ? t('chat.resumeVoice') : t('chat.pauseVoice')}
-								</button>
-							{:else}
-								<span class="voice-slide" style:transform="translateX({Math.max(voiceDragX, -72) * 0.35}px)">
-									‹ {t('chat.slideToCancel')}
-								</span>
-							{/if}
-						</div>
-						{#if voiceLocked}
-							<button
-								type="button"
-								class="side-btn send"
-								aria-label={t('chat.send')}
-								onclick={() => void finishVoiceRecording(true)}
-							>
-								<AlphaLogo size={15} />
-							</button>
-						{:else}
-							<button
-								type="button"
-								class="side-btn mic active"
-								class:cancel={voiceCancelHint}
-								aria-label={t('chat.voiceMessage')}
-								style:transform="translate({voiceDragX}px, {voiceDragY}px)"
-								onpointerdown={onMicPointerDown}
-								onpointermove={onMicPointerMove}
-								onpointerup={onMicPointerUp}
-								onpointercancel={onMicPointerUp}
-							>
-								<Voice size={22} />
-							</button>
-						{/if}
-					{:else}
-						<button type="button" class="side-btn plus" aria-label={t('chat.attach')} onclick={openAttach}>
-							<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-								<path
-									d="M9 3.5v11M3.5 9h11"
-									stroke="currentColor"
-									stroke-width="1.7"
-									stroke-linecap="round"
-								/>
-							</svg>
-						</button>
-						<div
-							class="composer-field"
-							class:fade-top={fadeTop}
-							class:fade-bottom={fadeBottom}
+						<button
+							type="button"
+							class="side-btn send"
+							aria-label={t('chat.send')}
+							onclick={() => void finishVoiceRecording(true)}
 						>
-							<textarea
-								bind:this={inputEl}
-								class="composer-input"
-								rows="1"
-								placeholder={pendingMedia.length
-									? t('chat.addCaption')
-									: replyTo
-										? t('chat.reply')
-										: t('chat.message')}
-								bind:value={draft}
-								onkeydown={onKey}
-								oninput={onInput}
-								onscroll={updateInputFade}
-								aria-label={pendingMedia.length ? t('chat.addCaption') : t('chat.message')}
-							></textarea>
-						</div>
-						{#if canSend}
-							<button type="button" class="side-btn send" aria-label={t('chat.send')} onclick={() => void send()}>
-								<AlphaLogo size={15} />
-							</button>
-						{:else}
-							<button
-								type="button"
-								class="side-btn mic"
-								aria-label={t('chat.voiceMessage')}
-								title={t('chat.voiceMessage')}
-								onpointerdown={onMicPointerDown}
-								onpointermove={onMicPointerMove}
-								onpointerup={onMicPointerUp}
-								onpointercancel={onMicPointerUp}
-							>
-								<Voice size={22} />
-							</button>
-						{/if}
+							<AlphaLogo size={17} />
+						</button>
+					{:else if canSend}
+						<button type="button" class="side-btn send" aria-label={t('chat.send')} onclick={() => void send()}>
+							<AlphaLogo size={17} />
+						</button>
+					{:else}
+						<button
+							type="button"
+							class="side-btn mic"
+							aria-label={t('chat.voiceMessage')}
+							title={t('chat.voiceMessage')}
+							onclick={onMicTap}
+						>
+							<Voice size={22} />
+						</button>
 					{/if}
 				</div>
 			</ChatComposer>
@@ -2426,130 +2315,109 @@
 		padding: 0 2px;
 	}
 
-	.composer-row.voice-on .side-btn.plus.ghost {
-		visibility: hidden;
-	}
-
-	.voice-lock-pill {
-		position: absolute;
-		right: 4px;
-		bottom: calc(100% + 10px);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 6px;
-		width: 44px;
-		height: 64px;
-		border-radius: 20px;
-		border: 1px solid var(--fg-8);
-		background: var(--fg);
-		color: var(--bg);
-		pointer-events: none;
-		opacity: 0.92;
-		transition: transform 0.18s ease, opacity 0.18s ease;
-	}
-
-	.voice-lock-pill.hot {
-		transform: translateY(-4px);
-	}
-
-	.lock-arrow {
-		font-size: 12px;
-		opacity: 0.7;
-	}
-
-	.lock-ico {
-		display: block;
-		opacity: 0.9;
-	}
-
-	.voice-inline {
-		flex: 1 1 auto;
+	.voice-row {
+		/* Top radius matches ChatComposer --composer-radius-top (16px when expanded). */
+		--voice-corner: 16px;
+		--voice-dot: 10px;
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		min-width: 0;
-		padding: 0 4px;
+		min-height: calc(var(--voice-corner) * 2);
+		padding: 10px 10px 2px;
+		box-sizing: border-box;
+		z-index: 2;
 	}
 
-	.voice-inline.cancel .voice-time {
-		color: var(--accent-3, #c44);
-	}
-
-	.voice-pulse {
-		flex: 0 0 auto;
-		width: 10px;
-		height: 10px;
+	.voice-dot {
+		position: absolute;
+		top: calc(var(--voice-corner) - var(--voice-dot) / 2);
+		left: calc(var(--voice-corner) - var(--voice-dot) / 2);
+		width: var(--voice-dot);
+		height: var(--voice-dot);
 		border-radius: 50%;
-		background: var(--accent-1, #6c5ce7);
-		animation: voice-blink 0.62s ease infinite alternate;
+		background: radial-gradient(
+			circle at 35% 30%,
+			color-mix(in srgb, var(--accent-3, #c44) 92%, #fff) 0%,
+			var(--accent-3, #c44) 55%,
+			color-mix(in srgb, var(--accent-3, #c44) 70%, #000) 100%
+		);
+		box-shadow:
+			0 0 0 0 color-mix(in srgb, var(--accent-3, #c44) 45%, transparent),
+			0 0 10px 2px color-mix(in srgb, var(--accent-3, #c44) 40%, transparent);
+		animation: voice-glow 1.05s ease-in-out infinite alternate;
+		pointer-events: none;
 	}
 
-	.voice-pulse.paused {
+	.voice-row.paused .voice-dot {
 		animation: none;
-		opacity: 0.35;
+		opacity: 0.45;
+		box-shadow: none;
 	}
 
-	@keyframes voice-blink {
+	@keyframes voice-glow {
 		from {
-			opacity: 0.28;
+			transform: scale(0.86);
+			box-shadow:
+				0 0 0 0 color-mix(in srgb, var(--accent-3, #c44) 18%, transparent),
+				0 0 6px 1px color-mix(in srgb, var(--accent-3, #c44) 28%, transparent);
 		}
 		to {
-			opacity: 1;
+			transform: scale(1.12);
+			box-shadow:
+				0 0 0 6px color-mix(in srgb, var(--accent-3, #c44) 0%, transparent),
+				0 0 14px 4px color-mix(in srgb, var(--accent-3, #c44) 48%, transparent);
 		}
 	}
 
 	.voice-time {
+		/* Sit after the concentric corner dot — not mono. */
+		margin-left: calc(var(--voice-corner) + var(--voice-dot) / 2 + 6px);
 		flex: 0 0 auto;
-		font-size: 15px;
-		font-weight: 600;
-		color: var(--fg);
-		font-variant-numeric: tabular-nums;
+		font: inherit;
+		font-size: 14px;
+		font-weight: 500;
+		letter-spacing: 0.01em;
+		color: var(--fg-66);
+		font-family: inherit;
 	}
 
-	.voice-slide {
+	.voice-row-grow {
 		flex: 1 1 auto;
 		min-width: 0;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--fg-33);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		text-align: end;
 	}
 
-	.voice-pause {
-		margin-left: auto;
-		border: none;
+	.voice-cancel {
+		flex: 0 0 auto;
+		height: 30px;
+		padding: 0 14px;
+		border: 0;
 		border-radius: 999px;
-		padding: 6px 10px;
 		background: var(--fg-8);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 13px;
 		font-weight: 600;
 		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
 	}
 
-	.voice-x {
-		font-size: 22px;
-		line-height: 1;
+	.voice-pause-btn {
+		flex: 0 0 auto;
+		width: 33px;
+		height: 33px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8);
 		color: var(--fg-66);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.side-btn.mic {
-		touch-action: none;
-		user-select: none;
-	}
-
-	.side-btn.mic.active {
-		background: var(--accent-1, #6c5ce7);
-		color: #fff;
-	}
-
-	.side-btn.mic.active.cancel {
-		background: var(--accent-3, #c44);
+		-webkit-tap-highlight-color: transparent;
 	}
 </style>

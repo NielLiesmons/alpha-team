@@ -5,6 +5,7 @@
 	 */
 	import Modal from '@alpha/ui/Modal.svelte';
 	import NavIcon from '@alpha/ui/NavIcon.svelte';
+	import SheetTopbar from '@alpha/ui/SheetTopbar.svelte';
 	import { navPngUrl } from '@alpha/ui/nav-png.js';
 	import { t } from '$lib/i18n.svelte.js';
 
@@ -30,12 +31,12 @@
 
 <Modal bind:open label={t('chat.attach')}>
 	<div class="attach-modal">
-		<header class="head">
-			<h2 class="title">{t('chat.attachTitle')}</h2>
-			<button type="button" class="close" aria-label={t('common.close')} onclick={() => (open = false)}
-				>✕</button
-			>
-		</header>
+		<SheetTopbar
+			title={t('chat.attachTitle')}
+			trailing="none"
+			closeLabel={t('common.close')}
+			onclose={() => (open = false)}
+		/>
 		<div class="row" role="menu">
 			{#each items as item (item.kind)}
 				{@const png = navPngUrl(item.icon)}
@@ -58,39 +59,13 @@
 	.attach-modal {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
-		padding: 4px 4px 8px;
 		box-sizing: border-box;
-	}
-	.head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-	}
-	.title {
-		margin: 0;
-		font-size: 17px;
-		font-weight: 650;
-		color: var(--fg);
-	}
-	.close {
-		width: 2rem;
-		height: 2rem;
-		border: 0;
-		border-radius: 999px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		cursor: pointer;
-		font: inherit;
-		line-height: 1;
-		flex-shrink: 0;
 	}
 	.row {
 		display: flex;
 		gap: 10px;
 		overflow-x: auto;
-		padding: 2px 2px 6px;
+		padding: 4px 12px 16px;
 		scrollbar-width: none;
 		-webkit-overflow-scrolling: touch;
 	}

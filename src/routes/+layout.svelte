@@ -56,13 +56,16 @@
 			appBoot.stuck = true;
 		});
 
-		/* Stale hashed chunks after deploy → blank shell; force a clean reload once. */
+		/* Stale hashed chunks after deploy → blank shell; bypass SW via /api/recover once. */
 		/** @param {Event} e */
 		function onPreloadError(e) {
 			e.preventDefault?.();
-			if (sessionStorage.getItem('alpha.chunk-reload') === '1') return;
+			if (sessionStorage.getItem('alpha.chunk-reload') === '1') {
+				location.replace('/api/recover');
+				return;
+			}
 			sessionStorage.setItem('alpha.chunk-reload', '1');
-			location.reload();
+			location.replace('/api/recover');
 		}
 		window.addEventListener('vite:preloadError', onPreloadError);
 

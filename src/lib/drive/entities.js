@@ -2900,6 +2900,61 @@ export async function deleteChatMessage(session, id, _opts = {}) {
 }
 
 /**
+ * Drop Drive leaves for chat media (voice / image / video) so delete removes the bytes.
+ * Chunk ciphertext may remain orphaned — same as track delete.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any[] | null | undefined} attachments
+ */
+export async function deleteChatAttachments(session, attachments) {
+	const list = Array.isArray(attachments) ? attachments : [];
+	if (!list.length) return;
+
+	/** @type {Set<string>} */
+	const prefixes = new Set();
+	/** @type {Set<string>} */
+	const exact = new Set();
+
+	for (const a of list) {
+		if (!a || typeof a !== 'object') continue;
+		const kind = String(a.kind || inferMediaKind(a) || '');
+		if (kind !== 'voice' && kind !== 'image' && kind !== 'video') continue;
+		const path = String(a.path || '').trim();
+		if (!path || path.startsWith('local:') || path.startsWith('blob:')) continue;
+		exact.add(path);
+		const thumb = String(a.thumb_path || '').trim();
+		if (thumb) exact.add(thumb);
+		const slash = path.lastIndexOf('/');
+		if (slash <= 0) continue;
+		const folder = path.slice(0, slash);
+		if (
+			folder.startsWith('media/photos/') ||
+			folder.startsWith('media/video/items/') ||
+			folder.startsWith('media/audio/clips/')
+		) {
+			prefixes.add(`${folder}/`);
+			exact.add(`${folder}/media.json`);
+			exact.add(`${folder}/thumb.jpg`);
+			exact.add(`${folder}/preview.json`);
+		}
+	}
+
+	if (!exact.size && !prefixes.size) return;
+
+	try {
+		const dir = await loadRootDir(session);
+		for (const name of Object.keys(dir.children ?? {})) {
+			for (const prefix of prefixes) {
+				if (name.startsWith(prefix)) exact.add(name);
+			}
+		}
+	} catch {
+		/* still try exact paths */
+	}
+
+	await deletePaths(session, [...exact]);
+}
+
+/**
  * Soft-delete via mailbox tombstone op.
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
@@ -2948,6 +3003,12 @@ export async function softDeleteChatMessage(session, id, opts = {}) {
 				author: tombstone.author
 			})
 	));
+	/* Best-effort: remove voice / pic / video blobs after the tombstone lands. */
+	try {
+		await deleteChatAttachments(session, prev?.attachments);
+	} catch {
+		/* orphan media is preferable to a failed delete */
+	}
 	return tombstone;
 }
 

@@ -155,7 +155,8 @@
 	/* Chat equalizes 2nd/3rd columns in UiShell (.list-chat); token kept for callers */
 	--list-chat: var(--list);
 	--radius-16: 16px;
-	--radius-hero: 32px;
+	/* Mobile sheet top corners concentric with 44px chrome buttons (12 pad + 22). */
+	--radius-hero: 34px;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 	/*

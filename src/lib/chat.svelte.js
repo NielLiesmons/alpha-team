@@ -7,6 +7,7 @@ import { activePerson, displayNameFromEmail } from './actor.svelte.js';
 import {
 	compareChatMessageAsc,
 	createChatMessage,
+	deleteChatAttachments,
 	deleteChatMessage,
 	listComments,
 	listFeedMessages,
@@ -1432,6 +1433,7 @@ export async function softDeleteChatMessageUi(messageId) {
 	const idx = chatFeed.findIndex((m) => m.id === id);
 	const prev = idx >= 0 ? chatFeed[idx] : null;
 	if (prev?.deleted || prev?.deleted_at) return;
+	const mediaAtts = Array.isArray(prev?.attachments) ? prev.attachments : [];
 	const tombstone = {
 		...(prev || { schema: 'alpha.chat_message/1', id, kind: 'chat', author }),
 		body: '',
@@ -1455,6 +1457,12 @@ export async function softDeleteChatMessageUi(messageId) {
 		const i2 = chatFeed.findIndex((m) => m.id === id);
 		if (i2 >= 0) chatFeed[i2] = { ...chatFeed[i2], ...saved, deleted: true };
 		writeChatCache(chatFeed);
+		/* softDelete also cleans Drive media; feed atts cover any path the tip row still had. */
+		try {
+			await deleteChatAttachments(session, mediaAtts);
+		} catch {
+			/* orphan media is preferable to a failed delete */
+		}
 		return saved;
 	} catch (e) {
 		if (idx >= 0 && prev) chatFeed[idx] = prev;
