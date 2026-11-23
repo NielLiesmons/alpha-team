@@ -277,9 +277,7 @@
 		return () => {
 			stopChatTipPoll();
 			if (highlightTimer != null) clearTimeout(highlightTimer);
-			stopVoiceTick();
-			voiceRecorder.cancel();
-			signalRecording(channelId, false);
+			/* Voice tick / recorder cleanup lives in ChatComposerBar.onDestroy. */
 		};
 	});
 

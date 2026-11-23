@@ -582,9 +582,8 @@
 	}
 
 	onDestroy(() => {
+		resetVoiceUi();
 		voiceRecorder.cancel();
-		stopVoiceTick();
-		stopVoiceMeter();
 	});
 </script>
 
