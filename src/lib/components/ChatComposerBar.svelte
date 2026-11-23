@@ -17,7 +17,6 @@
 	import { t } from '$lib/i18n.svelte.js';
 	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
-	import { openComposer } from '$lib/workspace.svelte.js';
 	import { createVoiceRecorder } from '$lib/voice-recorder.js';
 	import { formatVoiceRecordTime } from '$lib/voice-waveform.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
@@ -39,7 +38,6 @@
 	 *   replyTo?: any | null,
 	 *   draft?: string,
 	 *   inputEl?: HTMLTextAreaElement | undefined,
-	 *   attachExtras?: boolean,
 	 *   signalPresence?: boolean,
 	 *   onSent?: () => void,
 	 *   cancelReplyLabel?: string
@@ -51,7 +49,6 @@
 		replyTo = $bindable(null),
 		draft = $bindable(''),
 		inputEl = $bindable(undefined),
-		attachExtras = true,
 		signalPresence = true,
 		onSent = () => {},
 		cancelReplyLabel = undefined
@@ -62,6 +59,8 @@
 	/** @type {HTMLInputElement | undefined} */
 	let fileInputEl = $state();
 	let attachOpen = $state(false);
+	/** Active content-type tab inside the shared expand slot. */
+	let attachTab = $state('photo');
 	/** Keep original / larger quality on image upload — default compressed. */
 	let uploadHd = $state(false);
 
@@ -113,21 +112,14 @@
 	);
 	const canSend = $derived(Boolean(draft.trim()) || pendingFiles.length > 0);
 
-	const attachItems = $derived.by(() => {
-		/** @type {{ kind: string, label: string, icon: string }[]} */
-		const items = [
-			{ kind: 'photo', label: t('nav.photos'), icon: 'photos' },
-			{ kind: 'file', label: t('chat.file'), icon: 'folder' },
-			{ kind: 'poll', label: t('chat.poll'), icon: 'poll' }
-		];
-		if (attachExtras) {
-			items.push(
-				{ kind: 'note', label: t('create.note'), icon: 'notes' },
-				{ kind: 'task', label: t('create.task'), icon: 'tasks' }
-			);
-		}
-		return items;
-	});
+	const attachItems = $derived([
+		{ kind: 'photo', label: t('nav.photos'), icon: 'photos' },
+		{ kind: 'file', label: t('nav.drive'), icon: 'folder' },
+		{ kind: 'poll', label: t('chat.poll'), icon: 'poll' },
+		{ kind: 'location', label: t('chat.location'), icon: 'globe' },
+		{ kind: 'contact', label: t('chat.contact'), icon: 'people' },
+		{ kind: 'event', label: t('chat.event'), icon: 'calendar' }
+	]);
 
 	const isDark = $derived.by(() => {
 		const choice = themeChoice.value;
@@ -155,8 +147,15 @@
 	});
 
 	const chromeExpanded = $derived(
-		Boolean(replyPreview) || pendingFiles.length > 0 || voiceRecording || fieldTall
+		Boolean(replyPreview) ||
+			pendingFiles.length > 0 ||
+			voiceRecording ||
+			fieldTall ||
+			attachOpen
 	);
+
+	/** Shared expand slot: tabs OR media stage (never stacked). */
+	const showExpand = $derived(attachOpen || pendingMedia.length > 0 || pendingDocs.length > 0);
 
 	const replyClearLabel = $derived(cancelReplyLabel || t('chat.cancelReply'));
 
@@ -191,28 +190,21 @@
 	}
 
 	function toggleAttach() {
-		attachOpen = !attachOpen;
+		if (attachOpen) {
+			attachOpen = false;
+			return;
+		}
+		attachOpen = true;
+	}
+
+	/** From media stage “+”: replace stage with Photos tab in the same expand slot. */
+	function openAttachPhotos() {
+		attachTab = 'photo';
+		attachOpen = true;
 	}
 
 	function closeAttach() {
 		attachOpen = false;
-	}
-
-	/** @param {string} kind */
-	function onAttachAction(kind) {
-		if (kind === 'note') {
-			closeAttach();
-			openComposer('note');
-			return;
-		}
-		if (kind === 'task') {
-			closeAttach();
-			openComposer('task');
-			return;
-		}
-		if (kind === 'poll') {
-			chatUi.error = t('chat.pollSoon');
-		}
 	}
 
 	/**
@@ -654,15 +646,6 @@
 </script>
 
 <div class="composer-stack">
-	<ChatAttachPanel
-		open={attachOpen}
-		items={attachItems}
-		bind:hd={uploadHd}
-		onPickFiles={addPickedFiles}
-		onPickLibrary={onPickLibrary}
-		onAction={onAttachAction}
-		onClose={closeAttach}
-	/>
 	<ChatComposer expanded={chromeExpanded}>
 		{#if replyPreview}
 			<div class="composer-quote-wrap">
@@ -691,35 +674,53 @@
 				</div>
 			</div>
 		{/if}
-		{#if pendingMedia.length}
-			<ChatMediaStage
-				items={pendingMedia}
-				activeIndex={Math.min(mediaFocus, pendingMedia.length - 1)}
-				onActiveIndex={setMediaFocus}
-				onRemove={removePendingMedia}
-				onAddMore={toggleAttach}
-			/>
-		{/if}
-		{#if pendingDocs.length}
-			<div class="attach-bar">
-				{#each pendingDocs as f (f.id)}
-					<span class="attach-chip">
-						{f.file?.name || f.library?.name || t('chat.file')}
-						<button
-							type="button"
-							class="attach-x"
-							aria-label={t('chat.remove')}
-							onclick={() => {
-								if (f.previewUrl && !f.libraryPreview) URL.revokeObjectURL(f.previewUrl);
-								pendingFiles = pendingFiles.filter((x) => x.id !== f.id);
-							}}>×</button
-						>
-					</span>
-				{/each}
-				<button type="button" class="attach-clear" onclick={clearPendingFiles}>{t('chat.clear')}</button>
+		{#if showExpand}
+			<div class="composer-expand">
+				{#if attachOpen}
+					<ChatAttachPanel
+						open={true}
+						items={attachItems}
+						bind:tab={attachTab}
+						bind:hd={uploadHd}
+						onPickFiles={addPickedFiles}
+						onPickLibrary={onPickLibrary}
+						onClose={closeAttach}
+					/>
+				{:else}
+					{#if pendingMedia.length}
+						<ChatMediaStage
+							items={pendingMedia}
+							activeIndex={Math.min(mediaFocus, pendingMedia.length - 1)}
+							onActiveIndex={setMediaFocus}
+							onRemove={removePendingMedia}
+							onAddMore={openAttachPhotos}
+						/>
+					{/if}
+					{#if pendingDocs.length}
+						<div class="attach-bar">
+							{#each pendingDocs as f (f.id)}
+								<span class="attach-chip">
+									{f.file?.name || f.library?.name || t('chat.file')}
+									<button
+										type="button"
+										class="attach-x"
+										aria-label={t('chat.remove')}
+										onclick={() => {
+											if (f.previewUrl && !f.libraryPreview) URL.revokeObjectURL(f.previewUrl);
+											pendingFiles = pendingFiles.filter((x) => x.id !== f.id);
+										}}>×</button
+									>
+								</span>
+							{/each}
+							<button type="button" class="attach-clear" onclick={clearPendingFiles}
+								>{t('chat.clear')}</button
+							>
+						</div>
+					{/if}
+				{/if}
 			</div>
 		{/if}
-		<div class="composer-body" class:voice-on={voiceRecording}>
+		<div class="composer-body" class:voice-on={voiceRecording} class:expand-rule={showExpand}>
 			{#if voiceRecording}
 				<div class="voice-row" class:paused={voicePaused} aria-live="polite">
 					<div class="voice-pill">
@@ -854,6 +855,20 @@
 		box-sizing: border-box;
 		position: relative;
 		z-index: 2;
+	}
+
+	/* Shared expand slot (attach tabs XOR media stage) — sits in the composer family. */
+	.composer-expand {
+		position: relative;
+		z-index: 2;
+		min-width: 0;
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	/* Edge-to-edge rule between expand content and the message row (no L/R inset). */
+	.composer-body.expand-rule {
+		border-top: 1px solid var(--fg-8);
 	}
 
 	.composer-quote {

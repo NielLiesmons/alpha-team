@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * Composer attach expand panel — glass pill type selector + tab body.
-	 * Not a Modal: expands from the composer + control (~61% page height).
+	 * Composer attach expand — content-type selector + tab body.
+	 * Lives inside the shared composer expand slot (not a floating glass card).
 	 */
 	import Camera from '$lib/components/icons/Camera.svelte';
 	import PhotoTile from '$lib/components/PhotoTile.svelte';
@@ -22,26 +22,25 @@
 	 * @type {{
 	 *   open?: boolean,
 	 *   items?: AttachItem[],
+	 *   tab?: string,
 	 *   hd?: boolean,
 	 *   onHdChange?: (hd: boolean) => void,
 	 *   onPickFiles?: (files: File[]) => void,
 	 *   onPickLibrary?: (item: import('$lib/photos.js').PhotoItem, previewUrl: string | null) => void,
-	 *   onAction?: (kind: string) => void,
 	 *   onClose?: () => void
 	 * }}
 	 */
 	let {
 		open = false,
 		items = [],
+		tab = $bindable('photo'),
 		hd = $bindable(false),
 		onHdChange,
 		onPickFiles,
 		onPickLibrary,
-		onAction,
 		onClose
 	} = $props();
 
-	let tab = $state('photo');
 	/** @type {import('$lib/photos.js').PhotoItem[]} */
 	let library = $state([]);
 	let libraryLoading = $state(false);
@@ -84,9 +83,6 @@
 	/** @param {string} kind */
 	function selectTab(kind) {
 		tab = kind;
-		if (kind === 'note' || kind === 'task') {
-			/* Keep panel open with CTA — action fires from body button. */
-		}
 	}
 
 	/** @param {Event} e */
@@ -193,6 +189,7 @@
 		/>
 
 		<div class="pill-shell">
+			<!-- Outer recessed track — same family as Mail inbox SegmentedControl -->
 			<div class="pill-track" role="tablist" aria-label={t('chat.attach')}>
 				{#each items as item (item.kind)}
 					{@const on = tab === item.kind}
@@ -259,23 +256,21 @@
 				<div class="tab-cta">
 					<p class="hint">{t('chat.pollSoon')}</p>
 				</div>
-			{:else if tab === 'note'}
+			{:else if tab === 'location'}
 				<div class="tab-cta">
-					<button type="button" class="primary-pill" onclick={() => onAction?.('note')}
-						>{t('chat.createNote')}</button
-					>
+					<p class="hint">{t('chat.locationSoon')}</p>
 				</div>
-			{:else if tab === 'task'}
+			{:else if tab === 'contact'}
 				<div class="tab-cta">
-					<button type="button" class="primary-pill" onclick={() => onAction?.('task')}
-						>{t('chat.createTask')}</button
-					>
+					<p class="hint">{t('chat.contactSoon')}</p>
+				</div>
+			{:else if tab === 'event'}
+				<div class="tab-cta">
+					<p class="hint">{t('chat.eventSoon')}</p>
 				</div>
 			{:else}
 				<div class="tab-cta">
-					<button type="button" class="primary-pill" onclick={() => onAction?.(tab)}
-						>{items.find((i) => i.kind === tab)?.label || t('chat.attach')}</button
-					>
+					<p class="hint">{t('chat.attachSoon')}</p>
 				</div>
 			{/if}
 		</div>
@@ -290,29 +285,13 @@
 		/* ~61% of available page / chat column height */
 		height: min(61dvh, calc(var(--app-height, 100dvh) * 0.61));
 		max-height: min(61dvh, calc(var(--app-height, 100dvh) * 0.61));
-		margin: 0 0 8px;
-		border: 1px solid transparent;
-		border-radius: calc(var(--radius-hero, 34px) - 2px);
-		background:
-			linear-gradient(var(--glass-panel, var(--glass)), var(--glass-panel, var(--glass))) padding-box,
-			var(--glass-shine, var(--fg-8)) border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		box-shadow: 0 8px 28px var(--shadow-strong, rgba(0, 0, 0, 0.18));
+		margin: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
 		overflow: hidden;
 		box-sizing: border-box;
-		animation: attach-in 0.22s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
-	}
-
-	@keyframes attach-in {
-		from {
-			opacity: 0;
-			transform: translate3d(0, 12px, 0);
-		}
-		to {
-			opacity: 1;
-			transform: translate3d(0, 0, 0);
-		}
 	}
 
 	.file-input {
@@ -325,19 +304,25 @@
 
 	.pill-shell {
 		flex-shrink: 0;
-		padding: 10px 10px 6px;
+		padding: 10px 10px 8px;
 		box-sizing: border-box;
 	}
 
+	/* Outer pill container — Mail SegmentedControl / inbox category track */
 	.pill-track {
 		display: flex;
 		align-items: stretch;
-		gap: 4px;
+		gap: 2px;
+		min-height: 40px;
+		padding: 4px;
+		border-radius: 999px;
+		border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+		background: color-mix(in srgb, var(--fg) 4%, transparent);
 		overflow-x: auto;
 		scrollbar-width: none;
 		-ms-overflow-style: none;
 		-webkit-overflow-scrolling: touch;
-		padding: 2px;
+		box-sizing: border-box;
 	}
 
 	.pill-track::-webkit-scrollbar {
@@ -350,6 +335,7 @@
 		align-items: center;
 		gap: 7px;
 		min-height: 34px;
+		height: 100%;
 		padding: 6px 12px 6px 10px;
 		border: 1px solid transparent;
 		border-radius: 999px;
@@ -538,5 +524,9 @@
 		font-weight: 500;
 		color: var(--fg-33);
 		text-align: center;
+	}
+
+	.tab-cta .hint {
+		margin: 0;
 	}
 </style>

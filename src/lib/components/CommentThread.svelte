@@ -631,7 +631,6 @@
 					bind:replyTo
 					bind:inputEl
 					{commentRef}
-					attachExtras={true}
 					signalPresence={false}
 					cancelReplyLabel={t('comments.cancelReply')}
 					onSent={onComposerSent}
