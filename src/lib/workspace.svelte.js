@@ -98,7 +98,12 @@ export const ui = $state({
 	/** Feed list filter id (route-specific options in AppShell). */
 	listFilter: 'all',
 	/** @type {'none' | 'drive'} */
-	source: 'none'
+	source: 'none',
+	/**
+	 * True after local entity cache hydrate or first Drive crawl — chat tips must
+	 * not show “Deleted Note/Task” before this flips.
+	 */
+	entitiesReady: false
 });
 
 /**
@@ -299,6 +304,7 @@ function clearWorkspace() {
 	ui.selection = null;
 	ui.composer = null;
 	ui.source = 'none';
+	ui.entitiesReady = false;
 }
 
 function cacheKeyForSession(session) {
@@ -546,6 +552,7 @@ export async function hydrateWorkspaceFromCache() {
 	replaceArray(captureForms, Array.isArray(snap.captureForms) ? snap.captureForms : []);
 	replaceArray(dataViews, Array.isArray(snap.dataViews) ? snap.dataViews : []);
 	ui.source = 'drive';
+	ui.entitiesReady = true;
 	return hasAny || Array.isArray(snap.tasks);
 }
 
@@ -569,6 +576,7 @@ export async function refreshFromDrive(opts = {}) {
 	/* Offline + local data: keep painting cache; never clear. */
 	if (isOffline() && hadLocal) {
 		ui.source = 'drive';
+		ui.entitiesReady = true;
 		driveSession.loading = false;
 		return;
 	}
@@ -584,12 +592,14 @@ export async function refreshFromDrive(opts = {}) {
 			try {
 				const tipNow = await getTip(session);
 				if (tipNow && tipNow === getLastAppliedTip(session)) {
+					ui.entitiesReady = true;
 					if (ownProgress) setSyncRatio(1, 1);
 					return;
 				}
 			} catch {
 				/* Tip unreachable — keep local workspace. */
 				if (hadLocal) {
+					ui.entitiesReady = true;
 					if (ownProgress) setSyncRatio(1, 1);
 					return;
 				}
@@ -663,12 +673,14 @@ export async function refreshFromDrive(opts = {}) {
 		replaceArray(captureForms, buckets.form);
 		replaceArray(dataViews, buckets.view);
 		ui.source = 'drive';
+		ui.entitiesReady = true;
 		if (tip) setLastAppliedTip(session, tip);
 		void persistWorkspaceCache(session);
 	} catch (e) {
 		driveSession.error = e instanceof Error ? e.message : String(e);
 		/* Never wipe a warm cache on network / tip failure. */
 		if (!hadLocal && !isOffline()) clearWorkspace();
+		else if (hadLocal) ui.entitiesReady = true;
 	} finally {
 		driveSession.loading = false;
 		if (ownProgress) {

@@ -16,7 +16,7 @@ import {
 	sortChatMessagesOldestFirst
 } from './drive/entities.js';
 import { recentEmojis, rememberEmoji } from './emoji.js';
-import { activeSession } from './drive/session.svelte.js';
+import { activeSession, driveSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
 import { mailTipFor } from './mail.svelte.js';
 import {
@@ -24,7 +24,8 @@ import {
 	notes,
 	projects,
 	selectEntity,
-	tasks
+	tasks,
+	ui as workspaceUi
 } from './workspace.svelte.js';
 import { projectDisplayIcon, projectLifecycle } from './project-status.js';
 import { getContentType, resolveContentTypeCard } from './content-types/index.js';
@@ -1521,6 +1522,16 @@ export function chatPublicationRefKey(msg) {
  *   tipNames?: Record<string, string>
  * } | null}
  */
+/**
+ * Entity lists not hydrated yet — never claim Deleted for a missing id.
+ * Touch reactive workspace/drive fields so tips re-resolve when ready.
+ */
+function entitiesStillResolving() {
+	workspaceUi.entitiesReady;
+	driveSession.loading;
+	return !workspaceUi.entitiesReady || driveSession.loading;
+}
+
 export function chatRefMeta(msg) {
 	const ref = msg?.ref;
 	if (!ref?.type) return null;
@@ -1530,15 +1541,18 @@ export function chatRefMeta(msg) {
 	const typeIcon = pkg?.chat?.icon;
 
 	if (ref.type === 'task') {
+		tasks.length;
 		const task = tasks.find((x) => x.id === ref.id);
 		if (!task) {
+			const loading = entitiesStillResolving();
 			return {
 				kind: typeName || 'Task',
-				title: t('chat.deletedTask'),
+				title: loading ? t('chat.loadingTask') : t('chat.deletedTask'),
 				icon: typeIcon || 'tasks',
 				box: 'task',
 				status: 'open',
-				deleted: true
+				loading,
+				deleted: !loading
 			};
 		}
 		const card = resolveContentTypeCard({ ...task, schema: 'alpha.task/4' }, {
@@ -1554,14 +1568,17 @@ export function chatRefMeta(msg) {
 		};
 	}
 	if (ref.type === 'note') {
+		notes.length;
 		const n = notes.find((x) => x.id === ref.id);
 		if (!n) {
+			const loading = entitiesStillResolving();
 			return {
 				kind: typeName || 'Note',
-				title: t('chat.deletedNote'),
+				title: loading ? t('chat.loadingNote') : t('chat.deletedNote'),
 				icon: typeIcon || 'notes',
 				box: 'note',
-				deleted: true
+				loading,
+				deleted: !loading
 			};
 		}
 		const card = resolveContentTypeCard({ ...n, schema: 'alpha.note/1' }, {
@@ -1575,15 +1592,18 @@ export function chatRefMeta(msg) {
 		};
 	}
 	if (ref.type === 'project') {
+		projects.length;
 		const p = projects.find((x) => x.id === ref.id);
 		if (!p) {
+			const loading = entitiesStillResolving();
 			return {
 				kind: typeName || 'Project',
-				title: t('chat.deletedProject'),
+				title: loading ? t('chat.loadingProject') : t('chat.deletedProject'),
 				icon: typeIcon || 'projects',
 				box: 'project',
 				project: null,
-				deleted: true
+				loading,
+				deleted: !loading
 			};
 		}
 		const card = resolveContentTypeCard({ ...p, schema: 'alpha.project/1' }, {
@@ -1598,15 +1618,18 @@ export function chatRefMeta(msg) {
 		};
 	}
 	if (ref.type === 'enterprise') {
+		enterprises.length;
 		const e = enterprises.find((x) => x.id === ref.id);
 		if (!e) {
+			const loading = entitiesStillResolving();
 			return {
 				kind: 'Enterprise',
-				title: t('chat.deletedEnterprise'),
+				title: loading ? t('chat.loadingEnterprise') : t('chat.deletedEnterprise'),
 				icon: 'entreprises',
 				box: 'enterprise',
 				enterprise: null,
-				deleted: true
+				loading,
+				deleted: !loading
 			};
 		}
 		return {

@@ -43,7 +43,26 @@ const urlByPath = $state(/** @type {Record<string, string>} */ ({}));
 /** @type {Set<string>} */
 const loadingUrls = new Set();
 
+/** @type {Set<string>} paths that failed to load (no raw :name: fallback). */
+const failedUrls = $state(/** @type {Set<string>} */ (new Set()));
+
+/** Tick so failed/loaded readers stay reactive. */
+let emojiUiTick = $state(0);
+
 let loaded = false;
+
+/** True after first successful index read (empty index still counts). */
+export function customEmojiIndexReady() {
+	emojiUiTick;
+	return loaded;
+}
+
+/** @param {string} [path] */
+export function customEmojiFailed(path) {
+	emojiUiTick;
+	const p = String(path || '').trim();
+	return Boolean(p && failedUrls.has(p));
+}
 
 function normName(name) {
 	return String(name || '')
@@ -168,6 +187,7 @@ export async function refreshCustomEmojis() {
 	const items = await readIndex(session);
 	customEmojis.splice(0, customEmojis.length, ...items);
 	loaded = true;
+	emojiUiTick += 1;
 	for (const e of items) void ensureCustomEmojiUrl(e.path);
 	return items;
 }
@@ -179,6 +199,7 @@ export async function ensureCustomEmojiUrl(path) {
 	const p = String(path || '').trim();
 	if (!p) return null;
 	if (urlByPath[p]) return urlByPath[p];
+	if (failedUrls.has(p)) return null;
 	if (loadingUrls.has(p)) return null;
 	const session = activeSession();
 	if (!session) return null;
@@ -192,9 +213,15 @@ export async function ensureCustomEmojiUrl(path) {
 		);
 		const prev = urlByPath[p];
 		if (prev) URL.revokeObjectURL(prev);
+		if (failedUrls.has(p)) {
+			failedUrls.delete(p);
+			emojiUiTick += 1;
+		}
 		urlByPath[p] = URL.createObjectURL(blob);
 		return urlByPath[p];
 	} catch {
+		failedUrls.add(p);
+		emojiUiTick += 1;
 		return null;
 	} finally {
 		loadingUrls.delete(p);

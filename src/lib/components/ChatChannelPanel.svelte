@@ -88,6 +88,14 @@
 	let pinBottom = $state(true);
 	let showScrollFab = $state(false);
 	let pendingNewCount = $state(0);
+	/**
+	 * Visit-scoped unread boundary (captured on channel open) — in-feed chip + open scroll.
+	 * Survives deferred read-receipt writes for this visit.
+	 */
+	/** @type {string | null} */
+	let visitFirstNewId = $state(null);
+	let visitNewCount = $state(0);
+	let visitBoundaryChannel = $state('');
 	/** @type {string} */
 	let lastTailId = $state('');
 	/** @type {string} */
@@ -266,15 +274,21 @@
 			chatUi.loading = false;
 			chatUi.settled = true;
 			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
-			void goBottom(true);
+			void anchorOpenScroll();
 		} else if (chatFeed.length === 0) {
 			chatUi.loading = true;
 		}
 		void refreshChatFeed().then(() => {
 			const nextTail = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
 			lastTailId = nextTail;
-			/* Always re-pin after hydrate — splice remounts can leave scrollTop at 0. */
-			if (pinBottom) void goBottom(false, false);
+			/* Re-anchor after hydrate — prefer first unread when still at open boundary. */
+			if (visitBoundaryChannel !== channelId || !visitFirstNewId) {
+				void anchorOpenScroll();
+			} else if (pinBottom) {
+				void goBottom(false, false);
+			} else {
+				void scrollToMessage(visitFirstNewId, { smooth: false, block: 'start' });
+			}
 		});
 		return () => {
 			stopChatTipPoll();
@@ -331,10 +345,13 @@
 		if (mountedChannel && mountedChannel !== id) {
 			lastTailId = '';
 			pendingNewCount = 0;
+			visitFirstNewId = null;
+			visitNewCount = 0;
+			visitBoundaryChannel = '';
 			pinBottom = true;
 			showScrollFab = false;
 			mountedChannel = id;
-			void goBottom(true);
+			void anchorOpenScroll();
 		} else if (!mountedChannel) {
 			mountedChannel = id;
 		}
@@ -351,8 +368,8 @@
 		}
 		if (!lastTailId) {
 			lastTailId = tailId;
-			/* First paint after open/hydrate — land on bottom without waiting for a new tip. */
-			if (pinBottom) void goBottom(false, false);
+			/* First paint — prefer first-unread anchor over blind bottom. */
+			void anchorOpenScroll();
 			return;
 		}
 		if (tailId === lastTailId) return;
@@ -414,7 +431,124 @@
 		if (near) leaveBottomIntent = false;
 		pinBottom = near;
 		showScrollFab = !near && el.scrollHeight > el.clientHeight + 40;
-		if (near) pendingNewCount = 0;
+		if (near) {
+			pendingNewCount = 0;
+			/* Dismiss visit new-message chip once the user reaches the tip. */
+			visitFirstNewId = null;
+			visitNewCount = 0;
+		}
+	}
+
+	/**
+	 * Unread tips for this channel (others' messages not yet in read_by).
+	 * @param {any[]} msgs
+	 */
+	function unreadBoundary(msgs) {
+		const me = String(activePerson().email || '')
+			.trim()
+			.toLowerCase();
+		/** @type {string | null} */
+		let firstId = null;
+		let count = 0;
+		if (!me) return { firstId, count };
+		for (const m of msgs) {
+			if (!m?.id || String(m.id).startsWith('local-')) continue;
+			if (m.kind === 'reaction' || m.kind === 'event') continue;
+			const author = String(m.author || '')
+				.trim()
+				.toLowerCase();
+			if (!author || author === me) continue;
+			const readBy = Array.isArray(m.read_by)
+				? m.read_by.map((e) => String(e).toLowerCase())
+				: [];
+			if (readBy.includes(me)) continue;
+			if (!firstId) firstId = String(m.id);
+			count += 1;
+		}
+		return { firstId, count };
+	}
+
+	/**
+	 * Open / channel switch: land on first unread when any exist; else bottom.
+	 * @param {{ force?: boolean }} [opts]
+	 */
+	async function anchorOpenScroll(opts = {}) {
+		const force = Boolean(opts.force);
+		await tick();
+		const msgs = chronological;
+		if (!msgs.length) {
+			if (force || pinBottom) void goBottom(true, false);
+			return;
+		}
+		const already = visitBoundaryChannel === channelId && visitFirstNewId;
+		if (!force && already) {
+			await scrollToMessage(visitFirstNewId, { smooth: false, block: 'start' });
+			return;
+		}
+		const { firstId, count } = unreadBoundary(msgs);
+		visitBoundaryChannel = channelId;
+		visitFirstNewId = firstId;
+		visitNewCount = count;
+		if (firstId) {
+			pendingNewCount = count;
+			pinBottom = false;
+			leaveBottomIntent = true;
+			await scrollToMessage(firstId, { smooth: false, block: 'start' });
+			showScrollFab = true;
+			measureScroll();
+			return;
+		}
+		visitFirstNewId = null;
+		visitNewCount = 0;
+		pendingNewCount = 0;
+		await goBottom(true, false);
+	}
+
+	/**
+	 * @param {string} messageId
+	 * @param {{ smooth?: boolean, block?: ScrollLogicalPosition, flash?: boolean }} [opts]
+	 */
+	async function scrollToMessage(messageId, opts = {}) {
+		const id = String(messageId || '');
+		if (!id) return;
+		await tick();
+		const root = messagesEl;
+		const target = root?.querySelector(`[data-chat-bubble="${CSS.escape(id)}"]`);
+		if (!(target instanceof HTMLElement)) {
+			/* Bubble may be inside a panel — try anchor wrappers. */
+			const anchor = root?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
+			if (anchor instanceof HTMLElement) {
+				snapLock++;
+				try {
+					anchor.scrollIntoView({
+						behavior: opts.smooth ? 'smooth' : 'auto',
+						block: opts.block || 'start'
+					});
+				} finally {
+					snapLock = Math.max(0, snapLock - 1);
+					measureScroll();
+				}
+			}
+			return;
+		}
+		snapLock++;
+		try {
+			target.scrollIntoView({
+				behavior: opts.smooth ? 'smooth' : 'auto',
+				block: opts.block || 'start'
+			});
+			if (opts.flash) {
+				highlightId = id;
+				if (highlightTimer != null) clearTimeout(highlightTimer);
+				highlightTimer = setTimeout(() => {
+					if (highlightId === id) highlightId = null;
+					highlightTimer = null;
+				}, 1400);
+			}
+		} finally {
+			snapLock = Math.max(0, snapLock - 1);
+			measureScroll();
+		}
 	}
 
 	/**
@@ -429,6 +563,11 @@
 		leaveBottomIntent = false;
 		showScrollFab = false;
 		pendingNewCount = 0;
+		/* Reaching bottom clears the visit new-message chip. */
+		if (force) {
+			visitFirstNewId = null;
+			visitNewCount = 0;
+		}
 		try {
 			await snapFeedToBottomSoon(() => messagesEl, { smooth });
 		} finally {
@@ -439,6 +578,47 @@
 
 	function onJumpToLatest() {
 		void goBottom(true, true);
+	}
+
+	/** Local calendar day key for date chips. @param {string | undefined} iso */
+	function dayKey(iso) {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+	}
+
+	/** @param {string | undefined} iso */
+	function formatDayChip(iso) {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		const now = new Date();
+		const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const startMsg = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+		const diffDays = Math.round((startToday.getTime() - startMsg.getTime()) / 86_400_000);
+		if (diffDays === 0) return t('chat.dateToday');
+		if (diffDays === 1) return t('chat.dateYesterday');
+		if (diffDays > 1 && diffDays < 7) {
+			return d.toLocaleDateString(undefined, { weekday: 'long' });
+		}
+		return d.toLocaleDateString(undefined, {
+			weekday: 'short',
+			month: 'short',
+			day: 'numeric',
+			...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {})
+		});
+	}
+
+	/** @param {any} block */
+	function blockDayIso(block) {
+		return String(block?.messages?.[0]?.created_at || '');
+	}
+
+	function newMessagesChipLabel() {
+		const n = visitNewCount;
+		if (n <= 1) return t('chat.newMessageChip');
+		return t('chat.newMessagesChip', { n: n > 99 ? '99+' : n });
 	}
 
 	/** Jump to a quoted parent bubble and flash it. */
@@ -738,12 +918,25 @@
 				</div>
 			{:else}
 				<div class="stack">
-					{#each feedBlocks as block (block.key)}
+					{#each feedBlocks as block, bi (block.key)}
+						{@const prevIso = bi > 0 ? blockDayIso(feedBlocks[bi - 1]) : ''}
+						{@const curIso = blockDayIso(block)}
+						{@const showDay = Boolean(curIso && dayKey(curIso) !== dayKey(prevIso))}
+						{#if showDay}
+							<div class="day-chip-row" role="separator" aria-label={formatDayChip(curIso)}>
+								<span class="day-chip">{formatDayChip(curIso)}</span>
+							</div>
+						{/if}
 						{#if block.type === 'status'}
 							{@const msg = block.messages[0]}
 							{@const subject = String(msg?.ref?.id || msg?.author || '')
 								.trim()
 								.toLowerCase()}
+							{#if visitFirstNewId && String(msg?.id) === visitFirstNewId && visitNewCount > 0}
+								<div class="new-chip-row" role="separator" aria-label={newMessagesChipLabel()}>
+									<span class="new-chip">{newMessagesChipLabel()}</span>
+								</div>
+							{/if}
 							<ChatStatusLine
 								text={chatStatusText(msg)}
 								email={subject}
@@ -765,6 +958,7 @@
 									type="button"
 									class="pub-tip"
 									class:deleted={Boolean(refMeta?.deleted)}
+									class:loading={Boolean(refMeta?.loading)}
 									aria-label={refMeta ? `${refMeta.kind}: ${refMeta.title}` : t('chat.open')}
 									onclick={() => openChatRef(block.messages[0])}
 								>
@@ -847,10 +1041,16 @@
 										{/if}
 										{#each bubbles as msg, bi (msg.id)}
 											{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
+											{#if visitFirstNewId && String(msg.id) === visitFirstNewId && visitNewCount > 0}
+												<div class="new-chip-row" role="separator" aria-label={newMessagesChipLabel()}>
+													<span class="new-chip">{newMessagesChipLabel()}</span>
+												</div>
+											{/if}
 											<div
 												class="bubble-anchor"
 												class:jump-flash={highlightId === msg.id}
 												class:panel-first={bi === 0}
+												data-msg-id={msg.id}
 											>
 												<ChatFeedCard
 													{msg}
@@ -870,7 +1070,16 @@
 						{:else}
 							{#each block.messages as msg (msg.id)}
 								{@const st = stackMap.get(String(msg.id)) || { isFirst: true, isLast: true }}
-								<div class="bubble-anchor" class:jump-flash={highlightId === msg.id}>
+								{#if visitFirstNewId && String(msg.id) === visitFirstNewId && visitNewCount > 0}
+									<div class="new-chip-row" role="separator" aria-label={newMessagesChipLabel()}>
+										<span class="new-chip">{newMessagesChipLabel()}</span>
+									</div>
+								{/if}
+								<div
+									class="bubble-anchor"
+									class:jump-flash={highlightId === msg.id}
+									data-msg-id={msg.id}
+								>
 									<ChatFeedCard
 										{msg}
 										parent={findChatParent(msg.reply_to)}
@@ -913,26 +1122,18 @@
 	</div>
 
 	{#if showScrollFab || pendingNewCount > 0}
-		<div class="scroll-fabs" class:with-new={pendingNewCount > 0}>
-			{#if pendingNewCount > 0}
-				<button type="button" class="new-msgs" onclick={onJumpToLatest}>
-					New messages{#if pendingNewCount > 1}
-						· {pendingNewCount > 99 ? '99+' : pendingNewCount}{/if}
-				</button>
-			{/if}
-			{#if showScrollFab}
-				<button
-					type="button"
-					class="scroll-fab"
-					aria-label={t('chat.scrollToBottom')}
-					onclick={onJumpToLatest}
-				>
-					<ArrowDown size={18} />
-					{#if pendingNewCount > 0}
-						<span class="fab-badge">{pendingNewCount > 99 ? '99+' : pendingNewCount}</span>
-					{/if}
-				</button>
-			{/if}
+		<div class="scroll-fabs">
+			<button
+				type="button"
+				class="scroll-fab"
+				aria-label={t('chat.scrollToBottom')}
+				onclick={onJumpToLatest}
+			>
+				<ArrowDown size={18} />
+				{#if pendingNewCount > 0}
+					<span class="fab-badge">{pendingNewCount > 99 ? '99+' : pendingNewCount}</span>
+				{/if}
+			</button>
 		</div>
 	{/if}
 
@@ -1223,6 +1424,12 @@
 		opacity: 0.45;
 	}
 
+	.pub-tip.loading .pub-kind,
+	.pub-tip.loading .pub-title {
+		color: var(--fg-33);
+		font-weight: 500;
+	}
+
 	.pub-tip:hover,
 	.pub-tip:focus,
 	.pub-tip:focus-visible {
@@ -1432,16 +1639,49 @@
 		}
 	}
 
+	.day-chip-row,
+	.new-chip-row {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
+		padding: 10px 0 6px;
+		pointer-events: none;
+	}
+
+	.day-chip,
+	.new-chip {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		max-width: 100%;
+		padding: 4px 10px;
+		border-radius: 999px;
+		background: var(--fg-8);
+		color: var(--fg-33);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.01em;
+		line-height: 1.2;
+		white-space: nowrap;
+	}
+
+	.new-chip {
+		/* Whisper accent mark — not a filled CTA */
+		color: var(--accent-1);
+		background: color-mix(in srgb, var(--accent-1) 12%, var(--fg-8));
+	}
+
 	.scroll-fabs {
 		position: absolute;
 		right: 24px;
-		/* 12px above live dock top (tracks quote height via --composer-dock-h) */
-		bottom: calc(var(--composer-dock-h, 67px) + 12px);
+		/* ~2px above live dock top (was +12px; sit ~10px closer to composer) */
+		bottom: calc(var(--composer-dock-h, 67px) + 2px);
 		z-index: 8;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 8px;
 		pointer-events: none;
 	}
 
@@ -1453,21 +1693,6 @@
 		.scroll-fabs {
 			right: 14px;
 		}
-	}
-
-	.new-msgs {
-		padding: 6px 12px;
-		border: 0;
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--accent-1) 33%, transparent);
-		color: #fff;
-		font: inherit;
-		font-size: 12px;
-		font-weight: 500;
-		cursor: pointer;
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		box-shadow: 0 4px 16px var(--shadow);
 	}
 
 	.scroll-fab {
@@ -1519,24 +1744,25 @@
 
 	.fab-badge {
 		position: absolute;
-		top: -4px;
+		top: -8px;
 		left: 50%;
 		transform: translateX(-50%);
-		min-width: 18px;
-		height: 18px;
-		padding: 0 4px;
+		min-width: 24px;
+		height: 24px;
+		padding: 0 6px;
 		box-sizing: border-box;
 		display: grid;
 		place-items: center;
 		border-radius: 999px;
-		background: var(--accent-1);
+		background: var(--gradient-accent-1, radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%));
 		color: #fff;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 10px;
-		font-weight: 600;
+		font-size: 12px;
+		font-weight: 700;
 		font-variant-numeric: lining-nums;
 		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
 		line-height: 1;
+		box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-1) 35%, transparent);
 	}
 
 	/* Soft veil behind composer — fixed band (not tied to clear pad). */
