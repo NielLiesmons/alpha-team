@@ -3,6 +3,7 @@
 	 * Mail thread panels only — private chat lives in CommentThread (FAB panel),
 	 * same pattern as Tasks / Notes / Projects.
 	 */
+	import { tick } from 'svelte';
 	import DetailTitleRow from '@alpha/ui/DetailTitleRow.svelte';
 	import ArrowRight from './icons/ArrowRight.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
@@ -27,6 +28,7 @@
 		mailPriorityFor,
 		mailPreview,
 		mailTipCache,
+		markMailRead,
 		preferReplyAll,
 		rememberMailTip,
 		threadMessages
@@ -97,6 +99,10 @@
 	let feedEl = $state();
 	/** Prevents remount/tip refresh from re-forcing scroll on the same thread. */
 	let loadedThreadId = '';
+	/** Visit-scoped unread boundary (captured on open, before mark-read). */
+	let visitFirstNewId = $state(/** @type {string | null} */ (null));
+	let visitNewCount = $state(0);
+	let visitBoundaryThread = '';
 	/** @type {Record<string, boolean>} */
 	let quoteOpen = $state({});
 	/** Which message’s reply/forward menu is open. */
@@ -114,6 +120,79 @@
 	const recipientsTo = $derived(recipientsMail ? mailRecipientPeople(recipientsMail, 'to') : []);
 	const recipientsCc = $derived(recipientsMail ? mailRecipientPeople(recipientsMail, 'cc') : []);
 
+	/**
+	 * Unread inbound mails in chronological order (others' unread only).
+	 * @param {any[]} msgs
+	 */
+	function unreadBoundary(msgs) {
+		const self = String(me || '')
+			.trim()
+			.toLowerCase();
+		/** @type {string | null} */
+		let firstId = null;
+		let count = 0;
+		for (const m of msgs) {
+			const id = String(m?.id || '');
+			if (!id) continue;
+			if (!m?._unread) continue;
+			const from = String(m?.from || '')
+				.trim()
+				.toLowerCase();
+			if (self && from === self) continue;
+			if (!firstId) firstId = id;
+			count += 1;
+		}
+		return { firstId, count };
+	}
+
+	function newMailsChipLabel() {
+		const n = visitNewCount;
+		if (n <= 0) return '';
+		return t('mail.newMailsChip', { n: n > 99 ? '99+' : n });
+	}
+
+	/**
+	 * @param {string} messageId
+	 * @param {{ block?: ScrollLogicalPosition }} [opts]
+	 */
+	async function scrollToMailPanel(messageId, opts = {}) {
+		const id = String(messageId || '');
+		if (!id) return;
+		await tick();
+		const root = feedEl;
+		const target = root?.querySelector(`[data-mail-id="${CSS.escape(id)}"]`);
+		if (!(target instanceof HTMLElement)) return;
+		target.scrollIntoView({
+			behavior: 'auto',
+			block: opts.block || 'start'
+		});
+	}
+
+	async function goThreadBottom() {
+		await tick();
+		const el = feedEl;
+		if (!el) return;
+		el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+	}
+
+	/**
+	 * Open thread: land on first unread (chip above); else newest at bottom.
+	 * Mark-read after snapshot so unread flags survive for the boundary.
+	 */
+	async function anchorOpenScroll() {
+		const msgs = mails;
+		const { firstId, count } = unreadBoundary(msgs);
+		visitBoundaryThread = threadId;
+		visitFirstNewId = firstId;
+		visitNewCount = count;
+		if (firstId) {
+			await scrollToMailPanel(firstId, { block: 'start' });
+		} else {
+			await goThreadBottom();
+		}
+		if (threadId) void markMailRead(threadId);
+	}
+
 	$effect(() => {
 		const id = threadId;
 		if (!id) return;
@@ -127,9 +206,11 @@
 		replyMenuAnchor = null;
 		recipientsMenuId = '';
 		recipientsMenuAnchor = null;
+		visitFirstNewId = null;
+		visitNewCount = 0;
+		visitBoundaryThread = '';
 		queueMicrotask(() => {
-			const el = feedEl;
-			if (el) el.scrollTop = 0;
+			void anchorOpenScroll();
 		});
 	});
 
@@ -349,6 +430,17 @@
 				{@const recipientsOpen = recipientsMenuId === quoteId}
 				{@const hasQuote = Boolean(parts.collapsible && parts.quoted)}
 				{@const attachments = Array.isArray(m.attachments) ? m.attachments : []}
+				{@const showNewChip =
+					Boolean(visitFirstNewId) &&
+					visitBoundaryThread === threadId &&
+					visitNewCount > 0 &&
+					quoteId === visitFirstNewId}
+				<div class="mail-panel-anchor" data-mail-id={quoteId}>
+				{#if showNewChip}
+					<div class="new-chip-row" role="separator" aria-label={newMailsChipLabel()}>
+						<span class="new-chip">{newMailsChipLabel()}</span>
+					</div>
+				{/if}
 				<article
 					class="mail-panel"
 					class:draft={isDraft(m)}
@@ -473,6 +565,7 @@
 						</div>
 					{/if}
 				</article>
+				</div>
 			{/each}
 
 			<button type="button" class="mail-reply-field" onclick={composeThreadReply}>
@@ -637,6 +730,39 @@
 				transparent 100%
 			);
 		}
+	}
+
+	.mail-panel-anchor {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		width: 100%;
+	}
+
+	.new-chip-row {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
+		padding: 10px 0 6px;
+		pointer-events: none;
+	}
+
+	.new-chip {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		max-width: 100%;
+		padding: 4px 10px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--accent-1) 12%, var(--fg-8));
+		color: var(--accent-1);
+		font-family: 'Inter', var(--font), system-ui, sans-serif;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.01em;
+		line-height: 1.2;
+		white-space: nowrap;
 	}
 
 	.feed-body {

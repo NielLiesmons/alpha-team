@@ -31,7 +31,6 @@
 		mailAuthorLabel,
 		mailCategoryFor,
 		mailComposeSeed,
-		markMailRead,
 		markMailUnread,
 		moveMailThreadLocal,
 		refreshMailForStubOnce,
@@ -279,24 +278,15 @@
 		});
 	});
 
-	/** Only auto-mark-read once per opened thread id (avoids fighting mark-unread). */
-	let autoReadMailId = $state('');
-
 	$effect(() => {
 		const id = mailMsg?.id;
-		if (!id) {
-			autoReadMailId = '';
-			return;
-		}
+		if (!id) return;
 		if (mailMsg?._stub) {
 			refreshMailForStubOnce(id);
 			return;
 		}
 		rememberMailTip(mailMsg);
-		if (id !== autoReadMailId) {
-			autoReadMailId = id;
-			void markMailRead(id);
-		}
+		/* Mark-read runs in MailThreadFeed after capturing the unread boundary for scroll/chip. */
 		void loadComments('mail', id).catch(() => {});
 	});
 
