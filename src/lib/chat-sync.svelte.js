@@ -187,11 +187,90 @@ function onVisibility() {
 	}
 }
 
+/** @type {{ tip: string, messageId: string } | null} */
+let pendingPushOpen = null;
+
+/**
+ * Notification tap / push deep-link: force chat pull (and tip wake when known).
+ * Queues until Drive session exists (cold start from killed PWA).
+ * @param {{ tip?: string, messageId?: string }} [opts]
+ */
+export function openChatFromPush(opts = {}) {
+	const tip = String(opts.tip || '').trim();
+	const messageId = String(opts.messageId || '').trim();
+	if (typeof window !== 'undefined') {
+		try {
+			const path = window.location?.pathname || '';
+			if (!path.startsWith('/chat')) {
+				void import('$app/navigation')
+					.then(({ goto }) => {
+						void goto('/chat', { replaceState: false, keepFocus: true, noScroll: true });
+					})
+					.catch(() => {
+						try {
+							window.history.pushState({}, '', '/chat');
+							window.dispatchEvent(new PopStateEvent('popstate'));
+						} catch {
+							/* ignore */
+						}
+					});
+			}
+		} catch {
+			/* ignore */
+		}
+	}
+	if (!activeSession()) {
+		pendingPushOpen = { tip, messageId };
+		return;
+	}
+	pendingPushOpen = null;
+	startChatTipPoll();
+	if (tip) void wakeChatFromTip(tip);
+	else void pullChatIfNeeded(true);
+}
+
+/** Call after Drive session is up (boot) so notification taps aren't lost. */
+export function flushPendingPushOpen() {
+	if (!pendingPushOpen) return;
+	if (!activeSession()) return;
+	const pending = pendingPushOpen;
+	pendingPushOpen = null;
+	openChatFromPush(pending);
+}
+
+/** Consume ?push=1&tip=&mid= from a notification cold-start URL. */
+function consumePushOpenQuery() {
+	if (typeof window === 'undefined') return;
+	try {
+		const u = new URL(window.location.href);
+		if (u.searchParams.get('push') !== '1') return;
+		const tip = String(u.searchParams.get('tip') || '').trim();
+		const messageId = String(u.searchParams.get('mid') || '').trim();
+		u.searchParams.delete('push');
+		u.searchParams.delete('tip');
+		u.searchParams.delete('mid');
+		const next = `${u.pathname}${u.search}${u.hash}`;
+		window.history.replaceState(window.history.state, '', next || '/chat');
+		openChatFromPush({ tip, messageId });
+	} catch {
+		/* ignore */
+	}
+}
+
 function onSwMessage(/** @type {MessageEvent} */ ev) {
 	const data = ev?.data;
 	if (!data || typeof data !== 'object') return;
+	if (data.type === 'push-open') {
+		openChatFromPush({
+			tip: typeof data.tip === 'string' ? data.tip : '',
+			messageId: typeof data.messageId === 'string' ? data.messageId : ''
+		});
+		return;
+	}
 	if (data.type === 'chat-wake' || data.type === 'PUSH_RECEIVED') {
-		void pullChatIfNeeded(true);
+		const tip = typeof data.tip === 'string' ? data.tip.trim() : '';
+		if (tip) void wakeChatFromTip(tip);
+		else void pullChatIfNeeded(true);
 	}
 }
 
@@ -228,7 +307,10 @@ export function stopChatTipPoll() {
 export function initChatWakeListeners() {
 	if (typeof window === 'undefined') return () => {};
 	const onFocus = () => void pullChatIfNeeded(true);
-	const onPageShow = () => void pullChatIfNeeded(true);
+	const onPageShow = () => {
+		consumePushOpenQuery();
+		void pullChatIfNeeded(true);
+	};
 	document.addEventListener('visibilitychange', onVisibility);
 	window.addEventListener('focus', onFocus);
 	window.addEventListener('pageshow', onPageShow);
@@ -237,6 +319,7 @@ export function initChatWakeListeners() {
 	 * Always poll while visible — reactions do not get push wakes, and chat
 	 * panel mount is not required for peer reaction visibility.
 	 */
+	consumePushOpenQuery();
 	if (typeof document === 'undefined' || document.visibilityState === 'visible') {
 		startChatTipPoll();
 	}

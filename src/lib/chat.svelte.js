@@ -16,6 +16,7 @@ import {
 	sortChatMessagesOldestFirst
 } from './drive/entities.js';
 import { recentEmojis, rememberEmoji } from './emoji.js';
+import { peekCachedChatTip } from './drive/client.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
 import { mailTipFor } from './mail.svelte.js';
@@ -259,10 +260,35 @@ function readChatCache() {
 	}
 }
 
+/**
+ * blob: object URLs die on reload — never persist them or feed hydrate shows broken imgs / skips Drive fetch.
+ * @param {any[]} list
+ */
+function stripEphemeralAttachments(list) {
+	return list.map((m) => {
+		if (!Array.isArray(m?.attachments) || !m.attachments.length) return m;
+		let changed = false;
+		const attachments = m.attachments.map((a) => {
+			if (!a || typeof a !== 'object') return a;
+			const url = a.previewUrl;
+			if (typeof url === 'string' && url.startsWith('blob:')) {
+				changed = true;
+				const { previewUrl: _p, ...rest } = a;
+				return rest;
+			}
+			return a;
+		});
+		return changed ? { ...m, attachments } : m;
+	});
+}
+
 function writeChatCache(list) {
 	if (typeof localStorage === 'undefined') return;
 	try {
-		localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(list.slice(0, CHAT_FEED_LIMIT)));
+		localStorage.setItem(
+			CHAT_CACHE_KEY,
+			JSON.stringify(stripEphemeralAttachments(list).slice(0, CHAT_FEED_LIMIT))
+		);
 	} catch {
 		/* quota */
 	}
@@ -279,7 +305,7 @@ export function hydrateChatFeedFromCache() {
 	if (!Array.isArray(cached) || !cached.length) return false;
 	if (chatFeed.length === 0) {
 		/* Stale in-flight rows from a killed tab → failed (never silent vanish). */
-		const rows = cached.map((m) => {
+		const rows = stripEphemeralAttachments(cached).map((m) => {
 			if (!m?._pending && m?.delivery !== 'sending') return m;
 			return {
 				...m,
@@ -323,7 +349,7 @@ function mergeFeedRows(list, prev) {
 		const id = String(m?.id || '');
 		if (!id) continue;
 		if (byId.has(id)) {
-			/* Tip listed this id — prefer server row; keep local previewUrls on atts. */
+			/* Tip listed this id — prefer server row; keep in-memory previewUrls (incl. live blob:). */
 			if (Array.isArray(m.attachments)) {
 				const server = byId.get(id);
 				const prevAtt = m.attachments;
@@ -1278,6 +1304,7 @@ export async function postChatMessage(input) {
 				return settledMsg;
 			}
 
+			let tipWritten = '';
 			const created = await createChatMessage(
 				session,
 				{
@@ -1302,6 +1329,7 @@ export async function postChatMessage(input) {
 					},
 					/* Publish tip hash the instant putTip lands — queues if WS is reconnecting. */
 					onTipWritten: (tip) => {
+						tipWritten = String(tip || '');
 						void import('./realtime.svelte.js').then(({ publishTipWake }) => {
 							publishTipWake(tip);
 						});
@@ -1318,10 +1346,13 @@ export async function postChatMessage(input) {
 					kind === 'event'
 						? `${displayNameFromEmail(author)} ${chatEventLabel({ ref: input.ref })}`
 						: body || (attachments.length ? '📎 Attachment' : '');
+				const tipHash = tipWritten || peekCachedChatTip(session) || '';
 				void notifyChatRecipients({
 					authorEmail: author,
 					authorName: displayNameFromEmail(author),
-					body: pushBody
+					body: pushBody,
+					tip: tipHash,
+					messageId: String(created?.id || serverId || '')
 				}).catch((e) => console.warn('chat push', e));
 			}
 		} catch (e) {

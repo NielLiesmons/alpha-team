@@ -169,6 +169,12 @@ export async function bootApp() {
 					console.warn('mail approved sync', e);
 				}
 				await refreshChatFeed();
+				try {
+					const { flushPendingPushOpen } = await import('./chat-sync.svelte.js');
+					flushPendingPushOpen();
+				} catch {
+					/* ignore */
+				}
 				void refreshMembersAndAvatars().catch((e) => console.warn('members/avatars', e));
 				void refreshBackgroundDrive().then(() => {
 					/* Opt-in demo seed only — never auto-seed customer Spaces. */

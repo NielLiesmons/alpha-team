@@ -118,7 +118,7 @@ export async function enablePushNotifications(email) {
 		const msg = e instanceof Error ? e.message : String(e);
 		if (/push service error/i.test(msg) || name === 'AbortError') {
 			throw new Error(
-				'Push service unavailable on this device. On Android you need Google Play services and a normal network — then try again.'
+				'Push unavailable here. Chrome/Vanadium on GrapheneOS need sandboxed Google Play services (FCM). Or use IronFox + a UnifiedPush distributor (e.g. Sunup). iPhone: Home Screen app only.'
 			);
 		}
 		throw e instanceof Error ? e : new Error(msg);
@@ -198,9 +198,11 @@ export async function isPushSubscribed() {
 /**
  * Send one notification through alpha-api → APNs/FCM.
  * @param {{ endpoint: string, keys: { p256dh: string, auth: string } }} subscription
- * @param {{ title: string, body: string, url?: string, tag?: string, badge?: number }} notification
+ * @param {{ title: string, body: string, url?: string, tag?: string, badge?: number, tip?: string, messageId?: string }} notification
  */
 export async function relayPush(subscription, notification) {
+	const tip = String(notification.tip || '').trim();
+	const messageId = String(notification.messageId || '').trim();
 	const res = await fetch(`${apiBase()}/v1/push/send`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
@@ -214,7 +216,9 @@ export async function relayPush(subscription, notification) {
 				body: notification.body,
 				url: notification.url || '/chat',
 				tag: notification.tag || 'alpha-chat',
-				badge: notification.badge ?? null
+				badge: notification.badge ?? null,
+				...(tip ? { tip } : {}),
+				...(messageId ? { messageId } : {})
 			}
 		})
 	});
@@ -231,7 +235,7 @@ export async function relayPush(subscription, notification) {
 /**
  * Fan-out chat alert to every Drive-registered device except the author.
  * Fire-and-forget safe — never blocks the chat send UX.
- * @param {{ authorEmail: string, authorName: string, body: string }} input
+ * @param {{ authorEmail: string, authorName: string, body: string, tip?: string, messageId?: string }} input
  */
 export async function notifyChatRecipients(input) {
 	const session = activeSession();
@@ -240,6 +244,8 @@ export async function notifyChatRecipients(input) {
 	const author = String(input.authorEmail || '').trim().toLowerCase();
 	const title = String(input.authorName || author.split('@')[0] || 'Alpha');
 	const body = String(input.body || '').trim().slice(0, 140) || 'New message';
+	const tip = String(input.tip || '').trim();
+	const messageId = String(input.messageId || '').trim();
 
 	let subs = [];
 	try {
@@ -260,7 +266,14 @@ export async function notifyChatRecipients(input) {
 		try {
 			const result = await relayPush(
 				{ endpoint: sub.endpoint, keys: sub.keys },
-				{ title, body, url: '/chat', tag: 'alpha-chat' }
+				{
+					title,
+					body,
+					url: '/chat',
+					tag: 'alpha-chat',
+					...(tip ? { tip } : {}),
+					...(messageId ? { messageId } : {})
+				}
 			);
 			if (result.gone && sub.id) {
 				void removePushSubscription(session, sub.id).catch(() => {});
