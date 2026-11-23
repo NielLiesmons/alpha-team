@@ -118,6 +118,33 @@ export function publishTipWake(tip) {
 }
 
 /**
+ * Instant reaction fan-out (paint before mailbox pull). Tip wake still heals.
+ * @param {{
+ *   op: 'add' | 'remove',
+ *   message_id: string,
+ *   emoji: string,
+ *   author: string,
+ *   id?: string,
+ *   tip?: string
+ * }} payload
+ */
+export function publishReactionHint(payload) {
+	if (!payload?.message_id || !payload?.emoji || !payload?.author) return false;
+	ensureRealtime();
+	return publishRealtime({
+		type: 'reaction',
+		...(payload.tip ? { tip: String(payload.tip) } : {}),
+		reaction: {
+			op: payload.op === 'remove' ? 'remove' : 'add',
+			message_id: String(payload.message_id),
+			emoji: String(payload.emoji),
+			author: String(payload.author),
+			...(payload.id ? { id: String(payload.id) } : {})
+		}
+	});
+}
+
+/**
  * @param {{ channel_id: string, state: string, label?: string, expires_at?: string }} input
  */
 export function publishEphemeral(input) {
@@ -226,6 +253,24 @@ function onMessage(ev) {
 			void wakeChatFromTip(tip);
 		} catch (e) {
 			console.warn('tip-wake handler', e);
+		}
+		return;
+	}
+	if (type === 'reaction' && data.reaction) {
+		try {
+			void import('./chat.svelte.js').then(({ applyReactionHint }) => {
+				applyReactionHint(data.reaction);
+			});
+		} catch (e) {
+			console.warn('reaction hint', e);
+		}
+		/* Durable heal via tip when present; otherwise tip-poll catches up. */
+		if (data.tip) {
+			try {
+				void wakeChatFromTip(String(data.tip));
+			} catch {
+				/* ignore */
+			}
 		}
 		return;
 	}

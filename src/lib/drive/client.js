@@ -26,7 +26,19 @@ let rootDirCache = null;
 /** Chat mailbox tip (named tip `chat`) — append-once chain, not a cryptree dir. */
 /** @type {{ key: string, tip: string } | null} */
 let mailboxTipCache = null;
-/** @type {{ key: string, tip: string, messages: any[] } | null} */
+/**
+ * Materialized chat mailbox feed.
+ * `complete` = last walk reached genesis (prev empty). Incomplete IDB snaps must
+ * never warm-hit — phones otherwise stick on a truncated tip-matched cache.
+ * @type {{
+ *   key: string,
+ *   tip: string,
+ *   messages: any[],
+ *   complete: boolean,
+ *   count: number,
+ *   tailHash: string
+ * } | null}
+ */
 let mailboxFeedCache = null;
 /** Decrypted mailbox envelopes by ciphertext hash. */
 /** @type {Map<string, any>} */
@@ -125,19 +137,45 @@ function rememberMailboxTip(session, tip) {
  * @param {DriveSession} session
  * @param {string} tip
  * @param {any[]} messages
+ * @param {{ complete?: boolean, tailHash?: string }} [meta]
  */
-function rememberMailboxFeed(session, tip, messages) {
+function rememberMailboxFeed(session, tip, messages, meta = {}) {
 	rememberMailboxTip(session, tip);
+	const rows = Array.isArray(messages) ? messages.map((m) => structuredClone(m)) : [];
+	const complete = Boolean(meta.complete);
+	const tailHash = String(meta.tailHash || '');
 	mailboxFeedCache = {
 		key: sessionCacheKey(session),
 		tip: tip || '',
-		messages: Array.isArray(messages) ? messages.map((m) => structuredClone(m)) : []
+		messages: rows,
+		complete,
+		count: rows.length,
+		tailHash
 	};
 	void idbSet(mailboxFeedIdbKey(session), {
 		at: Date.now(),
 		tip: tip || '',
-		messages: mailboxFeedCache.messages
+		messages: rows,
+		complete,
+		count: rows.length,
+		tailHash
 	}).catch(() => {});
+}
+
+/**
+ * In-memory mailbox feed integrity meta (tip / count / complete) — no network.
+ * @param {DriveSession} session
+ * @returns {{ tip: string, count: number, complete: boolean, tailHash: string } | null}
+ */
+export function peekMailboxFeedMeta(session) {
+	if (!session || !mailboxFeedCache) return null;
+	if (mailboxFeedCache.key !== sessionCacheKey(session)) return null;
+	return {
+		tip: mailboxFeedCache.tip || '',
+		count: mailboxFeedCache.count || mailboxFeedCache.messages?.length || 0,
+		complete: Boolean(mailboxFeedCache.complete),
+		tailHash: mailboxFeedCache.tailHash || ''
+	};
 }
 
 /**
@@ -483,11 +521,14 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 							structuredClone(entry.message),
 							...mailboxFeedCache.messages.filter((m) => m?.id !== entry.message.id)
 						];
-						rememberMailboxFeed(session, hash, next);
+						rememberMailboxFeed(session, hash, next, {
+							complete: Boolean(mailboxFeedCache.complete),
+							tailHash: mailboxFeedCache.tailHash || ''
+						});
 					}
 				} else if (mailboxFeedCache?.key === sessionCacheKey(session)) {
 					/* Ops invalidate materialization — next pull rebuilds. */
-					mailboxFeedCache = { ...mailboxFeedCache, tip: '' };
+					mailboxFeedCache = { ...mailboxFeedCache, tip: '', complete: false };
 				}
 				if (typeof console !== 'undefined' && console.debug) {
 					console.debug('[chat-latency] appendMailbox', {
@@ -525,20 +566,23 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 
 /**
  * Walk chat mailbox from tip → prev until limit messages (or stopAt hash).
+ * Server tip is authority: incomplete local caches never warm-hit permanently.
  * @param {DriveSession} session
  * @param {{
  *   limit?: number,
  *   stopAt?: string,
  *   tip?: string,
+ *   force?: boolean,
  *   signal?: AbortSignal,
  *   onPartial?: (rows: any[]) => void
  * }} [opts]
- * @returns {Promise<{ tip: string, messages: any[] }>}
+ * @returns {Promise<{ tip: string, messages: any[], complete: boolean }>}
  */
 export async function loadMailboxMessages(session, opts = {}) {
 	/* High ceiling: tip→prev must be able to surface full history after remigrate. */
 	const limit = Math.max(1, Math.min(5000, Number(opts.limit) || 2000));
 	const stopAt = String(opts.stopAt || '');
+	const force = Boolean(opts.force);
 	const cacheKey = sessionCacheKey(session);
 	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	/* Cold boot: rehydrate durable chatmail snapshot before any tip walk. */
@@ -551,10 +595,18 @@ export async function loadMailboxMessages(session, opts = {}) {
 				Array.isArray(snap.messages) &&
 				snap.messages.length > 0
 			) {
+				/*
+				 * Legacy snaps lack `complete` — treat as incomplete so tip-matched
+				 * truncated phones reconcile to the full server chain once.
+				 */
+				const complete = snap.complete === true;
 				mailboxFeedCache = {
 					key: cacheKey,
 					tip: String(snap.tip || ''),
-					messages: snap.messages.map((m) => structuredClone(m))
+					messages: snap.messages.map((m) => structuredClone(m)),
+					complete,
+					count: snap.messages.length,
+					tailHash: String(snap.tailHash || '')
 				};
 				if (mailboxFeedCache.tip) {
 					mailboxTipCache = { key: cacheKey, tip: mailboxFeedCache.tip };
@@ -577,12 +629,21 @@ export async function loadMailboxMessages(session, opts = {}) {
 			) {
 				return {
 					tip: mailboxFeedCache.tip || '',
-					messages: mailboxFeedCache.messages.map((m) => structuredClone(m))
+					messages: mailboxFeedCache.messages.map((m) => structuredClone(m)),
+					complete: Boolean(mailboxFeedCache.complete)
 				};
 			}
 			throw e;
 		}
 	}
+	const priorMeta =
+		mailboxFeedCache && mailboxFeedCache.key === cacheKey
+			? {
+					complete: Boolean(mailboxFeedCache.complete),
+					tailHash: mailboxFeedCache.tailHash || '',
+					tip: mailboxFeedCache.tip || ''
+				}
+			: null;
 	const priorTip = peekCachedChatTip(session);
 	const priorFeed =
 		mailboxFeedCache &&
@@ -595,23 +656,26 @@ export async function loadMailboxMessages(session, opts = {}) {
 
 	rememberMailboxTip(session, tip);
 	if (!tip) {
-		rememberMailboxFeed(session, '', []);
-		return { tip: '', messages: [] };
+		rememberMailboxFeed(session, '', [], { complete: true, tailHash: '' });
+		return { tip: '', messages: [], complete: true };
 	}
 	/*
-	 * Warm hit only when we actually have rows. tip+[] is never authoritative —
-	 * it happens when stopAt===tip with no priorFeed and would hide full history.
+	 * Warm hit only for a COMPLETE chain at the live tip. tip+partial was the
+	 * phone/desktop divergence: same tip hash, missing medium-old rows.
 	 */
 	if (
+		!force &&
 		mailboxFeedCache &&
 		mailboxFeedCache.key === cacheKey &&
 		mailboxFeedCache.tip === tip &&
+		mailboxFeedCache.complete === true &&
 		Array.isArray(mailboxFeedCache.messages) &&
 		mailboxFeedCache.messages.length > 0
 	) {
 		return {
 			tip,
-			messages: mailboxFeedCache.messages.map((m) => structuredClone(m))
+			messages: mailboxFeedCache.messages.map((m) => structuredClone(m)),
+			complete: true
 		};
 	}
 
@@ -619,14 +683,21 @@ export async function loadMailboxMessages(session, opts = {}) {
 	/** @type {{ hash: string, prev?: string | null, entry?: any }[]} */
 	const newestFirst = [];
 	/*
-	 * Incremental tip→stopAt only when we can merge a non-empty prior feed.
-	 * stopAt===tip with no priorFeed must full-walk (otherwise we cache []).
+	 * Incremental tip→stopAt only when prior feed is a complete chain we can merge.
+	 * Incomplete / missing complete → full tip→prev (server tip is authority).
 	 */
-	let walkStop = stopAt || (priorFeed ? priorTip : '');
-	if (walkStop && walkStop === tip && !priorFeed) walkStop = '';
+	const priorComplete = Boolean(priorMeta?.complete && priorFeed);
+	let walkStop = '';
+	if (priorComplete) {
+		walkStop = stopAt || priorTip || '';
+		if (walkStop && walkStop === tip) walkStop = '';
+	}
 	let hash = tip;
 	let netFetches = 0;
 	let msgCount = 0;
+	let reachedGenesis = false;
+	/** Oldest envelope hash visited this walk. */
+	let tailHash = '';
 	while (hash && newestFirst.length < limit * 4) {
 		if (walkStop && hash === walkStop) break;
 		let doc;
@@ -638,20 +709,37 @@ export async function loadMailboxMessages(session, opts = {}) {
 			break;
 		}
 		newestFirst.push({ hash, prev: doc?.prev ?? null, entry: doc?.entry });
+		tailHash = hash;
 		if (doc?.entry?.kind === 'message') msgCount += 1;
+		const prev = doc?.prev ? String(doc.prev) : '';
+		if (!prev) {
+			reachedGenesis = true;
+			break;
+		}
 		if (!walkStop && msgCount >= limit) break;
-		hash = doc?.prev ? String(doc.prev) : '';
+		hash = prev;
 		if (typeof opts.onPartial === 'function' && msgCount > 0 && msgCount % 12 === 0) {
 			opts.onPartial(materializeMailboxMessages(newestFirst, limit, priorFeed || []));
 		}
 	}
 	const messages = materializeMailboxMessages(newestFirst, limit, priorFeed || []);
 	/*
+	 * Completeness: full genesis walk, or incremental prefix merged onto a
+	 * previously complete chain. Limit truncation / decrypt break → incomplete.
+	 */
+	const stoppedAtPrior = Boolean(walkStop && !reachedGenesis && newestFirst.length > 0);
+	const complete = reachedGenesis || (stoppedAtPrior && priorComplete);
+	const nextTail = complete
+		? stoppedAtPrior
+			? priorMeta?.tailHash || tailHash
+			: tailHash
+		: tailHash;
+	/*
 	 * Never persist tip+[] from a truncated incremental walk — that becomes a
 	 * permanent warm hit and hides remigrated history until hard cache wipe.
 	 */
 	if (messages.length > 0 || !walkStop) {
-		rememberMailboxFeed(session, tip, messages);
+		rememberMailboxFeed(session, tip, messages, { complete, tailHash: nextTail || '' });
 	}
 	if (typeof opts.onPartial === 'function') opts.onPartial(messages);
 	if (typeof console !== 'undefined' && console.debug) {
@@ -661,10 +749,15 @@ export async function loadMailboxMessages(session, opts = {}) {
 			),
 			ids: messages.length,
 			netFetches,
+			complete,
 			tip: tip.slice(0, 12)
 		});
 	}
-	return { tip, messages: messages.map((m) => structuredClone(m)) };
+	return {
+		tip,
+		messages: messages.map((m) => structuredClone(m)),
+		complete
+	};
 }
 
 /**

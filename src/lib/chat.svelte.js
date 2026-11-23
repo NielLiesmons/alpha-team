@@ -51,6 +51,13 @@ export const chatFeed = $state([]);
 export const commentsByKey = $state({});
 
 /**
+ * Instant YES/NO “has comments?” for cards — rebuilt from feed + comment loads.
+ * Mailbox remains SoT; this + entity `comments.json` are the fast index.
+ * @type {Record<string, boolean>}
+ */
+export const hasCommentsByKey = $state({});
+
+/**
  * Keys that finished at least one network load — FAB/panel treat unset as
  * “unknown” (spinner), never a lying empty/0 before settle.
  * @type {Record<string, boolean>}
@@ -185,6 +192,52 @@ export function isCommentEntityType(type) {
 	);
 }
 
+/**
+ * Mark entity as having comments (local fast index — no network).
+ * @param {string} type
+ * @param {string} entityId
+ */
+export function markEntityHasComments(type, entityId) {
+	if (!isCommentEntityType(type) || !entityId) return;
+	hasCommentsByKey[commentKey(type, entityId)] = true;
+}
+
+/**
+ * Uberfast YES/NO — feed projection / seeded comments, no mailbox walk.
+ * @param {string} type
+ * @param {string} entityId
+ */
+export function entityHasComments(type, entityId) {
+	const key = commentKey(type, entityId);
+	if (hasCommentsByKey[key]) return true;
+	const cached = commentsByKey[key];
+	if (Array.isArray(cached) && cached.length > 0) return true;
+	return false;
+}
+
+/**
+ * Rebuild has-comments projection from feed + loaded comment threads.
+ * @param {any[]} [list]
+ */
+export function rebuildHasCommentsIndex(list = chatFeed) {
+	/** @type {Set<string>} */
+	const next = new Set();
+	for (const m of list || []) {
+		if (!m || m._failed) continue;
+		if (m.kind === 'reaction' || m.kind === 'event') continue;
+		if (!isCommentEntityType(m.ref?.type)) continue;
+		const id = String(m.ref?.id || '');
+		if (id) next.add(commentKey(m.ref.type, id));
+	}
+	for (const [key, rows] of Object.entries(commentsByKey)) {
+		if (Array.isArray(rows) && rows.length > 0) next.add(key);
+	}
+	for (const key of Object.keys(hasCommentsByKey)) {
+		if (!next.has(key)) delete hasCommentsByKey[key];
+	}
+	for (const key of next) hasCommentsByKey[key] = true;
+}
+
 const CHAT_CACHE_KEY = 'alpha.chat.feed.v1';
 const CHAT_FEED_LIMIT = 2000;
 /** Keep recently settled sends that a stale tip fetch has not listed yet. */
@@ -238,6 +291,7 @@ export function hydrateChatFeedFromCache() {
 		chatFeed.push(...rows);
 		/* Failed bubbles carry their own retry — never a global pendingLost banner. */
 		if (rows.some((m) => m._failed)) writeChatCache(chatFeed);
+		rebuildHasCommentsIndex(chatFeed);
 	}
 	chatUi.settled = true;
 	chatUi.loading = false;
@@ -254,6 +308,14 @@ function mergeFeedRows(list, prev) {
 	for (const m of list) {
 		const id = String(m?.id || '');
 		if (id) byId.set(id, m);
+	}
+	/** Drop reaction hints once a durable twin lands (same target/emoji/author). */
+	/** @type {Set<string>} */
+	const durableReactionKeys = new Set();
+	for (const m of byId.values()) {
+		if (m?.kind !== 'reaction') continue;
+		const key = `${String(m.reply_to || '')}|${String(m.reaction || m.body || '').trim()}|${String(m.author || '').trim().toLowerCase()}`;
+		durableReactionKeys.add(key);
 	}
 	const now = Date.now();
 	for (const m of prev) {
@@ -277,9 +339,14 @@ function mergeFeedRows(list, prev) {
 			}
 			continue;
 		}
+		if (m?.kind === 'reaction' && (m._hint || String(id).startsWith('hint-'))) {
+			const key = `${String(m.reply_to || '')}|${String(m.reaction || m.body || '').trim()}|${String(m.author || '').trim().toLowerCase()}`;
+			if (durableReactionKeys.has(key)) continue;
+		}
 		const pending =
-			Boolean(m?._local || m?._pending || m?._failed) ||
+			Boolean(m?._local || m?._pending || m?._failed || m?._hint) ||
 			String(id).startsWith('local-') ||
+			String(id).startsWith('hint-') ||
 			m?.delivery === 'sending' ||
 			m?.delivery === 'failed';
 		const settledAt = Date.parse(m._settledAt || '');
@@ -349,6 +416,7 @@ export async function refreshChatFeed() {
 			chatUi.settled = true;
 			/* Keep pending/failed locals — stripping them made reopen vanish sends. */
 			writeChatCache(merged);
+			rebuildHasCommentsIndex(merged);
 		};
 
 		const list = await listFeedMessages(session, CHAT_FEED_LIMIT, {
@@ -442,6 +510,7 @@ export function seedCommentsFromFeed(type, entityId) {
 	if (!added && prev) return prev;
 	const list = sortChatMessagesOldestFirst([...byId.values()]);
 	commentsByKey[key] = list;
+	if (list.length) hasCommentsByKey[key] = true;
 	return list;
 }
 
@@ -496,6 +565,8 @@ export async function loadComments(type, entityId) {
 				if (!byId.has(id)) byId.set(id, m);
 			}
 			const merged = sortChatMessagesOldestFirst([...byId.values()]);
+			if (merged.length) hasCommentsByKey[key] = true;
+			else delete hasCommentsByKey[key];
 			stampCommentSeq(merged);
 			commentsByKey[key] = merged;
 			return merged;
@@ -686,6 +757,75 @@ export function announceMemberStatus(email, action = 'added', name = '') {
 }
 
 /**
+ * Apply a peer reaction hint from the realtime bus (paint before mailbox pull).
+ * Durable tip-wake replaces `_hint` rows with real mailbox ids.
+ * @param {{
+ *   op?: string,
+ *   message_id?: string,
+ *   emoji?: string,
+ *   author?: string,
+ *   id?: string
+ * }} hint
+ */
+export function applyReactionHint(hint) {
+	if (!hint || typeof hint !== 'object') return;
+	const target = String(hint.message_id || '').trim();
+	const emoji = String(hint.emoji || '').trim();
+	const author = String(hint.author || '').trim();
+	const op = String(hint.op || 'add').toLowerCase();
+	if (!target || !emoji || !author) return;
+	const me = (activePerson().email || '').trim().toLowerCase();
+	if (me && author.toLowerCase() === me) return;
+	const authorLc = author.toLowerCase();
+
+	if (op === 'remove') {
+		for (let i = chatFeed.length - 1; i >= 0; i--) {
+			const m = chatFeed[i];
+			if (m?.kind !== 'reaction') continue;
+			if (String(m.reply_to || '') !== target) continue;
+			if (String(m.reaction || m.body || '').trim() !== emoji) continue;
+			if (String(m.author || '').trim().toLowerCase() !== authorLc) continue;
+			chatFeed.splice(i, 1);
+		}
+		writeChatCache(chatFeed);
+		return;
+	}
+
+	const exists = chatFeed.some(
+		(m) =>
+			m?.kind === 'reaction' &&
+			String(m.reply_to || '') === target &&
+			String(m.reaction || m.body || '').trim() === emoji &&
+			String(m.author || '').trim().toLowerCase() === authorLc
+	);
+	if (exists) return;
+
+	chatFeed.unshift({
+		schema: 'alpha.chat_message/1',
+		id: String(hint.id || `hint-${authorLc}-${target}-${emoji}`),
+		kind: 'reaction',
+		author,
+		body: '',
+		reaction: emoji,
+		created_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+		reply_to: target,
+		ref: { type: 'chat', id: target },
+		_hint: true
+	});
+	writeChatCache(chatFeed);
+}
+
+/**
+ * @param {{ tip?: string, op: 'add' | 'remove', message_id: string, emoji: string, author: string, id?: string }} payload
+ */
+function publishReactionWake(payload) {
+	void import('./realtime.svelte.js').then(({ publishTipWake, publishReactionHint }) => {
+		if (payload.tip) publishTipWake(payload.tip);
+		publishReactionHint(payload);
+	});
+}
+
+/**
  * Toggle a reaction on a chat message (persists as `alpha.chat_message/1` kind=reaction).
  * Tapping your own reaction removes it (optimistic + Drive delete).
  * @param {string} messageId
@@ -714,13 +854,26 @@ export async function toggleReaction(messageId, emoji) {
 		const idx = chatFeed.findIndex((m) => m.id === removeId);
 		if (idx >= 0) chatFeed.splice(idx, 1);
 		writeChatCache(chatFeed);
+		/* Peer paint immediately — tip wake follows once retract lands. */
+		publishReactionWake({
+			op: 'remove',
+			message_id: target,
+			emoji: reaction,
+			author,
+			id: removeId
+		});
 
-		if (!session || removeId.startsWith('local-')) return null;
+		if (!session || removeId.startsWith('local-') || removeId.startsWith('hint-')) return null;
 
 		try {
-			await deleteChatMessage(session, removeId, {
+			const tip = await deleteChatMessage(session, removeId, {
 				knownFeedIds: knownFeedIds()
 			});
+			if (tip) {
+				void import('./realtime.svelte.js').then(({ publishTipWake }) => {
+					publishTipWake(tip);
+				});
+			}
 		} catch (e) {
 			/* Roll back optimistic remove */
 			chatFeed.unshift(existing);
@@ -746,10 +899,20 @@ export async function toggleReaction(messageId, emoji) {
 	};
 	chatFeed.unshift(optimistic);
 	writeChatCache(chatFeed);
+	/* Fan out hint ASAP so peers paint before mailbox pull (messages already felt instant). */
+	publishReactionWake({
+		op: 'add',
+		message_id: target,
+		emoji: reaction,
+		author,
+		id: localId
+	});
 
 	if (!session) return optimistic;
 
 	try {
+		/** @type {string} */
+		let durableId = localId;
 		const created = await createChatMessage(
 			session,
 			{
@@ -762,9 +925,17 @@ export async function toggleReaction(messageId, emoji) {
 			},
 			{
 				knownFeedIds: knownFeedIds().filter((id) => id !== localId),
+				onLeafStored: (leaf) => {
+					durableId = String(leaf?.id || localId);
+				},
 				onTipWritten: (tip) => {
-					void import('./realtime.svelte.js').then(({ publishTipWake }) => {
-						publishTipWake(tip);
+					publishReactionWake({
+						tip,
+						op: 'add',
+						message_id: target,
+						emoji: reaction,
+						author,
+						id: durableId
 					});
 				}
 			}
@@ -917,6 +1088,7 @@ export async function postChatMessage(input) {
 		const key = commentKey(/** @type {any} */ (input.ref.type), input.ref.id);
 		const prev = commentsByKey[key] ?? [];
 		commentsByKey[key] = [...prev, optimistic];
+		markEntityHasComments(input.ref.type, input.ref.id);
 	}
 	writeChatCache(chatFeed);
 
@@ -1053,6 +1225,7 @@ export async function postChatMessage(input) {
 				};
 				chatFeed[idx] = next;
 				if (!isEvent && input.ref && isCommentEntityType(input.ref.type)) {
+					markEntityHasComments(input.ref.type, input.ref.id);
 					patchCommentRow(
 						commentKey(/** @type {any} */ (input.ref.type), input.ref.id),
 						next,

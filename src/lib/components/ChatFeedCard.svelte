@@ -675,9 +675,9 @@
 		margin-top: 10px;
 	}
 
-	/* Clear hanging reaction pills so they never cover the next bubble */
+	/* Reaction row participates in layout (multi-line wrap gets real space). */
 	.card:has(.reaction-pills) {
-		margin-bottom: 28px;
+		margin-bottom: 4px;
 	}
 
 	.card.mine:not(.threaded) {
@@ -1170,8 +1170,8 @@
 	}
 
 	.reaction-pills {
-		position: absolute;
-		top: 100%;
+		/* In-flow so wrapped rows take real height; negative margin sits on bubble. */
+		position: relative;
 		left: 0;
 		display: flex;
 		flex-direction: row;
@@ -1179,19 +1179,20 @@
 		align-items: center;
 		gap: 4px;
 		width: max-content;
-		max-width: min(100vw, 280px);
-		/* Hang ~4px onto the bubble bottom edge */
-		margin-top: -4px;
+		max-width: min(100%, 280px);
+		/* Visually sit on top of the message bubble under the second row */
+		margin-top: -10px;
+		padding-top: 2px;
 		padding-left: 4px;
 		z-index: 2;
 	}
 
 	.card.mine:not(.threaded) .reaction-pills {
 		left: auto;
-		right: 0;
 		padding-left: 0;
 		padding-right: 4px;
 		justify-content: flex-end;
+		align-self: flex-end;
 	}
 
 	.reaction-pill {
@@ -1202,22 +1203,28 @@
 		gap: 4px;
 		/* Right pad matches top/bottom around the pfp */
 		padding: 3px 3px 3px 5px;
-		border: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+		border: 1px solid var(--glass-border, color-mix(in srgb, var(--fg) 8%, transparent));
 		border-radius: 999px;
-		/* Same surface as dropdown / FloatPanel popovers */
-		background: var(--popover);
+		/* Peer reactions: same glass as the reactions popover */
+		background: var(--glass-panel, var(--glass, var(--popover)));
 		color: var(--fg);
 		font: inherit;
 		cursor: pointer;
 		line-height: 1;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+		backdrop-filter: blur(var(--glass-blur, 22px));
+		-webkit-backdrop-filter: blur(var(--glass-blur, 22px));
+		box-shadow: 0 4px 14px color-mix(in srgb, #000 12%, transparent);
 	}
 
 	.reaction-pill.mine {
-		/* Own reaction: accent wash on top of popover */
-		background: color-mix(in srgb, var(--accent-1) 28%, var(--popover));
+		/* Own reaction: accent wash on top of glass */
+		background: color-mix(
+			in srgb,
+			var(--accent-1) 28%,
+			var(--glass-panel, var(--popover))
+		);
 		border-color: color-mix(in srgb, var(--accent-1) 35%, transparent);
+		box-shadow: none;
 	}
 
 	.reaction-pill .emoji {

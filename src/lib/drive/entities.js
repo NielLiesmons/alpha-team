@@ -12,6 +12,7 @@ import {
 	loadRootDir,
 	loadRootDirWithTip,
 	peekCachedChatTip,
+	peekMailboxFeedMeta,
 	putPath,
 	putPaths,
 	CHAT_TIP_NAME
@@ -19,8 +20,8 @@ import {
 import { sha256Hex } from './crypto.js';
 import { putMediaBlob } from './media.js';
 
-/** v2: remigrate missing Space leaves even when mailbox tip already exists. */
-const LEGACY_CHAT_MIGRATE_KEY = 'alpha.chat.mailboxMigrate.v2';
+/** v3: re-check remigrate when local mailbox cache was incomplete (truncated IDB). */
+const LEGACY_CHAT_MIGRATE_KEY = 'alpha.chat.mailboxMigrate.v3';
 /** In-flight repair so tip-wake / multi-panel open don't double-append. */
 let legacyChatMigrateInflight = null;
 
@@ -2169,6 +2170,28 @@ export async function listCommentIds(session, type, entityId) {
 }
 
 /**
+ * Fast YES/NO for “does this entity have comments?” — reads tiny comments.json
+ * (has_comments / ids.length). Prefer local `entityHasComments` when feed is warm.
+ * @param {import('./client.js').DriveSession} session
+ * @param {'task' | 'note' | 'project' | 'mail' | 'file'} type
+ * @param {string} entityId
+ * @returns {Promise<boolean>}
+ */
+export async function entityHasCommentsOnDrive(session, type, entityId) {
+	const path = `${type}s/${entityId}/comments.json`;
+	try {
+		const bytes = await getPath(session, path);
+		const doc = JSON.parse(new TextDecoder().decode(bytes));
+		if (typeof doc?.has_comments === 'boolean') return doc.has_comments;
+		if (Array.isArray(doc)) return doc.length > 0;
+		if (Array.isArray(doc?.ids)) return doc.ids.length > 0;
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+/**
  * @param {import('./client.js').DriveSession} session
  * @param {'task' | 'note' | 'project' | 'mail' | 'file'} type
  * @param {string} entityId
@@ -2239,6 +2262,7 @@ export async function listFeedIds(session) {
 /**
  * Load feed from append-only chat mailbox (tip → prev walk).
  * Pass seedRows so tip-wake can paint immediately; walk only fetches new envelopes.
+ * Incomplete local tip caches force a full reconcile (Drive tip = authority).
  * @param {import('./client.js').DriveSession} session
  * @param {number} [limit]
  * @param {{ onPartial?: (rows: any[]) => void, seedRows?: any[] }} [opts]
@@ -2248,10 +2272,17 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	if (seedRows.length && typeof opts.onPartial === 'function') {
 		opts.onPartial(sortChatMessagesNewestFirst(seedRows.filter((m) => m && !m._pending)));
 	}
-	const stopAt = peekCachedChatTip(session) || '';
+	const meta = peekMailboxFeedMeta(session);
+	const cachedTip = peekCachedChatTip(session) || '';
+	/*
+	 * Incremental tip→stopAt only when local chain is known-complete.
+	 * Truncated IDB (tip match, missing rows) must full-walk once.
+	 */
+	const canIncremental = Boolean(cachedTip && meta?.complete);
 	let { messages } = await loadMailboxMessages(session, {
 		limit,
-		stopAt,
+		stopAt: canIncremental ? cachedTip : '',
+		force: !canIncremental && Boolean(meta && !meta.complete),
 		onPartial: opts.onPartial
 	});
 	/*
@@ -2264,6 +2295,7 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 		if (migrated > 0) {
 			({ messages } = await loadMailboxMessages(session, {
 				limit,
+				force: true,
 				onPartial: opts.onPartial
 			}));
 		}
@@ -2360,10 +2392,18 @@ export async function migrateLegacyChatToMailbox(session, opts = {}) {
 
 		const missingIds = ids.filter((id) => !have.has(String(id)));
 		if (!missingIds.length) {
-			try {
-				if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
-			} catch {
-				/* ignore */
+			/*
+			 * Only gate when the local mailbox walk is a complete chain — otherwise
+			 * truncated IDB can claim "all Space ids present" while older mailbox
+			 * rows from another device's remigrate are still invisible.
+			 */
+			const feedMeta = peekMailboxFeedMeta(session);
+			if (feedMeta?.complete) {
+				try {
+					if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
+				} catch {
+					/* ignore */
+				}
 			}
 			return 0;
 		}
@@ -2381,10 +2421,30 @@ export async function migrateLegacyChatToMailbox(session, opts = {}) {
 		}
 		const ordered = sortChatMessagesOldestFirst(msgs);
 		let n = 0;
+		/** @type {Map<string, string[]>} */
+		const commentIndexByEntity = new Map();
 		for (const message of ordered) {
 			try {
 				await appendMailboxEntry(session, { kind: 'message', message });
 				n += 1;
+				/* Dual-write fast entity comments index for remigrated history. */
+				const rt = String(message?.ref?.type || '');
+				const rid = String(message?.ref?.id || '');
+				if (
+					message?.kind !== 'reaction' &&
+					message?.kind !== 'event' &&
+					(rt === 'task' ||
+						rt === 'note' ||
+						rt === 'project' ||
+						rt === 'mail' ||
+						rt === 'file') &&
+					rid
+				) {
+					const ek = `${rt}:${rid}`;
+					const list = commentIndexByEntity.get(ek) || [];
+					list.push(String(message.id));
+					commentIndexByEntity.set(ek, list);
+				}
 			} catch (e) {
 				/* Mailbox API missing (pre-deploy) — abort; retry next open. */
 				const msg = e instanceof Error ? e.message : String(e);
@@ -2396,6 +2456,32 @@ export async function migrateLegacyChatToMailbox(session, opts = {}) {
 			}
 		}
 		if (n > 0) invalidateMailboxFeedCache(session);
+		/* Best-effort: rebuild per-entity comments.json so cards answer has-comments. */
+		for (const [ek, addedIds] of commentIndexByEntity) {
+			const [rtype, rid] = ek.split(':');
+			if (!rtype || !rid) continue;
+			try {
+				const live = await listCommentIds(
+					session,
+					/** @type {'task'|'note'|'project'|'mail'|'file'} */ (rtype),
+					rid
+				);
+				const ids = [...live, ...addedIds].filter((x, i, arr) => x && arr.indexOf(x) === i);
+				await putPaths(session, [
+					{
+						path: `${rtype}s/${rid}/comments.json`,
+						kind: 'blob',
+						plaintext: JSON.stringify({
+							schema: 'alpha.comments_index/1',
+							ids,
+							has_comments: ids.length > 0
+						})
+					}
+				]);
+			} catch {
+				/* index best-effort */
+			}
+		}
 		try {
 			if (typeof localStorage !== 'undefined') localStorage.setItem(gateKey, '1');
 		} catch {
@@ -2550,7 +2636,8 @@ export async function createChatMessage(session, input, opts = {}) {
 					kind: 'blob',
 					plaintext: JSON.stringify({
 						schema: 'alpha.comments_index/1',
-						ids: commentIds
+						ids: commentIds,
+						has_comments: commentIds.length > 0
 					})
 				}
 			]);
@@ -2650,11 +2737,12 @@ export async function markChatMessagesRead(session, messages, readerEmail) {
  */
 export async function deleteChatMessage(session, id, _opts = {}) {
 	const sid = String(id || '').trim();
-	if (!sid || sid.startsWith('local-')) return;
-	await (chatTipWriteChain = chatTipWriteChain.then(
+	if (!sid || sid.startsWith('local-')) return '';
+	const tip = await (chatTipWriteChain = chatTipWriteChain.then(
 		() => appendMailboxEntry(session, { kind: 'retract', message_id: sid }),
 		() => appendMailboxEntry(session, { kind: 'retract', message_id: sid })
 	));
+	return String(tip || '');
 }
 
 /**

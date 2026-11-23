@@ -10,7 +10,7 @@
 	import { actor, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { appBoot } from '$lib/boot.svelte.js';
-	import { chatFeed, commentsByKey } from '$lib/chat.svelte.js';
+	import { chatFeed, commentsByKey, entityHasComments, hasCommentsByKey } from '$lib/chat.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
 		formatMailWhen,
@@ -151,6 +151,7 @@
 		ui.listFilter;
 		chatFeed.length;
 		Object.keys(commentsByKey).length;
+		Object.keys(hasCommentsByKey).length;
 		const all = mailThreadsForCurrentView();
 		if (ui.listFilter === 'unread') return all.filter((th) => isUnreadFor(th));
 		return all;
@@ -289,7 +290,7 @@
 							.slice(0, 100)
 					: ''}
 				{@const commenters = commentProfiles(comments)}
-				{@const hasComments = comments.length > 0}
+				{@const hasComments = entityHasComments('mail', thread.id) || comments.length > 0}
 				{@const convo = threadParticipantProfiles(thread)}
 				{@const linkedTask = taskByMailThreadId(thread.id)}
 				<button

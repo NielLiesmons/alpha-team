@@ -75,8 +75,10 @@ export async function pullChatIfNeeded(force = false) {
 		 * Space tip changes (cursors, tasks) must not stampede chat leaf fetches.
 		 */
 		if (force || tipChanged || lastChatPull === 0) {
-			if (tip) lastTip = tip;
 			await refreshChatFeed();
+			/* Stamp after refresh so a failed/empty apply cannot skip later wakes. */
+			if (tip) lastTip = tip;
+			else lastTip = peekCachedChatTip(session) || lastTip;
 			lastChatPull = Date.now();
 			/* Receipt tip writes compete with message tip CAS — defer. */
 			scheduleReadReceipts();
@@ -231,6 +233,13 @@ export function initChatWakeListeners() {
 	window.addEventListener('focus', onFocus);
 	window.addEventListener('pageshow', onPageShow);
 	navigator.serviceWorker?.addEventListener?.('message', onSwMessage);
+	/*
+	 * Always poll while visible — reactions do not get push wakes, and chat
+	 * panel mount is not required for peer reaction visibility.
+	 */
+	if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+		startChatTipPoll();
+	}
 	return () => {
 		document.removeEventListener('visibilitychange', onVisibility);
 		window.removeEventListener('focus', onFocus);
