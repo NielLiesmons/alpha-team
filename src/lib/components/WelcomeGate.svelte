@@ -9,6 +9,7 @@
 		loadDeviceProfiles,
 		switchDeviceProfile
 	} from '$lib/device-profiles.svelte.js';
+	import { beginInviteOnboarding, endInviteOnboarding } from '$lib/boot.svelte.js';
 	import { health } from '$lib/drive/client.js';
 	import { decodeInvite, invitePayloadFromLocation, isInvitePayload } from '$lib/drive/invite.js';
 	import { driveSession, saveSession } from '$lib/drive/session.svelte.js';
@@ -17,7 +18,8 @@
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import { redirectToReturnToIfAny } from '$lib/return-to.js';
-	import { refreshFromDrive } from '$lib/workspace.svelte.js';
+	import { space, syncSpaceFromHost } from '$lib/sections.js';
+	import { ui } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 
 	/** @type {'pick' | 'code' | 'password'} */
@@ -60,12 +62,43 @@
 		void tick().then(() => focusEl?.focus());
 	});
 
+	/**
+	 * Progressive invite hydrate: chat + mail first (never block on full Space crawl).
+	 * Entities load in background; section pages show loading — not fake empties.
+	 */
+	async function warmInviteEssentials() {
+		try {
+			const { refreshChatFeed } = await import('$lib/chat.svelte.js');
+			await refreshChatFeed();
+		} catch (e) {
+			console.warn('invite chat warm', e);
+		}
+		try {
+			const { refreshMail } = await import('$lib/mail.svelte.js');
+			await refreshMail();
+		} catch (e) {
+			console.warn('invite mail warm', e);
+		}
+		try {
+			const { refreshMembersAndAvatars } = await import('$lib/avatar.svelte.js');
+			void refreshMembersAndAvatars().catch(() => {});
+		} catch {
+			/* ignore */
+		}
+		endInviteOnboarding();
+		void import('$lib/drive-refresh.js').then(({ refreshBackgroundDrive }) => {
+			void refreshBackgroundDrive().catch((e) => console.warn('invite background drive', e));
+		});
+	}
+
 	async function connectSession(session) {
 		const ok = await health(session);
 		if (ok !== 'ok') throw new Error(`Drive health returned “${ok}”`);
 		saveSession(session);
-		await refreshFromDrive();
-		if (driveSession.error) throw new Error(driveSession.error);
+		/* Don't await full workspace crawl — show Space loading, warm chat+mail, unlock. */
+		ui.entitiesReady = false;
+		syncSpaceFromHost();
+		beginInviteOnboarding(space.name);
 		if (typeof history !== 'undefined' && $page.url.pathname === '/join') {
 			history.replaceState({}, '', '/');
 		} else if (typeof history !== 'undefined' && $page.url.searchParams.has('i')) {
@@ -129,6 +162,8 @@
 				console.warn('welcome upsert member', e);
 			}
 			await markMemberJoined(session.email);
+			/* Chat + mail first; full Space crawl stays in background after the gate lifts. */
+			void warmInviteEssentials();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {

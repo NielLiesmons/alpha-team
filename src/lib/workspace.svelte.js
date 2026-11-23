@@ -552,7 +552,8 @@ export async function hydrateWorkspaceFromCache() {
 	replaceArray(captureForms, Array.isArray(snap.captureForms) ? snap.captureForms : []);
 	replaceArray(dataViews, Array.isArray(snap.dataViews) ? snap.dataViews : []);
 	ui.source = 'drive';
-	ui.entitiesReady = true;
+	/* Only mark ready when we actually painted something — empty cache ≠ confirmed empty Space. */
+	ui.entitiesReady = Boolean(hasAny);
 	return hasAny || Array.isArray(snap.tasks);
 }
 

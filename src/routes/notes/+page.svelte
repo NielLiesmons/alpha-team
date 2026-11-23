@@ -51,7 +51,7 @@
 <svelte:head><title>{t('notes.title')}</title></svelte:head>
 
 <div class="feed">
-	{#if !appBoot.listsReady && notes.length === 0}
+	{#if (!appBoot.listsReady || !ui.entitiesReady) && notes.length === 0}
 		<FeedSkeleton rows={8} />
 	{:else if notes.length === 0}
 		<p class="empty">{t('notes.empty')}</p>

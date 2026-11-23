@@ -14,11 +14,13 @@
 	import { startViewportBridge } from '$lib/viewport.svelte.js';
 	import AppShell from '$lib/components/AppShell.svelte';
 	import BootSplash from '$lib/components/BootSplash.svelte';
+	import SpaceOnboarding from '$lib/components/SpaceOnboarding.svelte';
 	import WelcomeGate from '$lib/components/WelcomeGate.svelte';
 
 	let { children } = $props();
 
 	const signedIn = $derived(Boolean(driveSession.connected && actor.email));
+	const onboarding = $derived(Boolean(appBoot.onboarding?.active));
 	const webManifestLink = $derived(pwaInfo?.webManifest?.linkTag ?? '');
 
 	/* Realtime bus: connect as soon as Drive creds exist (actor optional on the wire). */
@@ -80,13 +82,19 @@
 			});
 		}
 
-		/* Deep-link recovery: /?recover=1 or /?reset=1 */
+		/*
+		 * Deep-link recovery is handled inline in app.html BEFORE modules load.
+		 * Keep a bundle-side fallback only if the inline script was stripped by an
+		 * ancient cached shell (should be rare after /api/recover).
+		 */
 		try {
-			const q = new URLSearchParams(location.search);
-			if (q.has('recover') || q.has('reset')) {
-				void import('$lib/boot-recovery.js').then(({ recoverAppShell }) =>
-					recoverAppShell({ full: q.has('reset') })
-				);
+			if (!window.__ALPHA_RECOVERING) {
+				const q = new URLSearchParams(location.search);
+				if (q.has('recover') || q.has('reset')) {
+					void import('$lib/boot-recovery.js').then(({ recoverAppShell }) =>
+						recoverAppShell({ full: q.has('reset') })
+					);
+				}
 			}
 		} catch {
 			/* ignore */
@@ -111,6 +119,8 @@
 	<BootSplash />
 {:else if !signedIn}
 	<WelcomeGate />
+{:else if onboarding}
+	<SpaceOnboarding />
 {:else}
 	<AppShell>
 		{@render children()}

@@ -79,7 +79,7 @@
 	{#if driveSession.error}
 		<p class="banner"><span class="err">{driveSession.error}</span></p>
 	{/if}
-	{#if !appBoot.listsReady && tasks.length === 0}
+	{#if (!appBoot.listsReady || !ui.entitiesReady) && tasks.length === 0}
 		<FeedSkeleton rows={8} />
 	{:else if tasks.length === 0}
 		<p class="empty">{t('tasks.empty')}</p>

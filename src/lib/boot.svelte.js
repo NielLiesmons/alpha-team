@@ -20,8 +20,38 @@ import { ensureEggsExample } from './seed-eggs-forecast.js';
 import { syncSpaceFromHost } from './sections.js';
 import { hydrateWorkspaceFromCache, ui } from './workspace.svelte.js';
 
-/** @type {{ ready: boolean, listsReady: boolean, error: string, stuck: boolean }} */
-export const appBoot = $state({ ready: false, listsReady: false, error: '', stuck: false });
+/**
+ * @typedef {{ active: boolean, spaceName: string }} BootOnboarding
+ * @type {{
+ *   ready: boolean,
+ *   listsReady: boolean,
+ *   error: string,
+ *   stuck: boolean,
+ *   onboarding: BootOnboarding
+ * }}
+ */
+export const appBoot = $state({
+	ready: false,
+	listsReady: false,
+	error: '',
+	stuck: false,
+	onboarding: { active: false, spaceName: '' }
+});
+
+/**
+ * Show Space-named loading gate after invite redeem until chat+mail are warm.
+ * @param {string} [spaceName]
+ */
+export function beginInviteOnboarding(spaceName = '') {
+	appBoot.onboarding = {
+		active: true,
+		spaceName: String(spaceName || '').trim()
+	};
+}
+
+export function endInviteOnboarding() {
+	appBoot.onboarding = { active: false, spaceName: appBoot.onboarding.spaceName || '' };
+}
 
 /** Drive connected and identity chosen — show the operator shell. */
 export function isSignedIn() {

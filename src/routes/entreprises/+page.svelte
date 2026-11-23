@@ -103,7 +103,7 @@
 		<p class="banner"><span class="err">{driveSession.error}</span></p>
 	{/if}
 
-	{#if !appBoot.listsReady && enterprises.length === 0 && dataTables.length === 0}
+	{#if (!appBoot.listsReady || !ui.entitiesReady) && enterprises.length === 0 && dataTables.length === 0}
 		<FeedSkeleton rows={6} />
 	{:else if enterprises.length === 0}
 		<p class="empty">{t('ent.empty')}</p>
