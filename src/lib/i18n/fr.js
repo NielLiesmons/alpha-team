@@ -399,6 +399,7 @@ export default {
 	'chat.clear': 'Effacer',
 	'chat.cancel': 'Annuler',
 	'chat.voiceMessage': 'Message vocal',
+	'chat.speakersVoiceMessage': 'Message vocal de {name}',
 	'chat.slideToCancel': 'Glisser pour annuler',
 	'chat.voiceTooShort': 'Maintenez un peu plus longtemps pour envoyer',
 	'chat.voiceUnsupported': 'L’enregistrement vocal n’est pas pris en charge',

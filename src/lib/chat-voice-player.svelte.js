@@ -1,5 +1,5 @@
 /**
- * Shared chat voice playback — one clip at a time for bubbles + chrome pill.
+ * Shared chat voice playback — one clip at a time for bubbles + chrome player.
  */
 
 import { formatAudioDurationMs, nextVoiceSpeed } from './voice-waveform.js';
@@ -15,6 +15,13 @@ export const chatVoicePlayer = $state({
 	title: '',
 	/** @type {string} */
 	author: '',
+	/** @type {string} */
+	speakerName: '',
+	/** Queue length when playing through multiple clips (1 = single). */
+	queueCount: 1,
+	queueIndex: 0,
+	/** Expanded panel (mobile modal / desktop sidebar detail open). */
+	panelOpen: false,
 	/** @type {VoicePlayStatus} */
 	status: /** @type {VoicePlayStatus} */ ('idle'),
 	positionMs: 0,
@@ -81,7 +88,10 @@ function stopRaf() {
  *   url: string,
  *   title?: string,
  *   author?: string,
- *   durationMs?: number
+ *   speakerName?: string,
+ *   durationMs?: number,
+ *   queueCount?: number,
+ *   queueIndex?: number
  * }} opts
  */
 export async function playVoiceClip(opts) {
@@ -102,10 +112,13 @@ export async function playVoiceClip(opts) {
 
 	chatVoicePlayer.msgId = opts.msgId;
 	chatVoicePlayer.url = opts.url;
-	chatVoicePlayer.title = opts.title || 'Voice message';
+	chatVoicePlayer.speakerName = opts.speakerName || '';
+	chatVoicePlayer.title = opts.title || opts.speakerName || 'Voice message';
 	chatVoicePlayer.author = opts.author || '';
 	chatVoicePlayer.durationMs = opts.durationMs || 0;
 	chatVoicePlayer.positionMs = 0;
+	chatVoicePlayer.queueCount = Math.max(1, opts.queueCount || 1);
+	chatVoicePlayer.queueIndex = Math.max(0, opts.queueIndex || 0);
 	chatVoicePlayer.status = 'playing';
 
 	el.src = opts.url;
@@ -129,6 +142,11 @@ export function resumeVoiceClip() {
 	void el.play().catch(() => {});
 }
 
+export function toggleVoicePlayPause() {
+	if (chatVoicePlayer.status === 'playing') pauseVoiceClip();
+	else resumeVoiceClip();
+}
+
 export function stopVoiceClip() {
 	if (audio) {
 		audio.pause();
@@ -140,9 +158,22 @@ export function stopVoiceClip() {
 	chatVoicePlayer.url = null;
 	chatVoicePlayer.title = '';
 	chatVoicePlayer.author = '';
+	chatVoicePlayer.speakerName = '';
+	chatVoicePlayer.queueCount = 1;
+	chatVoicePlayer.queueIndex = 0;
+	chatVoicePlayer.panelOpen = false;
 	chatVoicePlayer.status = 'idle';
 	chatVoicePlayer.positionMs = 0;
 	chatVoicePlayer.durationMs = 0;
+}
+
+export function openVoicePlayerPanel() {
+	if (!chatVoicePlayer.msgId || chatVoicePlayer.status === 'idle') return;
+	chatVoicePlayer.panelOpen = true;
+}
+
+export function closeVoicePlayerPanel() {
+	chatVoicePlayer.panelOpen = false;
 }
 
 /** @param {number} ms */
@@ -155,6 +186,13 @@ export function seekVoiceClip(ms) {
 	chatVoicePlayer.positionMs = Math.round(t * 1000);
 }
 
+/** @param {number} fraction 0..1 */
+export function seekVoiceClipFraction(fraction) {
+	const dur = chatVoicePlayer.durationMs;
+	if (!dur) return;
+	seekVoiceClip(dur * Math.max(0, Math.min(1, fraction)));
+}
+
 export function cycleVoiceSpeed() {
 	chatVoicePlayer.speed = nextVoiceSpeed(chatVoicePlayer.speed);
 	if (audio) audio.playbackRate = chatVoicePlayer.speed;
@@ -165,11 +203,18 @@ export function isVoiceClipActive(msgId) {
 	return Boolean(msgId) && chatVoicePlayer.msgId === msgId;
 }
 
+export function voicePlayerVisible() {
+	return Boolean(chatVoicePlayer.msgId) && chatVoicePlayer.status !== 'idle';
+}
+
 export function voicePlayerTimeLabel() {
-	const { status, positionMs, durationMs } = chatVoicePlayer;
-	if (status === 'playing' && durationMs > 0) {
-		return formatAudioDurationMs(Math.max(0, durationMs - positionMs));
-	}
-	if (durationMs > 0) return formatAudioDurationMs(durationMs);
-	return '0:00';
+	const { positionMs, durationMs } = chatVoicePlayer;
+	const cur = formatAudioDurationMs(positionMs);
+	const tot = durationMs > 0 ? formatAudioDurationMs(durationMs) : '0:00';
+	return `${cur} / ${tot}`;
+}
+
+export function voicePlayerProgress() {
+	const { positionMs, durationMs } = chatVoicePlayer;
+	return durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
 }

@@ -398,6 +398,7 @@ export default {
 	'chat.clear': 'Wissen',
 	'chat.cancel': 'Annuleren',
 	'chat.voiceMessage': 'Spraakbericht',
+	'chat.speakersVoiceMessage': 'Spraakbericht van {name}',
 	'chat.slideToCancel': 'Veeg om te annuleren',
 	'chat.voiceTooShort': 'Houd iets langer vast om te versturen',
 	'chat.voiceUnsupported': 'Spraakopname wordt niet ondersteund in deze browser',

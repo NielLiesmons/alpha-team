@@ -396,6 +396,7 @@ export default {
 	'chat.clear': 'Clear',
 	'chat.cancel': 'Cancel',
 	'chat.voiceMessage': 'Voice message',
+	'chat.speakersVoiceMessage': "{name}'s voice message",
 	'chat.slideToCancel': 'Slide to cancel',
 	'chat.voiceTooShort': 'Hold a bit longer to send a voice message',
 	'chat.voiceUnsupported': 'Voice recording isn’t supported in this browser',

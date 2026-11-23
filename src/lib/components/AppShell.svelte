@@ -61,7 +61,7 @@
 	import { locale, t } from '$lib/i18n.svelte.js';
 	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
 	import ChatVoiceNowPlaying from '$lib/components/ChatVoiceNowPlaying.svelte';
-	import { chatVoicePlayer } from '$lib/chat-voice-player.svelte.js';
+	import { voicePlayerVisible } from '$lib/chat-voice-player.svelte.js';
 	import UiShell from '@alpha/ui/UiShell.svelte';
 	import CostCreate from './CostCreate.svelte';
 	import DetailColumn from './DetailColumn.svelte';
@@ -595,6 +595,12 @@
 		/>
 	{/snippet}
 
+	{#snippet sidebarTrail()}
+		{#if chatList && voicePlayerVisible()}
+			<ChatVoiceNowPlaying placement="sidebar" />
+		{/if}
+	{/snippet}
+
 	{#snippet listTitleSlot()}
 		{#if mailList}
 			<MailFolderTitle />
@@ -611,8 +617,8 @@
 				titleClass={planningList ? 'planning-title' : ''}
 			/>
 			{#if chatList}
-				<div class="chat-voice-slot" class:on={chatVoicePlayer.status !== 'idle'}>
-					<ChatVoiceNowPlaying />
+				<div class="chat-voice-slot" class:on={voicePlayerVisible()}>
+					<ChatVoiceNowPlaying placement="bar" />
 				</div>
 			{/if}
 		{/if}
@@ -709,30 +715,22 @@
 
 <style>
 	/*
-	 * Voice now-playing sits under list chrome without joining list-top flex.
-	 * (list-title-slot is display:contents → this is a list-top child.)
+	 * Mobile: compact voice pill in list-top between Chat title and notifications.
+	 * (list-title-slot is display:contents → this is a list-top flex child.)
+	 * Desktop uses sidebarTrail player panel instead.
 	 */
 	.chat-voice-slot {
 		display: none;
 	}
 
-	.chat-voice-slot.on {
-		display: block;
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: 52px;
-		z-index: 5;
-		pointer-events: none;
-	}
-
-	.chat-voice-slot.on :global(.pill) {
-		pointer-events: auto;
-	}
-
 	@media (max-width: 767px) {
 		.chat-voice-slot.on {
-			top: calc(52px + env(safe-area-inset-top, 0px));
+			display: flex;
+			flex: 1 1 auto;
+			align-items: center;
+			min-width: 0;
+			position: relative;
+			z-index: 2;
 		}
 	}
 

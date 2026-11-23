@@ -398,6 +398,7 @@ export default {
 	'chat.clear': 'Borrar',
 	'chat.cancel': 'Cancelar',
 	'chat.voiceMessage': 'Mensaje de voz',
+	'chat.speakersVoiceMessage': 'Mensaje de voz de {name}',
 	'chat.slideToCancel': 'Desliza para cancelar',
 	'chat.voiceTooShort': 'Mantén pulsado un poco más para enviar',
 	'chat.voiceUnsupported': 'La grabación de voz no es compatible con este navegador',

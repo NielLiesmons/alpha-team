@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * Telegram/WhatsApp-style voice row — play + waveform + time + speed.
+	 * Telegram/WhatsApp-style voice row — play + waveform + speed/time.
 	 */
 	import Play from '@alpha/ui/icons/Play.svelte';
 	import Pause from '@alpha/ui/icons/Pause.svelte';
@@ -25,6 +25,7 @@
 	 *   isMine?: boolean,
 	 *   durationMs?: number,
 	 *   author?: string,
+	 *   speakerName?: string,
 	 *   name?: string
 	 * }}
 	 */
@@ -34,10 +35,11 @@
 		isMine = false,
 		durationMs = 0,
 		author = '',
+		speakerName = '',
 		name = ''
 	} = $props();
 
-	const bars = $derived(generateWaveformBars(msgId || name || 'voice', 48));
+	const bars = $derived(generateWaveformBars(msgId || name || 'voice', 40));
 	const active = $derived(isVoiceClipActive(msgId));
 	const playing = $derived(active && chatVoicePlayer.status === 'playing');
 	const positionMs = $derived(active ? chatVoicePlayer.positionMs : 0);
@@ -47,19 +49,25 @@
 	const progress = $derived(dur > 0 ? Math.min(1, positionMs / dur) : 0);
 	const timeLabel = $derived.by(() => {
 		if (!src) return '…';
-		if (dur > 0 && playing) return formatAudioDurationMs(Math.max(0, dur - positionMs));
-		if (dur > 0) return formatAudioDurationMs(dur);
-		return '0:00';
+		const cur = formatAudioDurationMs(active ? positionMs : 0);
+		const tot = dur > 0 ? formatAudioDurationMs(dur) : '0:00';
+		return `${cur} / ${tot}`;
 	});
 	const speedLabel = $derived(formatVoiceSpeed(active ? chatVoicePlayer.speed : 1));
+	const playTitle = $derived(
+		speakerName
+			? t('chat.speakersVoiceMessage', { name: speakerName })
+			: name || t('chat.voiceMessage')
+	);
 
 	function onPlayPause() {
 		if (!src) return;
 		void playVoiceClip({
 			msgId,
 			url: src,
-			title: name || t('chat.voiceMessage'),
+			title: playTitle,
 			author,
+			speakerName,
 			durationMs: dur
 		});
 	}
@@ -73,8 +81,9 @@
 			void playVoiceClip({
 				msgId,
 				url: src,
-				title: name || t('chat.voiceMessage'),
+				title: playTitle,
 				author,
+				speakerName,
 				durationMs: dur
 			}).then(() => seekVoiceClip(dur * fraction));
 			return;
@@ -92,69 +101,74 @@
 		onclick={onPlayPause}
 	>
 		{#if playing}
-			<Pause size={14} />
+			<Pause size={18} />
 		{:else}
-			<Play size={14} />
+			<Play size={18} />
 		{/if}
 	</button>
 
-	<button
-		type="button"
-		class="wave"
-		aria-label={t('chat.seekVoice')}
-		disabled={!src || !dur}
-		onpointerdown={onSeek}
-	>
-		{#each bars as h, i (i)}
-			<span
-				class="bar"
-				class:on={i / bars.length <= progress}
-				style:height="{Math.round(8 + h * 20)}px"
-			></span>
-		{/each}
-	</button>
+	<div class="cols">
+		<button
+			type="button"
+			class="wave"
+			aria-label={t('chat.seekVoice')}
+			disabled={!src || !dur}
+			onpointerdown={onSeek}
+		>
+			{#each bars as h, i (i)}
+				{@const half = Math.round(4 + h * 10)}
+				<span class="bar-col" class:on={i / bars.length <= progress}>
+					<span class="bar top" style:height="{half}px"></span>
+					<span class="bar bot" style:height="{half}px"></span>
+				</span>
+			{/each}
+		</button>
 
-	<span class="time">{timeLabel}</span>
-
-	<button
-		type="button"
-		class="speed"
-		aria-label={t('chat.playbackSpeed')}
-		disabled={!src}
-		onclick={(e) => {
-			e.stopPropagation();
-			if (!active && src) {
-				void playVoiceClip({
-					msgId,
-					url: src,
-					title: name || t('chat.voiceMessage'),
-					author,
-					durationMs: dur
-				}).then(() => cycleVoiceSpeed());
-				return;
-			}
-			cycleVoiceSpeed();
-		}}
-	>
-		{speedLabel}
-	</button>
+		<div class="meta">
+			<button
+				type="button"
+				class="speed"
+				aria-label={t('chat.playbackSpeed')}
+				disabled={!src}
+				onclick={(e) => {
+					e.stopPropagation();
+					if (!active && src) {
+						void playVoiceClip({
+							msgId,
+							url: src,
+							title: playTitle,
+							author,
+							speakerName,
+							durationMs: dur
+						}).then(() => cycleVoiceSpeed());
+						return;
+					}
+					cycleVoiceSpeed();
+				}}
+			>
+				{speedLabel}
+			</button>
+			<span class="time">{timeLabel}</span>
+		</div>
+	</div>
 </div>
 
 <style>
 	.voice {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 10px;
 		min-width: min(220px, 72vw);
-		max-width: min(280px, 78vw);
-		padding: 2px 0;
+		max-width: min(300px, 82vw);
+		padding: 10px 12px;
+		box-sizing: border-box;
 	}
 	.play {
 		flex: 0 0 auto;
 		display: grid;
 		place-items: center;
-		width: 36px;
-		height: 36px;
+		width: 44px;
+		height: 44px;
 		border: none;
 		border-radius: 999px;
 		background: color-mix(in srgb, var(--fg) 20%, transparent);
@@ -168,46 +182,81 @@
 		opacity: 0.5;
 		cursor: default;
 	}
-	.wave {
+	.cols {
 		flex: 1 1 auto;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 5px;
+	}
+	.wave {
+		flex: 0 0 auto;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 2px;
-		height: 32px;
+		gap: 1.5px;
+		height: 28px;
 		padding: 0;
 		border: none;
 		background: transparent;
 		cursor: pointer;
 		min-width: 0;
+		width: 100%;
 	}
 	.wave:disabled {
 		cursor: default;
 	}
-	.bar {
+	.bar-col {
 		flex: 1 1 0;
 		min-width: 2px;
 		max-width: 3px;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		justify-content: center;
+		gap: 0;
+	}
+	.bar {
+		display: block;
+		width: 100%;
+		min-height: 1px;
 		border-radius: 999px;
 		background: color-mix(in srgb, var(--fg) 28%, transparent);
-		align-self: center;
+	}
+	.bar.top {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+	.bar.bot {
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
 	}
 	.voice.mine .bar {
 		background: rgba(255, 255, 255, 0.28);
 	}
-	.bar.on {
+	.bar-col.on .bar {
 		background: color-mix(in srgb, var(--accent-1, #6c5ce7) 90%, transparent);
 	}
-	.voice.mine .bar.on {
+	.voice.mine .bar-col.on .bar {
 		background: rgba(255, 255, 255, 0.66);
 	}
+	.meta {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		min-width: 0;
+	}
 	.time {
-		flex: 0 0 36px;
+		flex: 0 0 auto;
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--fg-33);
 		text-align: end;
 		font-family: inherit;
+		white-space: nowrap;
 	}
 	.voice.mine .time {
 		color: color-mix(in srgb, #fff 66%, transparent);
@@ -216,7 +265,7 @@
 		flex: 0 0 auto;
 		border: none;
 		border-radius: 999px;
-		padding: 4px 7px;
+		padding: 3px 8px;
 		background: color-mix(in srgb, var(--fg) 10%, transparent);
 		color: var(--fg-66);
 		font-size: 11px;

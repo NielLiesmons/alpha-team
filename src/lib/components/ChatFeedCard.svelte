@@ -616,6 +616,7 @@
 									isMine={isMine}
 									durationMs={typeof att.duration_ms === 'number' ? att.duration_ms : 0}
 									author={msg.author || ''}
+									speakerName={name}
 									name={att.name || t('chat.voiceMessage')}
 								/>
 							{:else if mediaKind === 'voice' && !exhausted}

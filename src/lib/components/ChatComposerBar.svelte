@@ -719,113 +719,119 @@
 				<button type="button" class="attach-clear" onclick={clearPendingFiles}>{t('chat.clear')}</button>
 			</div>
 		{/if}
-		{#if voiceRecording}
-			<div class="voice-row" class:paused={voicePaused} aria-live="polite">
-				<div class="voice-pill">
-					<span class="voice-dot" aria-hidden="true"></span>
-					<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
-					<div class="voice-wave" aria-hidden="true">
-						{#each voiceBars as h, i (i)}
-							<span
-								class="voice-bar"
-								style:height="{h < 0.04 ? 2 : Math.round(2 + h * 18)}px"
-							></span>
-						{/each}
+		<div class="composer-body" class:voice-on={voiceRecording}>
+			{#if voiceRecording}
+				<div class="voice-row" class:paused={voicePaused} aria-live="polite">
+					<div class="voice-pill">
+						<span class="voice-dot" aria-hidden="true"></span>
+						<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
+						<div class="voice-wave" aria-hidden="true">
+							{#each voiceBars as h, i (i)}
+								{@const half = h < 0.04 ? 1 : Math.round(1 + h * 9)}
+								<span class="voice-bar-col">
+									<span class="voice-bar top" style:height="{half}px"></span>
+									<span class="voice-bar bot" style:height="{half}px"></span>
+								</span>
+							{/each}
+						</div>
 					</div>
+					<button type="button" class="voice-action delete" onclick={cancelVoiceRecording}>
+						<span class="voice-trash"><Trash size={14} /></span>
+						<span>{t('common.delete')}</span>
+					</button>
+					<button type="button" class="voice-action pause" onclick={toggleVoicePause}>
+						{#if voicePaused}
+							<Play size={13} />
+							<span>{t('chat.resumeVoice')}</span>
+						{:else}
+							<Pause size={13} />
+							<span>{t('chat.pauseVoice')}</span>
+						{/if}
+					</button>
 				</div>
-				<button type="button" class="voice-action delete" onclick={cancelVoiceRecording}>
-					<span class="voice-trash"><Trash size={14} /></span>
-					<span>{t('common.delete')}</span>
+			{/if}
+			<div class="composer-row" class:chrome-expanded={chromeExpanded}>
+				<input
+					bind:this={mediaInputEl}
+					type="file"
+					class="file-input"
+					multiple
+					accept="image/*,video/*"
+					onchange={onFilesPicked}
+				/>
+				<input
+					bind:this={fileInputEl}
+					type="file"
+					class="file-input"
+					multiple
+					accept=".pdf,.doc,.docx,.txt,.zip,application/pdf"
+					onchange={onFilesPicked}
+				/>
+				<button
+					type="button"
+					class="side-btn plus"
+					class:open={attachOpen}
+					aria-label={t('chat.attach')}
+					aria-expanded={attachOpen}
+					onclick={toggleAttach}
+				>
+					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+						<path
+							d="M9 3.5v11M3.5 9h11"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linecap="round"
+						/>
+					</svg>
 				</button>
-				<button type="button" class="voice-action pause" onclick={toggleVoicePause}>
-					{#if voicePaused}
-						<Play size={13} />
-						<span>{t('chat.resumeVoice')}</span>
+				<div class="composer-field" class:fade-top={fadeTop} class:fade-bottom={fadeBottom}>
+					<textarea
+						bind:this={inputEl}
+						class="composer-input"
+						rows="1"
+						placeholder={pendingMedia.length
+							? t('chat.addCaption')
+							: replyTo
+								? t('chat.reply')
+								: t('chat.message')}
+						bind:value={draft}
+						onkeydown={onKey}
+						oninput={onInput}
+						onscroll={updateInputFade}
+						aria-label={pendingMedia.length ? t('chat.addCaption') : t('chat.message')}
+					></textarea>
+				</div>
+				{#if !voiceRecording}
+					{#if canSend}
+						<button
+							type="button"
+							class="side-btn send"
+							aria-label={t('chat.send')}
+							onclick={() => void send()}
+						>
+							<span class="send-ico"><AlphaLogo size={18} /></span>
+						</button>
 					{:else}
-						<Pause size={13} />
-						<span>{t('chat.pauseVoice')}</span>
+						<button
+							type="button"
+							class="side-btn mic"
+							aria-label={t('chat.voiceMessage')}
+							title={t('chat.voiceMessage')}
+							onclick={onMicTap}
+						>
+							<Voice size={22} />
+						</button>
 					{/if}
-				</button>
-			</div>
-		{/if}
-		<div class="composer-row" class:chrome-expanded={chromeExpanded}>
-			<input
-				bind:this={mediaInputEl}
-				type="file"
-				class="file-input"
-				multiple
-				accept="image/*,video/*"
-				onchange={onFilesPicked}
-			/>
-			<input
-				bind:this={fileInputEl}
-				type="file"
-				class="file-input"
-				multiple
-				accept=".pdf,.doc,.docx,.txt,.zip,application/pdf"
-				onchange={onFilesPicked}
-			/>
-			<button
-				type="button"
-				class="side-btn plus"
-				class:open={attachOpen}
-				aria-label={t('chat.attach')}
-				aria-expanded={attachOpen}
-				onclick={toggleAttach}
-			>
-				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-					<path
-						d="M9 3.5v11M3.5 9h11"
-						stroke="currentColor"
-						stroke-width="1.7"
-						stroke-linecap="round"
-					/>
-				</svg>
-			</button>
-			<div class="composer-field" class:fade-top={fadeTop} class:fade-bottom={fadeBottom}>
-				<textarea
-					bind:this={inputEl}
-					class="composer-input"
-					rows="1"
-					placeholder={pendingMedia.length
-						? t('chat.addCaption')
-						: replyTo
-							? t('chat.reply')
-							: t('chat.message')}
-					bind:value={draft}
-					onkeydown={onKey}
-					oninput={onInput}
-					onscroll={updateInputFade}
-					aria-label={pendingMedia.length ? t('chat.addCaption') : t('chat.message')}
-				></textarea>
+				{/if}
 			</div>
 			{#if voiceRecording}
 				<button
 					type="button"
-					class="side-btn send"
+					class="side-btn send send-span"
 					aria-label={t('chat.send')}
 					onclick={() => void finishVoiceRecording(true)}
 				>
-					<span class="send-ico"><AlphaLogo size={18} /></span>
-				</button>
-			{:else if canSend}
-				<button
-					type="button"
-					class="side-btn send"
-					aria-label={t('chat.send')}
-					onclick={() => void send()}
-				>
-					<span class="send-ico"><AlphaLogo size={18} /></span>
-				</button>
-			{:else}
-				<button
-					type="button"
-					class="side-btn mic"
-					aria-label={t('chat.voiceMessage')}
-					title={t('chat.voiceMessage')}
-					onclick={onMicTap}
-				>
-					<Voice size={22} />
+					<span class="send-ico"><AlphaLogo size={20} /></span>
 				</button>
 			{/if}
 		</div>
@@ -911,6 +917,35 @@
 		cursor: pointer;
 	}
 
+	.composer-body {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-items: stretch;
+		position: relative;
+		z-index: 2;
+	}
+
+	.composer-body.voice-on {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-rows: auto auto;
+	}
+
+	.composer-body.voice-on .voice-row {
+		grid-column: 1;
+		grid-row: 1;
+	}
+
+	.composer-body.voice-on .composer-row {
+		grid-column: 1;
+		grid-row: 2;
+	}
+
+	.composer-body.voice-on .send-span {
+		grid-column: 2;
+		grid-row: 1 / -1;
+		align-self: stretch;
+	}
+
 	.composer-row {
 		display: flex;
 		align-items: flex-end;
@@ -920,6 +955,10 @@
 		box-sizing: border-box;
 		position: relative;
 		z-index: 2;
+	}
+
+	.composer-body.voice-on .composer-row {
+		padding-right: 7px;
 	}
 
 	.composer-row.chrome-expanded {
@@ -959,6 +998,15 @@
 	.side-btn.send {
 		background: var(--gradient-accent-1);
 		color: #fff;
+	}
+
+	.side-btn.send.send-span {
+		width: 40px;
+		min-height: 40px;
+		height: auto;
+		margin: 7px 7px 7px 0;
+		border-radius: 12px;
+		align-self: stretch;
 	}
 
 	.side-btn.send .send-ico {
@@ -1071,10 +1119,11 @@
 		display: flex;
 		align-items: center;
 		gap: 7px;
-		padding: 7px 7px 4px;
+		padding: 7px 0 4px 7px;
 		box-sizing: border-box;
 		position: relative;
 		z-index: 2;
+		min-width: 0;
 	}
 
 	.voice-pill {
@@ -1136,22 +1185,42 @@
 		flex: 1 1 auto;
 		min-width: 0;
 		width: 100%;
-		height: 20px;
+		height: 22px;
 		display: flex;
-		align-items: flex-end;
+		align-items: center;
 		justify-content: stretch;
 		gap: 1.5px;
-		padding-bottom: 1px;
 		overflow: hidden;
 		box-sizing: border-box;
 	}
 
-	.voice-bar {
+	.voice-bar-col {
 		flex: 1 1 0;
 		min-width: 1.5px;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		justify-content: center;
+		gap: 0;
+	}
+
+	.voice-bar {
+		display: block;
+		width: 100%;
+		min-height: 1px;
 		border-radius: 999px;
 		background: color-mix(in srgb, var(--fg) 28%, transparent);
-		align-self: flex-end;
+	}
+
+	.voice-bar.top {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+
+	.voice-bar.bot {
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
 	}
 
 	.voice-row.paused .voice-bar {
