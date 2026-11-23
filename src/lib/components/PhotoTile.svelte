@@ -50,15 +50,16 @@
 		const thumbPath = item.thumbPath;
 		const mediaPath = item.path;
 		const attKind = item.kind;
-		url = '';
+		/* Hold previous thumb across effect re-runs (session churn / entry refresh)
+		 * so tiles never flash empty → thumb → empty. */
 		failed = false;
-		hasBlur = false;
 		kind = attKind;
 		if (!session) return;
 		const ac = new AbortController();
+		const hadUrl = Boolean(url);
 
 		void (async () => {
-			if (previewPath) {
+			if (previewPath && !hadUrl) {
 				try {
 					const bytes = await getPath(session, previewPath);
 					if (ac.signal.aborted) return;
@@ -66,7 +67,7 @@
 					const hash = typeof doc?.blurhash === 'string' ? doc.blurhash : '';
 					if (hash && canvasEl) {
 						await paintBlurhash(canvasEl, hash);
-						if (!ac.signal.aborted) hasBlur = true;
+						if (!ac.signal.aborted && !url) hasBlur = true;
 					}
 				} catch {
 					/* no preview yet */
@@ -90,7 +91,7 @@
 				url = res.url;
 				if (!thumbPath && (res.kind === 'image' || res.kind === 'video')) kind = res.kind;
 				else if (thumbPath) kind = attKind;
-			} else {
+			} else if (!url) {
 				failed = true;
 			}
 		})();

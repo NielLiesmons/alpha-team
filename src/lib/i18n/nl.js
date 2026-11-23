@@ -162,6 +162,8 @@ export default {
 	'photos.imageOrVideoOnly': 'Foto’s accepteert alleen afbeeldingen en video’s',
 	'photos.untitled': 'Media',
 	'photos.uploadHd': 'HD (originele kwaliteit)',
+	'photos.filterCompressed': 'Gecomprimeerd',
+	'photos.filterHd': 'HD',
 	'photos.takePhoto': 'Foto of video maken',
 	'photos.fromDevice': 'Vanaf apparaat',
 	'photos.libraryEmpty': 'Nog geen foto’s in je bibliotheek',

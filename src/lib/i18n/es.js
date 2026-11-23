@@ -162,6 +162,8 @@ export default {
 	'photos.imageOrVideoOnly': 'Fotos solo acepta imágenes y vídeos',
 	'photos.untitled': 'Media',
 	'photos.uploadHd': 'HD (calidad original)',
+	'photos.filterCompressed': 'Comprimido',
+	'photos.filterHd': 'HD',
 	'photos.takePhoto': 'Hacer foto o vídeo',
 	'photos.fromDevice': 'Desde el dispositivo',
 	'photos.libraryEmpty': 'Aún no hay fotos en tu biblioteca',

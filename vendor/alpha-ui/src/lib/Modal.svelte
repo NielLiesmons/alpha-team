@@ -13,7 +13,7 @@
 		label = 'Dialog',
 		/** Enable drag-down dismiss on mobile (gesture only — no handle UI) */
 		dragDismiss: dragDismissEnabled = true,
-		/** 'default' | 'media' — media ≈ 90vw × 90vh desktop viewer */
+		/** 'default' | 'media' — media ≈ 70vw × 90vh desktop viewer */
 		size = 'default',
 		children
 	} = $props();
@@ -148,8 +148,8 @@
 
 		.sheet.media {
 			/* Leave side room for external chevrons (same 7.5rem gutter as default). */
-			width: min(90vw, calc(100vw - 7.5rem));
-			max-width: min(90vw, calc(100vw - 7.5rem));
+			width: min(70vw, calc(100vw - 7.5rem));
+			max-width: min(70vw, calc(100vw - 7.5rem));
 			height: 90vh;
 			max-height: 90vh;
 		}

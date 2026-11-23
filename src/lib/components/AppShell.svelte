@@ -164,6 +164,13 @@
 				{ id: 'unread', label: t('filter.unread') }
 			];
 		}
+		if (path.startsWith('/photos')) {
+			/* Upload quality — default `all` = compressed (filter chrome inactive). */
+			return [
+				{ id: 'all', label: t('photos.filterCompressed') },
+				{ id: 'hd', label: t('photos.filterHd') }
+			];
+		}
 		/* Publications filters live inside PublicationsFeed (detail column). */
 		return null;
 	});

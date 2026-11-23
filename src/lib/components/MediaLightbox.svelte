@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * Media viewer — desktop: Modal (~90vw×90vh) + SheetTopbar + external chevrons
+	 * Media viewer — desktop: Modal (~70vw×90vh) + SheetTopbar + external chevrons
 	 * (Bley publication pattern). Mobile: fullscreen lightbox with blurred scrim.
 	 */
 	import { fade } from 'svelte/transition';
@@ -277,7 +277,7 @@
 		color: var(--fg-66);
 	}
 
-	/* External chevrons — Bley PubModal edge pattern beside the ~90vw card. */
+	/* External chevrons — Bley PubModal edge pattern beside the ~70vw card. */
 	.edges {
 		pointer-events: none;
 	}
@@ -316,7 +316,7 @@
 	}
 
 	.nav.prev {
-		left: calc(50% - (min(90vw, calc(100vw - 7.5rem)) / 2) - 14px);
+		left: calc(50% - (min(70vw, calc(100vw - 7.5rem)) / 2) - 14px);
 		transform: translate(-100%, -50%);
 	}
 
@@ -329,7 +329,7 @@
 	}
 
 	.nav.next {
-		right: calc(50% - (min(90vw, calc(100vw - 7.5rem)) / 2) - 14px);
+		right: calc(50% - (min(70vw, calc(100vw - 7.5rem)) / 2) - 14px);
 		left: auto;
 		transform: translate(100%, -50%);
 	}

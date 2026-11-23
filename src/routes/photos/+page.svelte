@@ -17,8 +17,8 @@
 	let loading = $state(true);
 	let err = $state('');
 	let uploading = $state(false);
-	/** Keep original / larger quality — default is compressed. */
-	let uploadHd = $state(false);
+	/** Upload quality from shell filter — `hd` vs default compressed (`all`). */
+	const uploadHd = $derived(ui.listFilter === 'hd');
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput;
 	let reloadGen = 0;
@@ -164,10 +164,6 @@
 />
 
 <div class="feed photos">
-	<label class="hd-toggle">
-		<input type="checkbox" bind:checked={uploadHd} />
-		<span>{t('photos.uploadHd')}</span>
-	</label>
 	{#if loading && items.length === 0}
 		<FeedSkeleton rows={6} />
 	{:else if err && items.length === 0}
@@ -205,35 +201,6 @@
 		padding-left: 0;
 		padding-right: 0;
 		min-height: 40vh;
-	}
-
-	.hd-toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		margin: 0 16px 10px;
-		padding: 0;
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--fg-66);
-		cursor: pointer;
-		user-select: none;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.hd-toggle input {
-		width: 14px;
-		height: 14px;
-		margin: 0;
-		accent-color: var(--fg);
-		cursor: pointer;
-	}
-
-	@media (max-width: 767px) {
-		.hd-toggle {
-			margin-left: 14px;
-			margin-right: 14px;
-		}
 	}
 
 	.photo-group {
