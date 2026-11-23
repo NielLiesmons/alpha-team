@@ -129,9 +129,13 @@
 		.title-loader {
 			display: inline-flex;
 			align-items: center;
+			justify-content: center;
 			align-self: center;
-			flex-shrink: 0;
+			flex: 0 0 18px;
+			width: 18px;
+			height: 10px;
 			line-height: 0;
+			overflow: hidden;
 			--loader-ink: var(--fg-66);
 			color: var(--fg-66);
 			opacity: 0.85;

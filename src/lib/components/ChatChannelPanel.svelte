@@ -98,11 +98,17 @@
 	let highlightId = $state(/** @type {string | null} */ (null));
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let highlightTimer = null;
-	const chronological = $derived(
-		[...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)].sort(
-			compareChatMessageAsc
-		)
-	);
+	/*
+	 * Touch length so remounts + splice merges always re-derive.
+	 * Passing chatFeed into a helper alone has left the feed empty on first
+	 * navigate-back until a second visit forced another evaluation.
+	 */
+	const chronological = $derived.by(() => {
+		chatFeed.length;
+		return [
+			...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)
+		].sort(compareChatMessageAsc);
+	});
 	const stackMap = $derived(chatStackFlags(chronological, activePerson().email || ''));
 	const presence = $derived(
 		(chatEphemeral || []).filter((e) => e.channel_id === channelId && e.state !== 'idle')

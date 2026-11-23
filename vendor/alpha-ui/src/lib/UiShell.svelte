@@ -2115,9 +2115,13 @@
 	.title-loader {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		align-self: center;
-		flex-shrink: 0;
+		flex: 0 0 18px;
+		width: 18px;
+		height: 10px;
 		line-height: 0;
+		overflow: hidden;
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
@@ -2476,9 +2480,8 @@
 			position: relative;
 			z-index: 2;
 			margin-left: auto;
-			/* Prefer shrinking actions over clipping the section title pill. */
-			flex-shrink: 1;
-			min-width: 0;
+			/* Never shrink round 44px chrome buttons into ovals. */
+			flex-shrink: 0;
 		}
 
 		/* Section icon + title pill — opens the slide-over menu; collapses to round › when open */
@@ -2487,9 +2490,9 @@
 			z-index: 2;
 			display: inline-flex;
 			align-items: center;
-			gap: 10px;
-			/* Never flex-shrink under list-actions — that was clipping titles to one letter ("P"). */
-			max-width: min(70vw, 280px);
+			/* Tight chevron → icon → title; do not flex-grow the label away from the PNG. */
+			gap: 6px;
+			max-width: min(58vw, 240px);
 			height: 44px;
 			margin: 0;
 			padding: 0 14px 0 10px;
@@ -2501,6 +2504,7 @@
 			color: var(--fg-66);
 			cursor: pointer;
 			box-sizing: border-box;
+			/* Prefer ellipsis over flex-shrinking under list-actions. */
 			flex-shrink: 0;
 			min-width: 0;
 			backdrop-filter: blur(var(--glass-blur));
@@ -2552,7 +2556,8 @@
 			flex-shrink: 0;
 			width: 22px;
 			height: 22px;
-			margin-left: 2px;
+			/* Pull PNG a hair closer to the title (gap already 6px). */
+			margin-left: 0;
 			color: inherit;
 		}
 
@@ -2565,14 +2570,14 @@
 			display: inline-flex;
 			align-items: center;
 			gap: 6px;
-			/* Keep room for a real section name; loader may shrink/clip instead. */
-			min-width: 4.75em;
-			flex: 1 1 auto;
+			min-width: 0;
+			/* Intrinsic — never flex-grow and invent space after the icon. */
+			flex: 0 1 auto;
 		}
 
 		.pill-label {
 			min-width: 0;
-			flex: 1 1 auto;
+			flex: 0 1 auto;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
@@ -2587,8 +2592,12 @@
 		.pill-loader {
 			display: inline-flex;
 			align-items: center;
-			flex-shrink: 0;
+			justify-content: center;
+			flex: 0 0 18px;
+			width: 18px;
+			height: 10px;
 			line-height: 0;
+			overflow: hidden;
 			--loader-ink: var(--fg-66);
 			color: var(--fg-66);
 			opacity: 0.85;

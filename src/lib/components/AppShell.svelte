@@ -1,6 +1,6 @@
 <script>
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import {
 		activeWebsite,
 		mobileNavForRole,
@@ -85,7 +85,7 @@
 
 	let { children } = $props();
 
-	const path = $derived($page.url.pathname);
+	const path = $derived(page.url.pathname);
 	const chatList = $derived(path.startsWith('/chat'));
 	const mailList = $derived(path.startsWith('/mail'));
 	const commsFeed = $derived(chatList || mailList);
@@ -244,6 +244,7 @@
 	const websiteOpen = $derived(active('/website') || active('/publications'));
 
 	const activeItem = $derived.by(() => {
+		const p = path;
 		locale.value;
 		websites.length;
 		const site = activeWebsite();
@@ -261,12 +262,14 @@
 			const item = /** @type {import('$lib/sections.js').NavItem} */ (entry);
 			if (active(item.href)) return item;
 		}
-		if (active('/settings'))
+		if (p.startsWith('/settings'))
 			return { href: '/settings', label: t('nav.settings'), icon: 'settings' };
-		const first = roleNav[0];
-		return /** @type {any} */ (first)?.type === 'group'
-			? /** @type {any} */ (first).items?.[0]
-			: first;
+		/*
+		 * Never fall back to roleNav[0] (Chat) for an unmatched path — that left
+		 * activeHref/title/icon stuck on Chat after leaving the section.
+		 */
+		const labeled = navLabel(p) || t('nav.chat');
+		return { href: p || '/chat', label: labeled, icon: 'dot' };
 	});
 
 	/** Muted nav totals = “new since last visit” (not inventory size). */
@@ -360,12 +363,35 @@
 	/** Planning / Drive own list actions. */
 	const customChrome = $derived(planningList || driveList);
 
-	/** Top-bar title: Mail shows Inbox/Sent/Drafts, not “Mail”. */
+	/**
+	 * Top-bar title from path (not activeItem fallback).
+	 * activeItem falls back to the first nav row (Chat) when no href matches —
+	 * that left “Chat” stuck on Mail/Tasks after leaving Chat.
+	 */
 	const chromeTitle = $derived.by(() => {
+		const p = path;
 		locale.value;
 		mailView.folder;
-		if (mailList) return mailFolderLabel(mailView.folder) || t('mail.inbox');
-		if (photosList) return t('nav.photos');
+		if (p.startsWith('/mail')) return mailFolderLabel(mailView.folder) || t('mail.inbox');
+		if (p.startsWith('/photos')) return t('nav.photos');
+		if (p.startsWith('/website') || p.startsWith('/publications')) {
+			return activeWebsite()?.host || t('nav.website');
+		}
+		const bases = [
+			'/chat',
+			'/drive',
+			'/projects',
+			'/tasks',
+			'/notes',
+			'/entreprises',
+			'/planning',
+			'/settings'
+		];
+		for (const href of bases) {
+			if (p === href || p.startsWith(`${href}/`)) {
+				return navLabel(href) || activeItem.label || '';
+			}
+		}
 		const labeled = navLabel(activeItem.href);
 		return labeled || activeItem.label || '';
 	});
@@ -560,16 +586,22 @@
 		{#if mailList}
 			<MailFolderTitle />
 		{:else}
-			<div class="list-title-stack" class:voice-on={chatList && chatVoicePlayer.status !== 'idle'}>
-				<ListTitleChrome
-					title={chromeTitle}
-					syncing={titleSyncing}
-					titleClass={planningList ? 'planning-title' : ''}
-				/>
-				{#if chatList}
+			<!--
+				display:contents — do NOT wrap with width:100% here.
+				list-title-slot is already display:contents; a full-width stack
+				became a list-top flex child and crushed the mobile title pill
+				+ ovalized the 44px chat activity button.
+			-->
+			<ListTitleChrome
+				title={chromeTitle}
+				syncing={titleSyncing}
+				titleClass={planningList ? 'planning-title' : ''}
+			/>
+			{#if chatList}
+				<div class="chat-voice-slot" class:on={chatVoicePlayer.status !== 'idle'}>
 					<ChatVoiceNowPlaying />
-				{/if}
-			</div>
+				</div>
+			{/if}
 		{/if}
 	{/snippet}
 
@@ -663,11 +695,32 @@
 </UiShell>
 
 <style>
-	.list-title-stack {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-		width: 100%;
+	/*
+	 * Voice now-playing sits under list chrome without joining list-top flex.
+	 * (list-title-slot is display:contents → this is a list-top child.)
+	 */
+	.chat-voice-slot {
+		display: none;
+	}
+
+	.chat-voice-slot.on {
+		display: block;
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 52px;
+		z-index: 5;
+		pointer-events: none;
+	}
+
+	.chat-voice-slot.on :global(.pill) {
+		pointer-events: auto;
+	}
+
+	@media (max-width: 767px) {
+		.chat-voice-slot.on {
+			top: calc(52px + env(safe-area-inset-top, 0px));
+		}
 	}
 
 	/* Planning zoom chrome rendered into UiShell list actions */
@@ -726,10 +779,12 @@
 
 	.chat-activity-btn {
 		position: relative;
-		width: auto;
+		/* Stay a round chrome control — never width:auto (that ovalized mobile). */
+		width: 28px;
 		min-width: 28px;
-		padding: 0 8px;
+		padding: 0;
 		gap: 0;
+		flex-shrink: 0;
 	}
 
 	.activity-mark {
@@ -761,10 +816,22 @@
 	}
 
 	@media (max-width: 767px) {
+		/* Match UiShell mobile chrome-btn — fixed 44 round glass. */
+		.chat-activity-btn {
+			width: 44px;
+			min-width: 44px;
+			height: 44px;
+			padding: 0;
+			border-radius: 9999px;
+			flex-shrink: 0;
+		}
+
 		.chat-activity-btn.cats {
-			height: 32px;
-			padding: 0 10px;
-			border-radius: 999px;
+			width: auto;
+			min-width: 44px;
+			height: 44px;
+			padding: 0 12px;
+			border-radius: 9999px;
 		}
 
 		.chat-activity-btn.cats .activity-mark {
