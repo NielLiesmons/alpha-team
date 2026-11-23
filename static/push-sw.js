@@ -2,7 +2,7 @@
  * Imported by the Workbox-generated service worker (vite-pwa).
  * Handles Web Push + notification taps for Home Screen PWAs (incl. iOS 16.4+).
  *
- * alpha-sw-boot: v4 — bump forces clients to fetch a new SW after notifs/popover/overlay fixes.
+ * alpha-sw-boot: v5 — bump after create-sheet / comments morph + shared composer ship.
  */
 /* eslint-disable no-undef */
 

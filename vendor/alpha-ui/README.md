@@ -75,7 +75,7 @@ Stroke weight from CSS `--icon-stroke` with `vector-effect: non-scaling-stroke`.
 | `CreateSheet.svelte` | Create/edit overlay (keyboard-aware) |
 | `FloatPanel.svelte` | Portaled glass popover |
 | `PullToRefresh.svelte` | Mobile pull-to-refresh |
-| `MetaballLoader.svelte` | Soft two-ball gooey loader (product loading affordance) |
+| `MetaballLoader.svelte` | Three-ball metaball wave loader (title sync + typing) |
 | `Spinner.svelte` | Alias → MetaballLoader (legacy import path) |
 | `chrome-scroll-fade.js` | `--chrome-scroll-fade` driver |
 
@@ -113,9 +113,9 @@ export const primaryNav = [
 
 Admin passes its own `sections` from `sections.js` (Tasks, Notes, …) into the same `UiShell`.
 
-## Shared parent-domain session
+## Shared `.bley.farm` session
 
-Admin (`admin.customer.example`) and Player (`player.customer.example`) share Drive auth on the parent `.customer.example` cookie domain so deep-linking does not re-login.
+Admin (`admin.bley.farm`) and Player (`player.bley.farm`) share Drive auth on the parent `.bley.farm` cookie domain so deep-linking does not re-login.
 
 ## Design rules
 

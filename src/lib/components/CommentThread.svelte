@@ -5,9 +5,8 @@
 	 * content behind stays scrollable. Close via X, drag-under-min,
 	 * swipe-right, or Android/browser back.
 	 */
-	import AlphaLogo from './icons/AlphaLogo.svelte';
 	import Drag from './icons/Drag.svelte';
-	import Voice from './icons/Voice.svelte';
+	import ChatComposerBar from './ChatComposerBar.svelte';
 	import ChatFeedCard from './ChatFeedCard.svelte';
 	import ComposerSuggest from './ComposerSuggest.svelte';
 	import ProfilePicStack from './ProfilePicStack.svelte';
@@ -18,17 +17,13 @@
 		commentsByKey,
 		commentsSettledByKey,
 		loadComments,
-		postChatMessage,
 		seedCommentsFromFeed,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
 	import { compareChatMessageAsc } from '$lib/drive/entities.js';
-	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { snapFeedToBottom } from '$lib/feed-scroll.js';
 	import { isMobileNav } from '$lib/nav-stack.js';
-	import { themeChoice } from '$lib/theme.svelte.js';
-	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import Close from '@alpha/ui/icons/Close.svelte';
 	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
@@ -73,6 +68,8 @@
 	let panelEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
+	/** @type {import('./ChatComposerBar.svelte').default | undefined} */
+	let composerBar = $state();
 	/** Explicit sheet height (px); 0 = CSS default until user resizes. */
 	let sheetHeight = $state(0);
 	/** Collapsed FAB width (px) — opening/closing morph back to this, not a fixed rem. */
@@ -97,24 +94,31 @@
 	/** Unknown/loading with no seed — spinner, never a lying 0. */
 	const commentsPending = $derived(!settled && messages.length === 0);
 
-	const canSend = $derived(Boolean(draft.trim()));
-
-	const isDark = $derived.by(() => {
-		const choice = themeChoice.value;
-		if (choice === 'light') return false;
-		if (choice === 'gray' || choice === 'dark') return true;
-		if (typeof document === 'undefined') return true;
-		return document.documentElement.dataset.theme !== 'light';
+	const commentRef = $derived.by(() => {
+		/** @type {Record<string, string>} */
+		const ref = { type, id: entityId };
+		if (tip?.title) ref.title = tip.title;
+		if (tip?.subject) ref.subject = tip.subject;
+		if (tip?.from) ref.from = tip.from;
+		if (tip?.from_name) ref.from_name = tip.from_name;
+		return ref;
 	});
 
-	function maxSheetHeight() {
+	/** Visible viewport height (keyboard-aware via --app-height). */
+	function vvHeight() {
 		if (typeof window === 'undefined') return 640;
-		return Math.round(window.innerHeight * 0.8);
+		const css = getComputedStyle(document.documentElement).getPropertyValue('--app-height');
+		const fromCss = Number.parseFloat(css);
+		if (Number.isFinite(fromCss) && fromCss > 0) return fromCss;
+		return Math.round(window.visualViewport?.height ?? window.innerHeight);
+	}
+
+	function maxSheetHeight() {
+		return Math.round(vvHeight() * 0.92);
 	}
 
 	function defaultSheetHeight() {
-		if (typeof window === 'undefined') return 480;
-		return Math.min(Math.round(window.innerHeight * 0.78), 640);
+		return Math.min(Math.round(vvHeight() * 0.78), 640);
 	}
 
 	function clampSheetHeight(/** @type {number} */ h) {
@@ -427,80 +431,6 @@
 		inputEl?.focus();
 	}
 
-	function clearReply() {
-		replyTo = null;
-	}
-
-	async function send() {
-		const body = draft.trim();
-		if (!body || chatUi.posting) return;
-		error = null;
-		const parent = replyTo;
-		draft = '';
-		fieldTall = false;
-		fadeTop = false;
-		fadeBottom = false;
-		if (inputEl) inputEl.style.height = 'auto';
-		replyTo = null;
-		try {
-			/** @type {Record<string, string>} */
-			const ref = { type, id: entityId };
-			if (tip?.title) ref.title = tip.title;
-			if (tip?.subject) ref.subject = tip.subject;
-			if (tip?.from) ref.from = tip.from;
-			if (tip?.from_name) ref.from_name = tip.from_name;
-			await postChatMessage({
-				body,
-				kind: 'comment',
-				ref,
-				reply_to: parent?.id ?? null
-			});
-			queueMicrotask(() => {
-				snapFeedToBottom(listEl);
-				inputEl?.focus();
-			});
-		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
-		}
-	}
-
-	/** @param {KeyboardEvent} e */
-	function onKey(e) {
-		if (e.key === 'Escape' && sheetVisible) {
-			e.preventDefault();
-			if (replyTo) {
-				clearReply();
-				return;
-			}
-			void closeSheet();
-			return;
-		}
-		if (e.key === 'Enter' && !e.shiftKey && phase === 'open') {
-			e.preventDefault();
-			void send();
-		}
-	}
-
-	let fadeTop = $state(false);
-	let fadeBottom = $state(false);
-	let fieldTall = $state(false);
-	const COMPOSER_FADE_THRESHOLD = 4;
-	const COMPOSER_MAX_H = 140;
-	const COMPOSER_TALL_PX = 28;
-
-	function updateInputFade() {
-		const el = inputEl;
-		if (!el) {
-			fadeTop = false;
-			fadeBottom = false;
-			return;
-		}
-		fadeTop = el.scrollTop > COMPOSER_FADE_THRESHOLD;
-		fadeBottom =
-			el.scrollHeight - el.clientHeight > COMPOSER_FADE_THRESHOLD &&
-			el.scrollHeight - el.scrollTop - el.clientHeight > COMPOSER_FADE_THRESHOLD;
-	}
-
 	/** @param {string} next @param {number} cursor */
 	function onSuggestInsert(next, cursor) {
 		draft = next;
@@ -508,38 +438,44 @@
 			if (!inputEl) return;
 			inputEl.focus();
 			inputEl.setSelectionRange(cursor, cursor);
-			onInput();
+			composerBar?.afterSuggestInsert?.();
 		});
 	}
 
-	function onInput() {
-		const el = inputEl;
-		if (!el) return;
-		el.style.height = 'auto';
-		const next = Math.min(el.scrollHeight, COMPOSER_MAX_H);
-		el.style.height = `${next}px`;
-		fieldTall = next > COMPOSER_TALL_PX || draft.includes('\n');
-		updateInputFade();
+	function onComposerSent() {
+		error = null;
+		queueMicrotask(() => {
+			snapFeedToBottom(listEl);
+			inputEl?.focus();
+		});
 	}
 
-	const replyPreview = $derived.by(() => {
-		if (!replyTo) return null;
-		const email = String(replyTo.author || '');
-		const p = asPerson(replyTo.author);
-		const n = p?.name || displayNameFromEmail(replyTo.author);
-		const plain = String(replyTo.body || '')
-			.replace(/\s+/g, ' ')
-			.trim();
-		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain;
-		return {
-			name: n,
-			text,
-			accent: profileAccentCss(email, n),
-			nameColor: profileNameCss(email, n, isDark)
+	/** Keep sheet height inside the visible viewport when the keyboard opens. */
+	$effect(() => {
+		if (phase !== 'open' || typeof window === 'undefined') return;
+		const clamp = () => {
+			if (phase !== 'open') return;
+			const max = maxSheetHeight();
+			if (sheetHeight > max) sheetHeight = max;
+			else if (!sheetHeight) sheetHeight = defaultSheetHeight();
+		};
+		clamp();
+		window.visualViewport?.addEventListener('resize', clamp);
+		window.visualViewport?.addEventListener('scroll', clamp);
+		return () => {
+			window.visualViewport?.removeEventListener('resize', clamp);
+			window.visualViewport?.removeEventListener('scroll', clamp);
 		};
 	});
 
-	const pillExpanded = $derived(Boolean(replyPreview) || fieldTall);
+	/** @param {KeyboardEvent} e */
+	function onKey(e) {
+		if (e.key === 'Escape' && sheetVisible) {
+			e.preventDefault();
+			if (composerBar?.onParentEscape?.()) return;
+			void closeSheet();
+		}
+	}
 
 	/** Latest commentators first, max 3 for the FAB stack. */
 	const commentatorProfiles = $derived.by(() => {
@@ -645,7 +581,7 @@
 				class="top-btn close"
 				onclick={() => void closeSheet()}
 			>
-				<Close size={18} />
+				<Close size={15} />
 			</ChromeActionButton>
 			<p class="sheet-title">{t('comments.title')}</p>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -688,81 +624,18 @@
 			{/if}
 			<div class="composer-fade" aria-hidden="true"></div>
 			<div class="composer-dock">
-				<div class="composer-stack">
-					<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
-					<ChatComposer expanded={pillExpanded}>
-						{#if replyPreview}
-							<div class="composer-quote-wrap">
-								<div
-									class="composer-quote"
-									role="group"
-									aria-label={t('chat.replyingTo', { name: replyPreview.name })}
-								>
-									<div
-										class="composer-quote-bar"
-										style:background={replyPreview.accent}
-										aria-hidden="true"
-									></div>
-									<div class="composer-quote-body">
-										<span class="composer-quote-name" style:color={replyPreview.nameColor}
-											>{replyPreview.name}</span
-										>
-										<span class="composer-quote-text">{replyPreview.text}</span>
-									</div>
-									<button
-										type="button"
-										class="composer-quote-clear"
-										aria-label={t('comments.cancelReply')}
-										onclick={clearReply}>×</button
-									>
-								</div>
-							</div>
-						{/if}
-						<div class="composer-row" class:chrome-expanded={pillExpanded}>
-							<button type="button" class="side-btn plus" aria-label={t('chat.attach')} disabled>
-								<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-									<path
-										d="M9 3.5v11M3.5 9h11"
-										stroke="currentColor"
-										stroke-width="1.7"
-										stroke-linecap="round"
-									/>
-								</svg>
-							</button>
-							<div
-								class="composer-field"
-								class:fade-top={fadeTop}
-								class:fade-bottom={fadeBottom}
-							>
-								<textarea
-									bind:this={inputEl}
-									class="composer-input"
-									bind:value={draft}
-									rows="1"
-									placeholder={replyTo ? t('chat.reply') : t('chat.message')}
-									aria-label={t('chat.message')}
-									oninput={onInput}
-									onscroll={updateInputFade}
-								></textarea>
-							</div>
-							{#if canSend}
-								<button
-									type="button"
-									class="side-btn send"
-									aria-label={t('chat.send')}
-									disabled={chatUi.posting}
-									onclick={() => void send()}
-								>
-									<AlphaLogo size={15} />
-								</button>
-							{:else}
-								<button type="button" class="side-btn mic" aria-label={t('chat.voiceMessage')} disabled>
-									<Voice size={22} />
-								</button>
-							{/if}
-						</div>
-					</ChatComposer>
-				</div>
+				<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
+				<ChatComposerBar
+					bind:this={composerBar}
+					bind:draft
+					bind:replyTo
+					bind:inputEl
+					{commentRef}
+					attachExtras={true}
+					signalPresence={false}
+					cancelReplyLabel={t('comments.cancelReply')}
+					onSent={onComposerSent}
+				/>
 			</div>
 		</div>
 	{/if}
@@ -778,7 +651,7 @@
 		 * Fixed radius for FAB ↔ sheet morph. 34px = mobile sheet hero
 		 * (12 pad + 22 half-btn) so expanded corners stay concentric with chrome
 		 * buttons; when collapsed to 44px height CSS clamps to a pill. Only
-		 * width/height animate — never transition border-radius.
+		 * width/height/position animate — never transition border-radius.
 		 */
 		--comments-radius: 34px;
 		--fab-right: 20px;
@@ -788,11 +661,12 @@
 		position: absolute;
 		right: var(--fab-right);
 		bottom: var(--fab-bottom);
+		left: auto;
 		z-index: 6;
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
-		transform-origin: bottom right;
+		transform-origin: 100% 100%;
 		overflow: hidden;
 		border: 1px solid transparent;
 		border-radius: var(--comments-radius);
@@ -807,6 +681,9 @@
 			width 0.32s cubic-bezier(0.22, 1, 0.36, 1),
 			height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
 			max-height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+			right 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+			bottom 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+			left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
 			box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
 			background 0.24s ease,
 			color 0.24s ease;
@@ -895,6 +772,7 @@
 		align-items: center;
 		justify-content: center;
 		min-width: 18px;
+		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 	}
 
@@ -952,6 +830,12 @@
 		pointer-events: auto;
 	}
 
+	/* Desktop close: 1px smaller than ChromeActionButton's 16px default. */
+	.sheet-top :global(.chrome-btn.close svg) {
+		width: 15px;
+		height: 15px;
+	}
+
 	.sheet-top :global(.chrome-btn.drag) {
 		cursor: ns-resize;
 		touch-action: none;
@@ -1004,6 +888,7 @@
 		display: grid;
 		place-items: center;
 		padding: 28px 8px;
+		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
 	}
@@ -1049,185 +934,8 @@
 		background: transparent;
 	}
 
-	.composer-stack {
+	.composer-dock :global(.composer-stack) {
 		pointer-events: auto;
-		position: relative;
-		width: 100%;
-	}
-
-	.composer-quote-wrap {
-		padding: 8px 8px 0;
-		box-sizing: border-box;
-		position: relative;
-		z-index: 2;
-	}
-
-	.composer-quote {
-		display: flex;
-		align-items: stretch;
-		min-width: 0;
-		width: 100%;
-		border-radius: 8px;
-		overflow: hidden;
-		background: color-mix(in srgb, var(--fg) 8%, transparent);
-	}
-
-	.composer-quote-bar {
-		width: 2.8px;
-		flex-shrink: 0;
-		align-self: stretch;
-	}
-
-	.composer-quote-body {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
-		padding: 4px 8px 5px;
-	}
-
-	.composer-quote-name {
-		font-size: 13px;
-		font-weight: 700;
-		line-height: 1.35;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.composer-quote-text {
-		font-size: 13px;
-		line-height: 1.35;
-		color: var(--fg-66);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.composer-quote-clear {
-		flex-shrink: 0;
-		align-self: flex-start;
-		width: 28px;
-		height: 28px;
-		display: grid;
-		place-items: center;
-		margin: 2px 2px 0 0;
-		padding: 0;
-		border: 0;
-		border-radius: 999px;
-		background: transparent;
-		color: var(--fg-33);
-		font-size: 18px;
-		line-height: 1;
-		cursor: pointer;
-	}
-
-	.composer-row {
-		display: flex;
-		align-items: flex-end;
-		gap: 7px;
-		min-height: calc(47px - 14px);
-		padding: 7px;
-		box-sizing: border-box;
-		position: relative;
-		z-index: 2;
-	}
-
-	.composer-row.chrome-expanded {
-		padding-top: 4px;
-	}
-
-	.side-btn {
-		width: 33px;
-		height: 33px;
-		flex-shrink: 0;
-		display: grid;
-		place-items: center;
-		padding: 0;
-		border: 0;
-		border-radius: 9999px;
-		cursor: pointer;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.side-btn:disabled {
-		cursor: default;
-	}
-
-	.side-btn.plus {
-		background: color-mix(in srgb, var(--fg) 12%, transparent);
-		color: var(--fg-66);
-	}
-
-	.side-btn.mic {
-		background: transparent;
-		color: var(--fg-33);
-	}
-
-	.side-btn.send {
-		background: var(--gradient-accent-1);
-		color: #fff;
-	}
-
-	.composer-field {
-		flex: 1;
-		min-width: 0;
-		max-height: 140px;
-		display: flex;
-		align-items: flex-end;
-		-webkit-mask-image: linear-gradient(#000, #000);
-		mask-image: linear-gradient(#000, #000);
-	}
-
-	.composer-field.fade-top {
-		-webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
-		mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
-	}
-
-	.composer-field.fade-bottom {
-		-webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 8px), transparent 100%);
-		mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 8px), transparent 100%);
-	}
-
-	.composer-field.fade-top.fade-bottom {
-		-webkit-mask-image: linear-gradient(
-			to bottom,
-			transparent 0,
-			#000 8px,
-			#000 calc(100% - 8px),
-			transparent 100%
-		);
-		mask-image: linear-gradient(
-			to bottom,
-			transparent 0,
-			#000 8px,
-			#000 calc(100% - 8px),
-			transparent 100%
-		);
-	}
-
-	.composer-input {
-		flex: 1;
-		min-width: 0;
-		width: 100%;
-		min-height: 20px;
-		max-height: 140px;
-		margin: 0;
-		padding: 6px 4px 7px;
-		border: 0;
-		outline: none;
-		resize: none;
-		overflow-y: auto;
-		background: transparent;
-		color: var(--fg);
-		font: inherit;
-		font-size: 15px;
-		line-height: 20px;
-	}
-
-	.composer-input::placeholder {
-		color: var(--fg-33);
 	}
 
 	@media (max-width: 767px) {
@@ -1238,15 +946,26 @@
 
 		.panel.expanded {
 			position: fixed;
-			left: 0;
+			/* Grow from FAB (bottom-right) — keep right-anchored; width → 100%. */
+			left: auto;
 			right: 0;
-			bottom: 0;
+			/* Sit on the visualViewport bottom so the keyboard doesn't shove the top off-screen. */
+			bottom: max(0px, calc(100dvh - var(--vv-top, 0px) - var(--app-height, 100dvh)));
 			width: 100%;
 			max-width: none;
-			/* Keep --comments-radius on all corners so morph never retargets radius. */
-			border-bottom: none;
-			height: min(78svh, 640px);
+			/* Mobile sheet: top radii only, no stroke (edge-to-edge). Radius snaps — not transitioned. */
+			border: 0;
+			border-radius: var(--comments-radius) var(--comments-radius) 0 0;
+			height: min(78svh, calc(var(--app-height, 100dvh) - 8px), 640px);
+			max-height: calc(var(--app-height, 100dvh) - 8px);
 			z-index: 72;
+		}
+
+		.panel.opening {
+			position: fixed;
+			right: var(--fab-right);
+			left: auto;
+			bottom: var(--fab-bottom);
 		}
 
 		.panel.closing {
@@ -1269,8 +988,15 @@
 			line-height: 1.15;
 		}
 
+		/* Mobile close: 4px bigger than ChromeActionButton's 20px default. */
+		.sheet-top :global(.chrome-btn.close svg) {
+			width: 24px;
+			height: 24px;
+		}
+
 		.list {
 			padding-top: 68px;
+			padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.composer-dock {

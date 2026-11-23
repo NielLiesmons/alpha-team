@@ -61,6 +61,7 @@
 	}
 
 	.boot-loader {
+		--loader-ink: var(--fg-66, var(--white66, #aaa));
 		color: var(--fg-66, var(--white66, #aaa));
 	}
 

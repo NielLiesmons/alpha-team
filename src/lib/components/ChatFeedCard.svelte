@@ -27,6 +27,7 @@
 	import { inferMediaKind } from '$lib/drive/media-kind.js';
 	import { paintBlurhash } from '$lib/drive/media-preview.js';
 	import ChatVoiceBubble from './ChatVoiceBubble.svelte';
+	import { openMediaLightbox } from '$lib/media-lightbox.svelte.js';
 	import { swipeLeftReply } from '$lib/swipe-left-reply.js';
 
 	const REACTION_PFP_MAX = 3;
@@ -390,6 +391,31 @@
 		}
 	}
 
+	/** @param {number} startIndex */
+	function openMessageMedia(startIndex) {
+		const atts = Array.isArray(msg.attachments) ? msg.attachments : [];
+		/** @type {import('$lib/media-lightbox.svelte.js').MediaLightboxItem[]} */
+		const list = [];
+		let focus = 0;
+		atts.forEach((att, i) => {
+			const kind = inferMediaKind(att);
+			if (kind !== 'image' && kind !== 'video') return;
+			const path = String(att.path || '');
+			const url =
+				(path && attUrls[path]) || att.previewUrl || att.url || '';
+			list.push({
+				id: `${msg.id}:${path || i}`,
+				kind,
+				name: String(att.name || (kind === 'video' ? t('chat.video') : t('chat.image'))),
+				path: path || undefined,
+				url: url || undefined,
+				previewUrl: att.previewUrl || undefined
+			});
+			if (i === startIndex) focus = list.length - 1;
+		});
+		openMediaLightbox(list, focus);
+	}
+
 	$effect(() => {
 		const atts = Array.isArray(msg.attachments) ? msg.attachments : [];
 		const session = activeSession();
@@ -555,9 +581,34 @@
 								: '')}
 						<div class="att-block">
 							{#if mediaKind === 'image' && src}
-								<img class="att-image" src={src} alt={att.name || t('chat.image')} loading="lazy" />
+								<button
+									type="button"
+									class="att-media-btn"
+									aria-label={att.name || t('chat.image')}
+									onclick={(e) => {
+										e.stopPropagation();
+										openMessageMedia(ai);
+									}}
+								>
+									<img class="att-image" src={src} alt="" loading="lazy" />
+								</button>
 							{:else if mediaKind === 'video' && src}
-								<video class="att-video" src={src} controls playsinline></video>
+								<button
+									type="button"
+									class="att-media-btn"
+									aria-label={att.name || t('chat.video')}
+									onclick={(e) => {
+										e.stopPropagation();
+										openMessageMedia(ai);
+									}}
+								>
+									<video class="att-video" src={src} muted playsinline preload="metadata"></video>
+									<span class="att-play" aria-hidden="true">
+										<svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+											<path d="M8 5.5v13l11-6.5L8 5.5Z" fill="currentColor" />
+										</svg>
+									</span>
+								</button>
 							{:else if mediaKind === 'voice' && src}
 								<ChatVoiceBubble
 									msgId={`${msg.id}:${att.path || ai}`}
@@ -1009,15 +1060,41 @@
 		min-width: 0;
 	}
 
+	.att-media-btn {
+		position: relative;
+		display: block;
+		margin: 0 6px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		cursor: pointer;
+		max-width: min(260px, 72vw);
+		-webkit-tap-highlight-color: transparent;
+	}
+
 	.att-image,
 	.att-video {
 		display: block;
 		/* Match .quote horizontal inset (ChatQuoteBubblePadH = 6px). */
-		margin: 0 6px;
+		margin: 0;
 		max-width: min(260px, 72vw);
 		max-height: 220px;
 		border-radius: 8px;
 		object-fit: cover;
+		pointer-events: none;
+	}
+
+	.att-play {
+		position: absolute;
+		inset: auto 10px 10px auto;
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--bg) 72%, transparent);
+		color: var(--fg);
+		pointer-events: none;
 	}
 
 	.att-caption {

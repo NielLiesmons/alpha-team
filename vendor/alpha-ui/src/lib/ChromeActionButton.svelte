@@ -65,9 +65,9 @@
 		flex-shrink: 0;
 	}
 
+	/* Scale only — match page topbar (UiShell); no hover color wash. */
 	.chrome-btn:hover,
 	.chrome-btn[aria-expanded='true'] {
-		color: var(--fg);
 		transform: scale(1.06);
 	}
 

@@ -2115,7 +2115,10 @@
 	.title-loader {
 		display: inline-flex;
 		align-items: center;
+		align-self: center;
 		flex-shrink: 0;
+		line-height: 0;
+		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
 	}
@@ -2473,6 +2476,9 @@
 			position: relative;
 			z-index: 2;
 			margin-left: auto;
+			/* Prefer shrinking actions over clipping the section title pill. */
+			flex-shrink: 1;
+			min-width: 0;
 		}
 
 		/* Section icon + title pill — opens the slide-over menu; collapses to round › when open */
@@ -2482,7 +2488,8 @@
 			display: inline-flex;
 			align-items: center;
 			gap: 10px;
-			max-width: min(58vw, 240px);
+			/* Never flex-shrink under list-actions — that was clipping titles to one letter ("P"). */
+			max-width: min(70vw, 280px);
 			height: 44px;
 			margin: 0;
 			padding: 0 14px 0 10px;
@@ -2494,7 +2501,7 @@
 			color: var(--fg-66);
 			cursor: pointer;
 			box-sizing: border-box;
-			flex-shrink: 1;
+			flex-shrink: 0;
 			min-width: 0;
 			backdrop-filter: blur(var(--glass-blur));
 			-webkit-backdrop-filter: blur(var(--glass-blur));
@@ -2558,11 +2565,14 @@
 			display: inline-flex;
 			align-items: center;
 			gap: 6px;
-			min-width: 0;
+			/* Keep room for a real section name; loader may shrink/clip instead. */
+			min-width: 4.75em;
+			flex: 1 1 auto;
 		}
 
 		.pill-label {
 			min-width: 0;
+			flex: 1 1 auto;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
@@ -2578,6 +2588,8 @@
 			display: inline-flex;
 			align-items: center;
 			flex-shrink: 0;
+			line-height: 0;
+			--loader-ink: var(--fg-66);
 			color: var(--fg-66);
 			opacity: 0.85;
 		}

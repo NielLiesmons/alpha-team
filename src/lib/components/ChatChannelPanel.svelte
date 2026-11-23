@@ -1,8 +1,7 @@
 <script>
 	import { onMount, tick, untrack } from 'svelte';
-	import AlphaLogo from '$lib/components/icons/AlphaLogo.svelte';
 	import ArrowDown from '$lib/components/icons/ArrowDown.svelte';
-	import Voice from '$lib/components/icons/Voice.svelte';
+	import ChatComposerBar from '$lib/components/ChatComposerBar.svelte';
 	import ChatFeedCard from '$lib/components/ChatFeedCard.svelte';
 	import ChatStatusLine from '$lib/components/ChatStatusLine.svelte';
 	import ComposerSuggest from '$lib/components/ComposerSuggest.svelte';
@@ -29,37 +28,24 @@
 		isChatStatusEvent,
 		loadComments,
 		openChatRef,
-		postChatMessage,
 		refreshChatFeed,
 		requestOpenComments,
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
 	import { mailTipCache } from '$lib/mail.svelte.js';
 	import { startChatTipPoll, stopChatTipPoll } from '$lib/chat-sync.svelte.js';
-	import { openComposer, ui } from '$lib/workspace.svelte.js';
+	import { ui } from '$lib/workspace.svelte.js';
 	import { chatStackFlags } from '$lib/chat-stack.js';
-	import { compareChatMessageAsc, uploadChatAttachment } from '$lib/drive/entities.js';
-	import { profileAccentCss, profileNameCss } from '$lib/color.js';
+	import { compareChatMessageAsc } from '$lib/drive/entities.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { activeSession } from '$lib/drive/session.svelte.js';
-	import { inferMediaKind } from '$lib/drive/media-kind.js';
 	import {
 		attachComposerClearPad,
 		attachFeedPinResize,
 		isFeedNearBottom,
 		snapFeedToBottomSoon
 	} from '$lib/feed-scroll.js';
-	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
-	import { themeChoice } from '$lib/theme.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
-	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
-	import Pause from '@alpha/ui/icons/Pause.svelte';
-	import Play from '@alpha/ui/icons/Play.svelte';
-	import Trash from '@alpha/ui/icons/Trash.svelte';
-	import ChatAttachModal from '$lib/components/ChatAttachModal.svelte';
-	import ChatMediaStage from '$lib/components/ChatMediaStage.svelte';
-	import { createVoiceRecorder } from '$lib/voice-recorder.js';
-	import { formatVoiceRecordTime } from '$lib/voice-waveform.js';
+	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 
 	/** @type {{ channelId?: string }} */
 	let { channelId = 'general' } = $props();
@@ -80,42 +66,8 @@
 	let composerDockEl = $state();
 	/** @type {HTMLTextAreaElement | undefined} */
 	let inputEl = $state();
-	/** @type {HTMLInputElement | undefined} */
-	let mediaInputEl = $state();
-	/** @type {HTMLInputElement | undefined} */
-	let fileInputEl = $state();
-	let attachOpen = $state(false);
-	const attachItems = $derived([
-		{ kind: 'photo', label: t('nav.photos'), icon: 'photos' },
-		{ kind: 'file', label: t('chat.file'), icon: 'folder' },
-		{ kind: 'note', label: t('create.note'), icon: 'notes' },
-		{ kind: 'task', label: t('create.task'), icon: 'tasks' },
-		{ kind: 'poll', label: t('chat.poll'), icon: 'chat' }
-	]);
-	/**
-	 * Staged attachments — media items carry per-pic captions (WhatsApp-style).
-	 * @type {{ id: string, file: File, previewUrl: string | null, kind: string, caption: string }[]}
-	 */
-	let pendingFiles = $state([]);
-	/** Index into media-only subset for the stage hero / caption field. */
-	let mediaFocus = $state(0);
-	/** @typedef {'idle' | 'recording'} VoiceMode */
-	let voiceMode = $state(/** @type {VoiceMode} */ ('idle'));
-	let voiceMs = $state(0);
-	let voicePaused = $state(false);
-	/** Live waveform bars (ring) — small count, throttled updates. */
-	const VOICE_BAR_COUNT = 28;
-	/** @type {number[]} */
-	let voiceBars = $state(Array.from({ length: VOICE_BAR_COUNT }, () => 0.14));
-	/** @type {ReturnType<typeof setInterval> | null} */
-	let voiceTimer = null;
-	/** @type {number | null} */
-	let voiceMeterRaf = null;
-	let voiceMeterLast = 0;
-	const voiceRecorder = createVoiceRecorder();
-	const VOICE_MIN_MS = 1000;
-	const VOICE_MIN_BYTES = 800;
-	const voiceRecording = $derived(voiceMode === 'recording');
+	/** @type {import('./ChatComposerBar.svelte').default | undefined} */
+	let composerBar = $state();
 
 	/** Sticky pin — cleared when user scrolls away; gates auto-follow + resize snap. */
 	let pinBottom = $state(true);
@@ -146,53 +98,12 @@
 	let highlightId = $state(/** @type {string | null} */ (null));
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let highlightTimer = null;
-	/** Textarea edge fades — only when content overflows that edge. */
-	let fadeTop = $state(false);
-	let fadeBottom = $state(false);
-	let fieldTall = $state(false);
-	const COMPOSER_FADE_THRESHOLD = 4;
-	const COMPOSER_MAX_H = 140;
-	const COMPOSER_TALL_PX = 28;
-
 	const chronological = $derived(
 		[...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)].sort(
 			compareChatMessageAsc
 		)
 	);
 	const stackMap = $derived(chatStackFlags(chronological, activePerson().email || ''));
-	const pendingMedia = $derived(
-		pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video')
-	);
-	const pendingDocs = $derived(
-		pendingFiles.filter((f) => f.kind !== 'image' && f.kind !== 'video')
-	);
-	const canSend = $derived(Boolean(draft.trim()) || pendingFiles.length > 0);
-
-	function flushActiveCaption() {
-		if (!pendingMedia.length) return;
-		const focus = Math.min(Math.max(0, mediaFocus), pendingMedia.length - 1);
-		const target = pendingMedia[focus];
-		if (!target) return;
-		const idx = pendingFiles.findIndex((f) => f.id === target.id);
-		if (idx < 0) return;
-		if (pendingFiles[idx].caption === draft) return;
-		pendingFiles = pendingFiles.map((f, i) => (i === idx ? { ...f, caption: draft } : f));
-	}
-
-	/** @param {number} i */
-	function setMediaFocus(i) {
-		flushActiveCaption();
-		const next = Math.min(Math.max(0, i), Math.max(0, pendingMedia.length - 1));
-		mediaFocus = next;
-		draft = pendingMedia[next]?.caption || '';
-		tick().then(() => {
-			if (inputEl) {
-				inputEl.style.height = 'auto';
-				inputEl.style.height = `${Math.min(inputEl.scrollHeight, 120)}px`;
-				updateInputFade();
-			}
-		});
-	}
 	const presence = $derived(
 		(chatEphemeral || []).filter((e) => e.channel_id === channelId && e.state !== 'idle')
 	);
@@ -724,381 +635,6 @@
 		inputEl?.focus();
 	}
 
-	function clearReply() {
-		replyTo = null;
-	}
-
-	function openAttach() {
-		attachOpen = true;
-	}
-
-	/** @param {string} kind */
-	function onAttachPick(kind) {
-		if (kind === 'photo') {
-			mediaInputEl?.click();
-			return;
-		}
-		if (kind === 'file') {
-			fileInputEl?.click();
-			return;
-		}
-		if (kind === 'note') {
-			openComposer('note');
-			return;
-		}
-		if (kind === 'task') {
-			openComposer('task');
-			return;
-		}
-		if (kind === 'poll') {
-			chatUi.error = t('chat.pollSoon');
-		}
-	}
-
-	/** @param {Event} e */
-	function onFilesPicked(e) {
-		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
-		const files = [...(input.files || [])];
-		input.value = '';
-		if (!files.length) return;
-		const hadMedia = pendingMedia.length > 0;
-		if (hadMedia) flushActiveCaption();
-		const seedCaption = !hadMedia && draft.trim() ? draft.trim() : '';
-		const added = files.map((file, i) => {
-			const kind = inferMediaKind({
-				content_type: file.type,
-				name: file.name
-			});
-			const isMedia = kind === 'image' || kind === 'video';
-			return {
-				id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${i}`,
-				file,
-				previewUrl: isMedia ? URL.createObjectURL(file) : null,
-				kind,
-				caption: isMedia && i === 0 ? seedCaption : ''
-			};
-		});
-		pendingFiles = [...pendingFiles, ...added];
-		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
-		if (!media.length) return;
-		const newMedia = added.filter((a) => a.kind === 'image' || a.kind === 'video');
-		if (!hadMedia) {
-			mediaFocus = 0;
-			draft = media[0]?.caption || '';
-		} else if (newMedia.length) {
-			const idx = media.findIndex((m) => m.id === newMedia[0].id);
-			mediaFocus = idx >= 0 ? idx : media.length - 1;
-			draft = media[mediaFocus]?.caption || '';
-		}
-	}
-
-	function clearPendingFiles() {
-		flushActiveCaption();
-		for (const f of pendingFiles) {
-			if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-		}
-		pendingFiles = [];
-		mediaFocus = 0;
-		draft = '';
-	}
-
-	/** @param {number} mediaIndex */
-	function removePendingMedia(mediaIndex) {
-		flushActiveCaption();
-		const target = pendingMedia[mediaIndex];
-		if (!target) return;
-		if (target.previewUrl) URL.revokeObjectURL(target.previewUrl);
-		pendingFiles = pendingFiles.filter((f) => f.id !== target.id);
-		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
-		if (!media.length) {
-			mediaFocus = 0;
-			draft = '';
-			return;
-		}
-		mediaFocus = Math.min(mediaIndex, media.length - 1);
-		draft = media[mediaFocus]?.caption || '';
-	}
-
-	/**
-	 * @param {{
-	 *   body: string,
-	 *   files: typeof pendingFiles,
-	 *   parent: any | null,
-	 *   pubRef: { type: string, id: string } | null
-	 * }} opts
-	 */
-	async function sendOne(opts) {
-		const session = activeSession();
-		if (!session) throw new Error(t('settings.connectDriveFirst'));
-		const files = opts.files;
-		const localAtt = files.map((f) => ({
-			kind: f.kind,
-			name: f.file.name,
-			bytes: f.file.size,
-			content_type: f.file.type,
-			previewUrl: f.previewUrl,
-			path: `local:${f.file.name}`,
-			...(f.caption?.trim() ? { caption: f.caption.trim() } : {})
-		}));
-		await postChatMessage({
-			body: opts.body,
-			kind: opts.pubRef ? 'comment' : 'chat',
-			ref: opts.pubRef,
-			reply_to: opts.parent?.id ?? null,
-			channel_id: channelId,
-			...(localAtt.length ? { attachments: localAtt } : {}),
-			...(files.length
-				? {
-						resolveAttachments: async () =>
-							Promise.all(
-								files.map(async (f) => {
-									const meta = await uploadChatAttachment(session, f.file);
-									return {
-										...meta,
-										previewUrl: f.previewUrl,
-										...(f.caption?.trim() ? { caption: f.caption.trim() } : {})
-									};
-								})
-							)
-					}
-				: {})
-		});
-	}
-
-	async function send() {
-		flushActiveCaption();
-		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
-		const docs = pendingFiles.filter((f) => f.kind !== 'image' && f.kind !== 'video');
-		const textOnly = draft.trim();
-		if (!textOnly && !media.length && !docs.length) return;
-
-		const filesSnapshot = pendingFiles;
-		pendingFiles = [];
-		mediaFocus = 0;
-		draft = '';
-		fieldTall = false;
-		fadeTop = false;
-		fadeBottom = false;
-		if (inputEl) inputEl.style.height = 'auto';
-		const parent = replyTo;
-		replyTo = null;
-		const pubRef =
-			parent && chatPublicationRefKey(parent) && parent.ref?.type && parent.ref?.id
-				? { type: String(parent.ref.type), id: String(parent.ref.id) }
-				: null;
-
-		try {
-			pinBottom = true;
-			/* One message per pic/vid so each caption stands alone (WhatsApp-style comments). */
-			for (const f of media) {
-				await sendOne({
-					body: (f.caption || '').trim(),
-					files: [f],
-					parent,
-					pubRef
-				});
-			}
-			if (docs.length) {
-				await sendOne({
-					body: media.length ? '' : textOnly,
-					files: docs,
-					parent,
-					pubRef
-				});
-			} else if (textOnly && !media.length) {
-				await sendOne({ body: textOnly, files: [], parent, pubRef });
-			}
-			inputEl?.focus();
-			void goBottom(true);
-		} catch (e) {
-			/* Restore stage so the user can retry without re-picking. */
-			pendingFiles = filesSnapshot;
-			chatUi.error = e instanceof Error ? e.message : String(e);
-		}
-	}
-
-	function stopVoiceTick() {
-		if (voiceTimer != null) {
-			clearInterval(voiceTimer);
-			voiceTimer = null;
-		}
-	}
-
-	function stopVoiceMeter() {
-		if (voiceMeterRaf != null) {
-			cancelAnimationFrame(voiceMeterRaf);
-			voiceMeterRaf = null;
-		}
-		voiceMeterLast = 0;
-	}
-
-	function startVoiceMeter() {
-		stopVoiceMeter();
-		const tick = (/** @type {number} */ now) => {
-			voiceMeterRaf = requestAnimationFrame(tick);
-			if (voicePaused) return;
-			/* ~12 fps — enough for a live feel without thrashing Svelte. */
-			if (now - voiceMeterLast < 80) return;
-			voiceMeterLast = now;
-			const level = voiceRecorder.sampleLevel();
-			const next = voiceBars.slice(1);
-			next.push(0.12 + level * 0.88);
-			voiceBars = next;
-		};
-		voiceMeterRaf = requestAnimationFrame(tick);
-	}
-
-	function startVoiceTick() {
-		stopVoiceTick();
-		voiceTimer = setInterval(() => {
-			if (!voicePaused) voiceMs = voiceRecorder.elapsedMs();
-		}, 100);
-	}
-
-	function resetVoiceUi() {
-		voiceMode = 'idle';
-		voiceMs = 0;
-		voicePaused = false;
-		voiceBars = Array.from({ length: VOICE_BAR_COUNT }, () => 0.14);
-		stopVoiceTick();
-		stopVoiceMeter();
-		signalRecording(channelId, false);
-	}
-
-	async function beginVoiceRecording() {
-		if (voiceMode !== 'idle' || canSend) return;
-		try {
-			await voiceRecorder.start();
-			voiceMode = 'recording';
-			voiceMs = 0;
-			voicePaused = false;
-			voiceBars = Array.from({ length: VOICE_BAR_COUNT }, () => 0.14);
-			signalRecording(channelId, true);
-			startVoiceTick();
-			startVoiceMeter();
-		} catch (e) {
-			resetVoiceUi();
-			voiceRecorder.cancel();
-			const msg = e instanceof Error ? e.message : String(e);
-			chatUi.error =
-				msg === 'voice.unsupported'
-					? t('chat.voiceUnsupported')
-					: t('chat.voiceMicDenied');
-		}
-	}
-
-	function cancelVoiceRecording() {
-		voiceRecorder.cancel();
-		resetVoiceUi();
-	}
-
-	function toggleVoicePause() {
-		if (!voiceRecording) return;
-		if (voicePaused) {
-			voiceRecorder.resume();
-			voicePaused = false;
-		} else {
-			voiceRecorder.pause();
-			voicePaused = true;
-			voiceMs = voiceRecorder.elapsedMs();
-		}
-	}
-
-	async function finishVoiceRecording(send) {
-		const elapsed = voiceRecorder.elapsedMs();
-		if (!send) {
-			voiceRecorder.cancel();
-			resetVoiceUi();
-			return;
-		}
-		const result = await voiceRecorder.stop();
-		resetVoiceUi();
-		if (!result || elapsed < VOICE_MIN_MS || result.bytes < VOICE_MIN_BYTES) {
-			chatUi.error = t('chat.voiceTooShort');
-			return;
-		}
-		const session = activeSession();
-		if (!session) {
-			chatUi.error = t('settings.connectDriveFirst');
-			return;
-		}
-		const parent = replyTo;
-		replyTo = null;
-		const pubRef =
-			parent && chatPublicationRefKey(parent) && parent.ref?.type && parent.ref?.id
-				? { type: String(parent.ref.type), id: String(parent.ref.id) }
-				: null;
-		const previewUrl = URL.createObjectURL(result.blob);
-		const localAtt = {
-			kind: 'voice',
-			name: result.file.name,
-			bytes: result.bytes,
-			content_type: result.file.type,
-			previewUrl,
-			path: `local:${result.file.name}`,
-			duration_ms: result.durationMs
-		};
-		try {
-			pinBottom = true;
-			await postChatMessage({
-				body: '',
-				kind: pubRef ? 'comment' : 'chat',
-				ref: pubRef,
-				reply_to: parent?.id ?? null,
-				channel_id: channelId,
-				attachments: [localAtt],
-				resolveAttachments: async () => {
-					const meta = await uploadChatAttachment(session, result.file);
-					return [
-						{
-							...meta,
-							kind: 'voice',
-							previewUrl,
-							duration_ms: result.durationMs
-						}
-					];
-				}
-			});
-			void goBottom(true);
-		} catch (e) {
-			chatUi.error = e instanceof Error ? e.message : String(e);
-		}
-	}
-
-	function onMicTap() {
-		if (canSend || voiceRecording) return;
-		void beginVoiceRecording();
-	}
-
-	/** @param {KeyboardEvent} e */
-	function onKey(e) {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			void send();
-		}
-		if (e.key === 'Escape') {
-			if (voiceRecording) {
-				e.preventDefault();
-				cancelVoiceRecording();
-				return;
-			}
-			if (replyTo) clearReply();
-		}
-	}
-
-	function updateInputFade() {
-		const el = inputEl;
-		if (!el) {
-			fadeTop = false;
-			fadeBottom = false;
-			return;
-		}
-		fadeTop = el.scrollTop > COMPOSER_FADE_THRESHOLD;
-		fadeBottom =
-			el.scrollHeight - el.clientHeight > COMPOSER_FADE_THRESHOLD &&
-			el.scrollHeight - el.scrollTop - el.clientHeight > COMPOSER_FADE_THRESHOLD;
-	}
-
 	/** @param {string} next @param {number} cursor */
 	function onSuggestInsert(next, cursor) {
 		draft = next;
@@ -1106,51 +642,24 @@
 			if (!inputEl) return;
 			inputEl.focus();
 			inputEl.setSelectionRange(cursor, cursor);
-			onInput();
+			composerBar?.afterSuggestInsert?.();
 		});
 	}
 
-	function onInput() {
-		const el = inputEl;
-		if (!el) return;
-		el.style.height = 'auto';
-		const next = Math.min(el.scrollHeight, COMPOSER_MAX_H);
-		el.style.height = `${next}px`;
-		fieldTall = next > COMPOSER_TALL_PX || draft.includes('\n');
-		updateInputFade();
-		if (draft.trim()) signalTyping(channelId);
+	function onComposerSent() {
+		pinBottom = true;
+		void goBottom(true);
+		inputEl?.focus();
 	}
 
-	const isDark = $derived.by(() => {
-		const choice = themeChoice.value;
-		if (choice === 'light') return false;
-		if (choice === 'gray' || choice === 'dark') return true;
-		if (typeof document === 'undefined') return true;
-		return document.documentElement.dataset.theme !== 'light';
-	});
-
-	const replyPreview = $derived.by(() => {
-		if (!replyTo) return null;
-		const email = String(replyTo.author || '');
-		const p = asPerson(email);
-		const n = p?.name || displayNameFromEmail(email);
-		const plain = String(replyTo.body || '')
-			.replace(/\s+/g, ' ')
-			.trim();
-		const text = plain.length > 72 ? `${plain.slice(0, 72).trim()}…` : plain || t('chat.message');
-		return {
-			email,
-			name: n,
-			text,
-			accent: profileAccentCss(email, n),
-			nameColor: profileNameCss(email, n, isDark)
-		};
-	});
-
-	/* Full capsule by default; squared top only for quote / media / voice — not tall text. */
-	const chromeExpanded = $derived(
-		Boolean(replyPreview) || pendingFiles.length > 0 || voiceRecording
-	);
+	/** @param {KeyboardEvent} e */
+	function onKey(e) {
+		if (e.key === 'Escape') {
+			if (composerBar?.onParentEscape?.()) {
+				e.preventDefault();
+			}
+		}
+	}
 
 	function presenceLabel(/** @type {any} */ e) {
 		const name = displayNameFromEmail(e.actor);
@@ -1161,6 +670,8 @@
 		return t('chat.typing', { name });
 	}
 </script>
+
+<svelte:window onkeydown={onKey} />
 
 <div class="chat" class:compact class:was-compact={wasCompact} bind:this={chatRootEl}>
 	<!-- class "feed" required for list-top chrome scroll fade; app.css excludes .messages from feed-pad -->
@@ -1381,7 +892,7 @@
 								</div>
 								<div class="typing-bubble" aria-hidden="true">
 									<span class="typing-wave">
-										<i></i><i></i><i></i>
+										<MetaballLoader size="sm" label={presenceLabel(e)} />
 									</span>
 								</div>
 							</article>
@@ -1413,162 +924,16 @@
 		<!-- Suggest sits outside the pill so overflow:hidden / shine mask cannot clip it -->
 		<div class="composer-stack">
 			<ComposerSuggest {inputEl} value={draft} oninsert={onSuggestInsert} />
-			<ChatComposer expanded={chromeExpanded}>
-				{#if replyPreview}
-					<div class="composer-quote-wrap">
-						<div class="composer-quote" role="group" aria-label={t('chat.replyingTo', { name: replyPreview.name })}>
-							<div
-								class="composer-quote-bar"
-								style:background={replyPreview.accent}
-								aria-hidden="true"
-							></div>
-							<div class="composer-quote-body">
-								<span class="composer-quote-name" style:color={replyPreview.nameColor}
-									>{replyPreview.name}</span
-								>
-								<span class="composer-quote-text">{replyPreview.text}</span>
-							</div>
-							<button
-								type="button"
-								class="composer-quote-clear"
-								aria-label={t('chat.cancelReply')}
-								onclick={clearReply}>×</button
-							>
-						</div>
-					</div>
-				{/if}
-				{#if pendingMedia.length}
-					<ChatMediaStage
-						items={pendingMedia}
-						activeIndex={Math.min(mediaFocus, pendingMedia.length - 1)}
-						onActiveIndex={setMediaFocus}
-						onRemove={removePendingMedia}
-						onAddMore={openAttach}
-					/>
-				{/if}
-				{#if pendingDocs.length}
-					<div class="attach-bar">
-						{#each pendingDocs as f (f.id)}
-							<span class="attach-chip">
-								{f.file.name}
-								<button
-									type="button"
-									class="attach-x"
-									aria-label={t('chat.remove')}
-									onclick={() => {
-										if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-										pendingFiles = pendingFiles.filter((x) => x.id !== f.id);
-									}}>×</button
-								>
-							</span>
-						{/each}
-						<button type="button" class="attach-clear" onclick={clearPendingFiles}>{t('chat.clear')}</button>
-					</div>
-				{/if}
-				{#if voiceRecording}
-					<div class="voice-row" class:paused={voicePaused} aria-live="polite">
-						<div class="voice-pill">
-							<span class="voice-dot" aria-hidden="true"></span>
-							<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
-							<div class="voice-wave" aria-hidden="true">
-								{#each voiceBars as h, i (i)}
-									<span class="voice-bar" style:height="{Math.round(8 + h * 16)}px"></span>
-								{/each}
-							</div>
-						</div>
-						<button type="button" class="voice-action delete" onclick={cancelVoiceRecording}>
-							<Trash size={14} />
-							<span>{t('common.delete')}</span>
-						</button>
-						<button type="button" class="voice-action pause" onclick={toggleVoicePause}>
-							{#if voicePaused}
-								<Play size={13} />
-								<span>{t('chat.resumeVoice')}</span>
-							{:else}
-								<Pause size={13} />
-								<span>{t('chat.pauseVoice')}</span>
-							{/if}
-						</button>
-					</div>
-				{/if}
-				<div class="composer-row" class:chrome-expanded={chromeExpanded}>
-					<input
-						bind:this={mediaInputEl}
-						type="file"
-						class="file-input"
-						multiple
-						accept="image/*,video/*"
-						onchange={onFilesPicked}
-					/>
-					<input
-						bind:this={fileInputEl}
-						type="file"
-						class="file-input"
-						multiple
-						accept=".pdf,.doc,.docx,.txt,.zip,application/pdf"
-						onchange={onFilesPicked}
-					/>
-					<button type="button" class="side-btn plus" aria-label={t('chat.attach')} onclick={openAttach}>
-						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-							<path
-								d="M9 3.5v11M3.5 9h11"
-								stroke="currentColor"
-								stroke-width="1.7"
-								stroke-linecap="round"
-							/>
-						</svg>
-					</button>
-					<div
-						class="composer-field"
-						class:fade-top={fadeTop}
-						class:fade-bottom={fadeBottom}
-					>
-						<textarea
-							bind:this={inputEl}
-							class="composer-input"
-							rows="1"
-							placeholder={pendingMedia.length
-								? t('chat.addCaption')
-								: replyTo
-									? t('chat.reply')
-									: t('chat.message')}
-							bind:value={draft}
-							onkeydown={onKey}
-							oninput={onInput}
-							onscroll={updateInputFade}
-							aria-label={pendingMedia.length ? t('chat.addCaption') : t('chat.message')}
-						></textarea>
-					</div>
-					{#if voiceRecording}
-						<button
-							type="button"
-							class="side-btn send"
-							aria-label={t('chat.send')}
-							onclick={() => void finishVoiceRecording(true)}
-						>
-							<span class="send-ico"><AlphaLogo size={18} /></span>
-						</button>
-					{:else if canSend}
-						<button type="button" class="side-btn send" aria-label={t('chat.send')} onclick={() => void send()}>
-							<span class="send-ico"><AlphaLogo size={18} /></span>
-						</button>
-					{:else}
-						<button
-							type="button"
-							class="side-btn mic"
-							aria-label={t('chat.voiceMessage')}
-							title={t('chat.voiceMessage')}
-							onclick={onMicTap}
-						>
-							<Voice size={22} />
-						</button>
-					{/if}
-				</div>
-			</ChatComposer>
+			<ChatComposerBar
+				bind:this={composerBar}
+				{channelId}
+				bind:draft
+				bind:replyTo
+				bind:inputEl
+				onSent={onComposerSent}
+			/>
 		</div>
 	</div>
-
-	<ChatAttachModal bind:open={attachOpen} items={attachItems} onPick={onAttachPick} />
 </div>
 
 <style>
@@ -1914,40 +1279,10 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		gap: 4px;
-		height: 14px;
-		width: 28px;
-	}
-
-	.typing-wave i {
-		display: block;
-		width: 5px;
-		height: 5px;
-		border-radius: 50%;
-		background: var(--fg-33);
-		/* Animate inside fixed box — never change bubble height. */
-		animation: typing-wave 1.15s ease-in-out infinite;
-	}
-
-	.typing-wave i:nth-child(2) {
-		animation-delay: 0.15s;
-	}
-
-	.typing-wave i:nth-child(3) {
-		animation-delay: 0.3s;
-	}
-
-	@keyframes typing-wave {
-		0%,
-		80%,
-		100% {
-			transform: translateY(0);
-			opacity: 0.35;
-		}
-		40% {
-			transform: translateY(-4px);
-			opacity: 0.95;
-		}
+		/* Fixed bubble — wave travels inside MetaballLoader box only. */
+		--loader-ink: var(--fg-33);
+		color: var(--fg-33);
+		line-height: 0;
 	}
 
 	.day-chip-row,

@@ -11,11 +11,10 @@
 	/**
 	 * @type {{
 	 *   item: import('$lib/photos.js').PhotoItem,
-	 *   selected?: boolean,
 	 *   onclick?: () => void
 	 * }}
 	 */
-	let { item, selected = false, onclick } = $props();
+	let { item, onclick } = $props();
 
 	let rootEl = $state(/** @type {HTMLElement | undefined} */ (undefined));
 	let canvasEl = $state(/** @type {HTMLCanvasElement | undefined} */ (undefined));
@@ -103,7 +102,6 @@
 <button
 	type="button"
 	class="tile"
-	class:selected
 	class:video={kind === 'video'}
 	bind:this={rootEl}
 	onclick={() => onclick?.()}
@@ -142,17 +140,13 @@
 		padding: 0;
 		margin: 0;
 		border: none;
-		border-radius: 10px;
+		border-radius: 0;
 		overflow: hidden;
-		background: var(--fg-4);
+		background: var(--bg, var(--shell));
 		cursor: pointer;
 		color: var(--fg-66);
 		content-visibility: auto;
 		contain-intrinsic-size: 120px 120px;
-	}
-	.tile.selected {
-		outline: 2px solid var(--fg-33);
-		outline-offset: 1px;
 	}
 	.blur {
 		position: absolute;

@@ -117,7 +117,10 @@
 	.title-loader {
 		display: inline-flex;
 		align-items: center;
+		align-self: center;
 		flex-shrink: 0;
+		line-height: 0;
+		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
 	}

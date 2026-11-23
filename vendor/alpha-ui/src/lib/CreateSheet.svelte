@@ -2,14 +2,13 @@
 	import { fade } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { dragDismiss as dragDismissAction } from './drag-dismiss.js';
-	import SheetTopbar from './SheetTopbar.svelte';
 
 	/**
 	 * Create / edit overlay — mobile bottom sheet, desktop centered card.
 	 * Pass fullscreen for true edge-to-edge mobile (e.g. now-playing).
 	 * Mobile: optional drag-down dismiss (full surface; respects inner scroll).
 	 * Never show a visual drag handle — Alpha design system forbids grabbers on modals/sheets.
-	 * Default topbar: X | label | ⋯ (more). Pickers use FloatPanel — never nested sheets.
+	 * Content owns title/actions (no extra SheetTopbar row). Pickers use FloatPanel.
 	 */
 	let {
 		open = false,
@@ -17,14 +16,12 @@
 		fullscreen = false,
 		/** Enable drag-down dismiss on mobile (gesture only — no handle UI) */
 		dragDismiss = true,
-		/** Show X | title | ⋯ chrome (creation sheets). */
-		showTopbar = true,
-		closeLabel = 'Close',
-		moreLabel = 'More',
+		/** @deprecated Ignored — creation sheets use content chrome, not a topbar row */
+		showTopbar: _showTopbar = false,
 		/** @deprecated Ignored — drag handles are banned in the design system */
 		showHandle: _showHandle = false,
 		onclose = () => {},
-		onmore = undefined,
+		onmore: _onmore = undefined,
 		children
 	} = $props();
 
@@ -78,9 +75,6 @@
 				scrollSelector: '.sheet-inner'
 			}}
 		>
-			{#if showTopbar && !fullscreen}
-				<SheetTopbar title={label} trailing="more" {closeLabel} {moreLabel} {onclose} {onmore} />
-			{/if}
 			<div class="sheet-inner">
 				{@render children?.()}
 			</div>
@@ -131,7 +125,7 @@
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		overflow: visible;
-		/* No top pad — topbar + content rows own their inset; never a drag handle.
+		/* No top pad — content rows own their inset; never a drag handle.
 		 * Bottom matches typical 16px side inset under the CTA row. */
 		padding: 0 0 calc(16px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;

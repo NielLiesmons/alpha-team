@@ -4,9 +4,9 @@
 	import PhotoTile from '$lib/components/PhotoTile.svelte';
 	import { listEntries, uploadLibraryMedia } from '$lib/drive/entities.js';
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
-	import { getAttachmentObjectUrl } from '$lib/drive/media-cache.js';
 	import { listPhotoItems } from '$lib/photos.js';
 	import { photosUploadUi } from '$lib/photos-upload.svelte.js';
+	import { openMediaLightbox } from '$lib/media-lightbox.svelte.js';
 	import { ui } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 
@@ -17,10 +17,6 @@
 	let loading = $state(true);
 	let err = $state('');
 	let uploading = $state(false);
-	/** @type {import('$lib/photos.js').PhotoItem | null} */
-	let selected = $state(null);
-	let viewerUrl = $state('');
-	let viewerKind = $state(/** @type {'image' | 'video'} */ ('image'));
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput;
 	let reloadGen = 0;
@@ -105,35 +101,22 @@
 		tick().then(() => fileInput?.click());
 	});
 
-	$effect(() => {
-		const item = selected;
-		viewerUrl = '';
-		if (!item) return;
-		const session = activeSession();
-		if (!session) return;
-		const ac = new AbortController();
-		viewerKind = item.kind;
-		void getAttachmentObjectUrl(
-			session,
-			{ path: item.path, kind: item.kind, name: item.name },
-			{ signal: ac.signal }
-		).then((res) => {
-			if (ac.signal.aborted) return;
-			if (res?.url) {
-				viewerUrl = res.url;
-				if (res.kind === 'image' || res.kind === 'video') viewerKind = res.kind;
-			}
-		});
-		return () => ac.abort();
-	});
-
 	onMount(() => {
 		untrack(() => hydrateFromCache());
 	});
 
 	/** @param {import('$lib/photos.js').PhotoItem} item */
 	function onItem(item) {
-		selected = selected?.key === item.key ? null : item;
+		const list = items
+			.filter((it) => it.kind === 'image' || it.kind === 'video')
+			.map((it) => ({
+				id: it.key,
+				kind: it.kind,
+				name: it.name || t('photos.untitled'),
+				path: it.path
+			}));
+		const index = list.findIndex((it) => it.id === item.key);
+		openMediaLightbox(list, index >= 0 ? index : 0);
 	}
 
 	async function onFiles(/** @type {Event} */ e) {
@@ -169,7 +152,7 @@
 	onchange={onFiles}
 />
 
-<div class="photos">
+<div class="feed photos">
 	{#if loading && items.length === 0}
 		<FeedSkeleton rows={6} />
 	{:else if err && items.length === 0}
@@ -188,54 +171,30 @@
 		{/if}
 		<div class="grid">
 			{#each items as item (item.key)}
-				<PhotoTile
-					{item}
-					selected={selected?.key === item.key}
-					onclick={() => onItem(item)}
-				/>
+				<PhotoTile {item} onclick={() => onItem(item)} />
 			{/each}
 		</div>
 	{/if}
 </div>
 
-{#if selected}
-	<div class="viewer" role="dialog" aria-modal="true" aria-label={selected.name}>
-		<button type="button" class="scrim" onclick={() => (selected = null)} aria-label={t('common.close')}
-		></button>
-		<div class="viewer-card">
-			<header class="viewer-head">
-				<span class="viewer-name">{selected.name}</span>
-				<button type="button" class="viewer-close" onclick={() => (selected = null)}>
-					{t('common.close')}
-				</button>
-			</header>
-			<div class="viewer-body">
-				{#if viewerUrl && viewerKind === 'video'}
-					<video class="viewer-media" src={viewerUrl} controls playsinline></video>
-				{:else if viewerUrl}
-					<img class="viewer-media" src={viewerUrl} alt={selected.name} />
-				{:else}
-					<div class="viewer-loading" aria-busy="true">{t('chat.loadingMedia')}</div>
-				{/if}
-			</div>
-		</div>
-	</div>
-{/if}
-
 <style>
 	.photos {
-		padding: 8px 12px 28px;
+		/* Horizontal inset only — vertical pad comes from .feed / feed-pad chrome. */
+		padding-left: 0;
+		padding-right: 0;
 		min-height: 40vh;
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-		gap: 6px;
+		grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+		gap: 1px;
+		background: var(--fg-8);
+		border-top: 1px solid var(--fg-8);
+		border-bottom: 1px solid var(--fg-8);
 	}
 	@media (min-width: 768px) {
 		.grid {
-			grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-			gap: 8px;
+			grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
 		}
 	}
 	.empty {
@@ -267,82 +226,10 @@
 		color: var(--fg-66);
 	}
 	.status {
-		margin: 0 0 10px;
+		margin: 0;
+		padding: 10px 16px;
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--fg-33);
-	}
-	.viewer {
-		position: fixed;
-		inset: 0;
-		z-index: 80;
-		display: grid;
-		place-items: center;
-		padding: 16px;
-	}
-	.scrim {
-		position: absolute;
-		inset: 0;
-		border: none;
-		background: color-mix(in srgb, var(--bg) 35%, #000 65%);
-		cursor: pointer;
-	}
-	.viewer-card {
-		position: relative;
-		z-index: 1;
-		width: min(920px, 100%);
-		max-height: min(88vh, 900px);
-		display: flex;
-		flex-direction: column;
-		border-radius: 18px;
-		overflow: hidden;
-		background: var(--modal-bg, var(--bg));
-		box-shadow: 0 18px 48px color-mix(in srgb, #000 28%, transparent);
-	}
-	.viewer-head {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 12px 14px;
-		border-bottom: 1px solid var(--fg-8);
-	}
-	.viewer-name {
-		flex: 1;
-		min-width: 0;
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--fg);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.viewer-close {
-		border: none;
-		border-radius: 999px;
-		padding: 8px 12px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		font-size: 13px;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.viewer-body {
-		flex: 1;
-		min-height: 0;
-		display: grid;
-		place-items: center;
-		background: #000;
-		padding: 8px;
-	}
-	.viewer-media {
-		max-width: 100%;
-		max-height: min(72vh, 780px);
-		object-fit: contain;
-	}
-	.viewer-loading {
-		padding: 48px 24px;
-		color: var(--fg-33);
-		font-size: 14px;
-		font-weight: 500;
 	}
 </style>

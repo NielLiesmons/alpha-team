@@ -78,6 +78,7 @@
 	import ProfilePic from './ProfilePic.svelte';
 	import ProjectCreate from './ProjectCreate.svelte';
 	import SalesCreate from './SalesCreate.svelte';
+	import MediaLightbox from './MediaLightbox.svelte';
 	import TaskCreate from './TaskCreate.svelte';
 	import WelcomeEdit from './WelcomeEdit.svelte';
 	import PwaInstallBanner from './PwaInstallBanner.svelte';
@@ -352,8 +353,9 @@
 	});
 
 	const planningList = $derived(path.startsWith('/planning'));
-	/** Planning fills list+detail columns (no third-column pane). */
-	const wideList = $derived(planningList);
+	const photosList = $derived(path.startsWith('/photos'));
+	/** Planning / Photos fill list+detail columns (no third-column pane). */
+	const wideList = $derived(planningList || photosList);
 	const driveList = $derived(path.startsWith('/drive'));
 	/** Planning / Drive own list actions. */
 	const customChrome = $derived(planningList || driveList);
@@ -363,7 +365,9 @@
 		locale.value;
 		mailView.folder;
 		if (mailList) return mailFolderLabel(mailView.folder) || t('mail.inbox');
-		return activeItem.label;
+		if (photosList) return t('nav.photos');
+		const labeled = navLabel(activeItem.href);
+		return labeled || activeItem.label || '';
 	});
 
 	/**
@@ -652,6 +656,7 @@
 		<NewsletterCreate />
 		<MailCreate />
 		<WelcomeEdit />
+		<MediaLightbox />
 	{/snippet}
 
 	{@render children()}

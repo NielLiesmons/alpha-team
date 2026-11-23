@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * Soft metaball loader — two blobs always fused, alternating size.
-	 * Color inherits `currentColor` (chrome: set quiet ink via parent).
+	 * Three-ball metaball wave — connected goo, balls stay distinct.
+	 * Quiet ink by default (`--fg-33`); parents may override via `color` / class.
 	 * @type {{
 	 *   size?: 'sm' | 'default' | number,
 	 *   label?: string,
@@ -12,14 +12,19 @@
 
 	const uid = `mb-${Math.random().toString(36).slice(2, 9)}`;
 
-	/** @param {'sm' | 'default' | number} s */
+	/**
+	 * sm ≈ title / typing row; default ≈ boot / empty states.
+	 * Number = height in px (width scales ~1.75× for three balls).
+	 * @param {'sm' | 'default' | number} s
+	 */
 	function dims(s) {
 		if (typeof s === 'number' && Number.isFinite(s) && s > 0) {
-			const h = Math.max(8, Math.round(s));
+			const h = Math.max(10, Math.round(s));
 			return { w: Math.round(h * 1.75), h };
 		}
-		if (s === 'sm') return { w: 18, h: 10 };
-		return { w: 28, h: 16 };
+		/* sm stays title-chrome friendly so mobile pills don’t collapse to one letter */
+		if (s === 'sm') return { w: 22, h: 12 };
+		return { w: 44, h: 24 };
 	}
 
 	const box = $derived(dims(size));
@@ -35,32 +40,37 @@
 		class="metaball-svg"
 		width={box.w}
 		height={box.h}
-		viewBox="0 0 28 16"
+		viewBox="0 0 42 24"
 		aria-hidden="true"
 		focusable="false"
 	>
 		<defs>
+			<!--
+				Visible goo bridges: enough blur + classic threshold so adjacent
+				balls connect during the wave, without collapsing into one sausage.
+				Do not feComposite SourceGraphic atop goo — that strips bridges.
+			-->
 			<filter
 				id="{uid}-goo"
-				x="-40%"
-				y="-40%"
-				width="180%"
-				height="180%"
+				x="-50%"
+				y="-60%"
+				width="200%"
+				height="220%"
 				color-interpolation-filters="sRGB"
 			>
-				<feGaussianBlur in="SourceGraphic" stdDeviation="2.2" result="blur" />
+				<feGaussianBlur in="SourceGraphic" stdDeviation="2.4" result="blur" />
 				<feColorMatrix
 					in="blur"
 					mode="matrix"
 					values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7"
 					result="goo"
 				/>
-				<feComposite in="SourceGraphic" in2="goo" operator="atop" />
 			</filter>
 		</defs>
 		<g filter="url(#{uid}-goo)" fill="currentColor">
-			<circle class="ball left" cx="9" cy="8" r="5.2" />
-			<circle class="ball right" cx="19" cy="8" r="5.2" />
+			<circle class="ball b1" cx="10" cy="12" r="5" />
+			<circle class="ball b2" cx="21" cy="12" r="5" />
+			<circle class="ball b3" cx="32" cy="12" r="5" />
 		</g>
 	</svg>
 </span>
@@ -72,7 +82,11 @@
 		justify-content: center;
 		flex-shrink: 0;
 		line-height: 0;
-		color: inherit;
+		/*
+		 * Quiet ink: use --loader-ink when set, else muted --fg-33.
+		 * Title / boot / settle wrappers set --loader-ink or `color` + inherit below.
+		 */
+		color: var(--loader-ink, var(--fg-33));
 		vertical-align: middle;
 	}
 
@@ -82,53 +96,53 @@
 	}
 
 	.ball {
-		transform-origin: center;
+		/* translate from circle center so wave stays optically centered in the box */
 		transform-box: fill-box;
+		transform-origin: center;
+		animation: mb-wave 1.05s ease-in-out infinite;
 	}
 
-	.ball.left {
-		animation: mb-left 1.15s ease-in-out infinite;
+	.ball.b2 {
+		animation-delay: 0.14s;
 	}
 
-	.ball.right {
-		animation: mb-right 1.15s ease-in-out infinite;
+	.ball.b3 {
+		animation-delay: 0.28s;
 	}
 
-	@keyframes mb-left {
+	/* Stronger per-ball travel — staggered delays keep the wave readable */
+	@keyframes mb-wave {
 		0%,
 		100% {
-			transform: scale(1.22);
+			transform: translateY(0);
 		}
 		50% {
-			transform: scale(0.72);
-		}
-	}
-
-	@keyframes mb-right {
-		0%,
-		100% {
-			transform: scale(0.72);
-		}
-		50% {
-			transform: scale(1.22);
+			transform: translateY(-5.5px);
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.ball.left,
-		.ball.right {
+		.ball {
 			animation: mb-pulse 1.4s ease-in-out infinite;
+		}
+
+		.ball.b2 {
+			animation-delay: 0.2s;
+		}
+
+		.ball.b3 {
+			animation-delay: 0.4s;
 		}
 
 		@keyframes mb-pulse {
 			0%,
 			100% {
-				opacity: 0.55;
-				transform: scale(0.95);
+				opacity: 0.45;
+				transform: translateY(0) scale(0.94);
 			}
 			50% {
 				opacity: 1;
-				transform: scale(1.05);
+				transform: translateY(0) scale(1.04);
 			}
 		}
 	}
