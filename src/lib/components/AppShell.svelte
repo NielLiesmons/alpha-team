@@ -1,6 +1,6 @@
 <script>
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
-	import { page } from '$app/state';
+	import { page } from '$app/stores';
 	import {
 		activeWebsite,
 		mobileNavForRole,
@@ -85,7 +85,8 @@
 
 	let { children } = $props();
 
-	const path = $derived(page.url.pathname);
+	/* `$page` store — `$app/state` page.url lagged behind location on mobile nav switches. */
+	const path = $derived($page.url.pathname);
 	const chatList = $derived(path.startsWith('/chat'));
 	const mailList = $derived(path.startsWith('/mail'));
 	/**
@@ -723,7 +724,13 @@
 		<MediaLightbox />
 	{/snippet}
 
-	{@render children()}
+	<!--
+		Key by section root so a failed/partial mobile nav never reuses a stale
+		page instance; listBlank CSS-hides during the swap so the old UI never flashes.
+	-->
+	{#key sectionRoot(path)}
+		{@render children()}
+	{/key}
 </UiShell>
 
 <style>
