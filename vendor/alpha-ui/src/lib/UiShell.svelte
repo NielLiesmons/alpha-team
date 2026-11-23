@@ -404,6 +404,11 @@
 	function go(href) {
 		/* Navigating away — don't history.back() into the previous section. */
 		closeMobileNav({ history: false });
+		/* Cancel a pending trap arm so it cannot pushState mid-SvelteKit goto. */
+		if (navTrapTimer != null) {
+			clearTimeout(navTrapTimer);
+			navTrapTimer = null;
+		}
 		onNavigate(href);
 	}
 
@@ -492,22 +497,30 @@
 		});
 	}
 
-	/* Defer trap arm past SvelteKit’s navigation commit (see rearmNavTrap). */
+	/*
+	 * Do NOT rearm the Android-back trap on every activeHref change.
+	 * pushState during/after SvelteKit goto left the list pane empty ~50% of
+	 * the time (Chat especially). Trap is re-armed only after popstate consumes
+	 * it (rearmNavTrap) and once on first mobile paint below.
+	 */
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		if (!isMobileViewport) return;
 		activeHref;
-		const path = window.location.pathname;
-		navArmedPath = path;
+		navArmedPath = window.location.pathname;
+	});
+
+	/* One initial trap after mobile shell is known — never on section switches. */
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		if (!isMobileViewport) return;
 		if (navTrapTimer != null) clearTimeout(navTrapTimer);
 		navTrapTimer = setTimeout(() => {
 			navTrapTimer = null;
 			if (!isMobileShell()) return;
-			if (window.location.pathname !== path) return;
-			if (history.state?.alphaNav) return;
-			if (history.state?.alphaNavTrap && history.state?.alphaPath === path) return;
+			if (history.state?.alphaNav || history.state?.alphaNavTrap) return;
 			rearmNavTrap();
-		}, 50);
+		}, 100);
 		return () => {
 			if (navTrapTimer != null) {
 				clearTimeout(navTrapTimer);
