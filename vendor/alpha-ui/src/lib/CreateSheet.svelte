@@ -81,11 +81,9 @@
 
 <style>
 	.overlay {
+		/* Full layout viewport — cover safe areas; sheet wrap still tracks visualViewport */
 		position: fixed;
-		top: var(--vv-top, 0px);
-		left: 0;
-		right: 0;
-		height: var(--app-height, 100dvh);
+		inset: 0;
 		z-index: 60;
 		background: var(--scrim);
 	}

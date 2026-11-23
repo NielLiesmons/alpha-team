@@ -327,7 +327,7 @@
 	color-scheme: light;
 }
 
-/* Mobile page surface is --shell — glass follows it; scrim stays at desktop strength */
+/* Mobile page surface is --shell; nav drawer uses --bg (lighter in dark). */
 @media (max-width: 767px) {
 	:root,
 	:root[data-theme='dark'] {
@@ -347,8 +347,8 @@
 		/* Float panels sit on shell — slightly stronger frost than desktop workspace */
 		--float-panel-bg: color-mix(in srgb, #ffffff 11%, transparent);
 		--float-trigger-on: color-mix(in srgb, #ffffff 11%, transparent);
-		/* Same as desktop dark — do not darken modals on mobile */
-		--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
+		/* Modal/sheet scrim = page (--shell), not nav (--bg) */
+		--scrim: color-mix(in srgb, var(--shell) 92%, transparent);
 	}
 
 	:root[data-theme='light'] {

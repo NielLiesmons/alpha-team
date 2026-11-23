@@ -341,7 +341,7 @@
 	color-scheme: light;
 }
 
-/* Mobile page surface is --shell — glass follows it; scrim stays at desktop strength */
+/* Mobile page surface is --shell; nav drawer uses --bg (lighter in dark). */
 @media (max-width: 767px) {
 	:root,
 	:root[data-theme='dark'] {
@@ -361,8 +361,11 @@
 		/* Float panels sit on shell — slightly stronger frost than desktop workspace */
 		--float-panel-bg: color-mix(in srgb, #ffffff 11%, transparent);
 		--float-trigger-on: color-mix(in srgb, #ffffff 11%, transparent);
-		/* Same as desktop dark — do not darken modals on mobile */
-		--scrim: color-mix(in srgb, var(--bg) 72%, transparent);
+		/*
+		 * Modal/sheet scrim = page surface (--shell), not nav (--bg).
+		 * Near-opaque so overlay + safe-area/theme-color read as one tone.
+		 */
+		--scrim: color-mix(in srgb, var(--shell) 92%, transparent);
 	}
 
 	:root[data-theme='light'] {
@@ -389,7 +392,7 @@ body {
 	margin: 0;
 	height: 100%;
 	overflow: hidden;
-	/* Chrome behind nav + card gutter (#090909 dark / #f6f6f6 light) */
+	/* Chrome behind nav + card gutter (#090909 dark / #e2e2e2 light) */
 	background: var(--shell);
 	color: var(--fg);
 	font-family: var(--font);
@@ -397,6 +400,12 @@ body {
 	line-height: 1.45;
 	-webkit-font-smoothing: antialiased;
 	-webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile nav open: safe-area / html chrome match the drawer surface (--bg) */
+html.nav-menu-open,
+html.nav-menu-open body {
+	background: var(--bg);
 }
 
 /* Kill Android/WebKit blue flash on tap */

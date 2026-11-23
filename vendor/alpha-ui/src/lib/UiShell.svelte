@@ -548,6 +548,26 @@
 	);
 
 	/*
+	 * Mobile nav open: paint html/body + theme-color with the drawer surface (--bg)
+	 * so status-bar / home-indicator safe areas match the lighter nav panel.
+	 * Closed → restore page surface (--shell).
+	 */
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		const on = isMobileViewport && menuProgress > 0.02;
+		const root = document.documentElement;
+		root.classList.toggle('nav-menu-open', on);
+		const meta = document.querySelector('meta[name="theme-color"]');
+		if (!meta) return;
+		const probe = document.createElement('div');
+		probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;background:var(${on ? '--bg' : '--shell'})`;
+		root.appendChild(probe);
+		const color = getComputedStyle(probe).backgroundColor;
+		probe.remove();
+		if (color) meta.setAttribute('content', color);
+	});
+
+	/*
 	 * Touch swipe on the slid page → open/close the menu.
 	 * Listen on the wrap (capture) so nav-peek / feed / PTR children still bubble here.
 	 * Avoid shell-level touch-action: pan-y — it lets the browser cancel horizontal claims.

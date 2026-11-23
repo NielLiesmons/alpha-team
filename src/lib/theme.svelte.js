@@ -10,13 +10,38 @@ export function resolveTheme(choice) {
 	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+/**
+ * Resolve a CSS color var to a concrete color for meta theme-color.
+ * @param {string} varName e.g. '--shell' or '--bg'
+ */
+export function resolveCssColor(varName) {
+	const el = document.createElement('div');
+	el.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;background:var(${varName})`;
+	document.documentElement.appendChild(el);
+	const color = getComputedStyle(el).backgroundColor;
+	el.remove();
+	return color;
+}
+
+/**
+ * Sync browser chrome (status / home indicator) to a surface token.
+ * @param {'--shell' | '--bg'} [surface]
+ */
+export function syncThemeColor(surface = '--shell') {
+	const meta = document.querySelector('meta[name="theme-color"]');
+	if (!meta) return;
+	const color = resolveCssColor(surface);
+	if (color) meta.setAttribute('content', color);
+}
+
 /** @param {ThemeChoice} choice */
 export function applyTheme(choice) {
 	const resolved = resolveTheme(choice);
 	document.documentElement.dataset.theme = resolved;
-	const meta = document.querySelector('meta[name="theme-color"]');
-	const color = resolved === 'light' ? '#f6f6f6' : '#090909';
-	meta?.setAttribute('content', color);
+	/* Nav drawer owns theme-color while open — don't fight it. */
+	if (!document.documentElement.classList.contains('nav-menu-open')) {
+		syncThemeColor('--shell');
+	}
 }
 
 /** @param {ThemeChoice} choice */
