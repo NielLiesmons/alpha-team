@@ -8,16 +8,20 @@
 		mailView,
 		setMailFolder
 	} from '$lib/mail-view.svelte.js';
+	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { mailUi } from '$lib/mail.svelte.js';
 	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
-	import Spinner from '@alpha/ui/Spinner.svelte';
+	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 
 	let open = $state(false);
 	/** @type {HTMLButtonElement | undefined} */
 	let anchorEl = $state();
 
 	const label = $derived(mailFolderLabel(mailView.folder) || t('mail.inbox'));
-	const syncing = $derived(isSectionSyncing('mail'));
+	const syncing = $derived(
+		isSectionSyncing('mail') || mailUi.loading || driveSession.syncing
+	);
 
 	function toggle() {
 		open = !open;
@@ -45,7 +49,7 @@
 	>
 		<span class="title-label">{label}</span>
 		{#if syncing}
-			<Spinner size={12} label="Refreshing" />
+			<span class="title-loader"><MetaballLoader size="sm" label="Refreshing" /></span>
 		{/if}
 		<svg class="chev" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 			<path
@@ -67,7 +71,7 @@
 	>
 		<span class="mobile-name">{label}</span>
 		{#if syncing}
-			<Spinner size={12} label="Refreshing" />
+			<span class="title-loader"><MetaballLoader size="sm" label="Refreshing" /></span>
 		{/if}
 		<svg class="chev" width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 			<path
@@ -152,6 +156,14 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.title-loader {
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
+		color: var(--fg-66);
+		opacity: 0.85;
 	}
 
 	.chev {

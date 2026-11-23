@@ -200,11 +200,11 @@ export async function refreshAllDrive() {
 			tip = '';
 		}
 
-		/* Chat always first — never wait on workspace crawl. */
+		/* Title chrome: spin the open section for the whole refresh (PTR / boot). */
 		const route = currentSection();
-		if (route === 'chat') beginSync('', ['chat']);
+		if (route) beginSync('', [route]);
+		/* Chat always first — never wait on workspace crawl. */
 		await refreshChatFeed();
-		if (route === 'chat') endSync(['chat']);
 		setSyncRatio(0.18, 1);
 		void refreshMembersAndAvatars().catch(() => {});
 		setSyncRatio(0.24, 1);

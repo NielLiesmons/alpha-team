@@ -2,6 +2,7 @@
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { recoverAppShell } from '$lib/boot-recovery.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 
 	let recovering = $state(false);
 
@@ -43,7 +44,9 @@
 			</button>
 		</div>
 	{:else}
-		<div class="dot"></div>
+		<div class="boot-loader">
+			<MetaballLoader size={28} label={t('common.loading')} />
+		</div>
 	{/if}
 </main>
 
@@ -57,23 +60,8 @@
 		box-sizing: border-box;
 	}
 
-	.dot {
-		width: 10px;
-		height: 10px;
-		border-radius: 999px;
-		background: var(--white33);
-		animation: pulse 1s var(--ease, ease) infinite alternate;
-	}
-
-	@keyframes pulse {
-		from {
-			opacity: 0.35;
-			transform: scale(0.85);
-		}
-		to {
-			opacity: 1;
-			transform: scale(1);
-		}
+	.boot-loader {
+		color: var(--fg-66, var(--white66, #aaa));
 	}
 
 	.recover {

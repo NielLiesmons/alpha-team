@@ -30,6 +30,7 @@
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import ChatComposer from '@alpha/ui/ChatComposer.svelte';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
+	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 	import { tick, untrack } from 'svelte';
 
 	/**
@@ -622,7 +623,9 @@
 				/>
 			</svg>
 			{#if showFabSpinner}
-				<span class="count spin" aria-hidden="true"></span>
+				<span class="count loader" aria-hidden="true">
+					<MetaballLoader size="sm" label={t('common.loading')} />
+				</span>
 			{:else if showFabStack}
 				<span class="pill-stack">
 					<ProfilePicStack
@@ -668,7 +671,9 @@
 		<div class="sheet-body">
 			<div class="list" bind:this={listEl}>
 				{#if commentsPending}
-					<p class="hint">{t('common.loading')}</p>
+					<div class="settle-loader" aria-busy="true">
+						<MetaballLoader label={t('common.loading')} />
+					</div>
 				{:else if messages.length === 0}
 					<p class="hint">{t('comments.empty')}</p>
 				{:else}
@@ -890,20 +895,12 @@
 		color: var(--fg);
 	}
 
-	.count.spin {
-		width: 12px;
-		height: 12px;
-		min-width: 12px;
-		border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
-		border-top-color: currentColor;
-		border-radius: 50%;
-		animation: comments-fab-spin 0.65s linear infinite;
-	}
-
-	@keyframes comments-fab-spin {
-		to {
-			transform: rotate(360deg);
-		}
+	.count.loader {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 18px;
+		color: var(--fg-66);
 	}
 
 	.pill-stack {
@@ -1006,6 +1003,14 @@
 		text-align: center;
 		font-size: 13px;
 		color: var(--fg-33);
+	}
+
+	.settle-loader {
+		display: grid;
+		place-items: center;
+		padding: 28px 8px;
+		color: var(--fg-66);
+		opacity: 0.85;
 	}
 
 	.err {

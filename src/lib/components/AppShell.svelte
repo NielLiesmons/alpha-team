@@ -50,7 +50,10 @@
 		mailView,
 		setMailFolder
 	} from '$lib/mail-view.svelte.js';
+	import { chatUi } from '$lib/chat.svelte.js';
 	import { sectionForPath } from '$lib/drive/change-summary.svelte.js';
+	import { driveSession } from '$lib/drive/session.svelte.js';
+	import { mailUi } from '$lib/mail.svelte.js';
 	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
 	import { locale, t } from '$lib/i18n.svelte.js';
 	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
@@ -64,6 +67,7 @@
 	import TableCreate from './TableCreate.svelte';
 	import ViewCreate from './ViewCreate.svelte';
 	import MailCreate from './MailCreate.svelte';
+	import MailFolderTitle from './MailFolderTitle.svelte';
 	import NewsletterCreate from './NewsletterCreate.svelte';
 	import NoteCreate from './NoteCreate.svelte';
 	import ProfilePic from './ProfilePic.svelte';
@@ -344,6 +348,28 @@
 	/** Planning / Drive own list actions. */
 	const customChrome = $derived(planningList || driveList);
 
+	/** Top-bar title: Mail shows Inbox/Sent/Drafts, not “Mail”. */
+	const chromeTitle = $derived.by(() => {
+		locale.value;
+		mailView.folder;
+		if (mailList) return mailFolderLabel(mailView.folder) || t('mail.inbox');
+		return activeItem.label;
+	});
+
+	/**
+	 * Title-chrome loading: section sync + feed/list loads for the open section.
+	 * Keeps the metaball visible during real refreshes, not only tip-mismatch crawls.
+	 */
+	const titleSyncing = $derived.by(() => {
+		const section = sectionForPath(path);
+		if (isSectionSyncing(section)) return true;
+		if (section === 'chat' && (chatUi.loading || !chatUi.settled)) return true;
+		if (section === 'mail' && mailUi.loading) return true;
+		/* Active Drive refresh — covers tip-match PTR before section flags stamp. */
+		if (section && driveSession.syncing) return true;
+		return false;
+	});
+
 	const createMenuItems = $derived.by(() => {
 		locale.value;
 		return [
@@ -455,14 +481,14 @@
 	sections={roleNav}
 	mobileSections={roleMobileNav}
 	activeHref={activeItem.href}
-	title={activeItem.label}
+	title={chromeTitle}
 	{counts}
 	{unreadCounts}
 	{wideList}
 	listSize={chatList ? 'chat' : 'default'}
 	listCompact={chatCompact}
 	{commsFeed}
-	syncing={isSectionSyncing(sectionForPath(path))}
+	syncing={titleSyncing}
 	filterOptions={customChrome ? null : filterOptions}
 	filterValue={ui.listFilter}
 	{createMenuItems}
@@ -496,11 +522,15 @@
 	{/snippet}
 
 	{#snippet listTitleSlot()}
-		<ListTitleChrome
-			title={activeItem.label}
-			syncing={isSectionSyncing(sectionForPath(path))}
-			titleClass={planningList ? 'planning-title' : ''}
-		/>
+		{#if mailList}
+			<MailFolderTitle />
+		{:else}
+			<ListTitleChrome
+				title={chromeTitle}
+				syncing={titleSyncing}
+				titleClass={planningList ? 'planning-title' : ''}
+			/>
+		{/if}
 	{/snippet}
 
 	{#snippet listActionsSlot()}
