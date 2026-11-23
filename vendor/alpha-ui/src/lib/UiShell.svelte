@@ -171,12 +171,26 @@
 	 */
 	let chatWasCompact = $state(false);
 
+	/*
+	 * Compact↔wide morph only while staying on Chat. Leaving/entering the
+	 * section must snap widths — never animate listSize across routes.
+	 */
+	let prevListSize = /** @type {'default' | 'chat'} */ (listSize);
 	$effect(() => {
-		if (listSize !== 'chat') {
+		const size = listSize;
+		const compact = listCompact;
+		const leftOrEnteredChat = prevListSize !== size;
+		prevListSize = size;
+		if (size !== 'chat') {
 			chatWasCompact = false;
 			return;
 		}
-		if (listCompact) chatWasCompact = true;
+		if (leftOrEnteredChat) {
+			/* Fresh Chat land — wide default, no morph from prior section. */
+			chatWasCompact = false;
+			return;
+		}
+		if (compact) chatWasCompact = true;
 	});
 
 	$effect(() => {
@@ -392,11 +406,6 @@
 	function go(href) {
 		/* Navigating away — don't history.back() into the previous section. */
 		closeMobileNav({ history: false });
-		/* Cancel a pending trap arm so it cannot pushState mid-SvelteKit goto. */
-		if (navTrapTimer != null) {
-			clearTimeout(navTrapTimer);
-			navTrapTimer = null;
-		}
 		onNavigate(href);
 	}
 
@@ -2116,6 +2125,7 @@
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
+		pointer-events: none;
 	}
 
 	.mobile-page-title {
@@ -2599,6 +2609,7 @@
 			--loader-ink: var(--fg-66);
 			color: var(--fg-66);
 			opacity: 0.85;
+			pointer-events: none;
 		}
 
 		/*

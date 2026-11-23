@@ -128,6 +128,7 @@
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
+		pointer-events: none;
 	}
 
 	/* Admin Planning list — fixed label column width */

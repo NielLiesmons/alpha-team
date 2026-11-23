@@ -422,13 +422,14 @@
 				{@const ccPeople = mailRecipientPeople(m, 'cc')}
 				{@const toLine = toPeople.map((p) => p.name).filter(Boolean).join(', ')}
 				{@const parts = splitMailQuote(m.body || '')}
-				{@const rich = isHtmlMailBody(m.body) && !parts.collapsible}
 				{@const quoteId = String(m.id || '')}
 				{@const mailKey = quoteId}
 				{@const msgReplyAll = preferReplyAll(m, me)}
 				{@const menuFor = replyMenuId === quoteId}
 				{@const recipientsOpen = recipientsMenuId === quoteId}
 				{@const hasQuote = Boolean(parts.collapsible && parts.quoted)}
+				{@const foldedHtml = Boolean(hasQuote && parts.htmlMain)}
+				{@const richFull = isHtmlMailBody(m.body) && !hasQuote && !parts.collapsible}
 				{@const attachments = Array.isArray(m.attachments) ? m.attachments : []}
 				{@const showNewChip =
 					Boolean(visitFirstNewId) &&
@@ -524,19 +525,19 @@
 					</header>
 					<div class="mail-panel-rule" aria-hidden="true"></div>
 					<div class="mail-panel-content">
-						{#if rich}
-							<div class="mail-prose">{@html safeMailHtml(m.body || '')}</div>
-						{:else if parts.collapsible}
-							{#if parts.htmlMain}
+						{#if hasQuote}
+							{#if foldedHtml}
 								<div class="mail-prose">{@html safeMailHtml(parts.htmlMain)}</div>
 							{:else if parts.main}
 								<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 							{/if}
-							{#if hasQuote && quoteOpen[mailKey]}
+							{#if quoteOpen[mailKey]}
 								{@const expanded = resolveExpandedQuote(parts.quoted, mails, quoteId)}
 								{@const quoteFrom = quoteAuthorEmail(mails, quoteId, fromEmail)}
 								<MailRichBody text={expanded} fallbackEmail={quoteFrom} minDepth={1} />
 							{/if}
+						{:else if richFull}
+							<div class="mail-prose">{@html safeMailHtml(m.body || '')}</div>
 						{:else if parts.main}
 							<MailRichBody text={parts.main} fallbackEmail={fromEmail} />
 						{/if}
@@ -1121,7 +1122,18 @@
 		font-size: 15px;
 		line-height: 1.55;
 		color: var(--fg-83);
+		/* Let UA / sanitizer adapt absolute ink; children inherit theme fg. */
+		color-scheme: inherit;
 		overflow-wrap: anywhere;
+	}
+
+	/* Wrapper chrome (body/html fragments) must not re-impose black ink. */
+	.mail-prose :global(html),
+	.mail-prose :global(body) {
+		margin: 0;
+		padding: 0;
+		background: transparent;
+		color: inherit;
 	}
 
 	.mail-prose :global(p) {
@@ -1130,6 +1142,13 @@
 
 	.mail-prose :global(p:last-child) {
 		margin-bottom: 0;
+	}
+
+	/* Accidental trailing empties from clients — hide leftover chrome. */
+	.mail-prose :global(br:last-child),
+	.mail-prose :global(div:last-child:empty),
+	.mail-prose :global(p:last-child:empty) {
+		display: none;
 	}
 
 	.mail-prose :global(h1),

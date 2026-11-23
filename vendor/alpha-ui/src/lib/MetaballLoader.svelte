@@ -55,6 +55,8 @@
 		color: var(--loader-ink, var(--fg-33));
 		min-width: inherit;
 		max-width: none;
+		/* Never steal taps from title pill / nav chrome while syncing */
+		pointer-events: none;
 	}
 
 	.ball {

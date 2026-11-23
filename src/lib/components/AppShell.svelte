@@ -1,5 +1,6 @@
 <script>
-	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import {
 		activeWebsite,
 		mobileNavForRole,
@@ -84,46 +85,13 @@
 
 	let { children } = $props();
 
-	/**
-	 * Path for chrome — updated from before/afterNavigate (not $page / $app/state).
-	 * Those lagged behind location.pathname during mobile drawer section switches,
-	 * leaving list-chat / titles stuck on Chat while Mail was on screen.
+	/*
+	 * Drive chrome from the live $page store. Custom beforeNavigate path + listBlank
+	 * + history traps raced SvelteKit and left Chat UI / widths stuck across sections.
 	 */
-	let path = $state(
-		typeof window !== 'undefined' ? window.location.pathname : '/'
-	);
+	const path = $derived($page.url.pathname);
 	const chatList = $derived(path.startsWith('/chat'));
 	const mailList = $derived(path.startsWith('/mail'));
-	/**
-	 * Mobile section switch: blank the list pane immediately so the previous
-	 * page never flashes.
-	 */
-	let listBlank = $state(false);
-
-	/** @param {string | undefined} pathname */
-	function sectionRoot(pathname) {
-		const seg = String(pathname || '/')
-			.split('/')
-			.filter(Boolean)[0];
-		return seg || '';
-	}
-
-	function isMobileNav() {
-		return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
-	}
-
-	beforeNavigate(({ from, to }) => {
-		if (to?.url?.pathname) path = to.url.pathname;
-		if (!isMobileNav() || !from || !to) return;
-		if (sectionRoot(from.url.pathname) === sectionRoot(to.url.pathname)) return;
-		listBlank = true;
-	});
-
-	afterNavigate(({ to }) => {
-		if (to?.url?.pathname) path = to.url.pathname;
-		else if (typeof window !== 'undefined') path = window.location.pathname;
-		listBlank = false;
-	});
 	const commsFeed = $derived(chatList || mailList);
 	/** Entity detail from chat tips — not the notifications synopsis. */
 	const chatCompact = $derived.by(() => {
@@ -377,18 +345,26 @@
 			: undefined
 	);
 
-	let lastSectionPath = /** @type {string | null} */ (null);
+	/** @param {string | undefined} pathname */
+	function sectionRoot(pathname) {
+		const seg = String(pathname || '/')
+			.split('/')
+			.filter(Boolean)[0];
+		return seg || '';
+	}
+
+	let lastSectionRoot = /** @type {string | null} */ (null);
 	$effect(() => {
-		const p = path;
-		if (lastSectionPath === p) return;
-		const first = lastSectionPath === null;
-		lastSectionPath = p;
+		const root = sectionRoot(path);
+		if (lastSectionRoot === root) return;
+		const first = lastSectionRoot === null;
+		lastSectionRoot = root;
 		if (!first) {
+			/* Leaving any section — drop selection so Chat notifs / entities never leak. */
 			forceClearSelection();
 			ui.listFilter = 'all';
 			resetAccountingBrowse();
 		}
-		/* Chat feed lives in the list column — don't open it as a detail pane. */
 	});
 
 	const planningList = $derived(path.startsWith('/planning'));
@@ -475,13 +451,10 @@
 			return;
 		}
 		const replace = Boolean(typeof history !== 'undefined' && history.state?.alphaLayer);
+		/* Clear before goto so detail never keeps Chat activity on Mail/Photos. */
 		forceClearSelection();
 		/* Fresh entry to Mail always lands on Inbox; in-section folder picks keep state. */
 		if (href === '/mail' && !path.startsWith('/mail')) setMailFolder('inbox');
-		/* Blank list pane on the tap — don’t wait for beforeNavigate. */
-		if (isMobileNav() && sectionRoot(href) !== sectionRoot(path)) {
-			listBlank = true;
-		}
 		goto(href, { replaceState: replace });
 	}
 
@@ -589,7 +562,6 @@
 	listSize={chatList ? 'chat' : 'default'}
 	listCompact={chatCompact}
 	{commsFeed}
-	{listBlank}
 	syncing={titleSyncing}
 	filterOptions={customChrome ? null : filterOptions}
 	filterValue={ui.listFilter}

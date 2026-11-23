@@ -10,19 +10,28 @@ const EMAIL_RE = /[\w.+-]+@[\w.-]+\.\w+/;
 /**
  * “On … wrote:” style headers — match a full line.
  * EN On … wrote: | FR Le … a écrit : | NL Op … schreef …: | ES El … escribió:
+ * Accept unaccented “ecrit” (entities decoded upstream) and thin spaces.
+ * `.+` spans date formats like `21/11/2026 21:27, Name` (no email required).
  */
 const REPLY_HEADER_LINE =
-	/^(?:On\b.+wrote\s*:|Le\b.+a\s+[ée]crit\s*:|Op\b.+schreef.+:|El\b.+escribi[oó]\s*:)\s*$/i;
+	/^(?:On\b[\s\S]+?\bwrote\s*:|Le\b[\s\S]+?\ba\s+(?:[ée]crit|ecrit)\s*:|Op\b[\s\S]+?\bschreef[\s\S]+?:|El\b[\s\S]+?\bescribi[oó]\s*:)\s*$/i;
 
 /** Same, but may share the line with trailing content. */
 const REPLY_HEADER_PREFIX =
-	/^(?:On\b.+wrote\s*:|Le\b.+a\s+[ée]crit\s*:|Op\b.+schreef.+:|El\b.+escribi[oó]\s*:)\s*/i;
+	/^(?:On\b[\s\S]+?\bwrote\s*:|Le\b[\s\S]+?\ba\s+(?:[ée]crit|ecrit)\s*:|Op\b[\s\S]+?\bschreef[\s\S]+?:|El\b[\s\S]+?\bescribi[oó]\s*:)\s*/i;
 
-/** Gmail soft-wrap: first line looks like “On … <email>” without wrote yet. */
+/**
+ * Gmail / Apple soft-wrap: first line is “On … <email>” or “On … Name” without wrote yet.
+ * Only used when the next physical line is WROTE_ONLY — keep the opener broad.
+ */
 const REPLY_HEADER_START =
-	/^(?:On\b|Le\b|Op\b|El\b|Il\b|Am\b|Den\b).{0,160}<[^>]+@[^>]+>\s*$/i;
+	/^(?:On\b|Le\b|Op\b|El\b|Il\b|Am\b|Den\b).{4,200}$/i;
 
-const WROTE_ONLY = /^(?:wrote|a\s+[ée]crit|schreef|escribi[oó]|scritto)\s*:?\s*$/i;
+const WROTE_ONLY = /^(?:wrote|a\s+(?:[ée]crit|ecrit)|schreef|escribi[oó]|scritto)\s*:?\s*$/i;
+
+/** Inline tags that may interrupt an attribution without ending the block. */
+const ATTR_INLINE_GAP =
+	'(?:\\s|&nbsp;|&#160;|&#x0*a0;|<br\\s*/?>|</?(?:span|font|b|i|u|strong|em|a|wbr|time)\\b[^>]*>)*';
 
 const FORWARD_BANNER_LINE =
 	/^(?:-{2,}\s*(?:Forwarded message|Message transf[ée]r[ée]|Doorgestuurd bericht|Mensaje reenviado)\s*-{2,}|Begin forwarded message\s*:|D[ée]but du message transf[ée]r[ée]\s*:|Begin doorgestuurd bericht\s*:|Inicio del mensaje reenviado\s*:)\s*$/i;
@@ -45,10 +54,134 @@ export function isHtmlMailBody(text) {
 }
 
 /**
+ * Parse a CSS color token to [r,g,b] (0–255) or null.
+ * @param {string} value
+ * @returns {[number, number, number] | null}
+ */
+function parseCssColor(value) {
+	const v = String(value || '')
+		.trim()
+		.toLowerCase();
+	if (!v || v === 'transparent' || v === 'inherit' || v === 'currentcolor' || v === 'initial') {
+		return null;
+	}
+	if (v === 'black') return [0, 0, 0];
+	if (v === 'white') return [255, 255, 255];
+	let m = v.match(/^#([0-9a-f]{3})$/i);
+	if (m) {
+		const h = m[1];
+		return [
+			parseInt(h[0] + h[0], 16),
+			parseInt(h[1] + h[1], 16),
+			parseInt(h[2] + h[2], 16)
+		];
+	}
+	m = v.match(/^#([0-9a-f]{6})$/i);
+	if (m) {
+		return [
+			parseInt(m[1].slice(0, 2), 16),
+			parseInt(m[1].slice(2, 4), 16),
+			parseInt(m[1].slice(4, 6), 16)
+		];
+	}
+	m = v.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+	if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
+	return null;
+}
+
+/** @param {[number, number, number]} rgb */
+function luminance(rgb) {
+	return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+
+/** Near-black ink that assumes a light canvas (Apple Mail adapts these). */
+function isAssumedLightInk(rgb) {
+	/* Catch #000–#444-ish; leave mid grays / brand hues alone. */
+	return Boolean(rgb) && luminance(rgb) <= 68;
+}
+
+/** Near-white fills that force light-mode contrast against adapted ink. */
+function isAssumedLightFill(rgb) {
+	return Boolean(rgb) && luminance(rgb) >= 248;
+}
+
+/**
+ * Remap light-mode absolute colors in a style="" value for theme inheritance.
+ * Near-black → currentColor; near-white backgrounds → transparent. Brand hues kept.
+ * @param {string} style
+ */
+function adaptMailStyleColors(style) {
+	const parts = String(style || '')
+		.split(';')
+		.map((p) => p.trim())
+		.filter(Boolean);
+	/** @type {string[]} */
+	const out = [];
+	for (const part of parts) {
+		const colon = part.indexOf(':');
+		if (colon < 0) {
+			out.push(part);
+			continue;
+		}
+		const prop = part.slice(0, colon).trim().toLowerCase();
+		const val = part.slice(colon + 1).trim();
+		const rgb = parseCssColor(val);
+		if ((prop === 'color' || prop === 'text-decoration-color') && isAssumedLightInk(rgb)) {
+			out.push(`${prop}: currentColor`);
+			continue;
+		}
+		if (
+			(prop === 'background' || prop === 'background-color') &&
+			isAssumedLightFill(rgb) &&
+			!/url\s*\(/i.test(val)
+		) {
+			out.push(`${prop}: transparent`);
+			continue;
+		}
+		out.push(part);
+	}
+	return out.join('; ');
+}
+
+/**
+ * Apple Mail–style theme adaptation for HTML mails: rewrite near-black ink and
+ * near-white backgrounds so body text follows `--fg` / inherited color in dark mode.
+ * Leaves intentional brand colors alone.
+ * @param {string} html
+ */
+function adaptMailThemeColors(html) {
+	let s = String(html || '');
+
+	/* style="color:#000; background:#fff" */
+	s = s.replace(/\sstyle\s*=\s*(["'])([\s\S]*?)\1/gi, (full, q, style) => {
+		const next = adaptMailStyleColors(style);
+		if (!next.trim()) return '';
+		return ` style=${q}${next}${q}`;
+	});
+
+	/* <font color="#000000"> / color=black */
+	s = s.replace(/\scolor\s*=\s*(["']?)([^"'>\s]+)\1/gi, (full, _q, raw) => {
+		const rgb = parseCssColor(raw);
+		if (isAssumedLightInk(rgb)) return ' color="currentColor"';
+		return full;
+	});
+
+	/* bgcolor="#ffffff" */
+	s = s.replace(/\sbgcolor\s*=\s*(["']?)([^"'>\s]+)\1/gi, (full, _q, raw) => {
+		const rgb = parseCssColor(raw);
+		if (isAssumedLightFill(rgb)) return ' bgcolor="transparent"';
+		return full;
+	});
+
+	return s;
+}
+
+/**
  * TipTap / composer / inbound HTML safe to drop into the thread.
  * Strips scripts, styles, and inline event handlers; neuters javascript: URLs.
  * Also unwraps Gmail false-positive anchors whose label is only `+` / `++`
  * (e.g. “d'inventer ++”) while keeping real http(s)/mailto links.
+ * Adapts near-black / near-white absolute colors for dark-mode readability.
  * @param {string} html
  */
 export function safeMailHtml(html) {
@@ -70,7 +203,7 @@ export function safeMailHtml(html) {
 		return full;
 	});
 
-	return s;
+	return adaptMailThemeColors(s);
 }
 
 /** @param {string} s */
@@ -127,7 +260,7 @@ function formatPlainInline(escaped) {
  * @param {string} text
  */
 export function plainMailToSafeHtml(text) {
-	const raw = String(text ?? '').replace(/\r\n/g, '\n');
+	const raw = trimTrailingEmptyPlain(String(text ?? '').replace(/\r\n/g, '\n'));
 	if (!raw.trim()) return '';
 
 	const lines = raw.split('\n');
@@ -161,25 +294,56 @@ export function plainMailToSafeHtml(text) {
 	return out.join('');
 }
 
+/**
+ * Decode common HTML entities so FR “a &eacute;crit” matches reply headers.
+ * @param {string} s
+ */
+function decodeHtmlEntities(s) {
+	return String(s || '')
+		.replace(/&nbsp;/gi, ' ')
+		.replace(/&#160;/g, ' ')
+		.replace(/&#x0*a0;/gi, ' ')
+		.replace(/&quot;/gi, '"')
+		.replace(/&lt;/gi, '<')
+		.replace(/&gt;/gi, '>')
+		.replace(/&apos;/gi, "'")
+		.replace(/&eacute;/gi, 'é')
+		.replace(/&Eacute;/g, 'É')
+		.replace(/&egrave;/gi, 'è')
+		.replace(/&Egrave;/g, 'È')
+		.replace(/&agrave;/gi, 'à')
+		.replace(/&Agrave;/g, 'À')
+		.replace(/&acirc;/gi, 'â')
+		.replace(/&ocirc;/gi, 'ô')
+		.replace(/&uuml;/gi, 'ü')
+		.replace(/&ouml;/gi, 'ö')
+		.replace(/&ccedil;/gi, 'ç')
+		.replace(/&#(\d+);/g, (_, n) => {
+			const code = Number(n);
+			return Number.isFinite(code) ? String.fromCharCode(code) : '';
+		})
+		.replace(/&#x([0-9a-f]+);/gi, (_, h) => {
+			const code = parseInt(h, 16);
+			return Number.isFinite(code) ? String.fromCharCode(code) : '';
+		})
+		.replace(/&amp;/gi, '&');
+}
+
 /** @param {string} html */
 function stripHtml(html) {
-	return String(html || '')
-		.replace(/<style[\s\S]*?<\/style>/gi, '')
-		.replace(/<script[\s\S]*?<\/script>/gi, '')
-		.replace(/<br\s*\/?>/gi, '\n')
-		.replace(/<\/p>/gi, '\n\n')
-		.replace(/<\/div>/gi, '\n')
-		.replace(/<\/li>/gi, '\n')
-		.replace(/<\/tr>/gi, '\n')
-		.replace(/<\/h[1-6]>/gi, '\n\n')
-		.replace(/<hr\b[^>]*>/gi, '\n---\n')
-		.replace(/<[^>]+>/g, '')
-		.replace(/&nbsp;/g, ' ')
-		.replace(/&lt;/g, '<')
-		.replace(/&gt;/g, '>')
-		.replace(/&amp;/g, '&')
-		.replace(/&quot;/g, '"')
-		.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+	return decodeHtmlEntities(
+		String(html || '')
+			.replace(/<style[\s\S]*?<\/style>/gi, '')
+			.replace(/<script[\s\S]*?<\/script>/gi, '')
+			.replace(/<br\s*\/?>/gi, '\n')
+			.replace(/<\/p>/gi, '\n\n')
+			.replace(/<\/div>/gi, '\n')
+			.replace(/<\/li>/gi, '\n')
+			.replace(/<\/tr>/gi, '\n')
+			.replace(/<\/h[1-6]>/gi, '\n\n')
+			.replace(/<hr\b[^>]*>/gi, '\n---\n')
+			.replace(/<[^>]+>/g, '')
+	)
 		.replace(/[ \t]+\n/g, '\n')
 		.replace(/\n{3,}/g, '\n\n')
 		.trim();
@@ -190,19 +354,29 @@ export function isForwardedMail(text) {
 	return FORWARD_ANYWHERE.test(String(text || ''));
 }
 
+/**
+ * Strip ZWSP / soft hyphens / NBSP variants so attribution regexes see clean text.
+ * @param {string} s
+ */
+function normalizeMailInvisible(s) {
+	return String(s || '')
+		.replace(/[\u200b\u200c\u200d\ufeff\u00ad]/g, '')
+		.replace(/[\u00a0\u202f\u2007\u2009\u200a]/g, ' ');
+}
+
 /** @param {string} line */
 function isForwardBanner(line) {
-	return FORWARD_BANNER_LINE.test(String(line || '').trim());
+	return FORWARD_BANNER_LINE.test(normalizeMailInvisible(line).trim());
 }
 
 /** @param {string} line */
 function isReplyHeaderLine(line) {
-	return REPLY_HEADER_LINE.test(String(line || '').trim());
+	return REPLY_HEADER_LINE.test(normalizeMailInvisible(line).trim());
 }
 
 /** @param {string} line */
 function isReplyHeaderLike(line) {
-	const trim = String(line || '').trim();
+	const trim = normalizeMailInvisible(line).trim();
 	return (
 		isReplyHeaderLine(trim) ||
 		REPLY_HEADER_PREFIX.test(trim) ||
@@ -212,18 +386,52 @@ function isReplyHeaderLike(line) {
 }
 
 /**
- * Earliest HTML quote container (attribution + blockquote / gmail/outlook wrappers).
- * Include `gmail_attr` so “Le … a écrit :” is not left in the unexpanded main.
+ * Strip trailing blank lines from plain mail (accidental Enter keys).
+ * @param {string} text
+ */
+export function trimTrailingEmptyPlain(text) {
+	return String(text ?? '')
+		.replace(/\r\n/g, '\n')
+		.replace(/(?:[ \t]*\n)+$/u, '')
+		.replace(/[ \t]+$/u, '');
+}
+
+/**
+ * Strip trailing empty HTML chrome: `<br>`, `<div><br></div>`, `&nbsp;`-only nodes.
+ * Does not remove meaningful content.
+ * @param {string} html
+ */
+export function trimTrailingEmptyHtml(html) {
+	let s = String(html || '');
+	for (let guard = 0; guard < 12; guard++) {
+		const prev = s;
+		s = s.replace(/(?:(?:<br\s*\/?>)|\s|&nbsp;|&#160;|&#x0*a0;)+$/gi, '');
+		s = s.replace(
+			/<(div|p|span|font)\b[^>]*>\s*(?:<br\s*\/?>|&nbsp;|&#160;|&#x0*a0;|\s)*<\/\1>\s*$/gi,
+			''
+		);
+		/* Empty open wrappers left after a quote cut: …</div><div> / …<br><div> */
+		s = s.replace(/(?:<br\s*\/?>|\s)*<(?:div|p|span|font)\b[^>]*>\s*$/gi, '');
+		if (s === prev) break;
+	}
+	return s;
+}
+
+/**
+ * Earliest HTML quote container (attribution wrappers + blockquote).
+ * Include `gmail_attr` / `moz-cite-prefix` so attribution is not left in main.
  * @param {string} html
  */
 function findHtmlQuoteIndex(html) {
 	const patterns = [
 		/<div\b[^>]*class\s*=\s*["'][^"']*gmail_attr[^"']*["'][^>]*>/i,
+		/<div\b[^>]*class\s*=\s*["'][^"']*moz-cite-prefix[^"']*["'][^>]*>/i,
 		/<blockquote\b/i,
 		/<div\b[^>]*class\s*=\s*["'][^"']*gmail_quote[^"']*["'][^>]*>/i,
 		/<div\b[^>]*class\s*=\s*["'][^"']*gmail_extra[^"']*["'][^>]*>/i,
 		/<div\b[^>]*id\s*=\s*["']divRplyFwdMsg["'][^>]*>/i,
-		/<div\b[^>]*class\s*=\s*["'][^"']*OutlookMessageHeader[^"']*["'][^>]*>/i
+		/<div\b[^>]*class\s*=\s*["'][^"']*OutlookMessageHeader[^"']*["'][^>]*>/i,
+		/<hr\b[^>]*class\s*=\s*["'][^"']*(?:solid|outlook)[^"']*["'][^>]*>/i
 	];
 	let best = -1;
 	for (const re of patterns) {
@@ -234,6 +442,98 @@ function findHtmlQuoteIndex(html) {
 }
 
 /**
+ * Earliest “On … wrote:” / “Le … a écrit :” in HTML, allowing soft breaks, NBSP,
+ * and inline tags between tokens. Anchored at a block boundary (not mid-sentence).
+ * @param {string} html
+ */
+function findHtmlAttributionIndex(html) {
+	const s = String(html || '');
+	const gap = ATTR_INLINE_GAP;
+	const patterns = [
+		new RegExp(
+			`(?:^|>)(?:\\s|<br\\s*/?>|&nbsp;)*On\\b${gap}[\\s\\S]{2,220}?${gap}wrote${gap}:`,
+			'i'
+		),
+		new RegExp(
+			`(?:^|>)(?:\\s|<br\\s*/?>|&nbsp;)*Le\\b${gap}[\\s\\S]{2,220}?${gap}a${gap}(?:&(?:eacute|Eacute);|[ée]crit|ecrit)${gap}:`,
+			'i'
+		),
+		new RegExp(
+			`(?:^|>)(?:\\s|<br\\s*/?>|&nbsp;)*Op\\b${gap}[\\s\\S]{2,220}?${gap}schreef[\\s\\S]{0,80}?:`,
+			'i'
+		),
+		new RegExp(
+			`(?:^|>)(?:\\s|<br\\s*/?>|&nbsp;)*El\\b${gap}[\\s\\S]{2,220}?${gap}escribi[oó]${gap}:`,
+			'i'
+		)
+	];
+	let best = -1;
+	for (const re of patterns) {
+		const m = s.match(re);
+		if (!m || m.index == null) continue;
+		/* Skip the leading `>` from a prior tag close when present. */
+		let idx = m.index;
+		if (s[idx] === '>') idx += 1;
+		while (idx < s.length && /\s/.test(s[idx])) idx += 1;
+		/* Prefer the start of a nearby opening tag that wraps this text. */
+		const lookBehind = s.slice(Math.max(0, idx - 80), idx);
+		const open = lookBehind.match(/<(div|p|span|font|td)\b[^>]*>\s*$/i);
+		if (open && open.index != null) {
+			idx = Math.max(0, idx - 80) + open.index;
+		}
+		if (best < 0 || idx < best) best = idx;
+	}
+	return best;
+}
+
+/**
+ * Earliest cut for HTML bodies: attribution line or quote container.
+ * @param {string} html
+ */
+function findHtmlCutIndex(html) {
+	const qAt = findHtmlQuoteIndex(html);
+	const aAt = findHtmlAttributionIndex(html);
+	if (aAt < 0) return qAt;
+	if (qAt < 0) return aAt;
+	return Math.min(aAt, qAt);
+}
+
+/**
+ * Fold from the first attribution / soft-wrap pair anywhere in main (not only the
+ * trailing line). Everything from that line onward joins the quoted region.
+ * @param {string} main
+ * @param {string} quoted
+ * @returns {{ main: string, quoted: string } | null}
+ */
+function foldAttributionFromMain(main, quoted) {
+	const lines = normalizeMailInvisible(String(main ?? ''))
+		.replace(/\r\n/g, '\n')
+		.split('\n');
+	let start = -1;
+	for (let i = 0; i < lines.length; i++) {
+		const trim = lines[i].trim();
+		if (!trim) continue;
+		if (isReplyHeaderLine(trim) || REPLY_HEADER_PREFIX.test(trim)) {
+			start = i;
+			break;
+		}
+		if (
+			REPLY_HEADER_START.test(trim) &&
+			i + 1 < lines.length &&
+			WROTE_ONLY.test(lines[i + 1].trim())
+		) {
+			start = i;
+			break;
+		}
+	}
+	if (start < 0) return null;
+	const peeled = lines.slice(start).join('\n');
+	const nextMain = trimTrailingEmptyPlain(lines.slice(0, start).join('\n'));
+	const nextQuoted = quoted ? `${peeled}\n${quoted}` : peeled;
+	return { main: nextMain, quoted: nextQuoted };
+}
+
+/**
  * Move a trailing “On … wrote:” / “Le … a écrit :” line (or soft-wrapped pair)
  * from main into quoted so attribution never stays in the collapsed preview.
  * @param {string} main
@@ -241,7 +541,11 @@ function findHtmlQuoteIndex(html) {
  * @returns {{ main: string, quoted: string } | null}
  */
 function peelTrailingReplyHeader(main, quoted) {
-	const lines = String(main ?? '')
+	/* Prefer any in-main attribution (handles text between attr and quote cut). */
+	const anywhere = foldAttributionFromMain(main, quoted);
+	if (anywhere) return anywhere;
+
+	const lines = normalizeMailInvisible(String(main ?? ''))
 		.replace(/\r\n/g, '\n')
 		.split('\n');
 	while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
@@ -261,23 +565,70 @@ function peelTrailingReplyHeader(main, quoted) {
 	if (start < 0) return null;
 
 	const peeled = lines.slice(start).join('\n');
-	const nextMain = lines.slice(0, start).join('\n').replace(/\s+$/u, '');
+	const nextMain = trimTrailingEmptyPlain(lines.slice(0, start).join('\n'));
 	const nextQuoted = quoted ? `${peeled}\n${quoted}` : peeled;
 	return { main: nextMain, quoted: nextQuoted };
 }
 
 /**
- * Drop a trailing Gmail/Outlook attribution block from htmlMain after a plain peel.
+ * Drop trailing attribution from htmlMain after a plain peel — Gmail/Outlook
+ * wrappers, bare “On … wrote:” / “Le … a écrit :” blocks, and empty <br> tails.
  * @param {string} html
  * @returns {string}
  */
 function peelHtmlTrailingAttr(html) {
-	const s = String(html || '');
-	const re =
-		/(?:(?:<br\s*\/?>)|\s)*<div\b[^>]*class\s*=\s*["'][^"']*(?:gmail_attr|OutlookMessageHeader)[^"']*["'][^>]*>[\s\S]*$/i;
-	const m = s.match(re);
-	if (m && m.index != null && m.index > 0) return s.slice(0, m.index);
-	return s;
+	let s = String(html || '');
+
+	const gmailRe =
+		/(?:(?:<br\s*\/?>)|\s)*<(?:div|p)\b[^>]*class\s*=\s*["'][^"']*(?:gmail_attr|OutlookMessageHeader|moz-cite-prefix)[^"']*["'][^>]*>[\s\S]*$/i;
+	const gmail = s.match(gmailRe);
+	if (gmail && gmail.index != null && gmail.index > 0) {
+		s = s.slice(0, gmail.index);
+	}
+
+	/* If an attribution still sits somewhere in the tail, cut from its start. */
+	const attrAt = findHtmlAttributionIndex(s);
+	if (attrAt > 0) {
+		const before = stripHtml(s.slice(0, attrAt)).trim();
+		if (before) s = s.slice(0, attrAt);
+	}
+
+	s = trimTrailingEmptyHtml(s);
+
+	/*
+	 * Peel a trailing leaf block whose text is a reply attribution
+	 * (Apple / Thunderbird often emit a plain <div>On … wrote:</div> before
+	 * <blockquote>, without gmail_attr).
+	 */
+	for (let guard = 0; guard < 8; guard++) {
+		const m = s.match(
+			/(?:(?:<br\s*\/?>)|\s)*<(div|p|span|font|td)\b([^>]*)>([\s\S]*?)<\/\1>\s*$/i
+		);
+		if (!m || m.index == null || m.index <= 0) break;
+		const innerText = normalizeMailInvisible(stripHtml(m[3])).trim();
+		if (!innerText) {
+			s = trimTrailingEmptyHtml(s.slice(0, m.index));
+			continue;
+		}
+		if (isReplyHeaderLine(innerText) || REPLY_HEADER_PREFIX.test(innerText)) {
+			s = trimTrailingEmptyHtml(s.slice(0, m.index));
+			continue;
+		}
+		break;
+	}
+
+	/* Bare text attribution after the last tag: …</div>On … wrote:<br> */
+	const bare = s.match(
+		/(?:(?:<br\s*\/?>)|\s)*((?:On|Le|Op|El)\b[\s\S]{0,220}(?:wrote|a\s+(?:[ée]crit|ecrit)|schreef|escribi[oó])\s*:)\s*(?:(?:<br\s*\/?>)|\s)*$/i
+	);
+	if (bare && bare.index != null && bare.index > 0) {
+		const peeled = normalizeMailInvisible(decodeHtmlEntities(bare[1])).trim();
+		if (isReplyHeaderLine(peeled) || REPLY_HEADER_PREFIX.test(peeled)) {
+			s = trimTrailingEmptyHtml(s.slice(0, bare.index));
+		}
+	}
+
+	return trimTrailingEmptyHtml(s);
 }
 
 /**
@@ -307,7 +658,7 @@ function quotedLooksLikeReply(quoted) {
 	/* email-reply-parser may keep header + body on one fragment */
 	if (
 		/^(?:On|Le|Op|El|Il|Am|Den)\b/i.test(head) &&
-		/\b(?:wrote|écrit|schreef|escribi[oó]|scritto)\s*:/i.test(head)
+		/\b(?:wrote|[ée]crit|ecrit|schreef|escribi[oó]|scritto)\s*:/i.test(head)
 	) {
 		return true;
 	}
@@ -360,7 +711,7 @@ function splitViaReplyParser(text) {
  * @returns {{ main: string, quoted: string } | null}
  */
 function splitViaLineScan(text) {
-	const lines = text.split('\n');
+	const lines = normalizeMailInvisible(text).split('\n');
 	let start = -1;
 	for (let i = 0; i < lines.length; i++) {
 		const trim = lines[i].trim();
@@ -390,9 +741,9 @@ function splitViaLineScan(text) {
 	 * (e.g. “> Yuna…”) are not reply quotes — only real attribution headers.
 	 */
 	if (start < 0) return null;
-	if (start === 0) return { main: '', quoted: text };
+	if (start === 0) return { main: '', quoted: lines.join('\n') };
 	return {
-		main: lines.slice(0, start).join('\n').trimEnd(),
+		main: trimTrailingEmptyPlain(lines.slice(0, start).join('\n')),
 		quoted: lines.slice(start).join('\n')
 	};
 }
@@ -400,91 +751,173 @@ function splitViaLineScan(text) {
 /**
  * Split body into new reply vs quoted tail.
  * Quoted always runs through end of body (full prior citation, not a snippet).
+ * Attribution (“On … wrote:” / “Le … a écrit”) always starts the quoted region —
+ * including when it sits mid-body before a blockquote / `>` tail.
  * Pure forwards / empty-main splits are never collapsible.
  * @param {string} body
- * @returns {{ main: string, quoted: string, collapsible: boolean }}
+ * @returns {{ main: string, quoted: string, collapsible: boolean, htmlMain: string }}
  */
 export function splitMailQuote(body) {
-	let text = String(body ?? '').replace(/\r\n/g, '\n');
-	if (!text.trim()) return { main: '', quoted: '', collapsible: false, htmlMain: '' };
+	const raw = String(body ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+	if (!raw.trim()) return { main: '', quoted: '', collapsible: false, htmlMain: '' };
 
-	let main = text;
+	const asHtml = isHtmlMailBody(raw);
+	/** @type {string} */
+	let plainSource = asHtml
+		? normalizeMailInvisible(stripHtml(raw))
+		: normalizeMailInvisible(
+				/&(?:[a-z]+|#(?:\d+|x[0-9a-f]+));/i.test(raw) ? decodeHtmlEntities(raw) : raw
+			);
+
+	let main = plainSource;
 	let quoted = '';
-	let fromHtml = false;
 	/** HTML slice before quote (when body is HTML) — keep rich main for rendering. */
 	let htmlMain = '';
+	let fromHtml = false;
 
-	if (isHtmlMailBody(text)) {
-		const qAt = findHtmlQuoteIndex(text);
-		if (qAt > 0) {
-			htmlMain = text.slice(0, qAt);
-			main = stripHtml(htmlMain);
-			quoted = stripHtml(text.slice(qAt));
+	if (asHtml) {
+		const cut = findHtmlCutIndex(raw);
+		if (cut > 0) {
+			htmlMain = raw.slice(0, cut);
+			main = normalizeMailInvisible(stripHtml(htmlMain));
+			quoted = normalizeMailInvisible(stripHtml(raw.slice(cut)));
 			fromHtml = true;
-		} else if (qAt === 0) {
-			/* Entire body is a quote container — don't collapse to empty. */
-			return { main: stripHtml(text), quoted: '', collapsible: false, htmlMain: '' };
-		} else {
-			text = stripHtml(text);
-			main = text;
+		} else if (cut === 0) {
+			/* Entire body is a quote/attr container — don't collapse to empty. */
+			return {
+				main: trimTrailingEmptyPlain(stripHtml(raw)),
+				quoted: '',
+				collapsible: false,
+				htmlMain: ''
+			};
 		}
 	}
 
-	if (!quoted) {
-		const viaLib = splitViaReplyParser(text);
-		const viaScan = viaLib || splitViaLineScan(text);
-		if (viaScan) {
-			main = viaScan.main;
-			quoted = viaScan.quoted;
-			/* Plain split of a previously-stripped HTML body — htmlMain no longer matches. */
-			if (!fromHtml) htmlMain = '';
-		}
-	} else if (fromHtml && !quotedLooksLikeReply(quoted)) {
-		/* Attribution often sits just before the quote container — fold it in. */
-		const peeled = peelTrailingReplyHeader(main, quoted);
-		if (peeled && quotedLooksLikeReply(peeled.quoted)) {
-			main = peeled.main;
-			quoted = peeled.quoted;
-			htmlMain = htmlMain ? peelHtmlTrailingAttr(htmlMain) : '';
-			if (htmlMain && stripHtml(htmlMain).trim() !== main.trim()) htmlMain = '';
-		} else if (!/<blockquote/i.test(String(body || ''))) {
-			/* HTML wrapper without a real attribution — keep full body visible. */
-			return { main: stripHtml(String(body ?? '')), quoted: '', collapsible: false, htmlMain: '' };
+	/*
+	 * Authoritative plain split: earliest “On … wrote:” wins even when an early
+	 * HTML <blockquote> (inline cite) would have cut too soon.
+	 */
+	const viaPlain = splitViaReplyParser(plainSource) || splitViaLineScan(plainSource);
+	if (viaPlain) {
+		const plainMain = viaPlain.main;
+		const plainQuoted = viaPlain.quoted;
+		/* Prefer the earlier attribution boundary. */
+		if (
+			!quoted.trim() ||
+			plainMain.length < main.length ||
+			(quotedLooksLikeReply(plainQuoted) && !quotedLooksLikeReply(quoted))
+		) {
+			main = plainMain;
+			quoted = plainQuoted;
+			if (asHtml && fromHtml) {
+				/* Re-cut htmlMain to the plain attribution when it is earlier. */
+				const attrAt = findHtmlAttributionIndex(raw);
+				const qAt = findHtmlQuoteIndex(raw);
+				let cut = -1;
+				if (attrAt >= 0 && qAt >= 0) cut = Math.min(attrAt, qAt);
+				else cut = attrAt >= 0 ? attrAt : qAt;
+				if (cut > 0) {
+					htmlMain = raw.slice(0, cut);
+					fromHtml = true;
+				} else {
+					htmlMain = '';
+					fromHtml = false;
+				}
+			} else if (!fromHtml) {
+				htmlMain = '';
+			}
 		}
 	}
 
-	/* Even when the quote container already looked like a reply, peel a stray
-	 * attribution left in main (e.g. text before <blockquote> without gmail_attr). */
 	if (quoted.trim()) {
 		const peeled = peelTrailingReplyHeader(main, quoted);
 		if (peeled) {
 			main = peeled.main;
 			quoted = peeled.quoted;
-			if (htmlMain) {
-				htmlMain = peelHtmlTrailingAttr(htmlMain);
-				if (stripHtml(htmlMain).trim() !== main.trim()) htmlMain = '';
+		}
+		if (htmlMain) {
+			htmlMain = peelHtmlTrailingAttr(htmlMain);
+			if (normalizeMailInvisible(stripHtml(htmlMain)).trim() !== normalizeMailInvisible(main).trim()) {
+				htmlMain = '';
 			}
 		}
+	} else if (fromHtml && !/<blockquote/i.test(raw) && findHtmlAttributionIndex(raw) < 0) {
+		/* HTML wrapper without a real attribution — keep full body visible. */
+		return {
+			main: trimTrailingEmptyPlain(stripHtml(raw)),
+			quoted: '',
+			collapsible: false,
+			htmlMain: ''
+		};
 	}
 
-	if (!quoted.trim()) return { main: text, quoted: '', collapsible: false, htmlMain: '' };
+	main = trimTrailingEmptyPlain(main);
+	quoted = String(quoted || '').replace(/^\n+/, '');
+	quoted = trimTrailingEmptyPlain(quoted);
+	if (htmlMain) htmlMain = trimTrailingEmptyHtml(htmlMain);
+
+	if (!quoted.trim()) {
+		return {
+			main: trimTrailingEmptyPlain(asHtml ? stripHtml(raw) : plainSource),
+			quoted: '',
+			collapsible: false,
+			htmlMain: ''
+		};
+	}
 
 	const firstQuoted = quoted
 		.split('\n')
 		.map((l) => l.trim())
 		.find(Boolean);
+	const firstPlain = plainSource
+		.split('\n')
+		.map((l) => l.trim())
+		.find(Boolean);
 	const pureForward =
-		!main.trim() ||
 		isForwardBanner(firstQuoted || '') ||
-		(isForwardBanner(text.split('\n').map((l) => l.trim()).find(Boolean) || '') &&
-			!quotedLooksLikeReply(quoted));
+		(isForwardBanner(firstPlain || '') && !quotedLooksLikeReply(quoted));
 
 	if (pureForward) {
-		return { main: text, quoted: '', collapsible: false, htmlMain: '' };
+		return {
+			main: trimTrailingEmptyPlain(asHtml ? stripHtml(raw) : plainSource),
+			quoted: '',
+			collapsible: false,
+			htmlMain: ''
+		};
 	}
 	if (!main.trim()) {
-		return { main: text, quoted: '', collapsible: false, htmlMain: '' };
+		/* Attribution-only / quote-only body — show full text, no empty collapse. */
+		return {
+			main: trimTrailingEmptyPlain(asHtml ? stripHtml(raw) : plainSource),
+			quoted: '',
+			collapsible: false,
+			htmlMain: ''
+		};
 	}
+
+	/* Final safety: never leave an attribution line in visible main. */
+	const safety = foldAttributionFromMain(main, quoted);
+	if (safety) {
+		main = trimTrailingEmptyPlain(safety.main);
+		quoted = trimTrailingEmptyPlain(safety.quoted);
+		if (htmlMain) {
+			htmlMain = peelHtmlTrailingAttr(htmlMain);
+			if (normalizeMailInvisible(stripHtml(htmlMain)).trim() !== normalizeMailInvisible(main).trim()) {
+				htmlMain = '';
+			} else {
+				htmlMain = trimTrailingEmptyHtml(htmlMain);
+			}
+		}
+		if (!main.trim()) {
+			return {
+				main: trimTrailingEmptyPlain(asHtml ? stripHtml(raw) : plainSource),
+				quoted: '',
+				collapsible: false,
+				htmlMain: ''
+			};
+		}
+	}
+
 	return { main, quoted, collapsible: true, htmlMain };
 }
 

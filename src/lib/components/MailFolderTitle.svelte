@@ -97,6 +97,7 @@
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
+		pointer-events: none;
 	}
 
 	@media (max-width: 767px) {

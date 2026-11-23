@@ -145,11 +145,17 @@
 	}
 
 	const selection = $derived(ui.selection);
+	/** Chat detail only while actually on /chat — never leak notifs into Mail/Photos. */
+	const onChatSection = $derived($page.url.pathname.startsWith('/chat'));
 	const chatNotifsOpen = $derived(
-		selection?.kind === 'chat' && String(selection.id) === 'notifications'
+		onChatSection &&
+			selection?.kind === 'chat' &&
+			String(selection.id) === 'notifications'
 	);
 	const chatChannelId = $derived(
-		selection?.kind === 'chat' && String(selection.id) !== 'notifications'
+		onChatSection &&
+			selection?.kind === 'chat' &&
+			String(selection.id) !== 'notifications'
 			? String(selection.id)
 			: null
 	);
@@ -2207,7 +2213,7 @@
 	</PullToRefresh>
 	</div>
 	{/key}
-{:else if $page.url.pathname.startsWith('/chat')}
+{:else if onChatSection}
 	<div class="detail-page chat-home">
 		<header class="detail-top desktop-head notifs-top">
 			<div class="detail-top-start">
@@ -2430,6 +2436,7 @@
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
 		opacity: 0.85;
+		pointer-events: none;
 	}
 
 
