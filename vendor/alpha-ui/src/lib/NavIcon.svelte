@@ -130,6 +130,12 @@
 				stroke="currentColor"
 			/>
 		</svg>
+	{:else if name === 'poll' || name === 'polls'}
+		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<path d="M4 14.5V8.5" stroke="currentColor" stroke-linecap="round" />
+			<path d="M9 14.5V3.5" stroke="currentColor" stroke-linecap="round" />
+			<path d="M14 14.5V6.5" stroke="currentColor" stroke-linecap="round" />
+		</svg>
 	{:else if name === 'tasks'}
 		<!-- Checkmark (Bley Check glyph, stroke for nav weight) -->
 		<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">

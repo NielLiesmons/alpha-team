@@ -8,10 +8,11 @@
 	/**
 	 * @typedef {{
 	 *   id: string,
-	 *   file: File,
+	 *   file: File | null,
 	 *   previewUrl: string | null,
 	 *   kind: string,
-	 *   caption: string
+	 *   caption: string,
+	 *   library?: { name?: string }
 	 * }} PendingMedia
 	 */
 
@@ -35,9 +36,13 @@
 			{#if active.kind === 'video' && active.previewUrl}
 				<video class="hero-media" src={active.previewUrl} controls playsinline></video>
 			{:else if active.previewUrl}
-				<img class="hero-media" src={active.previewUrl} alt={active.file.name} />
+				<img
+					class="hero-media"
+					src={active.previewUrl}
+					alt={active.file?.name || active.library?.name || ''}
+				/>
 			{:else}
-				<div class="hero-fallback">{active.file.name}</div>
+				<div class="hero-fallback">{active.file?.name || active.library?.name || t('chat.attachment')}</div>
 			{/if}
 			<button
 				type="button"
@@ -59,7 +64,7 @@
 					class="thumb"
 					class:on={i === activeIndex}
 					role="listitem"
-					aria-label={item.file.name}
+					aria-label={item.file?.name || item.library?.name || t('chat.attachment')}
 					aria-current={i === activeIndex ? 'true' : undefined}
 					onclick={() => onActiveIndex(i)}
 				>

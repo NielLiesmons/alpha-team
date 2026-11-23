@@ -20,6 +20,7 @@ import {
 import { sha256Hex } from './crypto.js';
 import { putMediaBlob } from './media.js';
 import { inferMediaKind, mimeFromNameAndType } from './media-kind.js';
+import { compressImageFile } from '$lib/compress-image.js';
 import { generateMediaPreview, previewJsonDoc } from './media-preview.js';
 
 /** v3: re-check remigrate when local mailbox cache was incomplete (truncated IDB). */
@@ -281,19 +282,30 @@ async function putMediaSidecars(session, folder, file, kind) {
  * - other → files/{id}-{name}
  * Large / streamable blobs use chunked media.json; small images stay whole-file.
  * Image/video also write thumb.jpg + preview.json (blurhash) for the Photos grid.
+ * Images are compressed by default (chat-friendly max edge); pass `{ hd: true }` to keep larger.
  *
  * @param {import('./client.js').DriveSession} session
  * @param {File} file
+ * @param {{ hd?: boolean }} [opts]
  * @returns {Promise<ChatAttachmentMeta>}
  */
-export async function uploadChatAttachment(session, file) {
+export async function uploadChatAttachment(session, file, opts = {}) {
 	const id = newId();
-	const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'file';
-	const kind = inferMediaKind({ content_type: file.type, name: file.name });
-	const contentType = mimeFromNameAndType(file.name, file.type);
-	const bytes = new Uint8Array(await file.arrayBuffer());
-	const chunked = file.size > 512 * 1024 || kind === 'video' || kind === 'voice';
-	const created_at = fileCreatedAt(file);
+	let upload = file;
+	let kind = inferMediaKind({ content_type: upload.type, name: upload.name });
+	if (kind === 'image') {
+		try {
+			upload = await compressImageFile(upload, { hd: Boolean(opts.hd) });
+		} catch {
+			/* keep original if canvas decode fails */
+		}
+		kind = inferMediaKind({ content_type: upload.type, name: upload.name });
+	}
+	const safe = upload.name.replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'file';
+	const contentType = mimeFromNameAndType(upload.name, upload.type);
+	const bytes = new Uint8Array(await upload.arrayBuffer());
+	const chunked = upload.size > 512 * 1024 || kind === 'video' || kind === 'voice';
+	const created_at = fileCreatedAt(upload);
 
 	if (kind === 'image') {
 		const folder = `media/photos/${id}`;
@@ -302,15 +314,15 @@ export async function uploadChatAttachment(session, file) {
 		if (chunked) {
 			const path = `${folder}/media.json`;
 			await putMediaBlob(session, path, contentType, bytes, { created_at });
-			meta = { path, content_type: contentType, kind, name: file.name, bytes: file.size };
+			meta = { path, content_type: contentType, kind, name: upload.name, bytes: upload.size };
 		} else {
 			const path = `${folder}/${safe}`;
 			await putPaths(session, [
-				{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safe, created_at }
+				{ path, kind: 'blob', plaintext: bytes, display_name: upload.name || safe, created_at }
 			]);
-			meta = { path, content_type: contentType, kind, name: file.name, bytes: file.size };
+			meta = { path, content_type: contentType, kind, name: upload.name, bytes: upload.size };
 		}
-		const side = await putMediaSidecars(session, folder, file, 'image');
+		const side = await putMediaSidecars(session, folder, upload, 'image');
 		return { ...meta, ...side };
 	}
 
@@ -318,13 +330,13 @@ export async function uploadChatAttachment(session, file) {
 		const folder = `media/video/items/${id}`;
 		const path = `${folder}/media.json`;
 		await putMediaBlob(session, path, contentType, bytes, { created_at });
-		const side = await putMediaSidecars(session, folder, file, 'video');
+		const side = await putMediaSidecars(session, folder, upload, 'video');
 		return {
 			path,
 			content_type: contentType,
 			kind,
-			name: file.name,
-			bytes: file.size,
+			name: upload.name,
+			bytes: upload.size,
 			...side
 		};
 	}
@@ -337,31 +349,32 @@ export async function uploadChatAttachment(session, file) {
 			path,
 			content_type: contentType,
 			kind: 'voice',
-			name: file.name,
-			bytes: file.size
+			name: upload.name,
+			bytes: upload.size
 		};
 		return meta;
 	}
 
 	const path = `files/${id}-${safe}`;
 	await putPaths(session, [
-		{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safe, created_at }
+		{ path, kind: 'blob', plaintext: bytes, display_name: upload.name || safe, created_at }
 	]);
-	return { path, content_type: contentType, kind: 'file', name: file.name, bytes: file.size };
+	return { path, content_type: contentType, kind: 'file', name: upload.name, bytes: upload.size };
 }
 
 /**
  * Upload image/video into the Photos library (same paths as chat media).
  * @param {import('./client.js').DriveSession} session
  * @param {File} file
+ * @param {{ hd?: boolean }} [opts]
  * @returns {Promise<ChatAttachmentMeta>}
  */
-export async function uploadLibraryMedia(session, file) {
+export async function uploadLibraryMedia(session, file, opts = {}) {
 	const kind = inferMediaKind({ content_type: file.type, name: file.name });
 	if (kind !== 'image' && kind !== 'video') {
 		throw new Error('photos.imageOrVideoOnly');
 	}
-	return uploadChatAttachment(session, file);
+	return uploadChatAttachment(session, file, opts);
 }
 
 /**

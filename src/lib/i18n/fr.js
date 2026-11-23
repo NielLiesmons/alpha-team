@@ -161,6 +161,13 @@ export default {
 	'photos.uploading': 'Téléversement…',
 	'photos.imageOrVideoOnly': 'Photos n’accepte que les images et vidéos',
 	'photos.untitled': 'Média',
+	'photos.uploadHd': 'HD (qualité originale)',
+	'photos.takePhoto': 'Prendre une photo ou une vidéo',
+	'photos.fromDevice': 'Depuis l’appareil',
+	'photos.libraryEmpty': 'Pas encore de photos dans votre bibliothèque',
+	'chat.chooseFiles': 'Choisir des fichiers',
+	'chat.createNote': 'Nouvelle note',
+	'chat.createTask': 'Nouvelle tâche',
 
 	/* ── settings hub ─────────────────────────────────── */
 	'settings.profile': 'Profil',

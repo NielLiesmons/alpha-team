@@ -17,6 +17,8 @@
 	let loading = $state(true);
 	let err = $state('');
 	let uploading = $state(false);
+	/** Keep original / larger quality — default is compressed. */
+	let uploadHd = $state(false);
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput;
 	let reloadGen = 0;
@@ -137,7 +139,7 @@
 		err = '';
 		try {
 			for (const file of files) {
-				await uploadLibraryMedia(session, file);
+				await uploadLibraryMedia(session, file, { hd: uploadHd });
 			}
 			await reload();
 		} catch (ex) {
@@ -162,6 +164,10 @@
 />
 
 <div class="feed photos">
+	<label class="hd-toggle">
+		<input type="checkbox" bind:checked={uploadHd} />
+		<span>{t('photos.uploadHd')}</span>
+	</label>
 	{#if loading && items.length === 0}
 		<FeedSkeleton rows={6} />
 	{:else if err && items.length === 0}
@@ -180,7 +186,7 @@
 		{/if}
 		{#each groups as group (group.key)}
 			<section class="photo-group">
-				<div class="task-group-header">
+				<div class="photo-eyebrow">
 					<span class="eyebrow-label-xs">{groupLabel(group.key)}</span>
 				</div>
 				<div class="grid">
@@ -201,12 +207,56 @@
 		min-height: 40vh;
 	}
 
+	.hd-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		margin: 0 16px 10px;
+		padding: 0;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--fg-66);
+		cursor: pointer;
+		user-select: none;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.hd-toggle input {
+		width: 14px;
+		height: 14px;
+		margin: 0;
+		accent-color: var(--fg);
+		cursor: pointer;
+	}
+
+	@media (max-width: 767px) {
+		.hd-toggle {
+			margin-left: 14px;
+			margin-right: 14px;
+		}
+	}
+
 	.photo-group {
 		display: flex;
 		flex-direction: column;
-		/* Clear gap between rounded eyebrow containers and the 1px grid. */
-		gap: 12px;
+		gap: 10px;
 		padding-bottom: 18px;
+	}
+
+	/* Flat section labels — no rounded boxed header chrome. */
+	.photo-eyebrow {
+		display: flex;
+		align-items: center;
+		margin: 0;
+		padding: 4px 16px 0;
+		box-sizing: border-box;
+	}
+
+	@media (max-width: 767px) {
+		.photo-eyebrow {
+			padding-left: 14px;
+			padding-right: 14px;
+		}
 	}
 
 	.eyebrow-label-xs {

@@ -161,6 +161,13 @@ export default {
 	'photos.uploading': 'Uploaden…',
 	'photos.imageOrVideoOnly': 'Foto’s accepteert alleen afbeeldingen en video’s',
 	'photos.untitled': 'Media',
+	'photos.uploadHd': 'HD (originele kwaliteit)',
+	'photos.takePhoto': 'Foto of video maken',
+	'photos.fromDevice': 'Vanaf apparaat',
+	'photos.libraryEmpty': 'Nog geen foto’s in je bibliotheek',
+	'chat.chooseFiles': 'Bestanden kiezen',
+	'chat.createNote': 'Nieuwe notitie',
+	'chat.createTask': 'Nieuwe taak',
 
 	/* ── settings hub ─────────────────────────────────── */
 	'settings.profile': 'Profiel',

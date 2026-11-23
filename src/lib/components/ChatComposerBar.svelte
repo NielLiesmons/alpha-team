@@ -6,13 +6,13 @@
 	import { onDestroy, tick } from 'svelte';
 	import AlphaLogo from '$lib/components/icons/AlphaLogo.svelte';
 	import Voice from '$lib/components/icons/Voice.svelte';
-	import ChatAttachModal from '$lib/components/ChatAttachModal.svelte';
+	import ChatAttachPanel from '$lib/components/ChatAttachPanel.svelte';
 	import ChatMediaStage from '$lib/components/ChatMediaStage.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { chatPublicationRefKey, chatUi, postChatMessage } from '$lib/chat.svelte.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
 	import { uploadChatAttachment } from '$lib/drive/entities.js';
-	import { inferMediaKind } from '$lib/drive/media-kind.js';
+	import { inferMediaKind, mimeFromNameAndType } from '$lib/drive/media-kind.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
@@ -62,10 +62,22 @@
 	/** @type {HTMLInputElement | undefined} */
 	let fileInputEl = $state();
 	let attachOpen = $state(false);
+	/** Keep original / larger quality on image upload — default compressed. */
+	let uploadHd = $state(false);
 
 	/**
-	 * @type {{ id: string, file: File, previewUrl: string | null, kind: string, caption: string }[]}
+	 * @typedef {{
+	 *   id: string,
+	 *   file: File | null,
+	 *   previewUrl: string | null,
+	 *   kind: string,
+	 *   caption: string,
+	 *   hd?: boolean,
+	 *   library?: import('$lib/drive/entities.js').ChatAttachmentMeta,
+	 *   libraryPreview?: boolean
+	 * }} PendingFile
 	 */
+	/** @type {PendingFile[]} */
 	let pendingFiles = $state([]);
 	let mediaFocus = $state(0);
 
@@ -105,13 +117,13 @@
 		/** @type {{ kind: string, label: string, icon: string }[]} */
 		const items = [
 			{ kind: 'photo', label: t('nav.photos'), icon: 'photos' },
-			{ kind: 'file', label: t('chat.file'), icon: 'folder' }
+			{ kind: 'file', label: t('chat.file'), icon: 'folder' },
+			{ kind: 'poll', label: t('chat.poll'), icon: 'poll' }
 		];
 		if (attachExtras) {
 			items.push(
 				{ kind: 'note', label: t('create.note'), icon: 'notes' },
-				{ kind: 'task', label: t('create.task'), icon: 'tasks' },
-				{ kind: 'poll', label: t('chat.poll'), icon: 'chat' }
+				{ kind: 'task', label: t('create.task'), icon: 'tasks' }
 			);
 		}
 		return items;
@@ -178,25 +190,23 @@
 		replyTo = null;
 	}
 
-	function openAttach() {
-		attachOpen = true;
+	function toggleAttach() {
+		attachOpen = !attachOpen;
+	}
+
+	function closeAttach() {
+		attachOpen = false;
 	}
 
 	/** @param {string} kind */
-	function onAttachPick(kind) {
-		if (kind === 'photo') {
-			mediaInputEl?.click();
-			return;
-		}
-		if (kind === 'file') {
-			fileInputEl?.click();
-			return;
-		}
+	function onAttachAction(kind) {
 		if (kind === 'note') {
+			closeAttach();
 			openComposer('note');
 			return;
 		}
 		if (kind === 'task') {
+			closeAttach();
 			openComposer('task');
 			return;
 		}
@@ -205,11 +215,10 @@
 		}
 	}
 
-	/** @param {Event} e */
-	function onFilesPicked(e) {
-		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
-		const files = [...(input.files || [])];
-		input.value = '';
+	/**
+	 * @param {File[]} files
+	 */
+	function addPickedFiles(files) {
 		if (!files.length) return;
 		const hadMedia = pendingMedia.length > 0;
 		if (hadMedia) flushActiveCaption();
@@ -225,10 +234,12 @@
 				file,
 				previewUrl: isMedia ? URL.createObjectURL(file) : null,
 				kind,
-				caption: isMedia && i === 0 ? seedCaption : ''
+				caption: isMedia && i === 0 ? seedCaption : '',
+				hd: uploadHd
 			};
 		});
 		pendingFiles = [...pendingFiles, ...added];
+		attachOpen = false;
 		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
 		if (!media.length) return;
 		const newMedia = added.filter((a) => a.kind === 'image' || a.kind === 'video');
@@ -242,10 +253,51 @@
 		}
 	}
 
+	/** @param {Event} e */
+	function onFilesPicked(e) {
+		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
+		const files = [...(input.files || [])];
+		input.value = '';
+		addPickedFiles(files);
+	}
+
+	/**
+	 * @param {import('$lib/photos.js').PhotoItem} item
+	 * @param {string | null} previewUrl
+	 */
+	function onPickLibrary(item, previewUrl) {
+		const hadMedia = pendingMedia.length > 0;
+		if (hadMedia) flushActiveCaption();
+		const seedCaption = !hadMedia && draft.trim() ? draft.trim() : '';
+		/** @type {PendingFile} */
+		const added = {
+			id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-lib`,
+			file: null,
+			previewUrl,
+			kind: item.kind,
+			caption: seedCaption,
+			libraryPreview: Boolean(previewUrl),
+			library: {
+				path: item.path,
+				content_type: mimeFromNameAndType(item.name, ''),
+				kind: item.kind,
+				name: item.name || t('photos.untitled'),
+				bytes: 0,
+				...(item.thumbPath ? { thumb_path: item.thumbPath } : {})
+			}
+		};
+		pendingFiles = [...pendingFiles, added];
+		attachOpen = false;
+		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
+		mediaFocus = Math.max(0, media.length - 1);
+		draft = media[mediaFocus]?.caption || '';
+	}
+
 	function clearPendingFiles() {
 		flushActiveCaption();
 		for (const f of pendingFiles) {
-			if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+			/* Shared media-cache URLs must not be revoked. */
+			if (f.previewUrl && !f.libraryPreview) URL.revokeObjectURL(f.previewUrl);
 		}
 		pendingFiles = [];
 		mediaFocus = 0;
@@ -257,7 +309,7 @@
 		flushActiveCaption();
 		const target = pendingMedia[mediaIndex];
 		if (!target) return;
-		if (target.previewUrl) URL.revokeObjectURL(target.previewUrl);
+		if (target.previewUrl && !target.libraryPreview) URL.revokeObjectURL(target.previewUrl);
 		pendingFiles = pendingFiles.filter((f) => f.id !== target.id);
 		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
 		if (!media.length) {
@@ -293,11 +345,11 @@
 		const files = opts.files;
 		const localAtt = files.map((f) => ({
 			kind: f.kind,
-			name: f.file.name,
-			bytes: f.file.size,
-			content_type: f.file.type,
+			name: f.file?.name || f.library?.name || 'file',
+			bytes: f.file?.size ?? f.library?.bytes ?? 0,
+			content_type: f.file?.type || f.library?.content_type || '',
 			previewUrl: f.previewUrl,
-			path: `local:${f.file.name}`,
+			path: f.library?.path || `local:${f.file?.name || 'file'}`,
 			...(f.caption?.trim() ? { caption: f.caption.trim() } : {})
 		}));
 		const isComment = Boolean(opts.pubRef);
@@ -313,7 +365,17 @@
 						resolveAttachments: async () =>
 							Promise.all(
 								files.map(async (f) => {
-									const meta = await uploadChatAttachment(session, f.file);
+									if (f.library) {
+										return {
+											...f.library,
+											previewUrl: f.previewUrl,
+											...(f.caption?.trim() ? { caption: f.caption.trim() } : {})
+										};
+									}
+									if (!f.file) throw new Error(t('chat.attachment'));
+									const meta = await uploadChatAttachment(session, f.file, {
+										hd: Boolean(f.hd)
+									});
 									return {
 										...meta,
 										previewUrl: f.previewUrl,
@@ -568,8 +630,12 @@
 		onInput();
 	}
 
-	/** Whether Escape was consumed (voice / reply). */
+	/** Whether Escape was consumed (attach / voice / reply). */
 	export function onParentEscape() {
+		if (attachOpen) {
+			closeAttach();
+			return true;
+		}
 		if (voiceRecording) {
 			cancelVoiceRecording();
 			return true;
@@ -588,6 +654,15 @@
 </script>
 
 <div class="composer-stack">
+	<ChatAttachPanel
+		open={attachOpen}
+		items={attachItems}
+		bind:hd={uploadHd}
+		onPickFiles={addPickedFiles}
+		onPickLibrary={onPickLibrary}
+		onAction={onAttachAction}
+		onClose={closeAttach}
+	/>
 	<ChatComposer expanded={chromeExpanded}>
 		{#if replyPreview}
 			<div class="composer-quote-wrap">
@@ -622,20 +697,20 @@
 				activeIndex={Math.min(mediaFocus, pendingMedia.length - 1)}
 				onActiveIndex={setMediaFocus}
 				onRemove={removePendingMedia}
-				onAddMore={openAttach}
+				onAddMore={toggleAttach}
 			/>
 		{/if}
 		{#if pendingDocs.length}
 			<div class="attach-bar">
 				{#each pendingDocs as f (f.id)}
 					<span class="attach-chip">
-						{f.file.name}
+						{f.file?.name || f.library?.name || t('chat.file')}
 						<button
 							type="button"
 							class="attach-x"
 							aria-label={t('chat.remove')}
 							onclick={() => {
-								if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+								if (f.previewUrl && !f.libraryPreview) URL.revokeObjectURL(f.previewUrl);
 								pendingFiles = pendingFiles.filter((x) => x.id !== f.id);
 							}}>×</button
 						>
@@ -690,7 +765,14 @@
 				accept=".pdf,.doc,.docx,.txt,.zip,application/pdf"
 				onchange={onFilesPicked}
 			/>
-			<button type="button" class="side-btn plus" aria-label={t('chat.attach')} onclick={openAttach}>
+			<button
+				type="button"
+				class="side-btn plus"
+				class:open={attachOpen}
+				aria-label={t('chat.attach')}
+				aria-expanded={attachOpen}
+				onclick={toggleAttach}
+			>
 				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
 					<path
 						d="M9 3.5v11M3.5 9h11"
@@ -750,14 +832,15 @@
 	</ChatComposer>
 </div>
 
-<ChatAttachModal bind:open={attachOpen} items={attachItems} onPick={onAttachPick} />
-
 <style>
 	.composer-stack {
 		pointer-events: auto;
 		position: relative;
 		width: 100%;
 		z-index: 5;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
 	}
 
 	.composer-quote-wrap {
@@ -859,6 +942,12 @@
 	.side-btn.plus {
 		background: color-mix(in srgb, var(--fg) 12%, transparent);
 		color: var(--fg-66);
+		transition: transform 0.18s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+	}
+
+	.side-btn.plus.open {
+		transform: rotate(45deg);
+		color: var(--fg);
 	}
 
 	.side-btn.mic {
