@@ -432,38 +432,6 @@
 		return 'Detail';
 	});
 
-	/** Centered mobile detail title (entity name when available). */
-	const mobileTitle = $derived.by(() => {
-		locale.value;
-		if (task?.title) return task.title;
-		if (project?.title) return project.title;
-		if (note?.title) return note.title;
-		if (ledger) return ledger.memo || ledger.account_title || t('detail.entry');
-		if (costItem?.title) return costItem.title;
-		if (salesLine?.title) return salesLine.title;
-		if (viewDoc?.title) return viewDoc.title;
-		if (dataTable?.title) return dataTable.title;
-		if (metricDoc?.title || metricDoc?.key) return metricDoc.title || metricDoc.key;
-		if (formDoc?.title) return formDoc.title;
-		if (enterprise?.title) return enterprise.title;
-		if (accountingPanel) return accountingBrowse.mode;
-		if (newsletter?.subject) return newsletter.subject;
-		if (pubPost?.title) return pubPost.title;
-		if (welcomeSelected) return t('detail.welcome');
-		if (pubsActivity) return t('web.activityTitle');
-		if (pubsAudiences) return t('nav.audiences');
-		if (pubsHub) return t('nav.publications');
-		if (pubsShop) return t('nav.shop');
-		if (pubsContent) return t('nav.content');
-		/* Subject lives big in the thread body — chrome stays generic. */
-		if (mailMsg) return t('mail.thread');
-		if (chatNotifsOpen) return t('chat.activityOpen');
-		if (chatChannel) return chatChannel.title || t('chat.general');
-		if (fileEntry) return fileTitle;
-		if (settingsSectionId) return settingsTitles[settingsSectionId] || t('nav.settings');
-		return typeLabel;
-	});
-
 	const open = $derived(
 		Boolean(
 				task ||
@@ -950,7 +918,7 @@
 			!isCategorizedContact(mailContactEmail) &&
 			mailCategoryFor(mailMsg) === 'new'}
 		{#if showMoreMenu || mailNeedsTriage || chatNotifsOpen}
-			<ChromeMobileBar title={mobileTitle || typeLabel} syncing={detailSyncing} onBack={close}>
+			<ChromeMobileBar title={typeLabel} syncing={detailSyncing} onBack={close}>
 				{#snippet trailing()}
 					{#if chatNotifsOpen}
 						<NotifFilterButton
@@ -976,7 +944,7 @@
 				{/snippet}
 			</ChromeMobileBar>
 		{:else}
-			<ChromeMobileBar title={mobileTitle || typeLabel} syncing={detailSyncing} onBack={close} />
+			<ChromeMobileBar title={typeLabel} syncing={detailSyncing} onBack={close} />
 		{/if}
 
 		<DropdownMenu
