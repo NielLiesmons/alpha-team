@@ -956,6 +956,17 @@
 		max-width: calc(100% - 40px);
 	}
 
+	/* Voice rows: ~80% of the card, capped at 500px on desktop. */
+	.card:has(:global(.voice)) .bubble-trailing {
+		width: min(500px, 80%);
+	}
+
+	.card:has(:global(.voice)) .bubble-stack,
+	.bubble:has(:global(.voice)) {
+		width: 100%;
+		max-width: 100%;
+	}
+
 	.card.threaded .bubble-trailing {
 		max-width: calc(100% - 32px);
 	}

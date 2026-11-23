@@ -832,7 +832,7 @@
 					aria-label={t('chat.send')}
 					onclick={() => void finishVoiceRecording(true)}
 				>
-					<span class="send-ico"><AlphaLogo size={20} /></span>
+					<span class="send-ico"><AlphaLogo size={22} /></span>
 				</button>
 			{/if}
 		</div>
@@ -959,6 +959,7 @@
 		grid-column: 2;
 		grid-row: 1 / -1;
 		align-self: stretch;
+		justify-self: end;
 	}
 
 	.composer-row {
@@ -1015,12 +1016,15 @@
 		color: #fff;
 	}
 
+	/* Square send that matches both voice rows in height (not a tall portrait pill). */
 	.side-btn.send.send-span {
-		width: 40px;
-		min-height: 40px;
+		width: auto;
 		height: auto;
+		min-width: 0;
+		min-height: 0;
+		aspect-ratio: 1 / 1;
 		margin: 7px 7px 7px 0;
-		border-radius: 12px;
+		border-radius: 14px;
 		align-self: stretch;
 	}
 

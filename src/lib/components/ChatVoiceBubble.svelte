@@ -116,7 +116,7 @@
 			onpointerdown={onSeek}
 		>
 			{#each bars as h, i (i)}
-				{@const half = Math.round(4 + h * 10)}
+				{@const half = Math.max(1, Math.round((4 + h * 10) * (2 / 3)))}
 				<span class="bar-col" class:on={i / bars.length <= progress}>
 					<span class="bar top" style:height="{half}px"></span>
 					<span class="bar bot" style:height="{half}px"></span>
@@ -158,8 +158,9 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		min-width: min(220px, 72vw);
-		max-width: min(300px, 82vw);
+		width: 100%;
+		min-width: 0;
+		max-width: 500px;
 		padding: 10px 12px;
 		box-sizing: border-box;
 	}
@@ -196,7 +197,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 1.5px;
-		height: 28px;
+		height: 19px;
 		padding: 0;
 		border: none;
 		background: transparent;
