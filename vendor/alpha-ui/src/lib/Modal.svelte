@@ -13,6 +13,8 @@
 		label = 'Dialog',
 		/** Enable drag-down dismiss on mobile (gesture only — no handle UI) */
 		dragDismiss: dragDismissEnabled = true,
+		/** 'default' | 'media' — media ≈ 80vw × 80vh desktop viewer */
+		size = 'default',
 		children
 	} = $props();
 
@@ -50,10 +52,23 @@
 
 {#if open}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="overlay" onclick={close} role="presentation" transition:fade={{ duration: 180 }}></div>
-	<div class="wrap" role="dialog" aria-modal="true" aria-label={label}>
+	<div
+		class="overlay"
+		class:media={size === 'media'}
+		onclick={close}
+		role="presentation"
+		transition:fade={{ duration: 180 }}
+	></div>
+	<div
+		class="wrap"
+		class:media={size === 'media'}
+		role="dialog"
+		aria-modal="true"
+		aria-label={label}
+	>
 		<div
 			class="sheet"
+			class:media={size === 'media'}
 			transition:sheetSlide
 			use:dragDismiss={{ onclose: close, enabled: dragDismissEnabled }}
 		>
@@ -70,6 +85,10 @@
 		background: var(--scrim);
 	}
 
+	.overlay.media {
+		z-index: 90;
+	}
+
 	.wrap {
 		position: fixed;
 		z-index: 50;
@@ -82,6 +101,10 @@
 		justify-content: center;
 		pointer-events: none;
 		box-sizing: border-box;
+	}
+
+	.wrap.media {
+		z-index: 100;
 	}
 
 	.sheet {
@@ -102,6 +125,12 @@
 		overflow: auto;
 	}
 
+	.sheet.media {
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
 	@media (min-width: 768px) {
 		.wrap {
 			align-items: center;
@@ -115,6 +144,14 @@
 			border-radius: calc(var(--radius-hero, 34px) - 2px);
 			border-bottom: 1px solid var(--glass-border);
 			overflow: hidden;
+		}
+
+		.sheet.media {
+			/* Leave side room for external chevrons (same 7.5rem gutter as default). */
+			width: min(80vw, calc(100vw - 7.5rem));
+			max-width: min(80vw, calc(100vw - 7.5rem));
+			height: 80vh;
+			max-height: 80vh;
 		}
 	}
 </style>

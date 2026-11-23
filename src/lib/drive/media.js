@@ -40,7 +40,7 @@ function throwIfAborted(signal) {
  * @param {string} manifestPath
  * @param {string} contentType
  * @param {Uint8Array} plaintext
- * @param {{ chunkSize?: number, onProgress?: (done: number, total: number) => void, signal?: AbortSignal }} [opts]
+ * @param {{ chunkSize?: number, onProgress?: (done: number, total: number) => void, signal?: AbortSignal, created_at?: string }} [opts]
  */
 export async function putMediaBlob(session, manifestPath, contentType, plaintext, opts = {}) {
 	const chunkSize = Math.max(opts.chunkSize ?? DEFAULT_CHUNK_SIZE, 64 * 1024);
@@ -78,7 +78,8 @@ export async function putMediaBlob(session, manifestPath, contentType, plaintext
 		manifestPath,
 		'media',
 		JSON.stringify(manifest, null, 2),
-		fileKey
+		fileKey,
+		opts.created_at ? { created_at: opts.created_at } : undefined
 	);
 	return { manifest, fileKeyHex: bytesToHex(fileKey) };
 }

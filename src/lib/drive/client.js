@@ -906,7 +906,7 @@ export async function putPath(session, logicalPath, kind, plaintext) {
  * Retries if tip moved between load and commit. Pass `rematerialize` for index docs
  * (e.g. chat/feed.json) so concurrent writers re-merge instead of clobbering ids.
  * @param {DriveSession} session
- * @param {{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]} entries
+ * @param {{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string, created_at?: string }[]} entries
  * @param {{
  *   mergeFirst?: boolean,
  *   skipTipProbe?: boolean,
@@ -915,8 +915,8 @@ export async function putPath(session, logicalPath, kind, plaintext) {
  *   prePrepared?: Record<string, { hash: string, wrapped_key: string, kind: string, display_name?: string }>,
  *   rematerialize?: (
  *     dir: any,
- *     entries: { path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]
- *   ) => Promise<{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]>
+ *     entries: { path: string, kind: string, plaintext: Uint8Array | string, display_name?: string, created_at?: string }[]
+ *   ) => Promise<{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string, created_at?: string }[]>
  * }} [opts]
  */
 export async function putPaths(session, entries, opts = {}) {
@@ -929,7 +929,7 @@ export async function putPaths(session, entries, opts = {}) {
 
 /**
  * @param {DriveSession} session
- * @param {{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]} entries
+ * @param {{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string, created_at?: string }[]} entries
  * @param {{
  *   mergeFirst?: boolean,
  *   skipTipProbe?: boolean,
@@ -938,8 +938,8 @@ export async function putPaths(session, entries, opts = {}) {
  *   prePrepared?: Record<string, { hash: string, wrapped_key: string, kind: string, display_name?: string }>,
  *   rematerialize?: (
  *     dir: any,
- *     entries: { path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]
- *   ) => Promise<{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string }[]>
+ *     entries: { path: string, kind: string, plaintext: Uint8Array | string, display_name?: string, created_at?: string }[]
+ *   ) => Promise<{ path: string, kind: string, plaintext: Uint8Array | string, display_name?: string, created_at?: string }[]>
  * }} [opts]
  */
 async function putPathsUnlocked(session, entries, opts = {}) {
@@ -987,7 +987,7 @@ async function putPathsUnlocked(session, entries, opts = {}) {
 			current = await opts.rematerialize(fresh, current);
 		}
 
-		/** @type {{ name: string, kind: string, hash: string, wrapped_key: string }[]} */
+		/** @type {{ name: string, kind: string, hash: string, wrapped_key: string, display_name?: string, created_at?: string }[]} */
 		const prepared = await Promise.all(
 			current.map(async (entry) => {
 				const name = normalizePath(entry.path);
@@ -1014,7 +1014,8 @@ async function putPathsUnlocked(session, entries, opts = {}) {
 					kind: entry.kind,
 					hash,
 					wrapped_key: fileKeyHex,
-					...(entry.display_name ? { display_name: String(entry.display_name) } : {})
+					...(entry.display_name ? { display_name: String(entry.display_name) } : {}),
+					...(entry.created_at ? { created_at: String(entry.created_at) } : {})
 				};
 				preparedByName.set(name, { ptKey, row });
 				return row;
@@ -1024,14 +1025,17 @@ async function putPathsUnlocked(session, entries, opts = {}) {
 		dir = fresh;
 		dir.schema = 'alpha.dir/1';
 		dir.children = dir.children ?? {};
+		const nowIso = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 		for (const row of prepared) {
 			const prev = dir.children[row.name];
 			const display_name = row.display_name || prev?.display_name || undefined;
+			const created_at = row.created_at || prev?.created_at || nowIso;
 			dir.children[row.name] = {
 				hash: row.hash,
 				kind: row.kind,
 				wrapped_key: row.wrapped_key,
-				...(display_name ? { display_name: String(display_name) } : {})
+				...(display_name ? { display_name: String(display_name) } : {}),
+				created_at: String(created_at)
 			};
 		}
 
@@ -1166,8 +1170,9 @@ export async function deletePaths(session, logicalPaths) {
  * @param {string} kind
  * @param {Uint8Array | string} plaintext
  * @param {Uint8Array} fileKey 32 bytes
+ * @param {{ created_at?: string, display_name?: string }} [meta]
  */
-export async function putPathWithKey(session, logicalPath, kind, plaintext, fileKey) {
+export async function putPathWithKey(session, logicalPath, kind, plaintext, fileKey, meta = {}) {
 	const root = parseRootKey(session.rootKey);
 	const bytes =
 		typeof plaintext === 'string' ? new TextEncoder().encode(plaintext) : plaintext;
@@ -1180,10 +1185,15 @@ export async function putPathWithKey(session, logicalPath, kind, plaintext, file
 	if (!name) throw new Error('empty path');
 	dir.schema = 'alpha.dir/1';
 	dir.children = dir.children ?? {};
+	const prev = dir.children[name];
+	const nowIso = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+	const display_name = meta.display_name || prev?.display_name || undefined;
 	dir.children[name] = {
 		hash,
 		kind,
-		wrapped_key: bytesToHex(fileKey)
+		wrapped_key: bytesToHex(fileKey),
+		...(display_name ? { display_name: String(display_name) } : {}),
+		created_at: String(meta.created_at || prev?.created_at || nowIso)
 	};
 
 	const dirBytes = new TextEncoder().encode(JSON.stringify(dir));

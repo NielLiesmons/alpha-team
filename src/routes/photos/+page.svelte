@@ -4,7 +4,7 @@
 	import PhotoTile from '$lib/components/PhotoTile.svelte';
 	import { listEntries, uploadLibraryMedia } from '$lib/drive/entities.js';
 	import { activeSession, driveSession } from '$lib/drive/session.svelte.js';
-	import { listPhotoItems } from '$lib/photos.js';
+	import { groupPhotosByTime, listPhotoItems } from '$lib/photos.js';
 	import { photosUploadUi } from '$lib/photos-upload.svelte.js';
 	import { openMediaLightbox } from '$lib/media-lightbox.svelte.js';
 	import { ui } from '$lib/workspace.svelte.js';
@@ -12,7 +12,7 @@
 
 	const ENTRIES_CACHE_KEY = 'alpha.photos.entries.v1';
 
-	/** @type {{ path: string, kind: string, display_name?: string | null }[]} */
+	/** @type {{ path: string, kind: string, display_name?: string | null, created_at?: string | null }[]} */
 	let entries = $state([]);
 	let loading = $state(true);
 	let err = $state('');
@@ -23,6 +23,15 @@
 	let reloadInFlight = false;
 
 	const items = $derived(listPhotoItems(entries));
+	const groups = $derived(groupPhotosByTime(items));
+
+	/** @param {'today' | 'week' | 'month' | 'earlier'} key */
+	function groupLabel(key) {
+		if (key === 'today') return t('chat.activityGroupToday');
+		if (key === 'week') return t('chat.activityGroupThisWeek');
+		if (key === 'month') return t('chat.activityGroupThisMonth');
+		return t('chat.activityGroupEarlier');
+	}
 
 	function hydrateFromCache() {
 		if (typeof localStorage === 'undefined') return;
@@ -169,11 +178,18 @@
 		{#if err}
 			<p class="status err">{err}</p>
 		{/if}
-		<div class="grid">
-			{#each items as item (item.key)}
-				<PhotoTile {item} onclick={() => onItem(item)} />
-			{/each}
-		</div>
+		{#each groups as group (group.key)}
+			<section class="photo-group">
+				<div class="task-group-header">
+					<span class="eyebrow-label-xs">{groupLabel(group.key)}</span>
+				</div>
+				<div class="grid">
+					{#each group.items as item (item.key)}
+						<PhotoTile {item} onclick={() => onItem(item)} />
+					{/each}
+				</div>
+			</section>
+		{/each}
 	{/if}
 </div>
 
@@ -184,6 +200,23 @@
 		padding-right: 0;
 		min-height: 40vh;
 	}
+
+	.photo-group {
+		display: flex;
+		flex-direction: column;
+		/* Clear gap between rounded eyebrow containers and the 1px grid. */
+		gap: 12px;
+		padding-bottom: 18px;
+	}
+
+	.eyebrow-label-xs {
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--fg-66);
+	}
+
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));

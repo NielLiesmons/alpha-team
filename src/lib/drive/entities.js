@@ -31,6 +31,15 @@ function nowRfc3339() {
 	return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+/** @param {File | Blob | undefined | null} file */
+function fileCreatedAt(file) {
+	const ms = file && 'lastModified' in file ? Number(file.lastModified) : NaN;
+	if (Number.isFinite(ms) && ms > 0) {
+		return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+	}
+	return nowRfc3339();
+}
+
 function newId() {
 	const bytes = crypto.getRandomValues(new Uint8Array(8));
 	return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -183,6 +192,10 @@ export async function listEntries(session) {
 			display_name:
 				typeof child.display_name === 'string' && child.display_name.trim()
 					? child.display_name.trim()
+					: null,
+			created_at:
+				typeof child.created_at === 'string' && child.created_at.trim()
+					? child.created_at.trim()
 					: null
 		}))
 		.sort((a, b) => a.path.localeCompare(b.path));
@@ -235,18 +248,21 @@ async function putMediaSidecars(session, folder, file, kind) {
 	const thumbPath = `${folder}/thumb.jpg`;
 	const metaPath = `${folder}/preview.json`;
 	const doc = previewJsonDoc(preview);
+	const created_at = fileCreatedAt(file);
 	await putPaths(session, [
 		{
 			path: thumbPath,
 			kind: 'blob',
 			plaintext: preview.thumbBytes,
-			display_name: 'thumb.jpg'
+			display_name: 'thumb.jpg',
+			created_at
 		},
 		{
 			path: metaPath,
 			kind: 'blob',
 			plaintext: JSON.stringify(doc),
-			display_name: 'preview.json'
+			display_name: 'preview.json',
+			created_at
 		}
 	]);
 	return {
@@ -277,6 +293,7 @@ export async function uploadChatAttachment(session, file) {
 	const contentType = mimeFromNameAndType(file.name, file.type);
 	const bytes = new Uint8Array(await file.arrayBuffer());
 	const chunked = file.size > 512 * 1024 || kind === 'video' || kind === 'voice';
+	const created_at = fileCreatedAt(file);
 
 	if (kind === 'image') {
 		const folder = `media/photos/${id}`;
@@ -284,12 +301,12 @@ export async function uploadChatAttachment(session, file) {
 		let meta;
 		if (chunked) {
 			const path = `${folder}/media.json`;
-			await putMediaBlob(session, path, contentType, bytes);
+			await putMediaBlob(session, path, contentType, bytes, { created_at });
 			meta = { path, content_type: contentType, kind, name: file.name, bytes: file.size };
 		} else {
 			const path = `${folder}/${safe}`;
 			await putPaths(session, [
-				{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safe }
+				{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safe, created_at }
 			]);
 			meta = { path, content_type: contentType, kind, name: file.name, bytes: file.size };
 		}
@@ -300,7 +317,7 @@ export async function uploadChatAttachment(session, file) {
 	if (kind === 'video') {
 		const folder = `media/video/items/${id}`;
 		const path = `${folder}/media.json`;
-		await putMediaBlob(session, path, contentType, bytes);
+		await putMediaBlob(session, path, contentType, bytes, { created_at });
 		const side = await putMediaSidecars(session, folder, file, 'video');
 		return {
 			path,
@@ -314,7 +331,7 @@ export async function uploadChatAttachment(session, file) {
 
 	if (kind === 'voice') {
 		const path = `media/audio/clips/${id}/media.json`;
-		await putMediaBlob(session, path, contentType, bytes);
+		await putMediaBlob(session, path, contentType, bytes, { created_at });
 		/** @type {ChatAttachmentMeta} */
 		const meta = {
 			path,
@@ -328,7 +345,7 @@ export async function uploadChatAttachment(session, file) {
 
 	const path = `files/${id}-${safe}`;
 	await putPaths(session, [
-		{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safe }
+		{ path, kind: 'blob', plaintext: bytes, display_name: file.name || safe, created_at }
 	]);
 	return { path, content_type: contentType, kind: 'file', name: file.name, bytes: file.size };
 }
