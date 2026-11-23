@@ -1134,17 +1134,18 @@
 				</header>
 				{#if onRefresh}
 					<PullToRefresh onRefresh={onRefresh}>
+						<!--
+							Never {#if}-unmount children while blanking — that tore out
+							SvelteKit’s page outlet mid-goto and left the pane empty.
+							CSS-hide only; SK can swap the route under the blank.
+						-->
 						<div class="pane-inner" class:list-blank={listBlank}>
-							{#if !listBlank}
-								{@render children?.()}
-							{/if}
+							{@render children?.()}
 						</div>
 					</PullToRefresh>
 				{:else}
 					<div class="pane-inner" class:list-blank={listBlank}>
-						{#if !listBlank}
-							{@render children?.()}
-						{/if}
+						{@render children?.()}
 					</div>
 				{/if}
 				<div class="list-bottom-fade" aria-hidden="true"></div>
@@ -2298,6 +2299,12 @@
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+	}
+
+	/* Mobile section switch: hide stale page instantly without unmounting SK outlet */
+	.pane-inner.list-blank > :global(*) {
+		visibility: hidden !important;
+		pointer-events: none !important;
 	}
 
 	.sr-only {
