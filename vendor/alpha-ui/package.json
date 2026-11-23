@@ -54,7 +54,9 @@
 		"./icons/MenuToggle.svelte": "./src/lib/icons/MenuToggle.svelte",
 		"./icons/Folder.svelte": "./src/lib/icons/Folder.svelte",
 		"./icons/Search.svelte": "./src/lib/icons/Search.svelte",
-		"./icons/At.svelte": "./src/lib/icons/At.svelte"
+		"./icons/At.svelte": "./src/lib/icons/At.svelte",
+		"./icons/Phone.svelte": "./src/lib/icons/Phone.svelte",
+		"./icons/VideoCall.svelte": "./src/lib/icons/VideoCall.svelte"
 	},
 	"files": [
 		"icons",

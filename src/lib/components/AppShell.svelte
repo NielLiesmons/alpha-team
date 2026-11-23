@@ -61,6 +61,7 @@
 	import { locale, t } from '$lib/i18n.svelte.js';
 	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
 	import ChatVoiceNowPlaying from '$lib/components/ChatVoiceNowPlaying.svelte';
+	import ChatCallActions from '$lib/components/ChatCallActions.svelte';
 	import { voicePlayerVisible } from '$lib/chat-voice-player.svelte.js';
 	import UiShell from '@alpha/ui/UiShell.svelte';
 	import CostCreate from './CostCreate.svelte';
@@ -658,6 +659,7 @@
 				</button>
 			{/if}
 		{:else if chatList}
+			<ChatCallActions />
 			<button
 				type="button"
 				class="chrome-btn chat-activity-btn"
