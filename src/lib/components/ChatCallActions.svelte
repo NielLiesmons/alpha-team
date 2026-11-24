@@ -1,31 +1,25 @@
 <script>
 	/**
-	 * Chat list chrome: call affordance + chevron mode menu (Coming soon).
-	 * Default selected mode = audio. Glass rounds match AppShell chrome-btn.
+	 * Chat list chrome: one glass pill — audio/video icon + chevron options.
+	 * Default selected mode = audio. Coming soon until media is wired.
 	 */
 	import Phone from '@alpha/ui/icons/Phone.svelte';
 	import VideoCall from '@alpha/ui/icons/VideoCall.svelte';
 	import DropdownMenu from './DropdownMenu.svelte';
 	import { t } from '$lib/i18n.svelte.js';
 
-	/** @typedef {'audio' | 'video' | 'meeting'} CallMode */
+	/** @typedef {'audio' | 'video'} CallMode */
 
 	/** @type {CallMode} */
 	let mode = $state('audio');
 	let menuOpen = $state(false);
 	/** @type {HTMLElement | null} */
-	let chevronEl = $state(null);
+	let pillEl = $state(null);
 	let soonToast = $state(false);
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let soonTimer = null;
 
-	const callLabel = $derived(
-		mode === 'video'
-			? t('chat.videoCall')
-			: mode === 'meeting'
-				? t('chat.meeting')
-				: t('chat.audioCall')
-	);
+	const callLabel = $derived(mode === 'video' ? t('chat.videoCall') : t('chat.audioCall'));
 
 	function showComingSoon() {
 		soonToast = true;
@@ -36,10 +30,6 @@
 		}, 1800);
 	}
 
-	function onCallClick() {
-		showComingSoon();
-	}
-
 	/** @param {CallMode} next */
 	function chooseMode(next) {
 		mode = next;
@@ -47,7 +37,7 @@
 		showComingSoon();
 	}
 
-	function toggleMenu() {
+	function onPillClick() {
 		menuOpen = !menuOpen;
 	}
 </script>
@@ -55,28 +45,21 @@
 <div class="chat-call" role="group" aria-label={t('chat.call')}>
 	<button
 		type="button"
-		class="chrome-btn call-main"
+		class="chrome-btn call-pill"
+		bind:this={pillEl}
 		aria-label={callLabel}
-		onclick={onCallClick}
-	>
-		{#if mode === 'video'}
-			<VideoCall size={16} />
-		{:else}
-			<!-- audio + meeting share the phone glyph until meeting has its own mark -->
-			<Phone size={14} />
-		{/if}
-	</button>
-	<span class="call-divider" aria-hidden="true"></span>
-	<button
-		type="button"
-		class="chrome-btn call-chevron"
-		bind:this={chevronEl}
-		aria-label={t('chat.callOptions')}
 		aria-expanded={menuOpen}
 		aria-haspopup="menu"
-		onclick={toggleMenu}
+		onclick={onPillClick}
 	>
-		<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+		<span class="call-ico" aria-hidden="true">
+			{#if mode === 'video'}
+				<VideoCall size={16} />
+			{:else}
+				<Phone size={14} />
+			{/if}
+		</span>
+		<svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
 			<path
 				d="M3 4.5 6 7.5 9 4.5"
 				stroke="currentColor"
@@ -94,46 +77,35 @@
 
 <DropdownMenu
 	open={menuOpen}
-	anchor={chevronEl}
+	anchor={pillEl}
 	placement="below"
 	align="end"
 	width={220}
 	maxHeight={280}
 	onclose={() => (menuOpen = false)}
 >
-	<div class="dropdown-list" role="menu">
+	<div class="alpha-popover-list dropdown-list" role="menu">
 		<button
 			type="button"
-			class="dropdown-item"
+			class="alpha-popover-item dropdown-item"
 			class:on={mode === 'audio'}
 			role="menuitem"
 			onclick={() => chooseMode('audio')}
 		>
-			<Phone size={14} />
-			<span>{t('chat.audioCall')}</span>
-			<span class="hint">{t('chat.callSoon')}</span>
+			<span class="alpha-popover-ico"><Phone size={14} /></span>
+			<span class="alpha-popover-label">{t('chat.audioCall')}</span>
+			<span class="alpha-popover-hint hint">{t('chat.callSoon')}</span>
 		</button>
 		<button
 			type="button"
-			class="dropdown-item"
+			class="alpha-popover-item dropdown-item"
 			class:on={mode === 'video'}
 			role="menuitem"
 			onclick={() => chooseMode('video')}
 		>
-			<VideoCall size={15} />
-			<span>{t('chat.videoCall')}</span>
-			<span class="hint">{t('chat.callSoon')}</span>
-		</button>
-		<button
-			type="button"
-			class="dropdown-item"
-			class:on={mode === 'meeting'}
-			role="menuitem"
-			onclick={() => chooseMode('meeting')}
-		>
-			<Phone size={14} />
-			<span>{t('chat.meeting')}</span>
-			<span class="hint">{t('chat.callSoon')}</span>
+			<span class="alpha-popover-ico"><VideoCall size={15} /></span>
+			<span class="alpha-popover-label">{t('chat.videoCall')}</span>
+			<span class="alpha-popover-hint hint">{t('chat.callSoon')}</span>
 		</button>
 	</div>
 </DropdownMenu>
@@ -143,18 +115,20 @@
 		position: relative;
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
 		flex-shrink: 0;
 	}
 
 	.chrome-btn {
-		width: 28px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
 		height: 28px;
-		display: grid;
-		place-items: center;
-		padding: 0;
+		width: auto;
+		min-width: 28px;
+		padding: 0 8px;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 9999px;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -177,21 +151,20 @@
 		transform: scale(0.96);
 	}
 
-	.chrome-btn :global(svg) {
+	.call-ico {
+		display: grid;
+		place-items: center;
+		line-height: 0;
+	}
+
+	.call-ico :global(svg),
+	.chevron {
 		display: block;
 	}
 
-	.call-chevron {
-		/* Slightly narrower optical hit — chevron only */
-		width: 28px;
-	}
-
-	.call-divider {
-		width: 1px;
-		height: 16px;
-		background: var(--fg-16, var(--fg-8));
+	.chevron {
+		opacity: 0.85;
 		flex-shrink: 0;
-		border-radius: 1px;
 	}
 
 	.soon-toast {
@@ -216,49 +189,12 @@
 		box-shadow: 0 8px 24px color-mix(in srgb, var(--fg) 8%, transparent);
 	}
 
-	.dropdown-list {
-		display: flex;
-		flex-direction: column;
-		padding: 4px 0;
-	}
-
-	.dropdown-item {
-		display: grid;
-		grid-template-columns: 18px 1fr auto;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		padding: 10px 14px;
-		border: 0;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.dropdown-item:hover,
-	.dropdown-item.on {
-		background: var(--fg-4);
-		color: var(--fg);
-	}
-
-	.dropdown-item .hint {
-		font-size: 11px;
-		font-weight: 600;
-		color: var(--fg-33);
-	}
-
 	@media (max-width: 767px) {
-		.chat-call {
-			gap: 6px;
-		}
-
 		.chrome-btn {
-			width: 44px;
 			height: 44px;
+			min-width: 44px;
+			padding: 0 12px;
+			gap: 4px;
 			border-radius: 9999px;
 		}
 
@@ -267,16 +203,12 @@
 			transform: scale(1.04);
 		}
 
-		.call-divider {
-			height: 22px;
-		}
-
-		.call-main :global(.icon) {
+		.call-ico :global(.icon) {
 			width: 18px !important;
 			height: 18px !important;
 		}
 
-		.call-chevron :global(svg) {
+		.chevron {
 			width: 16px;
 			height: 16px;
 		}
