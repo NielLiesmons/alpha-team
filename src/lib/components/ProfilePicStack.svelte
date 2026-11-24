@@ -152,7 +152,9 @@
 		font-size: 0.8125rem;
 		font-weight: 600;
 		line-height: 1;
-		font-variant-numeric: tabular-nums;
+		/* Never monospace / tabular figures — counts use the same UI type as labels. */
+		font-variant-numeric: normal;
+		font-family: inherit;
 		color: var(--white66, var(--fg-66, color-mix(in srgb, var(--fg, var(--ink)) 66%, transparent)));
 		white-space: nowrap;
 		overflow: hidden;

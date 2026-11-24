@@ -81,7 +81,8 @@
 		display: inline-grid;
 		place-items: center;
 		vertical-align: -0.2em;
-		border-radius: 22%;
+		/* Fully round so the skeleton latches the emojiFill smiley — never a rounded square. */
+		border-radius: 50%;
 		overflow: hidden;
 		background: var(--fg-8);
 		color: var(--fg-16);

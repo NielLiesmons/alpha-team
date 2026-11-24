@@ -22,6 +22,10 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 - Chat stacking: publication panels are barriers (`chat-stack.js`). See ADR §3c.
 - **Empty:** large centered muted copy like Chat (`empty-title` ~1.65rem / `--fg-33`, `empty-body` 14px / `--fg-16`) — not small left-aligned list chrome.
 
+## Typography
+
+- **NEVER use monospace for anything** — not counts, timestamps, codes in chrome, seen-by receipts, or overlays. No `font-family: monospace`, no `ui-monospace` / `Menlo` stacks, no `font-variant-numeric: tabular-nums` / `tabular` figure tricks for UI counts. Use the same Inter / `--font-sans` body type as surrounding labels.
+
 ## Icons
 
 - Prefer existing icons: `Pen`, `Share` (filled), `Crown`, `Trash`, `Folder`, `NavIcon`, `@alpha/ui` SVGs.
@@ -50,6 +54,18 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 - ≤767px: **no scrollbars by default** (`@alpha/ui/scrollbars.css`) — overflow still scrolls.
 - Opt in with `.show-scrollbar` only when scroll affordance is otherwise unclear.
 - Do **not** opt in for horizontal emoji rows, pill tracks, or segmented controls (stay hidden).
+
+## Popovers
+
+Canonical surface + rows: `@alpha/ui/popover.css` (`.alpha-popover`, `.alpha-popover-list`, `.alpha-popover-item`, `.alpha-popover-ico`). FloatPanel / DropdownMenu / chat actions / in-flow menus share this chrome.
+
+- **Glass:** `--composer-bg` / `--modal-bg` + specular hairline (same as scroll-FAB) — do not invent new fills.
+- **No outer vertical padding** on the item column — tight to first/last rows (`padding: 0` on `.alpha-popover-list`).
+- **Icon before every item** in a plain square `.alpha-popover-ico` (sizing only — no bg/border/radius). Icons fit width **or** height of the square. Missing glyph → `ChevronRight`.
+- **Labels muted** (`--fg-66`) — never full `--fg`, including hover/active.
+- **Destructive** menu actions → `--accent-3` / `--destructive` (rouge). Not Settings Disconnect grayscale.
+- **Anchor:** chrome triggers → element `anchor`; context menus (Mail inbox, etc.) → `point` `{ x: clientX, y: clientY }` so the panel opens at the tap/pointer — never “below the whole card” by default.
+- **Chat bubble actions:** transparent dismiss scrim (no modal wash); reactions pill stays its own glass panel; actions list = standard popover rows. Plus overlays the reactions row (fade mask; row scrolls underneath). Expanding reactions morphs the **same** pill in place (width/height only, fixed `--reactions-radius` — never transition radius; no second overlay panel).
 
 ## Destructive
 
