@@ -57,7 +57,13 @@
 		"./icons/At.svelte": "./src/lib/icons/At.svelte",
 		"./icons/Phone.svelte": "./src/lib/icons/Phone.svelte",
 		"./icons/VideoCall.svelte": "./src/lib/icons/VideoCall.svelte",
-		"./icons/Lock.svelte": "./src/lib/icons/Lock.svelte"
+		"./icons/Lock.svelte": "./src/lib/icons/Lock.svelte",
+		"./icons/ChevronRight.svelte": "./src/lib/icons/ChevronRight.svelte",
+		"./icons/Text.svelte": "./src/lib/icons/Text.svelte",
+		"./icons/Appearance.svelte": "./src/lib/icons/Appearance.svelte",
+		"./icons/Profile.svelte": "./src/lib/icons/Profile.svelte",
+		"./icons/Storage.svelte": "./src/lib/icons/Storage.svelte",
+		"./icons/OtherDevices.svelte": "./src/lib/icons/OtherDevices.svelte"
 	},
 	"files": [
 		"icons",
