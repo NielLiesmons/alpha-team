@@ -1473,8 +1473,10 @@
 
 	.voice-trash {
 		display: inline-flex;
-		/* Optical: trash glyph sits slightly low in the pill. */
-		transform: translateY(-2px);
+		align-items: center;
+		justify-content: center;
+		/* Optical: trash can lid sits a hair high in the SVG box. */
+		transform: translateY(1px);
 		line-height: 0;
 		color: var(--accent-3, var(--destructive, #c44));
 	}
@@ -1541,7 +1543,8 @@
 		align-items: center;
 		justify-content: flex-start;
 		gap: 7px;
-		padding: 0 22px 0 14px;
+		/* Extra right pad so label clears the overlaid mic circle (~20px more). */
+		padding: 0 42px 0 14px;
 		margin-right: -18px;
 		border: 0;
 		border-radius: 999px 0 0 999px;
@@ -1557,7 +1560,7 @@
 	.voice-row.locked .hold-delete-pill {
 		pointer-events: auto;
 		cursor: pointer;
-		padding-right: 26px;
+		padding-right: 46px;
 	}
 
 	.hold-delete-pill.armed {
