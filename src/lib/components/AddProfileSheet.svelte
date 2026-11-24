@@ -5,6 +5,7 @@
 	 */
 	import { tick } from 'svelte';
 	import QRCode from 'qrcode';
+	import Close from '@alpha/ui/icons/Close.svelte';
 	import AlphaLogo from '$lib/components/icons/AlphaLogo.svelte';
 	import { actor, setActiveEmail } from '$lib/actor.svelte.js';
 	import { addDeviceProfile } from '$lib/device-profiles.svelte.js';
@@ -194,9 +195,9 @@
 		>
 			<header class="head">
 				<div class="mark" aria-hidden="true"><AlphaLogo size={36} /></div>
-				<button type="button" class="icon-pill" aria-label={t('common.close')} disabled={busy} onclick={dismiss}
-					>✕</button
-				>
+				<button type="button" class="icon-pill" aria-label={t('common.close')} disabled={busy} onclick={dismiss}>
+					<Close size={18} />
+				</button>
 			</header>
 
 			{#if step === 'create'}
@@ -395,14 +396,25 @@
 	.icon-pill {
 		width: 2rem;
 		height: 2rem;
+		display: grid;
+		place-items: center;
+		padding: 0;
 		border-radius: 999px;
 		border: 0;
 		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
 		color: var(--fg-66, var(--white66));
 		cursor: pointer;
 		font: inherit;
-		line-height: 1;
+		line-height: 0;
 		flex-shrink: 0;
+		box-sizing: border-box;
+	}
+
+	@media (max-width: 767px) {
+		.icon-pill {
+			width: 44px;
+			height: 44px;
+		}
 	}
 
 	.lead {

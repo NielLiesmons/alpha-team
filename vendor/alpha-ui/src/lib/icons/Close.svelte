@@ -1,10 +1,14 @@
 <script>
-	/** Dismiss / close X. @type {{ size?: number, className?: string }} */
+	/**
+	 * Dismiss / close X.
+	 * Desktop: `size` (default 18). Mobile: shared ~50% bump via `--close-icon-size-mobile` (27).
+	 * @type {{ size?: number, className?: string }}
+	 */
 	let { size = 18, className = '' } = $props();
 </script>
 
-<span class="icon {className}" style:width="{size}px" style:height="{size}px">
-	<svg viewBox="0 0 18 18" width={size} height={size} fill="none" aria-hidden="true">
+<span class="icon close-icon {className}" style:--close-size="{size}px">
+	<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">
 		<path
 			d="M4.5 4.5 13.5 13.5M13.5 4.5 4.5 13.5"
 			stroke="currentColor"
@@ -22,10 +26,25 @@
 		flex-shrink: 0;
 		line-height: 0;
 		color: inherit;
+		width: var(--close-size, 18px);
+		height: var(--close-size, 18px);
 	}
 	.icon :global(svg) {
 		display: block;
 		width: 100%;
 		height: 100%;
+	}
+
+	/* One shared mobile rule — SheetTopbar, comments, lightbox, voice player, etc. */
+	@media (max-width: 767px) {
+		.icon {
+			width: var(--close-icon-size-mobile, 27px);
+			height: var(--close-icon-size-mobile, 27px);
+		}
+		/* Beat ChromeActionButton / local .chrome-btn svg size clamps */
+		.icon :global(svg) {
+			width: 100% !important;
+			height: 100% !important;
+		}
 	}
 </style>

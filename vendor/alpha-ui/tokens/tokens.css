@@ -157,6 +157,8 @@
 	--radius-16: 16px;
 	/* Mobile sheet top corners concentric with 44px chrome buttons (12 pad + 22). */
 	--radius-hero: 34px;
+	/* Top-bar Close (X): desktop via size prop (~18); mobile ~50% larger inside 44 hit target */
+	--close-icon-size-mobile: 27px;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 	/*

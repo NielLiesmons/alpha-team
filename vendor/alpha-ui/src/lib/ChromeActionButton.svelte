@@ -81,6 +81,13 @@
 		height: 16px;
 	}
 
+	/* Close (X) owns its size — see icons/Close.svelte (+ mobile --close-icon-size-mobile). */
+	.chrome-btn :global(.close-icon),
+	.chrome-btn :global(.close-icon svg) {
+		width: var(--close-size, 18px);
+		height: var(--close-size, 18px);
+	}
+
 	/* ⋮ inside the same glass hit target — keep compact (was briefly oversized). */
 	.chrome-btn.more-btn :global(svg) {
 		width: 16px;
@@ -107,6 +114,12 @@
 		.chrome-btn.more-btn :global(svg) {
 			width: 20px;
 			height: 20px;
+		}
+
+		.chrome-btn :global(.close-icon),
+		.chrome-btn :global(.close-icon svg) {
+			width: var(--close-icon-size-mobile, 27px);
+			height: var(--close-icon-size-mobile, 27px);
 		}
 	}
 </style>

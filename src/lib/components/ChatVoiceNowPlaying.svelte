@@ -154,9 +154,11 @@
 			border-radius: 9999px;
 		}
 
-		.chrome-btn :global(svg) {
-			width: 22px;
-			height: 22px;
+		/* Close.svelte owns mobile X size (--close-icon-size-mobile). */
+		.chrome-btn :global(.close-icon),
+		.chrome-btn :global(.close-icon svg) {
+			width: var(--close-icon-size-mobile, 27px);
+			height: var(--close-icon-size-mobile, 27px);
 		}
 
 		.panel-pic :global(.profile-pic) {
