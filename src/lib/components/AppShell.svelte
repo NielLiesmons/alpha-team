@@ -604,8 +604,8 @@
 	{/snippet}
 
 	{#snippet sidebarTrail()}
-		{#if chatList && voicePlayerVisible()}
-			<ChatVoiceNowPlaying placement="sidebar" />
+		{#if voicePlayerVisible()}
+			<ChatVoiceNowPlaying />
 		{/if}
 	{/snippet}
 
@@ -624,11 +624,6 @@
 				syncing={titleSyncing}
 				titleClass={planningList ? 'planning-title' : ''}
 			/>
-			{#if chatList}
-				<div class="chat-voice-slot" class:on={voicePlayerVisible()}>
-					<ChatVoiceNowPlaying placement="bar" />
-				</div>
-			{/if}
 		{/if}
 	{/snippet}
 
@@ -723,26 +718,6 @@
 </UiShell>
 
 <style>
-	/*
-	 * Mobile: compact voice pill in list-top between Chat title and notifications.
-	 * (list-title-slot is display:contents → this is a list-top flex child.)
-	 * Desktop uses sidebarTrail player panel instead.
-	 */
-	.chat-voice-slot {
-		display: none;
-	}
-
-	@media (max-width: 767px) {
-		.chat-voice-slot.on {
-			display: flex;
-			flex: 1 1 auto;
-			align-items: center;
-			min-width: 0;
-			position: relative;
-			z-index: 2;
-		}
-	}
-
 	/* Planning zoom chrome rendered into UiShell list actions */
 	.zoom-seg {
 		display: inline-flex;

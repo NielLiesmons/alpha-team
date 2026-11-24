@@ -1,6 +1,8 @@
 <script>
 	/**
 	 * Telegram/WhatsApp-style voice row — play + waveform + speed/time.
+	 * Waveform seeks only while this clip is already playing; play starts via the play button.
+	 * Controls use data-voice-control so ChatFeedCard can still long-press → message actions.
 	 */
 	import Play from '@alpha/ui/icons/Play.svelte';
 	import Pause from '@alpha/ui/icons/Pause.svelte';
@@ -60,6 +62,23 @@
 			: name || t('chat.voiceMessage')
 	);
 
+	/** Ignore click after a long-press (ChatFeedCard opens the actions overlay). */
+	const LONG_PRESS_MS = 400;
+	let ptrDownAt = 0;
+
+	/** @param {PointerEvent} e */
+	function onCtrlPointerDown(e) {
+		ptrDownAt = Date.now();
+		/* Do not stopPropagation — bubble long-press arms on the card. */
+		if (e.pointerType === 'touch') {
+			/* Avoid scrolling while deciding tap vs hold on the wave. */
+		}
+	}
+
+	function wasLongPress() {
+		return Date.now() - ptrDownAt >= LONG_PRESS_MS;
+	}
+
 	function onPlayPause() {
 		if (!src) return;
 		void playVoiceClip({
@@ -72,23 +91,43 @@
 		});
 	}
 
-	/** @param {PointerEvent} e */
-	function onSeek(e) {
-		if (!dur || !(e.currentTarget instanceof HTMLElement)) return;
-		const rect = e.currentTarget.getBoundingClientRect();
-		const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-		if (!active) {
-			void playVoiceClip({
-				msgId,
-				url: src,
-				title: playTitle,
-				author,
-				speakerName,
-				durationMs: dur
-			}).then(() => seekVoiceClip(dur * fraction));
+	/** @param {MouseEvent} e */
+	function onPlayClick(e) {
+		if (wasLongPress()) {
+			e.preventDefault();
 			return;
 		}
+		e.stopPropagation();
+		onPlayPause();
+	}
+
+	/**
+	 * Seek only while this clip is actively playing — never start playback from the wave.
+	 * @param {MouseEvent} e
+	 */
+	function onWaveClick(e) {
+		if (wasLongPress()) {
+			e.preventDefault();
+			return;
+		}
+		if (!src || !dur || !playing) return;
+		e.stopPropagation();
+		const el = e.currentTarget;
+		if (!(el instanceof HTMLElement)) return;
+		const rect = el.getBoundingClientRect();
+		const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
 		seekVoiceClip(dur * fraction);
+	}
+
+	/** @param {MouseEvent} e */
+	function onSpeedClick(e) {
+		if (wasLongPress()) {
+			e.preventDefault();
+			return;
+		}
+		e.stopPropagation();
+		/* Speed cycles globally; only the play button starts playback. */
+		cycleVoiceSpeed();
 	}
 </script>
 
@@ -96,9 +135,11 @@
 	<button
 		type="button"
 		class="play"
+		data-voice-control
 		aria-label={playing ? t('chat.pauseVoice') : t('chat.playVoice')}
 		disabled={!src}
-		onclick={onPlayPause}
+		onpointerdown={onCtrlPointerDown}
+		onclick={onPlayClick}
 	>
 		{#if playing}
 			<Pause size={18} />
@@ -111,9 +152,11 @@
 		<button
 			type="button"
 			class="wave"
+			data-voice-control
 			aria-label={t('chat.seekVoice')}
 			disabled={!src || !dur}
-			onpointerdown={onSeek}
+			onpointerdown={onCtrlPointerDown}
+			onclick={onWaveClick}
 		>
 			{#each bars as h, i (i)}
 				{@const half = Math.max(1, Math.round((4 + h * 10) * (2 / 3)))}
@@ -128,23 +171,11 @@
 			<button
 				type="button"
 				class="speed"
+				data-voice-control
 				aria-label={t('chat.playbackSpeed')}
 				disabled={!src}
-				onclick={(e) => {
-					e.stopPropagation();
-					if (!active && src) {
-						void playVoiceClip({
-							msgId,
-							url: src,
-							title: playTitle,
-							author,
-							speakerName,
-							durationMs: dur
-						}).then(() => cycleVoiceSpeed());
-						return;
-					}
-					cycleVoiceSpeed();
-				}}
+				onpointerdown={onCtrlPointerDown}
+				onclick={onSpeedClick}
 			>
 				{speedLabel}
 			</button>

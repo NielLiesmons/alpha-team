@@ -414,7 +414,7 @@ export default {
 	'chat.clear': 'Effacer',
 	'chat.cancel': 'Annuler',
 	'chat.voiceMessage': 'Message vocal',
-	'chat.speakersVoiceMessage': 'Message vocal de {name}',
+	'chat.speakersVoiceMessage': 'Audio de {name}',
 	'chat.slideToCancel': 'Glisser pour annuler',
 	'chat.slideToDelete': 'Glisser pour supprimer',
 	'chat.lockVoice': 'Verrouiller l’enregistrement',

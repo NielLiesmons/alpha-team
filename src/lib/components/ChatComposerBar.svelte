@@ -1533,7 +1533,10 @@
 		box-shadow: 0 0 14px 3px color-mix(in srgb, var(--accent-1, #5c5fff) 32%, transparent);
 	}
 
-	/* Same row as wave pill — matching height/fill; full pill tucked under the hold circle. */
+	/*
+	 * Same row as wave pill — matching height/fill; full pill tucked under the mic
+	 * slot so its right round aligns with the bar’s 7px inset (mic-slot right edge).
+	 */
 	.hold-delete-pill {
 		flex: 0 0 auto;
 		align-self: center;
@@ -1543,9 +1546,9 @@
 		align-items: center;
 		justify-content: flex-start;
 		gap: 7px;
-		/* Right pad clears the overlaid mic circle; negative margin fills under it. */
-		padding: 0 52px 0 14px;
-		margin-right: -30px;
+		/* Right pad clears the 64px hold circle; -33px fills the mic-slot under it. */
+		padding: 0 50px 0 14px;
+		margin-right: -33px;
 		border: 0;
 		border-radius: 999px;
 		background: var(--fg-8);
@@ -1560,7 +1563,8 @@
 	.voice-row.locked .hold-delete-pill {
 		pointer-events: auto;
 		cursor: pointer;
-		padding-right: 56px;
+		/* Locked send glow is 56px — slightly less overhang than the hold circle. */
+		padding-right: 48px;
 	}
 
 	.hold-delete-pill.armed {

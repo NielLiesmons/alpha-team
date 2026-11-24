@@ -225,11 +225,22 @@
 	}
 
 	/**
+	 * Voice play/wave/speed: short tap runs the control; long-press still opens
+	 * the message-actions overlay (see data-voice-control + pointerup branch).
+	 * @param {EventTarget | null} target
+	 */
+	function isVoiceControlTarget(target) {
+		return target instanceof Element && Boolean(target.closest('[data-voice-control]'));
+	}
+
+	/**
 	 * Retry / quote / media controls / links must win over the reaction overlay.
+	 * Voice controls are excluded so the bubble can arm a long-press.
 	 * @param {EventTarget | null} target
 	 */
 	function isBubbleInteractiveTarget(target) {
 		if (!(target instanceof Element)) return false;
+		if (isVoiceControlTarget(target)) return false;
 		return Boolean(
 			target.closest(
 				'a, button, input, textarea, select, audio, video, label, [data-bubble-action], [contenteditable="true"]'
@@ -307,6 +318,14 @@
 		if (e.pointerType === 'mouse' || isDeleted) return;
 		if (textSelectable) return;
 		if (isBubbleInteractiveTarget(e.target)) return;
+		/*
+		 * Voice controls: short tap → let the control’s click handler run.
+		 * Long-press → open message actions (control click is suppressed by duration).
+		 */
+		if (isVoiceControlTarget(e.target)) {
+			if (wasHold) openOverlayAt(ox, oy);
+			return;
+		}
 		/*
 		 * Open on pointerup only — tap OR long-press. Never open under a still-down
 		 * finger (that was landing accidental reactions on the first release).

@@ -413,7 +413,7 @@ export default {
 	'chat.clear': 'Borrar',
 	'chat.cancel': 'Cancelar',
 	'chat.voiceMessage': 'Mensaje de voz',
-	'chat.speakersVoiceMessage': 'Mensaje de voz de {name}',
+	'chat.speakersVoiceMessage': 'Audio de {name}',
 	'chat.slideToCancel': 'Desliza para cancelar',
 	'chat.slideToDelete': 'Desliza para eliminar',
 	'chat.lockVoice': 'Bloquear grabación',

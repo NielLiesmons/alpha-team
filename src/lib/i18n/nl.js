@@ -413,7 +413,7 @@ export default {
 	'chat.clear': 'Wissen',
 	'chat.cancel': 'Annuleren',
 	'chat.voiceMessage': 'Spraakbericht',
-	'chat.speakersVoiceMessage': 'Spraakbericht van {name}',
+	'chat.speakersVoiceMessage': 'Audio van {name}',
 	'chat.slideToCancel': 'Veeg om te annuleren',
 	'chat.slideToDelete': 'Veeg om te verwijderen',
 	'chat.lockVoice': 'Opname vergrendelen',
