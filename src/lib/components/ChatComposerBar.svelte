@@ -1094,7 +1094,7 @@
 		align-items: stretch;
 	}
 
-	/* Hold/lock glow + half-pills may overflow the glass pill without growing it. */
+	/* Hold/lock glow + row pills may overflow the glass pill without growing it. */
 	.composer-stack.voice-active :global(.composer-pill) {
 		overflow: visible;
 	}
@@ -1533,7 +1533,7 @@
 		box-shadow: 0 0 14px 3px color-mix(in srgb, var(--accent-1, #5c5fff) 32%, transparent);
 	}
 
-	/* Same row as wave pill — matching height/fill; tucks under the hold circle. */
+	/* Same row as wave pill — matching height/fill; full pill tucked under the hold circle. */
 	.hold-delete-pill {
 		flex: 0 0 auto;
 		align-self: center;
@@ -1543,11 +1543,11 @@
 		align-items: center;
 		justify-content: flex-start;
 		gap: 7px;
-		/* Extra right pad so label clears the overlaid mic circle (~20px more). */
-		padding: 0 42px 0 14px;
-		margin-right: -18px;
+		/* Right pad clears the overlaid mic circle; negative margin fills under it. */
+		padding: 0 52px 0 14px;
+		margin-right: -30px;
 		border: 0;
-		border-radius: 999px 0 0 999px;
+		border-radius: 999px;
 		background: var(--fg-8);
 		color: var(--fg-66);
 		box-sizing: border-box;
@@ -1560,7 +1560,7 @@
 	.voice-row.locked .hold-delete-pill {
 		pointer-events: auto;
 		cursor: pointer;
-		padding-right: 46px;
+		padding-right: 56px;
 	}
 
 	.hold-delete-pill.armed {
