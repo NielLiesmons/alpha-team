@@ -160,8 +160,8 @@
 		gap: 10px;
 		width: 100%;
 		min-width: 0;
-		max-width: 500px;
-		padding: 10px 12px;
+		max-width: 400px;
+		padding: 6px 8px;
 		box-sizing: border-box;
 	}
 	.play {

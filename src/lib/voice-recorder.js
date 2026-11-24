@@ -1,5 +1,5 @@
 /**
- * Browser MediaRecorder for chat voice notes — tap to record / pause / send.
+ * Browser MediaRecorder for chat voice notes — hold-to-record / lock / pause / send.
  */
 
 const PREFERRED = [

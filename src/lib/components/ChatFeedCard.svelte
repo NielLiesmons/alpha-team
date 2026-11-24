@@ -956,9 +956,9 @@
 		max-width: calc(100% - 40px);
 	}
 
-	/* Voice rows: ~80% of the card, capped at 500px on desktop. */
+	/* Voice rows: ~80% of the card, capped at 400px on desktop. */
 	.card:has(:global(.voice)) .bubble-trailing {
-		width: min(500px, 80%);
+		width: min(400px, 80%);
 	}
 
 	.card:has(:global(.voice)) .bubble-stack,
