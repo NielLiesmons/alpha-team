@@ -1,9 +1,11 @@
 <script>
 	/**
-	 * Canonical dropdown / overflow menu — same look as Task create/detail FloatPanel lists.
-	 * Portaled glass panel + optional item list, or custom children for rich rows.
+	 * Canonical dropdown / overflow menu — glass FloatPanel + shared popover rows.
+	 * Items render with `.alpha-popover-ico` + muted label; missing icons → ChevronRight.
+	 * Destructive rows use accent-3. Pass `point` for context menus (tap/pointer).
 	 */
 	import FloatPanel from './FloatPanel.svelte';
+	import ChevronRight from './icons/ChevronRight.svelte';
 
 	/**
 	 * @typedef {{
@@ -11,6 +13,9 @@
 	 *   label: string,
 	 *   danger?: boolean,
 	 *   disabled?: boolean,
+	 *   active?: boolean,
+	 *   hint?: string,
+	 *   icon?: import('svelte').Component<any>,
 	 *   onclick?: () => void
 	 * }} DropdownItem
 	 */
@@ -19,6 +24,7 @@
 	 * @type {{
 	 *   open?: boolean,
 	 *   anchor?: HTMLElement | null,
+	 *   point?: { x: number, y: number } | null,
 	 *   placement?: 'above' | 'below',
 	 *   align?: 'start' | 'end',
 	 *   width?: number,
@@ -31,6 +37,7 @@
 	let {
 		open = false,
 		anchor = null,
+		point = null,
 		placement = 'below',
 		align = 'start',
 		width = 200,
@@ -48,116 +55,36 @@
 	}
 </script>
 
-<FloatPanel {open} {anchor} {placement} {align} {width} {maxHeight} {onclose}>
+<FloatPanel {open} {anchor} {point} {placement} {align} {width} {maxHeight} {onclose}>
 	{#if children}
 		{@render children()}
 	{:else}
-		<div class="dropdown-list" role="menu">
+		<div class="alpha-popover-list dropdown-list" role="menu">
 			{#each items as item, i (item.id ?? `${item.label}-${i}`)}
+				{@const Icon = item.icon}
 				<button
 					type="button"
-					class="dropdown-item"
+					class="alpha-popover-item dropdown-item"
 					class:danger={item.danger}
+					class:on={item.active}
 					role="menuitem"
 					disabled={item.disabled}
+					aria-checked={item.active ? 'true' : undefined}
 					onclick={() => activate(item)}
 				>
-					{item.label}
+					<span class="alpha-popover-ico" aria-hidden="true">
+						{#if Icon}
+							<Icon size={16} />
+						{:else}
+							<ChevronRight size={14} />
+						{/if}
+					</span>
+					<span class="alpha-popover-label">{item.label}</span>
+					{#if item.hint}
+						<span class="alpha-popover-hint">{item.hint}</span>
+					{/if}
 				</button>
 			{/each}
 		</div>
 	{/if}
 </FloatPanel>
-
-<style>
-	.dropdown-list {
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-		overflow: auto;
-		padding: 4px 0;
-	}
-
-	.dropdown-item {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		padding: 10px 14px;
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.dropdown-item:not(:last-child) {
-		border-bottom: 0.33px solid var(--fg-8);
-	}
-
-	.dropdown-item:hover:not(:disabled) {
-		background: var(--fg-4);
-		color: var(--fg);
-	}
-
-	.dropdown-item:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-
-	.dropdown-item.danger {
-		color: var(--destructive, var(--accent-3, var(--fg-66)));
-	}
-
-	.dropdown-item.danger:hover:not(:disabled) {
-		background: var(--fg-8);
-		color: var(--destructive, var(--accent-3, var(--fg)));
-	}
-
-	/* Expose list/item classes for custom children snippets */
-	:global(.dropdown-list) {
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-		overflow: auto;
-		padding: 4px 0;
-	}
-
-	:global(.dropdown-item) {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		padding: 10px 14px;
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	:global(.dropdown-item:not(:last-child)) {
-		border-bottom: 0.33px solid var(--fg-8);
-	}
-
-	:global(.dropdown-item:hover:not(:disabled)) {
-		background: var(--fg-4);
-		color: var(--fg);
-	}
-
-	:global(.dropdown-item.active),
-	:global(.dropdown-item[aria-checked='true']) {
-		color: var(--fg);
-		background: var(--fg-4);
-	}
-</style>

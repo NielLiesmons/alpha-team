@@ -2,6 +2,8 @@
 	/**
 	 * Light glass popover portaled to body so it is never clipped by modal overflow.
 	 * Drop-ups anchor to the trigger’s top edge using the panel’s real height.
+	 * Prefer `anchor` for chrome triggers; pass `point` (clientX/Y) for context menus
+	 * so the panel opens at the pointer/tap — not below a whole card.
 	 */
 	import { tick } from 'svelte';
 
@@ -9,6 +11,7 @@
 	 * @type {{
 	 *   open?: boolean,
 	 *   anchor?: HTMLElement | null,
+	 *   point?: { x: number, y: number } | null,
 	 *   placement?: 'above' | 'below',
 	 *   align?: 'start' | 'end',
 	 *   width?: number,
@@ -20,6 +23,7 @@
 	let {
 		open = false,
 		anchor = null,
+		point = null,
 		placement = 'above',
 		align = 'start',
 		width = 280,
@@ -43,14 +47,29 @@
 	}
 
 	function reposition() {
-		if (!anchor || typeof window === 'undefined') return;
-		const r = anchor.getBoundingClientRect();
+		if (typeof window === 'undefined') return;
 		const gap = 6;
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 		const panelH = panelEl?.offsetHeight || Math.min(120, maxHeight);
 
+		/** @type {{ top: number, bottom: number, left: number, right: number }} */
+		let r;
+		if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+			/* 1×1 hit at the pointer so below/above flips around the tap. */
+			r = { top: point.y, bottom: point.y, left: point.x, right: point.x };
+		} else if (anchor) {
+			const br = anchor.getBoundingClientRect();
+			r = { top: br.top, bottom: br.bottom, left: br.left, right: br.right };
+		} else {
+			return;
+		}
+
 		let left = align === 'end' ? r.right - width : r.left;
+		/* Point menus: center-ish on the tap when align is start. */
+		if (point && align === 'start') {
+			left = r.left;
+		}
 		left = Math.max(8, Math.min(left, vw - width - 8));
 
 		let top;
@@ -74,6 +93,7 @@
 	$effect(() => {
 		if (!open) return;
 		anchor;
+		point;
 		placement;
 		void tick().then(reposition);
 

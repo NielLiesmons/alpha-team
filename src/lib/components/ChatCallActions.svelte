@@ -2,6 +2,7 @@
 	/**
 	 * Chat list chrome: one glass pill — audio/video icon + chevron options.
 	 * Default selected mode = audio. Coming soon until media is wired.
+	 * Menu uses shared DropdownMenu `items` (FloatPanel + popover.css rows).
 	 */
 	import Phone from '@alpha/ui/icons/Phone.svelte';
 	import VideoCall from '@alpha/ui/icons/VideoCall.svelte';
@@ -21,6 +22,25 @@
 
 	const callLabel = $derived(mode === 'video' ? t('chat.videoCall') : t('chat.audioCall'));
 
+	const menuItems = $derived([
+		{
+			id: 'audio',
+			label: t('chat.audioCall'),
+			icon: Phone,
+			active: mode === 'audio',
+			hint: t('chat.callSoon'),
+			onclick: () => chooseMode('audio')
+		},
+		{
+			id: 'video',
+			label: t('chat.videoCall'),
+			icon: VideoCall,
+			active: mode === 'video',
+			hint: t('chat.callSoon'),
+			onclick: () => chooseMode('video')
+		}
+	]);
+
 	function showComingSoon() {
 		soonToast = true;
 		if (soonTimer) clearTimeout(soonTimer);
@@ -33,7 +53,6 @@
 	/** @param {CallMode} next */
 	function chooseMode(next) {
 		mode = next;
-		menuOpen = false;
 		showComingSoon();
 	}
 
@@ -82,33 +101,9 @@
 	align="end"
 	width={220}
 	maxHeight={280}
+	items={menuItems}
 	onclose={() => (menuOpen = false)}
->
-	<div class="alpha-popover-list dropdown-list" role="menu">
-		<button
-			type="button"
-			class="alpha-popover-item dropdown-item"
-			class:on={mode === 'audio'}
-			role="menuitem"
-			onclick={() => chooseMode('audio')}
-		>
-			<span class="alpha-popover-ico"><Phone size={14} /></span>
-			<span class="alpha-popover-label">{t('chat.audioCall')}</span>
-			<span class="alpha-popover-hint hint">{t('chat.callSoon')}</span>
-		</button>
-		<button
-			type="button"
-			class="alpha-popover-item dropdown-item"
-			class:on={mode === 'video'}
-			role="menuitem"
-			onclick={() => chooseMode('video')}
-		>
-			<span class="alpha-popover-ico"><VideoCall size={15} /></span>
-			<span class="alpha-popover-label">{t('chat.videoCall')}</span>
-			<span class="alpha-popover-hint hint">{t('chat.callSoon')}</span>
-		</button>
-	</div>
-</DropdownMenu>
+/>
 
 <style>
 	.chat-call {
