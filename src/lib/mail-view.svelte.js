@@ -3,16 +3,24 @@
  */
 import { t } from '$lib/i18n.svelte.js';
 
-/** @typedef {'inbox' | 'sent' | 'drafts' | 'junk' | 'trash'} MailFolder */
+/** @typedef {'inbox' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'} MailFolder */
 /** @typedef {'primary' | 'new' | 'updates' | 'other'} MailCategory */
 
-export const MAIL_FOLDERS = /** @type {const} */ (['inbox', 'sent', 'drafts', 'junk', 'trash']);
+export const MAIL_FOLDERS = /** @type {const} */ ([
+	'inbox',
+	'sent',
+	'drafts',
+	'archive',
+	'junk',
+	'trash'
+]);
 
 /** i18n keys per folder — use mailFolderLabel() to translate. */
 export const MAIL_FOLDER_LABEL_KEYS = {
 	inbox: 'mail.inbox',
 	sent: 'mail.sent',
 	drafts: 'mail.drafts',
+	archive: 'mail.archive',
 	junk: 'mail.junk',
 	trash: 'mail.trash'
 };
@@ -28,6 +36,7 @@ export const MAIL_FOLDER_ROLES = {
 	inbox: 'inbox',
 	sent: 'sent',
 	drafts: 'drafts',
+	archive: 'archive',
 	junk: 'junk',
 	trash: 'trash'
 };

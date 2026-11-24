@@ -4,7 +4,14 @@
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { locale, t } from '$lib/i18n.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { moments, openComposer, selectEntity, tasks, ui } from '$lib/workspace.svelte.js';
+	import {
+		archiveTask,
+		moments,
+		openComposer,
+		selectEntity,
+		tasks,
+		ui
+	} from '$lib/workspace.svelte.js';
 
 	/** @param {string} taskId */
 	function momentAssigneeEmails(taskId) {
@@ -53,8 +60,11 @@
 		const map = new Map();
 		const f = ui.listFilter;
 		const sorted = [...tasks]
-			.filter((t) => {
-				const st = STATUS_ORDER.includes(t.status) ? t.status : 'open';
+			.filter((task) => {
+				const archived = Boolean(task.archived);
+				if (f === 'archived') return archived;
+				if (archived) return false;
+				const st = STATUS_ORDER.includes(task.status) ? task.status : 'open';
 				if (f === 'open') return !DONE.has(st);
 				if (f === 'done') return DONE.has(st);
 				return true;
@@ -118,6 +128,7 @@
 						pending={Boolean(task._pending)}
 						onclick={() => selectEntity('task', task.id)}
 						selected={ui.selection?.kind === 'task' && ui.selection.id === task.id}
+						onArchive={task.archived ? null : () => void archiveTask(task.id)}
 					/>
 				{/each}
 			</div>

@@ -6,7 +6,8 @@
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { notePlainText } from '$lib/note-text.js';
-	import { notes, selectEntity, ui } from '$lib/workspace.svelte.js';
+	import { swipeLeftArchive } from '$lib/swipe-left-archive.js';
+	import { archiveNote, notes, selectEntity, ui } from '$lib/workspace.svelte.js';
 
 	const RECENT_MS = 7 * 86_400_000;
 
@@ -33,15 +34,20 @@
 		const f = ui.listFilter;
 		const now = Date.now();
 		let list = [...notes];
-		if (f === 'recent') {
-			list = list.filter((n) => {
-				const t = noteEditedAt(n);
-				return t > 0 && now - t < RECENT_MS;
-			});
-		} else if (f === 'linked') {
-			list = list.filter((n) => (n.project_ids ?? []).length > 0);
-		} else if (f === 'unlinked') {
-			list = list.filter((n) => (n.project_ids ?? []).length === 0);
+		if (f === 'archived') {
+			list = list.filter((n) => Boolean(n.archived));
+		} else {
+			list = list.filter((n) => !n.archived);
+			if (f === 'recent') {
+				list = list.filter((n) => {
+					const edited = noteEditedAt(n);
+					return edited > 0 && now - edited < RECENT_MS;
+				});
+			} else if (f === 'linked') {
+				list = list.filter((n) => (n.project_ids ?? []).length > 0);
+			} else if (f === 'unlinked') {
+				list = list.filter((n) => (n.project_ids ?? []).length === 0);
+			}
 		}
 		return list.sort((a, b) => noteEditedAt(b) - noteEditedAt(a));
 	});
@@ -65,6 +71,11 @@
 					type="button"
 					class="row"
 					class:on={ui.selection?.kind === 'note' && ui.selection.id === note.id}
+					use:swipeLeftArchive={{
+						label: t('action.archive'),
+						disabled: Boolean(note.archived),
+						onArchive: () => void archiveNote(note.id)
+					}}
 					onclick={() => selectEntity('note', note.id)}
 				>
 					<span class="title-row">
@@ -137,11 +148,13 @@
 		padding: calc(0.85rem - 4px) calc(0.9rem - 2px);
 		border: 0;
 		border-radius: 12px;
-		background: transparent;
+		background: var(--feed-bg, var(--bg));
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
 		box-sizing: border-box;
+		position: relative;
+		z-index: 1;
 	}
 
 	.row:hover {

@@ -1,8 +1,13 @@
 <script>
 	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
+	import ArrowRight from '$lib/components/icons/ArrowRight.svelte';
+	import Folder from '$lib/components/icons/Folder.svelte';
+	import Junk from '$lib/components/icons/Junk.svelte';
+	import MailUnread from '$lib/components/icons/MailUnread.svelte';
 	import Reply from '$lib/components/icons/Reply.svelte';
 	import ReplyAll from '$lib/components/icons/ReplyAll.svelte';
+	import Trash from '$lib/components/icons/Trash.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
 	import SegmentedControl from '@alpha/ui/SegmentedControl.svelte';
@@ -13,6 +18,7 @@
 	import { chatFeed, commentsByKey, entityHasComments, hasCommentsByKey } from '$lib/chat.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
+		archiveMailThread,
 		formatMailWhen,
 		isUnreadFor,
 		mailAuthorLabel,
@@ -34,6 +40,7 @@
 		threadMessages,
 		threadParticipantProfiles
 	} from '$lib/mail.svelte.js';
+	import { swipeLeftArchive } from '$lib/swipe-left-archive.js';
 	import {
 		MAIL_CATEGORIES,
 		mailCategoryLabel,
@@ -67,8 +74,9 @@
 	});
 
 	let menuOpen = $state(false);
-	/** @type {HTMLElement | null} */
-	let menuAnchor = $state(null);
+	/** Pointer/tap point — never the whole card (FloatPanel `point`). */
+	/** @type {{ x: number, y: number } | null} */
+	let menuPoint = $state(null);
 	/** @type {any | null} */
 	let menuThread = $state(null);
 
@@ -76,13 +84,14 @@
 	function openRowMenu(e, thread) {
 		e.preventDefault();
 		e.stopPropagation();
-		menuAnchor = /** @type {HTMLElement} */ (e.currentTarget);
+		menuPoint = { x: e.clientX, y: e.clientY };
 		menuThread = thread;
 		menuOpen = true;
 	}
 
 	function closeRowMenu() {
 		menuOpen = false;
+		menuPoint = null;
 		menuThread = null;
 	}
 
@@ -110,7 +119,7 @@
 		}
 	}
 
-	/** @param {'junk' | 'trash'} folder */
+	/** @param {'junk' | 'trash' | 'archive'} folder */
 	function menuMove(folder) {
 		const thread = menuThread;
 		closeRowMenu();
@@ -121,23 +130,54 @@
 		}
 	}
 
+	/** @param {string} threadId */
+	function archiveThread(threadId) {
+		if (!threadId || mailView.folder === 'archive') return;
+		archiveMailThread(threadId);
+		if (ui.selection?.kind === 'mail' && ui.selection.id === threadId) {
+			forceClearSelection();
+		}
+	}
+
 	const menuItems = $derived.by(() => {
 		const thread = menuThread;
 		if (!thread) return [];
 		const unread = isUnreadFor(thread);
 		return [
-			{ id: 'reply', label: t('mail.reply'), onclick: () => menuCompose('reply') },
-			{ id: 'replyAll', label: t('mail.replyAll'), onclick: () => menuCompose('replyAll') },
-			{ id: 'forward', label: t('mail.forward'), onclick: () => menuCompose('forward') },
+			{ id: 'reply', label: t('mail.reply'), icon: Reply, onclick: () => menuCompose('reply') },
+			{
+				id: 'replyAll',
+				label: t('mail.replyAll'),
+				icon: ReplyAll,
+				onclick: () => menuCompose('replyAll')
+			},
+			{
+				id: 'forward',
+				label: t('mail.forward'),
+				icon: ArrowRight,
+				onclick: () => menuCompose('forward')
+			},
 			{
 				id: 'read',
 				label: unread ? t('mail.markRead') : t('mail.markUnread'),
+				icon: MailUnread,
 				onclick: () => menuToggleRead()
 			},
-			{ id: 'junk', label: t('mail.moveToJunk'), onclick: () => menuMove('junk') },
+			...(mailView.folder === 'archive'
+				? []
+				: [
+						{
+							id: 'archive',
+							label: t('mail.moveToArchive'),
+							icon: Folder,
+							onclick: () => menuMove('archive')
+						}
+					]),
+			{ id: 'junk', label: t('mail.moveToJunk'), icon: Junk, onclick: () => menuMove('junk') },
 			{
 				id: 'trash',
 				label: t('mail.moveToTrash'),
+				icon: Trash,
 				danger: true,
 				onclick: () => menuMove('trash')
 			}
@@ -317,6 +357,11 @@
 					class:on={ui.selection?.kind === 'mail' && ui.selection.id === thread.id}
 					class:unread
 					class:has-comments={hasComments}
+					use:swipeLeftArchive={{
+						label: t('action.archive'),
+						disabled: mailView.folder === 'archive',
+						onArchive: () => archiveThread(thread.id)
+					}}
 					onclick={() => selectEntity('mail', thread.id)}
 					oncontextmenu={(e) => openRowMenu(e, thread)}
 				>
@@ -352,7 +397,7 @@
 							<span class="author">{author}</span>
 							<span class="meta-trail">
 								{#if linkedTask}
-									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
+									<span class="task-hit" data-no-swipe-archive onclick={(e) => e.stopPropagation()}>
 										<TaskFieldPicker
 											taskId={linkedTask.id}
 											field="status"
@@ -360,7 +405,7 @@
 											size={16}
 										/>
 									</span>
-									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
+									<span class="task-hit" data-no-swipe-archive onclick={(e) => e.stopPropagation()}>
 										<TaskFieldPicker
 											taskId={linkedTask.id}
 											field="priority"
@@ -374,7 +419,7 @@
 										Mail-only urgency (tip cache): status/priority mark alone —
 										no empty TaskBox. TaskBox appears only after a linked Task.
 									-->
-									<span class="task-hit" onclick={(e) => e.stopPropagation()}>
+									<span class="task-hit" data-no-swipe-archive onclick={(e) => e.stopPropagation()}>
 										<TaskFieldPicker
 											field="priority"
 											value={mailOnlyPriority}
@@ -435,9 +480,9 @@
 
 <DropdownMenu
 	open={menuOpen}
-	anchor={menuAnchor}
+	point={menuPoint}
 	placement="below"
-	align="end"
+	align="start"
 	width={220}
 	maxHeight={360}
 	items={menuItems}
@@ -514,12 +559,14 @@
 		padding: 10px 12px 10px 10px;
 		border: 0;
 		border-radius: 12px;
-		background: transparent;
+		background: var(--feed-bg, var(--bg));
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
 		font: inherit;
 		line-height: 1.25;
+		position: relative;
+		z-index: 1;
 	}
 
 	.row:hover {

@@ -1504,17 +1504,25 @@ export function mailComposeSeed(thread, mode) {
 /**
  * Soft-remove a thread from the current folder list (local until JMAP move exists).
  * @param {string} id
- * @param {'junk' | 'trash' | 'inbox'} folder
+ * @param {'junk' | 'trash' | 'archive' | 'inbox'} folder
  */
 export function moveMailThreadLocal(id, folder) {
 	const idx = mailMessages.findIndex((m) => String(m.id) === String(id));
 	if (idx < 0) return false;
 	/* Drop from the painted list; refreshMail will reconcile on next folder load. */
-	if (folder === 'junk' || folder === 'trash') {
+	if (folder === 'junk' || folder === 'trash' || folder === 'archive') {
 		mailMessages.splice(idx, 1);
 		return true;
 	}
 	return false;
+}
+
+/**
+ * Archive a mail thread (swipe / filter). Drops it from the current folder list.
+ * @param {string} id
+ */
+export function archiveMailThread(id) {
+	return moveMailThreadLocal(id, 'archive');
 }
 
 /** Preview line for list rows. */

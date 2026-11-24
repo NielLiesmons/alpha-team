@@ -10,6 +10,7 @@
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import { swipeLeftArchive } from '$lib/swipe-left-archive.js';
 
 	let {
 		id = '',
@@ -28,6 +29,9 @@
 		/** Local-only until Drive put succeeds */
 		pending = false,
 		selected = false,
+		/** When set, swipe-left archives this row */
+		/** @type {null | (() => void)} */
+		onArchive = null,
 		onclick = () => {}
 	} = $props();
 
@@ -65,11 +69,16 @@
 	role="button"
 	tabindex="0"
 	aria-current={selected ? 'true' : undefined}
+	use:swipeLeftArchive={{
+		label: t('action.archive'),
+		disabled: !onArchive,
+		onArchive: onArchive || (() => {})
+	}}
 	{onclick}
 	onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), onclick())}
 >
 	<div class="row-main">
-		<div class="taskbox-col">
+		<div class="taskbox-col" data-no-swipe-archive>
 			{#if id}
 				<TaskFieldPicker taskId={id} field="status" value={status} size={24} />
 			{:else}
@@ -101,7 +110,7 @@
 			</span>
 		{/if}
 		{#if status !== 'closed'}
-			<div class="priority-col">
+			<div class="priority-col" data-no-swipe-archive>
 				{#if id}
 					<TaskFieldPicker taskId={id} field="priority" value={priority} size={22} align="right" />
 				{:else}
@@ -124,10 +133,12 @@
 		gap: 0;
 		padding: 10px;
 		border: 0;
-		background: transparent;
+		background: var(--feed-bg, var(--bg));
 		border-radius: 12px;
 		cursor: pointer;
 		outline: none;
+		position: relative;
+		z-index: 1;
 	}
 
 	.task-card:hover {

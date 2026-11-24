@@ -135,7 +135,8 @@
 				{ id: 'all', label: t('filter.all') },
 				{ id: 'recent', label: t('filter.recent') },
 				{ id: 'linked', label: t('filter.linked') },
-				{ id: 'unlinked', label: t('filter.unlinked') }
+				{ id: 'unlinked', label: t('filter.unlinked') },
+				{ id: 'archived', label: t('filter.archived') }
 			];
 		}
 		if (path.startsWith('/projects')) {
@@ -156,13 +157,15 @@
 			return [
 				{ id: 'all', label: t('filter.all') },
 				{ id: 'open', label: t('filter.open') },
-				{ id: 'done', label: t('filter.done') }
+				{ id: 'done', label: t('filter.done') },
+				{ id: 'archived', label: t('filter.archived') }
 			];
 		}
 		if (path.startsWith('/mail')) {
 			return [
 				{ id: 'all', label: t('filter.all') },
-				{ id: 'unread', label: t('filter.unread') }
+				{ id: 'unread', label: t('filter.unread') },
+				{ id: 'archived', label: t('filter.archived') }
 			];
 		}
 		if (path.startsWith('/photos')) {
@@ -536,6 +539,9 @@
 	function onNavChild(parentHref, childId) {
 		if (parentHref === '/mail') {
 			setMailFolder(/** @type {import('$lib/mail-view.svelte.js').MailFolder} */ (childId));
+			/* Keep top-bar Archive filter in sync with the archive folder. */
+			if (childId === 'archive') ui.listFilter = 'archived';
+			else if (ui.listFilter === 'archived') ui.listFilter = 'all';
 			if (!path.startsWith('/mail')) go('/mail');
 		}
 	}
@@ -584,6 +590,11 @@
 	onGroupPlus={onGroupPlus}
 	onFilterChange={(id) => {
 		ui.listFilter = id;
+		/* Mail Archive filter ↔ archive folder (JMAP role). */
+		if (path.startsWith('/mail')) {
+			if (id === 'archived') setMailFolder('archive');
+			else if (mailView.folder === 'archive') setMailFolder('inbox');
+		}
 	}}
 	onRefresh={() => refreshAllDrive()}
 	feedPadClass={chatList ? '' : 'feed-pad'}

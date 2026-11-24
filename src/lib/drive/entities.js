@@ -419,6 +419,7 @@ export function normalizeTask(raw) {
 	t.schema = 'alpha.task/4';
 	t.labels = Array.isArray(t.labels) ? t.labels : [];
 	t.priority = t.priority ?? 'none';
+	t.archived = Boolean(t.archived);
 	t.depends_on = Array.isArray(t.depends_on) ? t.depends_on : [];
 	const deadline = t.deadline_at ?? t.due_at ?? null;
 	t.deadline_at = deadline;
@@ -463,6 +464,7 @@ export async function createTask(session, input) {
 		description: input.description ?? '',
 		status: input.status ?? 'open',
 		priority: input.priority ?? 'none',
+		archived: false,
 		labels: input.labels ?? [],
 		deadline_at: input.deadline_at ?? null,
 		depends_on: Array.isArray(input.depends_on) ? input.depends_on : [],
@@ -613,6 +615,7 @@ export async function createNote(session, input) {
 		title: input.title,
 		body: input.body ?? '',
 		labels: input.labels ?? [],
+		archived: false,
 		...(author ? { author } : {}),
 		created_at: created,
 		updated_at: created
@@ -637,6 +640,7 @@ export async function putNote(session, note) {
 		title: note.title,
 		body: note.body ?? '',
 		labels: Array.isArray(note.labels) ? note.labels : [],
+		archived: Boolean(note.archived),
 		...(author ? { author } : {}),
 		created_at: note.created_at ?? nowRfc3339(),
 		updated_at: nowRfc3339()
@@ -662,6 +666,7 @@ export async function listNotes(session, projectId) {
 				n.project_ids = Array.isArray(n.project_ids) ? n.project_ids : [];
 				n.labels = Array.isArray(n.labels) ? n.labels : [];
 				n.body = n.body ?? '';
+				n.archived = Boolean(n.archived);
 				if (!projectId || n.project_ids.includes(projectId)) out.push(n);
 			} catch {
 				/* skip */
@@ -688,6 +693,7 @@ export function toUiNote(n, projectList) {
 		title: n.title,
 		body: n.body ?? '',
 		labels: n.labels ?? [],
+		archived: Boolean(n.archived),
 		targets: (n.project_ids ?? []).map((id) => ({
 			id,
 			label: byId.get(id)?.title ?? id
@@ -716,6 +722,7 @@ export function fromUiNote(ui) {
 		title: ui.title,
 		body: ui.body ?? '',
 		labels: ui.labels ?? [],
+		archived: Boolean(ui.archived ?? ui._drive?.archived),
 		...(author ? { author: String(author).toLowerCase() } : {}),
 		created_at: ui._drive?.created_at ?? nowRfc3339(),
 		updated_at: nowRfc3339()
@@ -1337,6 +1344,7 @@ export function toUiTask(t, projectList) {
 		title: t.title,
 		status: t.status,
 		priority: t.priority ?? 'none',
+		archived: Boolean(t.archived),
 		body: t.description ?? '',
 		labels: t.labels ?? [],
 		targets: (t.project_ids ?? []).map((id) => ({
@@ -1378,6 +1386,7 @@ export function fromUiTask(ui) {
 		description: ui.body ?? '',
 		status: ui.status,
 		priority: ui.priority ?? 'none',
+		archived: Boolean(ui.archived ?? ui._drive?.archived),
 		labels: ui.labels ?? [],
 		deadline_at: ui.deadline_at ?? ui._drive?.deadline_at ?? ui._drive?.due_at ?? null,
 		depends_on: ui.depends_on ?? ui._drive?.depends_on ?? [],

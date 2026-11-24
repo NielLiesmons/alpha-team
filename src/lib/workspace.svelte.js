@@ -714,6 +714,28 @@ export async function patchNote(id, patch) {
 }
 
 /**
+ * Soft-archive a task (swipe / Archive filter). Persists `archived: true`.
+ * @param {string} id
+ */
+export async function archiveTask(id) {
+	const t = tasks.find((x) => x.id === id);
+	if (!t || t.archived) return;
+	if (ui.selection?.kind === 'task' && ui.selection.id === id) forceClearSelection();
+	await patchTask(id, { archived: true });
+}
+
+/**
+ * Soft-archive a note (swipe / Archive filter). Persists `archived: true`.
+ * @param {string} id
+ */
+export async function archiveNote(id) {
+	const n = notes.find((x) => x.id === id);
+	if (!n || n.archived) return;
+	if (ui.selection?.kind === 'note' && ui.selection.id === id) forceClearSelection();
+	await patchNote(id, { archived: true });
+}
+
+/**
  * Quick field patch for projects (status, milestones, …).
  * @param {string} id
  * @param {Record<string, unknown>} patch
