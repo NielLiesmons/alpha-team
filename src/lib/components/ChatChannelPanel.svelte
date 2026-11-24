@@ -68,6 +68,8 @@
 	let inputEl = $state();
 	/** @type {import('./ChatComposerBar.svelte').default | undefined} */
 	let composerBar = $state();
+	/** Suppress scroll-to-bottom FAB while hold/lock voice UI owns that slot. */
+	let voiceActive = $state(false);
 
 	/** Sticky pin — cleared when user scrolls away; gates auto-follow + resize snap. */
 	let pinBottom = $state(true);
@@ -909,7 +911,7 @@
 		</div>
 	</div>
 
-	{#if showScrollFab || pendingNewCount > 0}
+	{#if !voiceActive && (showScrollFab || pendingNewCount > 0)}
 		<div class="scroll-fabs">
 			<button
 				type="button"
@@ -936,6 +938,7 @@
 				bind:draft
 				bind:replyTo
 				bind:inputEl
+				bind:voiceActive
 				onSent={onComposerSent}
 			/>
 		</div>

@@ -40,7 +40,8 @@
 	 *   inputEl?: HTMLTextAreaElement | undefined,
 	 *   signalPresence?: boolean,
 	 *   onSent?: () => void,
-	 *   cancelReplyLabel?: string
+	 *   cancelReplyLabel?: string,
+	 *   voiceActive?: boolean
 	 * }}
 	 */
 	let {
@@ -51,7 +52,8 @@
 		inputEl = $bindable(undefined),
 		signalPresence = true,
 		onSent = () => {},
-		cancelReplyLabel = undefined
+		cancelReplyLabel = undefined,
+		voiceActive = $bindable(false)
 	} = $props();
 
 	/** @type {HTMLInputElement | undefined} */
@@ -88,6 +90,7 @@
 	let voiceLockArmed = $state(false);
 	let voiceDragX = $state(0);
 	let voiceDragY = $state(0);
+	let voicePreviewPlaying = $state(false);
 	const VOICE_BAR_COUNT = 28;
 	/** @type {number[]} */
 	let voiceBars = $state(Array.from({ length: VOICE_BAR_COUNT }, () => 0));
@@ -99,8 +102,15 @@
 	const voiceRecorder = createVoiceRecorder();
 	const VOICE_MIN_MS = 1000;
 	const VOICE_MIN_BYTES = 800;
-	const VOICE_CANCEL_PX = 72;
-	const VOICE_LOCK_PX = 64;
+	/** Max left drag (px) and arm threshold for slide-to-delete. */
+	const VOICE_CANCEL_MAX_PX = 100;
+	const VOICE_CANCEL_ARM_PX = 64;
+	/**
+	 * Max up drag = latch distance when the hold circle overlaps the lock FAB
+	 * (47px glass circle, ~16px gap above the 33px mic slot).
+	 */
+	const VOICE_LOCK_MAX_PX = 72;
+	const VOICE_LOCK_ARM_PX = 56;
 	const voiceRecording = $derived(voiceMode === 'holding' || voiceMode === 'locked');
 	const voiceHolding = $derived(voiceMode === 'holding');
 	const voiceLocked = $derived(voiceMode === 'locked');
@@ -110,6 +120,14 @@
 	let holdOriginY = 0;
 	/** False if the press ended before getUserMedia resolved. */
 	let holdPointerAlive = false;
+	/** @type {HTMLAudioElement | null} */
+	let voicePreviewAudio = null;
+	/** @type {string | null} */
+	let voicePreviewUrl = null;
+
+	$effect(() => {
+		voiceActive = voiceRecording;
+	});
 
 	let fadeTop = $state(false);
 	let fadeBottom = $state(false);
@@ -481,8 +499,25 @@
 		window.removeEventListener('pointercancel', onHoldPointerCancel);
 	}
 
+	function stopVoicePreview() {
+		if (voicePreviewAudio) {
+			try {
+				voicePreviewAudio.pause();
+			} catch {
+				/* ignore */
+			}
+			voicePreviewAudio = null;
+		}
+		if (voicePreviewUrl) {
+			URL.revokeObjectURL(voicePreviewUrl);
+			voicePreviewUrl = null;
+		}
+		voicePreviewPlaying = false;
+	}
+
 	function resetVoiceUi() {
 		clearHoldListeners();
+		stopVoicePreview();
 		holdPointerId = null;
 		holdPointerAlive = false;
 		voiceMode = 'idle';
@@ -499,14 +534,14 @@
 	}
 
 	function updateHoldGesture(/** @type {number} */ clientX, /** @type {number} */ clientY) {
-		const dx = clientX - holdOriginX;
-		const dy = clientY - holdOriginY;
+		const dx = Math.max(-VOICE_CANCEL_MAX_PX, Math.min(0, clientX - holdOriginX));
+		const dy = Math.max(-VOICE_LOCK_MAX_PX, Math.min(0, clientY - holdOriginY));
 		voiceDragX = dx;
 		voiceDragY = dy;
 		const absX = Math.abs(dx);
 		const absY = Math.abs(dy);
-		const cancel = dx <= -VOICE_CANCEL_PX && absX >= absY;
-		const lock = dy <= -VOICE_LOCK_PX && absY > absX;
+		const cancel = dx <= -VOICE_CANCEL_ARM_PX && absX >= absY;
+		const lock = dy <= -VOICE_LOCK_ARM_PX && absY > absX;
 		voiceCancelArmed = cancel;
 		voiceLockArmed = !cancel && lock;
 	}
@@ -558,6 +593,7 @@
 	function toggleVoicePause() {
 		if (!voiceLocked) return;
 		if (voicePaused) {
+			stopVoicePreview();
 			voiceRecorder.resume();
 			voicePaused = false;
 		} else {
@@ -565,6 +601,28 @@
 			voicePaused = true;
 			voiceMs = voiceRecorder.elapsedMs();
 		}
+	}
+
+	function toggleVoicePreview() {
+		if (!voiceLocked || !voicePaused) return;
+		if (voicePreviewPlaying) {
+			stopVoicePreview();
+			return;
+		}
+		const blob = voiceRecorder.previewBlob();
+		if (!blob || blob.size < 32) return;
+		stopVoicePreview();
+		voicePreviewUrl = URL.createObjectURL(blob);
+		const audio = new Audio(voicePreviewUrl);
+		voicePreviewAudio = audio;
+		audio.onended = () => {
+			if (voicePreviewAudio === audio) stopVoicePreview();
+		};
+		audio.onerror = () => {
+			if (voicePreviewAudio === audio) stopVoicePreview();
+		};
+		voicePreviewPlaying = true;
+		void audio.play().catch(() => stopVoicePreview());
 	}
 
 	async function finishVoiceRecording(/** @type {boolean} */ doSend) {
@@ -851,23 +909,35 @@
 				onchange={onFilesPicked}
 			/>
 
-			{#if voiceLocked}
+			{#if voiceRecording}
 				<div
-					class="composer-row voice-row locked"
+					class="composer-row voice-row"
+					class:holding={voiceHolding}
+					class:locked={voiceLocked}
 					class:paused={voicePaused}
+					class:cancel-armed={voiceCancelArmed}
+					class:lock-armed={voiceLockArmed}
 					class:chrome-expanded={chromeExpanded}
 					aria-live="polite"
 				>
-					<button
-						type="button"
-						class="voice-icon-btn delete"
-						aria-label={t('common.delete')}
-						onclick={cancelVoiceRecording}
-					>
-						<span class="voice-trash"><Trash size={16} /></span>
-					</button>
 					<div class="voice-pill">
-						<span class="voice-dot" aria-hidden="true"></span>
+						{#if voicePaused}
+							<button
+								type="button"
+								class="voice-dot-btn"
+								class:playing={voicePreviewPlaying}
+								aria-label={voicePreviewPlaying ? t('chat.pauseVoice') : t('chat.previewVoice')}
+								onclick={toggleVoicePreview}
+							>
+								{#if voicePreviewPlaying}
+									<Pause size={11} />
+								{:else}
+									<Play size={11} />
+								{/if}
+							</button>
+						{:else}
+							<span class="voice-dot" aria-hidden="true"></span>
+						{/if}
 						<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
 						<div class="voice-wave" aria-hidden="true">
 							{#each voiceBars as h, i (i)}
@@ -879,89 +949,71 @@
 							{/each}
 						</div>
 					</div>
-					<button
-						type="button"
-						class="voice-icon-btn pause"
-						aria-label={voicePaused ? t('chat.resumeVoice') : t('chat.pauseVoice')}
-						onclick={toggleVoicePause}
-					>
-						{#if voicePaused}
-							<Play size={15} />
-						{:else}
-							<Pause size={15} />
-						{/if}
-					</button>
-					<div class="mic-slot locked">
-						<button
-							type="button"
-							class="mic-glow locked"
-							aria-label={t('chat.send')}
-							onclick={() => void finishVoiceRecording(true)}
-						>
-							<span class="send-ico"><AlphaLogo size={22} /></span>
-						</button>
-					</div>
-				</div>
-			{:else if voiceHolding}
-				<div
-					class="composer-row voice-row holding"
-					class:chrome-expanded={chromeExpanded}
-					class:cancel-armed={voiceCancelArmed}
-					class:lock-armed={voiceLockArmed}
-					aria-live="polite"
-				>
-					<div class="hold-hint">
-						<span class="voice-dot" aria-hidden="true"></span>
-						<span class="voice-time">{formatVoiceRecordTime(voiceMs)}</span>
-						<span class="slide-hint" class:armed={voiceCancelArmed}>
-							{t('chat.slideToCancel')}
-						</span>
-					</div>
-					<div class="mic-slot holding">
-						<div
-							class="hold-pill left"
-							class:armed={voiceCancelArmed}
-							aria-hidden="true"
-						>
-							<span class="voice-trash"><Trash size={14} /></span>
-						</div>
-						<div class="hold-pill top" class:armed={voiceLockArmed} aria-hidden="true">
-							<svg
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
+					<div class="mic-slot" class:holding={voiceHolding} class:locked={voiceLocked}>
+						{#if voiceHolding}
+							<div
+								class="voice-fab lock"
+								class:armed={voiceLockArmed}
 								aria-hidden="true"
 							>
-								<path
-									d="M7 11V8a5 5 0 0 1 10 0v3"
-									stroke="currentColor"
-									stroke-width="1.8"
-									stroke-linecap="round"
-								/>
-								<rect
-									x="5"
-									y="11"
-									width="14"
-									height="10"
-									rx="2.5"
-									stroke="currentColor"
-									stroke-width="1.8"
-								/>
-							</svg>
-						</div>
-						<div
-							class="mic-glow holding"
-							class:cancel={voiceCancelArmed}
-							class:lock={voiceLockArmed}
-							style:transform="translate(calc(50% + {Math.max(
-								-48,
-								Math.min(8, voiceDragX)
-							)}px), calc(50% + {Math.max(-48, Math.min(8, voiceDragY))}px))"
-							aria-hidden="true"
-						>
-							<Voice size={26} />
-						</div>
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+									<path
+										fill="currentColor"
+										d="M17 9h-1V7A4 4 0 0 0 8 7v2H7a2.5 2.5 0 0 0-2.5 2.5v8A2.5 2.5 0 0 0 7 22h10a2.5 2.5 0 0 0 2.5-2.5v-8A2.5 2.5 0 0 0 17 9Zm-7-2a2 2 0 1 1 4 0v2h-4V7Zm2 8.75a1.75 1.75 0 1 1 0-3.5 1.75 1.75 0 0 1 0 3.5Z"
+									/>
+								</svg>
+							</div>
+						{:else}
+							<button
+								type="button"
+								class="voice-fab"
+								aria-label={voicePaused ? t('chat.resumeVoice') : t('chat.pauseVoice')}
+								onclick={toggleVoicePause}
+							>
+								{#if voicePaused}
+									<Voice size={20} />
+								{:else}
+									<Pause size={16} />
+								{/if}
+							</button>
+						{/if}
+						{#if voiceLocked}
+							<button
+								type="button"
+								class="hold-delete-pill"
+								aria-label={t('common.delete')}
+								onclick={cancelVoiceRecording}
+							>
+								<span class="voice-trash"><Trash size={15} /></span>
+								<span class="hold-delete-label">{t('common.delete')}</span>
+							</button>
+							<button
+								type="button"
+								class="mic-glow locked"
+								aria-label={t('chat.send')}
+								onclick={() => void finishVoiceRecording(true)}
+							>
+								<span class="send-ico"><AlphaLogo size={22} /></span>
+							</button>
+						{:else}
+							<div
+								class="hold-delete-pill"
+								class:armed={voiceCancelArmed}
+								aria-hidden="true"
+							>
+								<span class="voice-trash"><Trash size={15} /></span>
+								<span class="hold-delete-label shimmer">{t('chat.slideToDelete')}</span>
+							</div>
+							<div
+								class="mic-glow holding"
+								class:cancel={voiceCancelArmed}
+								class:lock={voiceLockArmed}
+								style:transform="translate(calc(50% + {voiceDragX}px), calc(50% + {voiceDragY}px))"
+								aria-hidden="true"
+							>
+								<Voice size={26} />
+							</div>
+						{/if}
 					</div>
 				</div>
 			{:else}
@@ -1300,33 +1352,6 @@
 		user-select: none;
 	}
 
-	.hold-hint {
-		flex: 1 1 auto;
-		min-width: 0;
-		height: 33px;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 0 4px 0 4px;
-		box-sizing: border-box;
-	}
-
-	.slide-hint {
-		flex: 1 1 auto;
-		min-width: 0;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--fg-33);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		transition: color 0.15s ease;
-	}
-
-	.slide-hint.armed {
-		color: var(--accent-3, var(--destructive, #c44));
-	}
-
 	.voice-pill {
 		flex: 1 1 auto;
 		min-width: 0;
@@ -1345,20 +1370,36 @@
 		width: var(--voice-dot);
 		height: var(--voice-dot);
 		border-radius: 50%;
-		background: radial-gradient(
-			circle at 35% 30%,
-			color-mix(in srgb, var(--accent-3, #c44) 92%, #fff) 0%,
-			var(--accent-3, #c44) 55%,
-			color-mix(in srgb, var(--accent-3, #c44) 70%, #000) 100%
-		);
+		background: var(--gradient-accent-3);
 		box-shadow: 0 0 8px 2px color-mix(in srgb, var(--accent-3, #c44) 40%, transparent);
 		animation: voice-glow 1.05s ease-in-out infinite alternate;
 	}
 
-	.voice-row.paused .voice-dot {
-		animation: none;
-		opacity: 0.45;
-		box-shadow: none;
+	.voice-dot-btn {
+		flex: 0 0 auto;
+		width: 22px;
+		height: 22px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		margin: 0;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		box-sizing: border-box;
+	}
+
+	.voice-dot-btn.playing {
+		color: var(--fg);
+		background: color-mix(in srgb, var(--fg) 12%, transparent);
+	}
+
+	.voice-dot-btn :global(.icon),
+	.voice-dot-btn :global(svg) {
+		display: block;
 	}
 
 	@keyframes voice-glow {
@@ -1428,38 +1469,12 @@
 		opacity: 0.55;
 	}
 
-	.voice-icon-btn {
-		flex: 0 0 auto;
-		width: 33px;
-		height: 33px;
-		display: grid;
-		place-items: center;
-		padding: 0;
-		border: 0;
-		border-radius: 999px;
-		background: var(--fg-8);
-		color: var(--fg-66);
-		cursor: pointer;
-		-webkit-tap-highlight-color: transparent;
-		box-sizing: border-box;
-	}
-
-	.voice-icon-btn.delete {
-		color: var(--accent-3, var(--destructive, #c44));
-	}
-
 	.voice-trash {
 		display: inline-flex;
 		/* Optical: trash glyph sits slightly low in the pill. */
 		transform: translateY(-2px);
 		line-height: 0;
-	}
-
-	.voice-icon-btn :global(.icon),
-	.voice-icon-btn :global(svg),
-	.hold-pill :global(.icon),
-	.hold-pill :global(svg) {
-		flex-shrink: 0;
+		color: var(--accent-3, var(--destructive, #c44));
 	}
 
 	/* Layout slot stays 33×33 so the bar height never grows; glow overflows. */
@@ -1485,17 +1500,14 @@
 		border-radius: 999px;
 		cursor: pointer;
 		color: #fff;
-		background: radial-gradient(
-			circle at 35% 30%,
-			color-mix(in srgb, var(--accent-3, #c44) 92%, #fff) 0%,
-			var(--accent-3, #c44) 55%,
-			color-mix(in srgb, var(--accent-3, #c44) 70%, #000) 100%
-		);
-		box-shadow: 0 0 16px 4px color-mix(in srgb, var(--accent-3, #c44) 42%, transparent);
+		/* In-progress recording — accent-2 gold gradient only. */
+		background: var(--gradient-accent-2);
+		box-shadow: 0 0 16px 4px color-mix(in srgb, var(--accent-2, #d4a017) 38%, transparent);
 		-webkit-tap-highlight-color: transparent;
 		touch-action: none;
 		user-select: none;
 		transform: translate(50%, 50%);
+		z-index: 6;
 		transition:
 			box-shadow 0.15s ease,
 			background 0.15s ease;
@@ -1506,78 +1518,184 @@
 	}
 
 	.mic-glow.holding.cancel {
-		background: radial-gradient(
-			circle at 35% 30%,
-			color-mix(in srgb, var(--accent-3, #c44) 80%, #fff) 0%,
-			var(--accent-3, #c44) 60%,
-			color-mix(in srgb, var(--accent-3, #c44) 55%, #000) 100%
-		);
-		box-shadow: 0 0 18px 5px color-mix(in srgb, var(--accent-3, #c44) 55%, transparent);
+		background: var(--gradient-accent-3);
+		box-shadow: 0 0 18px 5px color-mix(in srgb, var(--accent-3, #c44) 48%, transparent);
 	}
 
 	.mic-glow.holding.lock {
-		background: radial-gradient(
-			circle at 35% 30%,
-			color-mix(in srgb, var(--accent-2, #d4a017) 90%, #fff) 0%,
-			var(--accent-2, #d4a017) 55%,
-			color-mix(in srgb, var(--accent-2, #d4a017) 65%, #000) 100%
-		);
-		box-shadow: 0 0 16px 4px color-mix(in srgb, var(--accent-2, #d4a017) 42%, transparent);
+		background: var(--gradient-accent-2);
+		box-shadow: 0 0 18px 5px color-mix(in srgb, var(--accent-2, #d4a017) 48%, transparent);
 	}
 
 	.mic-glow.locked {
 		width: 56px;
 		height: 56px;
+		background: var(--gradient-accent-1);
+		box-shadow: 0 0 14px 3px color-mix(in srgb, var(--accent-1, #5c5fff) 32%, transparent);
 	}
 
-	.hold-pill {
+	/* Delete half-pill sits behind the large circle; same fill as wave pill. */
+	.hold-delete-pill {
 		position: absolute;
-		display: grid;
-		place-items: center;
-		pointer-events: none;
-		color: var(--fg-66);
-		background: color-mix(in srgb, var(--glass, var(--bg)) 88%, transparent);
-		border: 1px solid var(--fg-8);
-		box-sizing: border-box;
-		transition:
-			background 0.15s ease,
-			color 0.15s ease,
-			border-color 0.15s ease,
-			transform 0.15s ease;
-		z-index: 5;
-	}
-
-	.hold-pill.left {
 		right: 50%;
 		top: 50%;
-		height: 40px;
-		width: 52px;
-		padding-right: 18px;
+		z-index: 4;
+		height: 44px;
+		min-width: 132px;
+		display: flex;
+		align-items: center;
+		justify-content: flex-start;
+		gap: 7px;
+		padding: 0 34px 0 14px;
+		border: 0;
 		border-radius: 999px 0 0 999px;
-		transform: translate(-22px, -50%);
+		background: var(--fg-8);
+		color: var(--fg-66);
+		box-sizing: border-box;
+		transform: translate(-24px, -50%);
+		pointer-events: none;
+		white-space: nowrap;
+		transition:
+			background 0.15s ease,
+			transform 0.15s ease;
 	}
 
-	.hold-pill.top {
+	.mic-slot.locked .hold-delete-pill {
+		pointer-events: auto;
+		cursor: pointer;
+		min-width: 96px;
+		padding-right: 30px;
+	}
+
+	.hold-delete-pill.armed {
+		transform: translate(-28px, -50%);
+		background: color-mix(in srgb, var(--accent-3, #c44) 14%, var(--fg-8));
+	}
+
+	.hold-delete-label {
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 1;
+		color: var(--fg-33);
+	}
+
+	.hold-delete-label.shimmer {
+		color: transparent;
+		background-image: linear-gradient(
+			90deg,
+			var(--fg-16) 0%,
+			var(--fg-33) 28%,
+			var(--fg-66) 50%,
+			var(--fg-33) 72%,
+			var(--fg-16) 100%
+		);
+		background-size: 220% 100%;
+		-webkit-background-clip: text;
+		background-clip: text;
+		animation: delete-shimmer 1.35s ease-in-out infinite;
+	}
+
+	.hold-delete-pill.armed .hold-delete-label.shimmer {
+		background-image: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--accent-3, #c44) 45%, transparent) 0%,
+			var(--accent-3, #c44) 50%,
+			color-mix(in srgb, var(--accent-3, #c44) 45%, transparent) 100%
+		);
+	}
+
+	@keyframes delete-shimmer {
+		0% {
+			background-position: 100% 0;
+		}
+		100% {
+			background-position: -100% 0;
+		}
+	}
+
+	/*
+	 * Lock / pause / resume — occupies the scroll-to-bottom FAB slot
+	 * (glass round, same stroke treatment).
+	 */
+	.voice-fab {
+		position: absolute;
 		left: 50%;
-		bottom: 50%;
-		width: 40px;
-		height: 52px;
-		padding-bottom: 18px;
-		border-radius: 999px 999px 0 0;
-		transform: translate(-50%, -22px);
+		bottom: calc(100% + 16px);
+		width: 47px;
+		height: 47px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: var(--composer-bg, color-mix(in srgb, var(--glass) 72%, transparent));
+		color: var(--fg-66);
+		cursor: pointer;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		-webkit-tap-highlight-color: transparent;
+		isolation: isolate;
+		transform: translateX(-50%);
+		z-index: 8;
+		box-sizing: border-box;
+		transition:
+			transform 0.22s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+			color 0.15s ease;
 	}
 
-	.hold-pill.left.armed {
-		color: #fff;
-		background: var(--accent-3, var(--destructive, #c44));
-		border-color: transparent;
-		transform: translate(-26px, -50%) scale(1.06);
+	.voice-fab::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		padding: 1px;
+		pointer-events: none;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
+			color-mix(in srgb, var(--fg) 9%, transparent) 100%
+		);
+		-webkit-mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
 	}
 
-	.hold-pill.top.armed {
-		color: #fff;
-		background: var(--accent-2, #d4a017);
-		border-color: transparent;
-		transform: translate(-50%, -26px) scale(1.06);
+	.voice-fab.lock {
+		pointer-events: none;
+		cursor: default;
+	}
+
+	.voice-fab.lock.armed {
+		color: var(--fg);
+		animation: lock-pop 0.38s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+		transform: translateX(-50%) scale(1.12);
+	}
+
+	@keyframes lock-pop {
+		0% {
+			transform: translateX(-50%) scale(1);
+		}
+		45% {
+			transform: translateX(-50%) scale(1.2);
+		}
+		100% {
+			transform: translateX(-50%) scale(1.12);
+		}
+	}
+
+	.voice-fab :global(.icon),
+	.voice-fab :global(svg),
+	.hold-delete-pill :global(.icon),
+	.hold-delete-pill :global(svg) {
+		flex-shrink: 0;
+		position: relative;
+		z-index: 1;
 	}
 </style>

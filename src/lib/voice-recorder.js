@@ -26,6 +26,7 @@ export function pickVoiceMime() {
  *   resume: () => void,
  *   stop: () => Promise<{ file: File, blob: Blob, durationMs: number, bytes: number } | null>,
  *   cancel: () => void,
+ *   previewBlob: () => Blob | null,
  *   isPaused: () => boolean,
  *   elapsedMs: () => number,
  *   sampleLevel: () => number
@@ -175,6 +176,12 @@ export function createVoiceRecorder() {
 		tearDownTracks();
 	}
 
+	/** Snapshot of recorded audio so far (for prelisten while paused). */
+	function previewBlob() {
+		if (!chunks.length) return null;
+		return new Blob(chunks, { type: mime || 'audio/webm' });
+	}
+
 	/**
 	 * @returns {Promise<{ file: File, blob: Blob, durationMs: number, bytes: number } | null>}
 	 */
@@ -225,6 +232,7 @@ export function createVoiceRecorder() {
 		resume,
 		stop,
 		cancel,
+		previewBlob,
 		isPaused: () => paused,
 		elapsedMs,
 		sampleLevel
