@@ -23,7 +23,7 @@
 	import { compareChatMessageAsc } from '$lib/drive/entities.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { snapFeedToBottom } from '$lib/feed-scroll.js';
-	import { isMobileNav } from '$lib/nav-stack.js';
+	import { isMobileNav, setDetailPopIgnore } from '$lib/nav-stack.js';
 	import ChromeActionButton from '@alpha/ui/ChromeActionButton.svelte';
 	import Close from '@alpha/ui/icons/Close.svelte';
 	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
@@ -127,24 +127,34 @@
 
 	function pushCommentsHistory() {
 		if (!isMobileNav() || typeof history === 'undefined' || pushedHistory) return;
+		/* Dedicated overlay flag on top of the detail layer — not a new route. */
 		ignorePop = true;
+		setDetailPopIgnore(true);
 		history.pushState({ ...(history.state || {}), alphaComments: key }, '');
 		pushedHistory = true;
 		queueMicrotask(() => {
 			ignorePop = false;
+			setDetailPopIgnore(false);
 		});
 	}
 
+	/**
+	 * Pop only the comments history entry. Detail/selection stay put because
+	 * bindDetailPopstate keeps the layer when `alphaLayer` remains, and we
+	 * also suppress detail handlers for this intentional back.
+	 */
 	function popCommentsHistory() {
 		if (!pushedHistory || typeof history === 'undefined') {
 			pushedHistory = false;
 			return;
 		}
 		ignorePop = true;
+		setDetailPopIgnore(true);
 		pushedHistory = false;
 		history.back();
 		queueMicrotask(() => {
 			ignorePop = false;
+			setDetailPopIgnore(false);
 		});
 	}
 
@@ -262,7 +272,7 @@
 		});
 	});
 
-	/* Android / browser back closes the sheet. */
+	/* Android / browser back closes the sheet only (detail stays underneath). */
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		/** @param {PopStateEvent} _e */
@@ -534,6 +544,8 @@
 	role={sheetVisible ? 'dialog' : undefined}
 	aria-modal={sheetVisible ? 'false' : undefined}
 	aria-label={sheetVisible ? t('comments.title') : undefined}
+	data-no-detail-swipe={sheetVisible ? '' : undefined}
+	data-no-nav-swipe={sheetVisible ? '' : undefined}
 >
 	{#if phase === 'fab'}
 		<button

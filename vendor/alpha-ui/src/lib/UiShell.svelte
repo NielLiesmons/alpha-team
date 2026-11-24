@@ -502,8 +502,13 @@
 			const pathChanged = Boolean(navArmedPath) && path !== navArmedPath;
 			navArmedPath = path;
 
-			/* Detail layers own their history entries — don't steal that back. */
-			if (detailOpen() || history.state?.alphaLayer) {
+			/* Detail / comments overlays own their history — don't steal that back. */
+			if (
+				detailOpen() ||
+				detailCovering ||
+				history.state?.alphaLayer ||
+				history.state?.alphaComments
+			) {
 				if (mobileNavOpen) mobileNavOpen = false;
 				return;
 			}
@@ -537,7 +542,10 @@
 	);
 
 	/*
-	 * Touch swipe on the slid page → open/close the menu.
+	 * Touch swipe on the slid page:
+	 * - Level-one lists → open/close the nav menu
+	 * - Deeper pages (detail covering / alphaLayer / nested title) → history.back
+	 * Detail chrome owns the visual underlay when `.detail.open`; shell stays hands-off then.
 	 * Listen on the wrap (capture) so nav-peek / feed / PTR children still bubble here.
 	 * Avoid shell-level touch-action: pan-y — it lets the browser cancel horizontal claims.
 	 */
@@ -548,6 +556,7 @@
 		const CLAIM = 10;
 		const OPEN_AT = 0.2;
 		const CLOSE_AT = 0.28;
+		const BACK_AT = 0.28;
 
 		function drawerSpan() {
 			const shell = shellEl;
@@ -560,18 +569,31 @@
 			return Number.isFinite(n) && n > 0 ? n : window.innerWidth * 0.67;
 		}
 
+		/** Nested list / history layer — swipe-back instead of opening nav. */
+		function deeperPage() {
+			if (detailOpen() || detailCovering) return true;
+			if (typeof history !== 'undefined' && history.state?.alphaLayer) return true;
+			return Boolean(
+				listColEl?.querySelector('.mobile-page-title.nested, [data-swipe-back]')
+			);
+		}
+
 		let startX = 0;
 		let startY = 0;
-		/** @type {'open' | 'close' | null} */
+		/** @type {'open' | 'close' | 'back' | null} */
 		let mode = null;
 		let claimed = false;
 		let startOpen = false;
 		let tracking = false;
 		let suppressToggleClick = false;
+		/** Horizontal progress 0..1 while mode === 'back'. */
+		let backProg = 0;
 
 		/** @param {TouchEvent} e */
 		function onStart(e) {
-			if (!isMobileShell() || detailOpen()) return;
+			if (!isMobileShell()) return;
+			/* Detail column owns swipe-back + underlay when the pane is open. */
+			if (detailOpen() || detailCovering) return;
 			if (e.touches.length !== 1) return;
 			const t = e.target;
 			if (
@@ -589,8 +611,11 @@
 			startOpen = mobileNavOpen || menuProgress > 0.5;
 			claimed = false;
 			tracking = true;
-			mode = startOpen ? 'close' : 'open';
+			backProg = 0;
 			menuDrag = null;
+			if (startOpen) mode = 'close';
+			else if (deeperPage()) mode = 'back';
+			else mode = 'open';
 		}
 
 		/** @param {TouchEvent} e */
@@ -607,9 +632,10 @@
 					tracking = false;
 					mode = null;
 					menuDrag = null;
+					backProg = 0;
 					return;
 				}
-				if (mode === 'open' && dx < 0) {
+				if ((mode === 'open' || mode === 'back') && dx < 0) {
 					tracking = false;
 					mode = null;
 					return;
@@ -623,6 +649,10 @@
 				suppressToggleClick = true;
 			}
 			e.preventDefault();
+			if (mode === 'back') {
+				backProg = Math.max(0, Math.min(1, dx / span));
+				return;
+			}
 			if (mode === 'open') {
 				menuDrag = Math.max(0, Math.min(1, dx / span));
 			} else {
@@ -635,13 +665,23 @@
 				suppressToggleClick = false;
 				return;
 			}
-			const p = menuDrag;
+			const p = mode === 'back' ? backProg : menuDrag;
 			const wasClaimed = claimed;
+			const endMode = mode;
 			tracking = false;
 			mode = null;
 			claimed = false;
+			backProg = 0;
 			if (!wasClaimed || p == null) {
 				menuDrag = null;
+				queueMicrotask(() => {
+					suppressToggleClick = false;
+				});
+				return;
+			}
+			if (endMode === 'back') {
+				menuDrag = null;
+				if (p >= BACK_AT && typeof history !== 'undefined') history.back();
 				queueMicrotask(() => {
 					suppressToggleClick = false;
 				});

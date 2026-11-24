@@ -84,6 +84,7 @@
 	import { refreshAllDrive } from '$lib/drive-refresh.js';
 	import { attachChromeScrollFade } from '$lib/chrome-scroll-fade.js';
 	import { openEntreprisesEntity } from '$lib/entity-routes.js';
+	import { commentsHistoryActive } from '$lib/nav-stack.js';
 	import {
 		captureForms,
 		clearSelection,
@@ -799,30 +800,34 @@
 		};
 	});
 
-	/* iOS-like edge swipe-back: detail + list underlay track the finger. */
+	/*
+	 * Full-page swipe-right → back (same gesture family as nav-open on level-one).
+	 * Detail + list underlay track the finger via --detail-progress.
+	 */
 	$effect(() => {
 		const el = detailRoot;
 		const isOpen = panelOpen;
 		if (!el || typeof window === 'undefined' || !isOpen) return;
 
-		const EDGE = 28;
 		const CLAIM = 10;
-		const SPAN = Math.min(320, window.innerWidth * 0.55);
+		const CLOSE_AT = 0.32;
+
+		function mobile() {
+			return window.matchMedia('(max-width: 767px)').matches;
+		}
+
+		function span() {
+			return Math.min(360, window.innerWidth * 0.55);
+		}
 
 		let startX = 0;
 		let startY = 0;
 		let tracking = false;
 		let claimed = false;
 
-		function mobile() {
-			return window.matchMedia('(max-width: 767px)').matches;
-		}
-
 		/** @param {TouchEvent} e */
 		function onStart(e) {
 			if (!mobile() || e.touches.length !== 1) return;
-			const touch = e.touches[0];
-			if (touch.clientX > EDGE) return;
 			const t = e.target;
 			if (
 				t instanceof Element &&
@@ -832,6 +837,7 @@
 			) {
 				return;
 			}
+			const touch = e.touches[0];
 			startX = touch.clientX;
 			startY = touch.clientY;
 			tracking = true;
@@ -846,7 +852,8 @@
 			const dy = touch.clientY - startY;
 			if (!claimed) {
 				if (Math.abs(dx) < CLAIM && Math.abs(dy) < CLAIM) return;
-				if (Math.abs(dy) > Math.abs(dx) * 0.85 || dx < 0) {
+				/* Vertical wins — abandon (scroll / PTR). */
+				if (Math.abs(dy) >= Math.abs(dx) * 0.85 || dx < 0) {
 					tracking = false;
 					detailDrag = null;
 					return;
@@ -854,7 +861,7 @@
 				claimed = true;
 			}
 			e.preventDefault();
-			detailDrag = Math.max(0, Math.min(1, 1 - dx / SPAN));
+			detailDrag = Math.max(0, Math.min(1, 1 - dx / span()));
 		}
 
 		function onEnd() {
@@ -867,12 +874,18 @@
 				detailDrag = null;
 				return;
 			}
-			const shouldClose = p < 0.68;
+			const shouldClose = p < 1 - CLOSE_AT;
 			detailDrag = null;
-			if (shouldClose) close();
-			else {
-				/* Snap back open — progress returns to 1 via panelOpen. */
+			if (!shouldClose) return;
+			/*
+			 * Comments overlay owns the top history entry — one back closes
+			 * comments only; leave the publication / detail open.
+			 */
+			if (commentsHistoryActive()) {
+				history.back();
+				return;
 			}
+			close();
 		}
 
 		el.addEventListener('touchstart', onStart, { passive: true });
@@ -955,54 +968,54 @@
 			maxHeight={mailMsg ? 360 : 280}
 			onclose={() => (menuOpen = false)}
 		>
-			<div class="dropdown-list" role="menu">
+			<div class="alpha-popover-list dropdown-list" role="menu">
 				{#if mailMsg}
-					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('reply')}>
-						<Reply size={14} />
-						<span>{t('mail.reply')}</span>
+					<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={() => mailAction('reply')}>
+						<span class="alpha-popover-ico"><Reply size={14} /></span>
+						<span class="alpha-popover-label">{t('mail.reply')}</span>
 					</button>
-					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('replyAll')}>
-						<ReplyAll size={14} />
-						<span>{t('mail.replyAll')}</span>
+					<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={() => mailAction('replyAll')}>
+						<span class="alpha-popover-ico"><ReplyAll size={14} /></span>
+						<span class="alpha-popover-label">{t('mail.replyAll')}</span>
 					</button>
-					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailAction('forward')}>
-						<ArrowRight size={14} strokeWidth={1.45} />
-						<span>{t('mail.forward')}</span>
+					<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={() => mailAction('forward')}>
+						<span class="alpha-popover-ico"><ArrowRight size={14} strokeWidth={1.45} /></span>
+						<span class="alpha-popover-label">{t('mail.forward')}</span>
 					</button>
-					<button type="button" class="dropdown-item" role="menuitem" onclick={mailMarkUnread}>
-						<MailUnread size={14} />
-						<span>{t('mail.markUnread')}</span>
+					<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={mailMarkUnread}>
+						<span class="alpha-popover-ico"><MailUnread size={14} /></span>
+						<span class="alpha-popover-label">{t('mail.markUnread')}</span>
 					</button>
-					<button type="button" class="dropdown-item" role="menuitem" onclick={() => mailMove('junk')}>
-						<Junk size={14} />
-						<span>{t('mail.moveToJunk')}</span>
+					<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={() => mailMove('junk')}>
+						<span class="alpha-popover-ico"><Junk size={14} /></span>
+						<span class="alpha-popover-label">{t('mail.moveToJunk')}</span>
 					</button>
 					<button
 						type="button"
-						class="dropdown-item danger"
+						class="alpha-popover-item dropdown-item danger"
 						role="menuitem"
 						onclick={() => mailMove('trash')}
 					>
-						<Trash size={15} />
-						<span>{t('mail.moveToTrash')}</span>
+						<span class="alpha-popover-ico"><Trash size={15} /></span>
+						<span class="alpha-popover-label">{t('mail.moveToTrash')}</span>
 					</button>
 				{:else}
 					{#if canShare}
-						<button type="button" class="dropdown-item" role="menuitem" onclick={() => void shareCurrent()}>
-							<Share size={14} />
-							<span>{fileEntry ? t('drive.copyPath') : t('common.share')}</span>
+						<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={() => void shareCurrent()}>
+							<span class="alpha-popover-ico"><Share size={14} /></span>
+							<span class="alpha-popover-label">{fileEntry ? t('drive.copyPath') : t('common.share')}</span>
 						</button>
 					{/if}
 					{#if canComposerEdit}
-						<button type="button" class="dropdown-item" role="menuitem" onclick={editCurrent}>
-							<Pen size={13} />
-							<span>{t('common.edit')}</span>
+						<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={editCurrent}>
+							<span class="alpha-popover-ico"><Pen size={13} /></span>
+							<span class="alpha-popover-label">{t('common.edit')}</span>
 						</button>
 					{/if}
 					{#if canDelete}
-						<button type="button" class="dropdown-item danger" role="menuitem" onclick={deleteCurrent}>
-							<Trash size={15} />
-							<span>{t('common.delete')}</span>
+						<button type="button" class="alpha-popover-item dropdown-item danger" role="menuitem" onclick={deleteCurrent}>
+							<span class="alpha-popover-ico"><Trash size={15} /></span>
+							<span class="alpha-popover-label">{t('common.delete')}</span>
 						</button>
 					{/if}
 				{/if}
@@ -2952,48 +2965,12 @@
 	}
 
 	.float-list {
-		display: flex;
-		flex-direction: column;
+		/* Shared chrome: .alpha-popover-list in popover.css */
 		min-height: 0;
-		overflow: auto;
-		padding: 4px 0;
-	}
-
-	.menu-item {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		padding: 10px 14px;
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.menu-item:hover {
-		background: var(--fg-4);
-		color: var(--fg);
 	}
 
 	.menu-item.danger {
-		color: var(--fg-66);
-	}
-
-	.menu-item.danger:hover {
-		background: var(--fg-8);
-		color: var(--fg);
-	}
-
-	.menu-item svg {
-		flex-shrink: 0;
-		opacity: 0.85;
+		color: var(--destructive, var(--accent-3, #ff4778));
 	}
 
 	.block {

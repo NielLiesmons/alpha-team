@@ -1,6 +1,9 @@
 /**
  * Mobile detail layers use history.pushState so system/back closes one layer
  * instead of leaving the current section (e.g. Songs → Player, not → Tasks).
+ *
+ * Overlay stacks (comments) may push on top of a detail layer. After that
+ * overlay pops, `alphaLayer` is still present — do not clear the detail.
  */
 
 /** @type {boolean} */
@@ -42,6 +45,20 @@ export function popDetailLayer(layer, fallback) {
 }
 
 /**
+ * Suppress detail popstate handlers (e.g. while comments intentionally
+ * history.back() so selection/player stay put).
+ * @param {boolean} next
+ */
+export function setDetailPopIgnore(next) {
+	ignorePop = Boolean(next);
+}
+
+/** True when a comments overlay owns the top history entry. */
+export function commentsHistoryActive() {
+	return typeof history !== 'undefined' && Boolean(history.state?.alphaComments);
+}
+
+/**
  * @param {{ onPlayer?: () => void, onSelection?: () => void }} handlers
  * @returns {() => void} unbind
  */
@@ -51,11 +68,14 @@ export function bindDetailPopstate(handlers) {
 	function onPop(_e) {
 		if (ignorePop) return;
 		const layer = history.state?.alphaLayer;
-		// After back(), state is the *previous* entry — layer is gone.
-		// Always try closing whichever overlay is open (handlers no-op if already closed).
+		/*
+		 * After back(), state is the previous entry. If a detail layer flag
+		 * remains, we only closed an overlay (comments, etc.) — leave the
+		 * publication / selection / player open underneath.
+		 */
+		if (layer === 'selection' || layer === 'player') return;
 		handlers.onPlayer?.();
 		handlers.onSelection?.();
-		void layer;
 	}
 	window.addEventListener('popstate', onPop);
 	return () => window.removeEventListener('popstate', onPop);
