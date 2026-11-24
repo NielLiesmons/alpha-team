@@ -1,6 +1,7 @@
 <script>
 	import { onMount, tick, untrack } from 'svelte';
 	import ArrowDown from '$lib/components/icons/ArrowDown.svelte';
+	import Voice from '$lib/components/icons/Voice.svelte';
 	import ChatComposerBar from '$lib/components/ChatComposerBar.svelte';
 	import ChatFeedCard from '$lib/components/ChatFeedCard.svelte';
 	import ChatStatusLine from '$lib/components/ChatStatusLine.svelte';
@@ -11,6 +12,8 @@
 	import ProjectBox from '$lib/components/ProjectBox.svelte';
 	import TaskBox from '$lib/components/TaskBox.svelte';
 	import TipTypeIcon from '$lib/components/TipTypeIcon.svelte';
+	import Lock from '@alpha/ui/icons/Lock.svelte';
+	import Pause from '@alpha/ui/icons/Pause.svelte';
 	import { activePerson, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
 	import {
@@ -68,8 +71,12 @@
 	let inputEl = $state();
 	/** @type {import('./ChatComposerBar.svelte').default | undefined} */
 	let composerBar = $state();
-	/** Suppress scroll-to-bottom FAB while hold/lock voice UI owns that slot. */
+	/** Scroll-to-bottom FAB swaps to lock / pause / mic while recording. */
 	let voiceActive = $state(false);
+	/** @type {'idle' | 'holding' | 'locked'} */
+	let voiceMode = $state('idle');
+	let voicePaused = $state(false);
+	let voiceLockArmed = $state(false);
 
 	/** Sticky pin — cleared when user scrolls away; gates auto-follow + resize snap. */
 	let pinBottom = $state(true);
@@ -911,19 +918,40 @@
 		</div>
 	</div>
 
-	{#if !voiceActive && (showScrollFab || pendingNewCount > 0)}
+	{#if voiceActive || showScrollFab || pendingNewCount > 0}
 		<div class="scroll-fabs">
-			<button
-				type="button"
-				class="scroll-fab"
-				aria-label={t('chat.scrollToBottom')}
-				onclick={onJumpToLatest}
-			>
-				<ArrowDown size={18} />
-				{#if pendingNewCount > 0}
-					<span class="fab-badge">{pendingNewCount > 99 ? '99+' : pendingNewCount}</span>
+			{#if voiceActive}
+				{#if voiceMode === 'holding'}
+					<div class="scroll-fab" class:armed={voiceLockArmed} aria-hidden="true">
+						<Lock size={16} />
+					</div>
+				{:else}
+					<button
+						type="button"
+						class="scroll-fab"
+						aria-label={voicePaused ? t('chat.resumeVoice') : t('chat.pauseVoice')}
+						onclick={() => composerBar?.toggleVoicePause?.()}
+					>
+						{#if voicePaused}
+							<Voice size={20} />
+						{:else}
+							<Pause size={16} />
+						{/if}
+					</button>
 				{/if}
-			</button>
+			{:else}
+				<button
+					type="button"
+					class="scroll-fab"
+					aria-label={t('chat.scrollToBottom')}
+					onclick={onJumpToLatest}
+				>
+					<ArrowDown size={18} />
+					{#if pendingNewCount > 0}
+						<span class="fab-badge">{pendingNewCount > 99 ? '99+' : pendingNewCount}</span>
+					{/if}
+				</button>
+			{/if}
 		</div>
 	{/if}
 
@@ -939,6 +967,10 @@
 				bind:replyTo
 				bind:inputEl
 				bind:voiceActive
+				bind:voiceMode
+				bind:voicePaused
+				bind:voiceLockArmed
+				externalVoiceFab={true}
 				onSent={onComposerSent}
 			/>
 		</div>
@@ -1367,6 +1399,10 @@
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		-webkit-tap-highlight-color: transparent;
 		isolation: isolate;
+		box-sizing: border-box;
+		transition:
+			transform 0.22s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+			color 0.15s ease;
 	}
 
 	.scroll-fab::after {
@@ -1395,6 +1431,35 @@
 
 	.scroll-fab:hover {
 		color: var(--fg-66);
+	}
+
+	/* Hold-to-lock latch — same element, content swap only. */
+	div.scroll-fab {
+		cursor: default;
+		pointer-events: none;
+	}
+
+	.scroll-fab.armed {
+		color: var(--fg);
+		animation: lock-pop 0.38s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+	}
+
+	@keyframes lock-pop {
+		0% {
+			transform: scale(1);
+		}
+		45% {
+			transform: scale(1.2);
+		}
+		100% {
+			transform: scale(1.12);
+		}
+	}
+
+	.scroll-fab :global(.icon),
+	.scroll-fab :global(svg) {
+		position: relative;
+		z-index: 1;
 	}
 
 	.fab-badge {
