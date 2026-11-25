@@ -1,0 +1,14 @@
+[Unit]
+Description=Alpha Drive (alphamail.xyz)
+After=network.target mnt-storage.automount
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/alpha-drive/alphamail.env
+ExecStart=/opt/alpha-drive/target/release/alpha-drive serve --listen 127.0.0.1:8807 --data /mnt/storage/alpha-drive-alphamail
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

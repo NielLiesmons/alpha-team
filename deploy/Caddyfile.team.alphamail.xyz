@@ -1,0 +1,40 @@
+# Alpha VPS Caddy — Team control plane for alphamail.xyz (product Space)
+# Primary: team.alphamail.xyz → /var/www/admin (shared Admin/Team build)
+# Legacy:  admin.alphamail.xyz → permanent redirect to team.alphamail.xyz
+# Drive/API: separate systemd units (not bley’s store)
+#
+# Apply (as root): merge into /etc/caddy/Caddyfile, then
+#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# DNS A → 37.27.152.36: team, drive, api, mail (+ admin while redirecting)
+# Optional later: player (same pattern as bley)
+
+drive.alphamail.xyz {
+	reverse_proxy 127.0.0.1:8807
+}
+
+mail.alphamail.xyz {
+	reverse_proxy 127.0.0.1:8080
+}
+
+api.alphamail.xyz {
+	reverse_proxy 127.0.0.1:8808
+}
+
+team.alphamail.xyz {
+	encode gzip zstd
+	root * /var/www/admin
+
+	handle /jmap* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	route {
+		try_files {path} {path}.html {path}/index.html
+		file_server
+	}
+}
+
+admin.alphamail.xyz {
+	redir https://team.alphamail.xyz{uri} permanent
+}

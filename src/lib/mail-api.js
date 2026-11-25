@@ -17,12 +17,15 @@ function bakedAdminToken() {
 }
 
 export function apiBase() {
+	/* Prefer host-derived api.{apex} so one shared /var/www/admin build serves
+	 * every Space (bley / alphamail / niel) without baking a single customer API. */
+	const derived = serviceOrigin('', 'api');
+	if (derived) return derived;
 	const fromEnv = String(env.PUBLIC_ALPHA_API_URL || '')
 		.trim()
 		.replace(/\/$/, '');
 	return (
 		fromEnv ||
-		serviceOrigin('', 'api') ||
 		(typeof import.meta !== 'undefined' && import.meta.env.DEV ? 'http://127.0.0.1:8788' : '')
 	);
 }

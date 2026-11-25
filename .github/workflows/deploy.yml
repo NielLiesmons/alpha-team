@@ -30,9 +30,11 @@ jobs:
 
       - name: Build
         env:
-          # Bake pubs API token so invites / fresh devices never need Settings paste.
+          # Shared /var/www/admin serves every Space host (team.bley / team.alphamail / …).
+          # Do NOT bake PUBLIC_ALPHA_API_URL — Team derives api.{apex} from location.
+          # Optional bake: pubs token still hydrates via invite / Drive space-secrets;
+          # leave empty in multi-Space deploys so one customer token is not shipped to all hosts.
           PUBLIC_ALPHA_API_TOKEN: ${{ secrets.PUBLIC_ALPHA_API_TOKEN }}
-          PUBLIC_ALPHA_API_URL: https://api.bley.farm
         run: bun run build
 
       - name: Deploy via rsync
