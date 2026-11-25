@@ -1,40 +1,38 @@
 /**
  * alpha-api mail / campaigns client for the current Space project.
- * Token: localStorage `alpha-admin-api-token` or PUBLIC_ALPHA_API_TOKEN.
+ * Token: localStorage `alpha-admin-api-token` or PUBLIC_ALPHA_API_TOKEN
+ * (baked via `$env/dynamic/public` — optional chaining on import.meta.env
+ * prevents Vite from inlining PUBLIC_* at build time).
  */
 
+import { env } from '$env/dynamic/public';
 import { projectSlug, serviceOrigin } from './space-host.js';
 
 function project() {
 	return projectSlug();
 }
 
+function bakedAdminToken() {
+	return String(env.PUBLIC_ALPHA_API_TOKEN || '').trim();
+}
+
 export function apiBase() {
-	const fromEnv =
-		typeof import.meta !== 'undefined' && import.meta.env?.PUBLIC_ALPHA_API_URL
-			? String(import.meta.env.PUBLIC_ALPHA_API_URL).replace(/\/$/, '')
-			: '';
+	const fromEnv = String(env.PUBLIC_ALPHA_API_URL || '')
+		.trim()
+		.replace(/\/$/, '');
 	return (
 		fromEnv ||
 		serviceOrigin('', 'api') ||
-		(typeof import.meta !== 'undefined' && import.meta.env?.DEV ? 'http://127.0.0.1:8788' : '')
+		(typeof import.meta !== 'undefined' && import.meta.env.DEV ? 'http://127.0.0.1:8788' : '')
 	);
 }
 
 export function getAdminToken() {
-	if (typeof localStorage === 'undefined') {
-		return (
-			(typeof import.meta !== 'undefined' && import.meta.env?.PUBLIC_ALPHA_API_TOKEN
-				? String(import.meta.env.PUBLIC_ALPHA_API_TOKEN).trim()
-				: '') || ''
-		);
-	}
+	if (typeof localStorage === 'undefined') return bakedAdminToken();
 	return (
 		localStorage.getItem('alpha-admin-api-token') ||
 		localStorage.getItem('alpha-admin-api-token.v1') ||
-		(typeof import.meta !== 'undefined' && import.meta.env?.PUBLIC_ALPHA_API_TOKEN
-			? String(import.meta.env.PUBLIC_ALPHA_API_TOKEN).trim()
-			: '') ||
+		bakedAdminToken() ||
 		''
 	);
 }
