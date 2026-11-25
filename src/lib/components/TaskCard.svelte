@@ -133,7 +133,7 @@
 		gap: 0;
 		padding: 10px;
 		border: 0;
-		background: var(--feed-bg, var(--bg));
+		background: transparent;
 		border-radius: 12px;
 		cursor: pointer;
 		outline: none;

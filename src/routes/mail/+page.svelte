@@ -559,7 +559,7 @@
 		padding: 10px 12px 10px 10px;
 		border: 0;
 		border-radius: 12px;
-		background: var(--feed-bg, var(--bg));
+		background: transparent;
 		color: inherit;
 		text-align: left;
 		cursor: pointer;

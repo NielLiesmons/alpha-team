@@ -148,7 +148,7 @@
 		padding: calc(0.85rem - 4px) calc(0.9rem - 2px);
 		border: 0;
 		border-radius: 12px;
-		background: var(--feed-bg, var(--bg));
+		background: transparent;
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
