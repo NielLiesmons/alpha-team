@@ -1,18 +1,20 @@
 <script>
 	/**
 	 * Standard list-chrome filter control for the notifications column.
+	 * FloatPanel + DS popover rows (icon before every item).
 	 * @type {{
 	 *   value?: string,
-	 *   options?: { id: string, label: string }[],
+	 *   options?: { id: string, label: string, icon?: import('svelte').Component<any> }[],
 	 *   label?: string,
 	 *   onchange?: (id: string) => void
 	 * }}
 	 */
 	import FloatPanel from './FloatPanel.svelte';
+	import ChevronRight from './icons/ChevronRight.svelte';
 
 	let {
 		value = 'all',
-		options = /** @type {{ id: string, label: string }[]} */ ([]),
+		options = /** @type {{ id: string, label: string, icon?: import('svelte').Component<any> }[]} */ ([]),
 		label = 'Filter',
 		onchange = /** @type {(id: string) => void} */ (() => {})
 	} = $props();
@@ -48,20 +50,33 @@
 		anchor={btn}
 		placement="below"
 		align="end"
-		width={180}
+		width={200}
 		maxHeight={280}
 		onclose={() => (open = false)}
 	>
-		<div class="notif-filter-menu" role="listbox">
+		<div class="alpha-popover-list" role="listbox" aria-label={label}>
 			{#each options as opt (opt.id)}
+				{@const Icon = opt.icon}
 				<button
 					type="button"
+					class="alpha-popover-item"
 					class:on={value === opt.id}
+					role="option"
+					aria-selected={value === opt.id}
 					onclick={() => {
 						onchange(opt.id);
 						open = false;
-					}}>{opt.label}</button
+					}}
 				>
+					<span class="alpha-popover-ico" aria-hidden="true">
+						{#if Icon}
+							<Icon size={16} />
+						{:else}
+							<ChevronRight size={14} />
+						{/if}
+					</span>
+					<span class="alpha-popover-label">{opt.label}</span>
+				</button>
 			{/each}
 		</div>
 	</FloatPanel>
@@ -108,37 +123,6 @@
 		display: block;
 		width: 16px;
 		height: 16px;
-	}
-
-	.notif-filter-menu {
-		display: flex;
-		flex-direction: column;
-		padding: 4px 0;
-	}
-
-	.notif-filter-menu button {
-		display: block;
-		width: 100%;
-		padding: 8px 12px;
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-		color: var(--fg-66);
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.notif-filter-menu button:hover,
-	.notif-filter-menu button.on {
-		background: var(--fg-4);
-		color: var(--fg);
-	}
-
-	.notif-filter-menu button.on {
-		font-weight: 600;
 	}
 
 	@media (max-width: 767px) {
