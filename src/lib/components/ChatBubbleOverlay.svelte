@@ -290,15 +290,23 @@
 		style:--plus-circle="{PLUS_CIRCLE}px"
 		style:--stack-gap="{STACK_GAP}px"
 	>
-		<button
-			type="button"
+		<!--
+			Non-focusable dismiss target — a <button> would steal focus from the
+			composer CE and slam the soft keyboard when the overlay opens.
+		-->
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div
 			class="scrim"
-			aria-label={t('common.close')}
+			role="presentation"
+			onpointerdown={(e) => {
+				/* Keep composer focus / keyboard while dismissing. */
+				if (e.cancelable) e.preventDefault();
+			}}
 			onclick={() => {
 				if (!interactive) return;
 				onclose();
 			}}
-		></button>
+		></div>
 
 		<!-- Flex column (+ column-reverse when actions above) owns the fixed gap. -->
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -331,6 +339,9 @@
 									class="emoji-hit"
 									role="option"
 									tabindex={interactive ? 0 : -1}
+									onpointerdown={(e) => {
+										if (e.cancelable) e.preventDefault();
+									}}
 									onclick={() => pickReact(emoji)}
 								>
 									{#if isCustomEmojiToken(emoji)}
@@ -347,6 +358,9 @@
 							aria-label={t('chat.moreReactions')}
 							aria-expanded={browserOpen}
 							tabindex={interactive ? 0 : -1}
+							onpointerdown={(e) => {
+								if (e.cancelable) e.preventDefault();
+							}}
 							onclick={(e) => {
 								e.stopPropagation();
 								toggleBrowser();
@@ -391,6 +405,9 @@
 						class="alpha-popover-item"
 						role="menuitem"
 						tabindex={interactive ? 0 : -1}
+						onpointerdown={(e) => {
+							if (e.cancelable) e.preventDefault();
+						}}
 						onclick={() => runAction(onreply)}
 					>
 						<span class="alpha-popover-ico"><Reply size={16} /></span>
@@ -402,6 +419,9 @@
 							class="alpha-popover-item"
 							role="menuitem"
 							tabindex={interactive ? 0 : -1}
+							onpointerdown={(e) => {
+								if (e.cancelable) e.preventDefault();
+							}}
 							onclick={() =>
 								runAction(() => {
 									oncopy?.();
@@ -417,6 +437,9 @@
 							class="alpha-popover-item"
 							role="menuitem"
 							tabindex={interactive ? 0 : -1}
+							onpointerdown={(e) => {
+								if (e.cancelable) e.preventDefault();
+							}}
 							onclick={() =>
 								runAction(() => {
 									onselect?.();
@@ -432,6 +455,9 @@
 							class="alpha-popover-item"
 							role="menuitem"
 							tabindex={interactive ? 0 : -1}
+							onpointerdown={(e) => {
+								if (e.cancelable) e.preventDefault();
+							}}
 							onclick={() =>
 								runAction(() => {
 									onforward?.();
@@ -447,6 +473,9 @@
 							class="alpha-popover-item danger"
 							role="menuitem"
 							tabindex={interactive ? 0 : -1}
+							onpointerdown={(e) => {
+								if (e.cancelable) e.preventDefault();
+							}}
 							onclick={() =>
 								runAction(() => {
 									ondelete?.();
@@ -485,6 +514,10 @@
 		background: transparent;
 		cursor: default;
 		pointer-events: auto;
+		/* Never take focus — opening actions must not close the keyboard. */
+		outline: none;
+		-webkit-tap-highlight-color: transparent;
+		touch-action: manipulation;
 	}
 
 	/*
