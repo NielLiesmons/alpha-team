@@ -123,6 +123,70 @@ export const chatChannels = $state([
  */
 export const chatEphemeral = $state([]);
 
+/**
+ * After a peer message lands, ignore that actor's typing until a newer ephemeral.
+ * Key: `${channelId}|${actorLc}` → epoch ms of the clearing message.
+ * @type {Map<string, number>}
+ */
+const ephemeralClearedAt = new Map();
+
+/**
+ * Drop X's typing/recording row immediately (message/hint just arrived).
+ * Stale typing frames with updated_at ≤ this message are ignored afterward.
+ * @param {string} who
+ * @param {{ channel_id?: string, at?: string | number }} [opts]
+ */
+export function clearChatEphemeralForActor(who, opts = {}) {
+	const actorLc = String(who || '')
+		.trim()
+		.toLowerCase();
+	if (!actorLc) return;
+	const channelId = String(opts.channel_id || '').trim();
+	const atRaw = opts.at;
+	const atMs =
+		typeof atRaw === 'number' && Number.isFinite(atRaw)
+			? atRaw
+			: (() => {
+					const parsed = Date.parse(String(atRaw || ''));
+					return Number.isFinite(parsed) ? parsed : Date.now();
+				})();
+
+	for (let i = chatEphemeral.length - 1; i >= 0; i--) {
+		const e = chatEphemeral[i];
+		if (String(e?.actor || '').toLowerCase() !== actorLc) continue;
+		if (channelId && String(e.channel_id || '') !== channelId) continue;
+		chatEphemeral.splice(i, 1);
+	}
+
+	if (channelId) {
+		const key = `${channelId}|${actorLc}`;
+		const prev = ephemeralClearedAt.get(key) || 0;
+		if (atMs >= prev) ephemeralClearedAt.set(key, atMs);
+	}
+}
+
+/**
+ * True when a typing/recording frame is older than the last message that cleared X.
+ * @param {string} who
+ * @param {string} channelId
+ * @param {string | number} [updatedAt]
+ */
+export function isChatEphemeralSuppressed(who, channelId, updatedAt) {
+	const actorLc = String(who || '')
+		.trim()
+		.toLowerCase();
+	const cid = String(channelId || '').trim();
+	if (!actorLc || !cid) return false;
+	const cleared = ephemeralClearedAt.get(`${cid}|${actorLc}`) || 0;
+	if (!cleared) return false;
+	const at =
+		typeof updatedAt === 'number' && Number.isFinite(updatedAt)
+			? updatedAt
+			: Date.parse(String(updatedAt || ''));
+	if (!Number.isFinite(at)) return true;
+	return at <= cleared;
+}
+
 /** @param {string} id */
 export function setActiveChannel(id) {
 	chatUi.activeChannelId = String(id || 'general');
@@ -471,6 +535,20 @@ export async function refreshChatFeed(opts = {}) {
 				chatUi.loading = false;
 				chatUi.settled = true;
 				return;
+			}
+			const liveIds = new Set(live.map((m) => String(m?.id || '')).filter(Boolean));
+			const meLc = (activePerson().email || '').trim().toLowerCase();
+			for (const row of list || []) {
+				const id = String(row?.id || '');
+				if (!id || liveIds.has(id)) continue;
+				const kind = String(row?.kind || 'chat');
+				if (kind === 'reaction' || kind === 'event') continue;
+				const author = String(row?.author || '').trim();
+				if (!author || (meLc && author.toLowerCase() === meLc)) continue;
+				clearChatEphemeralForActor(author, {
+					channel_id: String(row?.channel_id || 'general'),
+					at: row?.created_at
+				});
 			}
 			const merged = mergeFeedRows(list, live);
 			if (!merged.length && !chatFeed.length) return;
@@ -840,6 +918,13 @@ export function applyMessageHint(hint) {
 	const me = (activePerson().email || '').trim().toLowerCase();
 	if (me && author.toLowerCase() === me) return;
 
+	const channelId = String(hint.channel_id || 'general');
+	const createdAt =
+		String(hint.created_at || '') ||
+		new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+	/* Message landed — drop "is typing" under the new bubble immediately. */
+	clearChatEphemeralForActor(author, { channel_id: channelId, at: createdAt });
+
 	const existingIdx = chatFeed.findIndex((m) => String(m?.id || '') === id);
 	if (existingIdx >= 0) {
 		const prev = chatFeed[existingIdx];
@@ -867,10 +952,8 @@ export function applyMessageHint(hint) {
 		author,
 		kind,
 		body: String(hint.body || ''),
-		created_at:
-			String(hint.created_at || '') ||
-			new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-		channel_id: String(hint.channel_id || 'general'),
+		created_at: createdAt,
+		channel_id: channelId,
 		delivery: 'sent',
 		read_by: Array.isArray(hint.read_by) ? hint.read_by : [],
 		_hint: true

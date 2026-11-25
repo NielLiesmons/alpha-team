@@ -4,7 +4,7 @@
  */
 
 import { actor } from './actor.svelte.js';
-import { chatEphemeral } from './chat.svelte.js';
+import { chatEphemeral, isChatEphemeralSuppressed } from './chat.svelte.js';
 import { wakeChatFromTip } from './chat-sync.svelte.js';
 import { apiBase } from './mail-api.js';
 
@@ -295,13 +295,16 @@ function applyEphemeral(ephemeral) {
 		if (idx >= 0) chatEphemeral.splice(idx, 1);
 		return;
 	}
+	const updatedAt = ephemeral.updated_at || new Date().toISOString();
+	/* Stale typing after a peer message — don't resurrect under their bubble. */
+	if (isChatEphemeralSuppressed(who, channelId, updatedAt)) return;
 	const row = {
 		schema: 'alpha.chat_ephemeral/1',
 		channel_id: channelId,
 		actor: who,
 		state,
 		...(ephemeral.label ? { label: ephemeral.label } : {}),
-		updated_at: ephemeral.updated_at || new Date().toISOString(),
+		updated_at: updatedAt,
 		expires_at: ephemeral.expires_at || new Date(Date.now() + 6_000).toISOString()
 	};
 	if (idx >= 0) chatEphemeral[idx] = row;
