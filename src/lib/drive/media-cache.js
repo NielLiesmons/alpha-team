@@ -16,7 +16,12 @@
 
 import { getPath } from './client.js';
 import { getMediaBlob } from './media.js';
-import { inferMediaKind, isMediaManifestPath, mimeFromNameAndType } from './media-kind.js';
+import {
+	inferMediaKind,
+	isMediaManifestPath,
+	mimeFromNameAndType,
+	normalizeChatAttachment
+} from './media-kind.js';
 
 const IDB_NAME = 'alpha.drive.media.v1';
 const IDB_STORE = 'blobs';
@@ -225,8 +230,9 @@ export async function getAttachmentObjectUrl(session, att, opts = {}) {
 	if (!session || !path || path.startsWith('local:')) return null;
 
 	const key = cacheKey(session, path);
-	const kind = inferMediaKind(att);
-	const typeHint = mimeFromNameAndType(att?.name, att?.content_type);
+	const normalized = normalizeChatAttachment(att) || att;
+	const kind = inferMediaKind(normalized);
+	const typeHint = mimeFromNameAndType(normalized?.name, normalized?.content_type);
 
 	const hit = memory.get(key);
 	if (hit) {
@@ -275,11 +281,15 @@ export async function getAttachmentObjectUrl(session, att, opts = {}) {
 		let type = typeHint;
 		try {
 			if (isMediaManifestPath(path) || kind === 'voice' || kind === 'video') {
-				const loaded = await getMediaBlob(session, path);
+				const loaded = await getMediaBlob(session, path, { signal: opts.signal });
 				bytes = loaded.bytes;
 				type = loaded.manifest?.content_type || type;
+				/* Manifest may carry audio/* even when the leaf mislabeled video/webm. */
+				if (kind === 'voice' && type && String(type).toLowerCase().startsWith('video/')) {
+					type = typeHint.startsWith('audio/') ? typeHint : 'audio/webm';
+				}
 			} else {
-				bytes = await getPath(session, path);
+				bytes = await getPath(session, path, opts.signal);
 			}
 		} catch {
 			return null;
