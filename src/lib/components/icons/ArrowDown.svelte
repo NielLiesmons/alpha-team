@@ -7,7 +7,7 @@
 	let { size = 18, className = '', strokeWidth = 1.6 } = $props();
 </script>
 
-<span class="icon {className}" style:width="{size}px" style:height="{size}px">
+<span class="icon {className}" style:width="{(size / 16)}rem" style:height="{(size / 16)}rem">
 	<svg
 		width={size}
 		height={size}

@@ -10,8 +10,8 @@
 <span
 	class="unread-dot-slot {className}"
 	class:quiet
-	style:width="{size}px"
-	style:height="{size}px"
+	style:width="{(size / 16)}rem"
+	style:height="{(size / 16)}rem"
 	aria-hidden="true"
 >
 	<span class="dot"></span>
@@ -27,8 +27,8 @@
 	}
 
 	.dot {
-		width: 7px;
-		height: 7px;
+		width: 0.4375rem;
+		height: 0.4375rem;
 		border-radius: 999px;
 		background: var(
 			--gradient-accent-1,

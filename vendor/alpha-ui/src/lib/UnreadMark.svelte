@@ -17,7 +17,7 @@
 	class:hot={n > 0 && !quiet}
 	title={n > 0 ? String(n) : undefined}
 >
-	<span class="dot" style:--dot="{size}px" aria-hidden="true"></span>
+	<span class="dot" style:--dot="{(size / 16)}rem" aria-hidden="true"></span>
 	{#if n > 0}
 		<span class="n">{label}</span>
 	{/if}
@@ -27,7 +27,7 @@
 	.unread-mark {
 		display: inline-flex;
 		align-items: center;
-		gap: 5px;
+		gap: 0.3125rem;
 		line-height: 1;
 		flex-shrink: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
@@ -36,8 +36,8 @@
 	}
 
 	.dot {
-		width: var(--dot, 7px);
-		height: var(--dot, 7px);
+		width: var(--dot, 0.4375rem);
+		height: var(--dot, 0.4375rem);
 		border-radius: 999px;
 		background: var(
 			--gradient-accent-1,

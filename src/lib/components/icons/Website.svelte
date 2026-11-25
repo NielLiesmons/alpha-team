@@ -7,7 +7,7 @@
 	const sw = $derived(strokeWidth ?? 'var(--icon-stroke, 1.5)');
 </script>
 
-<span class="icon {className}" style:width="{size}px" style:height="{size}px" style:--_sw={sw}>
+<span class="icon {className}" style:width="{(size / 16)}rem" style:height="{(size / 16)}rem" style:--_sw={sw}>
 	<svg viewBox="0 0 14 14" width={size} height={size} fill="none" aria-hidden="true">
 		<path
 			d="M7 13.5C10.5899 13.5 13.5 10.5899 13.5 7C13.5 3.41015 10.5899 0.5 7 0.5C3.41015 0.5 0.5 3.41015 0.5 7C0.5 10.5899 3.41015 13.5 7 13.5Z"

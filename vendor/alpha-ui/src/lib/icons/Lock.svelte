@@ -6,7 +6,7 @@
 	let { size = 16, className = '' } = $props();
 </script>
 
-<span class="icon {className}" style:width="{size}px" style:height="{Math.round((size * 10) / 8)}px">
+<span class="icon {className}" style:width="{(size / 16)}rem" style:height="{((Math.round((size * 10) / 8)) / 16)}rem">
 	<svg
 		viewBox="0 0 8 10"
 		width={size}

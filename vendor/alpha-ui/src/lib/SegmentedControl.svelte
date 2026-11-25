@@ -52,9 +52,9 @@
 		display: grid;
 		grid-auto-flow: column;
 		align-items: stretch;
-		gap: 2px;
-		min-height: 40px;
-		padding: 4px;
+		gap: 0.125rem;
+		min-height: 2.5rem;
+		padding: 0.25rem;
 		border-radius: 999px;
 		border: 1px solid color-mix(in srgb, var(--fg, var(--ink)) 10%, transparent);
 		background: color-mix(in srgb, var(--fg, var(--ink)) 4%, transparent);
@@ -83,9 +83,9 @@
 		font: inherit;
 		font-size: 0.75rem;
 		font-weight: 600;
-		min-height: 34px;
+		min-height: 2.125rem;
 		height: 100%;
-		padding: 0 8px;
+		padding: 0 0.5rem;
 		border-radius: 999px;
 		cursor: pointer;
 		white-space: nowrap;
@@ -93,15 +93,15 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		gap: 5px;
+		gap: 0.3125rem;
 		transition:
 			background 0.15s ease,
 			color 0.15s ease;
 	}
 
-	/* Language / themed chips: bigger leading mark + 4px more air before the label */
+	/* Language / themed chips: bigger leading mark + more air before the label */
 	.seg-btn.has-leading {
-		gap: 9px;
+		gap: 0.5625rem;
 	}
 
 	.seg-ico {
