@@ -19,7 +19,7 @@
 		<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 		<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
 		<style>
-			/* First paint before CSS/JS modules — never a blank gray/black void. */
+			/* First paint before CSS/JS modules — theme bg only, no product-name chrome. */
 			html,
 			body {
 				margin: 0;
@@ -84,23 +84,63 @@
 			#alpha-boot-shell .boot-link a {
 				color: #ccc;
 			}
-			#alpha-boot-shell .boot-pulse {
-				width: 10px;
-				height: 10px;
-				margin: 0 auto 14px;
-				border-radius: 999px;
-				background: #666;
-				animation: alpha-boot-pulse 1s ease-in-out infinite;
+			/* Quiet three-ball wave (matches MetaballLoader) — no branded copy. */
+			#alpha-boot-shell .boot-loader {
+				display: inline-flex;
+				align-items: center;
+				justify-content: space-between;
+				width: 42px;
+				height: 24px;
+				padding-top: 2px;
+				box-sizing: border-box;
+				color: #666;
 			}
-			@keyframes alpha-boot-pulse {
+			#alpha-boot-shell .boot-ball {
+				display: block;
+				flex: 0 0 auto;
+				width: 24%;
+				aspect-ratio: 1;
+				border-radius: 50%;
+				background: currentColor;
+				animation: alpha-boot-wave 1.05s ease-in-out infinite;
+			}
+			#alpha-boot-shell .boot-ball:nth-child(2) {
+				animation-delay: 0.14s;
+			}
+			#alpha-boot-shell .boot-ball:nth-child(3) {
+				animation-delay: 0.28s;
+			}
+			@keyframes alpha-boot-wave {
 				0%,
 				100% {
-					opacity: 0.35;
-					transform: scale(0.85);
+					transform: translateY(0);
+					opacity: 0.55;
 				}
 				50% {
+					transform: translateY(-35%);
 					opacity: 1;
-					transform: scale(1);
+				}
+			}
+			@media (prefers-reduced-motion: reduce) {
+				#alpha-boot-shell .boot-ball {
+					animation: alpha-boot-pulse 1.4s ease-in-out infinite;
+				}
+				#alpha-boot-shell .boot-ball:nth-child(2) {
+					animation-delay: 0.2s;
+				}
+				#alpha-boot-shell .boot-ball:nth-child(3) {
+					animation-delay: 0.4s;
+				}
+				@keyframes alpha-boot-pulse {
+					0%,
+					100% {
+						opacity: 0.4;
+						transform: scale(0.92);
+					}
+					50% {
+						opacity: 1;
+						transform: scale(1);
+					}
 				}
 			}
 		</style>
@@ -123,7 +163,7 @@
 							shell.hidden = false;
 							shell.innerHTML =
 								'<div class="boot-copy">' +
-								'<p class="boot-title">Resetting Alpha…</p>' +
+								'<p class="boot-title">Resetting…</p>' +
 								'<p class="boot-body">Clearing cached shell, then reloading.</p>' +
 								'</div>';
 							return;
@@ -132,7 +172,7 @@
 						document.body.innerHTML =
 							'<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:#090909;color:#eee;font:500 15px/1.45 system-ui,-apple-system,sans-serif;text-align:center">' +
 							'<div style="max-width:320px">' +
-							'<p style="margin:0 0 10px;font-size:18px;font-weight:650">Resetting Alpha…</p>' +
+							'<p style="margin:0 0 10px;font-size:18px;font-weight:650">Resetting…</p>' +
 							'<p style="margin:0;color:#aaa">Clearing cached shell, then reloading.</p>' +
 							'</div></div>';
 					};
@@ -186,11 +226,7 @@
 						);
 						if (full) {
 							try {
-								var keep = {
-									'alpha-admin-theme': 1,
-									'alpha-admin-theme.v1': 1,
-									'alpha-admin-ui-scale': 1
-								};
+								var keep = { 'alpha-admin-theme': 1, 'alpha-admin-theme.v1': 1 };
 								var doomed = [];
 								for (var i = 0; i < localStorage.length; i++) {
 									var k = localStorage.key(i);
@@ -245,10 +281,10 @@
 								if (!shell || shell.getAttribute('role') === 'alert') return;
 								shell.style.background = '#e2e2e2';
 								shell.style.color = '#111';
+								var loader = shell.querySelector('.boot-loader');
+								if (loader) loader.style.color = '#999';
 								var body = shell.querySelector('.boot-body');
 								if (body) body.style.color = '#666';
-								var pulse = shell.querySelector('.boot-pulse');
-								if (pulse) pulse.style.background = '#999';
 							},
 							{ once: true }
 						);
@@ -279,7 +315,7 @@
 		</script>
 		<script>
 			/*
-			 * Boot watchdog: keep a visible shell from first paint, then auto-recover
+			 * Boot watchdog: keep a minimal shell from first paint, then auto-recover
 			 * when hashed chunks 404 under a stale service worker (post-deploy blank PWA).
 			 */
 			(function () {
@@ -320,7 +356,7 @@
 					shell.setAttribute('role', 'alert');
 					shell.innerHTML =
 						'<div class="boot-copy">' +
-						'<p class="boot-title">Couldn’t start Alpha</p>' +
+						'<p class="boot-title">Couldn’t start</p>' +
 						'<p class="boot-body">' +
 						(auto
 							? 'Clearing the cached shell automatically…'
@@ -390,8 +426,27 @@
 				);
 
 				var watchHydration = function () {
+					/* Hide the pre-module shell as soon as Svelte paints BootSplash / shell. */
+					if (document.querySelector('.shell, .welcome, .splash')) {
+						markStarted();
+						return;
+					}
+					var obs = new MutationObserver(function () {
+						if (started || window.__ALPHA_RECOVERING) {
+							obs.disconnect();
+							return;
+						}
+						if (document.querySelector('.shell, .welcome, .splash')) {
+							obs.disconnect();
+							markStarted();
+						}
+					});
+					try {
+						obs.observe(document.documentElement, { childList: true, subtree: true });
+					} catch (e) {}
 					/* If Svelte never mounts, don’t wait on a blank shell. */
 					setTimeout(function () {
+						obs.disconnect();
 						if (started || window.__ALPHA_RECOVERING) return;
 						if (document.querySelector('.shell, .welcome, .splash')) {
 							markStarted();
@@ -411,11 +466,11 @@
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
-		<div id="alpha-boot-shell" aria-live="polite" aria-busy="true">
-			<div class="boot-copy">
-				<div class="boot-pulse" aria-hidden="true"></div>
-				<p class="boot-title">Starting Alpha…</p>
-				<p class="boot-body">Loading your space.</p>
+		<div id="alpha-boot-shell" aria-live="polite" aria-busy="true" aria-label="Loading">
+			<div class="boot-loader" aria-hidden="true">
+				<span class="boot-ball"></span>
+				<span class="boot-ball"></span>
+				<span class="boot-ball"></span>
 			</div>
 		</div>
 		<div style="display: contents">%sveltekit.body%</div>

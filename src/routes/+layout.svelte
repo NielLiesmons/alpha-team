@@ -27,6 +27,15 @@
 	const inviteWarming = $derived(Boolean(inviteFlow.active));
 	const webManifestLink = $derived(pwaInfo?.webManifest?.linkTag ?? '');
 
+	/* Drop the pre-module boot shell as soon as this module runs — don’t wait onMount. */
+	if (typeof window !== 'undefined') {
+		try {
+			queueMicrotask(() => window.dispatchEvent(new Event('alpha-boot-started')));
+		} catch {
+			/* ignore */
+		}
+	}
+
 	/* Realtime bus: connect as soon as Drive creds exist (actor optional on the wire). */
 	$effect(() => {
 		if (!driveSession.connected) {

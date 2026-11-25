@@ -78,7 +78,7 @@ export default defineConfig({
 							!url.pathname.endsWith('/sw.js'),
 						handler: 'NetworkFirst',
 						options: {
-							cacheName: 'alpha-pages-v4',
+							cacheName: 'alpha-pages-v5',
 							networkTimeoutSeconds: 3,
 							expiration: {
 								maxEntries: 64,
