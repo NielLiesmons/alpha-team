@@ -1,22 +1,19 @@
 /**
- * Text size (Settings → Appearance) — app-wide UI scale.
+ * UI scale (Settings → Appearance) — app-wide coherent scale.
  *
  * ┌─────────────────────────────────────────────────────────────┐
- * │  TWEAK HERE → UI_SCALE_FACTORS                              │
- * │  small 0.95 · normal 1.07 · large 1.18                      │
+ * │  TWEAK HERE → UI_SCALE_FACTORS_MOBILE / _DESKTOP            │
+ * │  Mobile:  small 0.95 · normal 1.07 · large 1.18             │
+ * │  Desktop: small 0.95 · normal 1.00 · large 1.18             │
+ * │  (Desktop Normal = 100% — same as pre-scale chrome.)        │
  * └─────────────────────────────────────────────────────────────┘
  *
- * Pipeline (one source of truth):
+ * Pipeline (one source of truth — no CSS `zoom`):
  *   1. This module writes `--ui-scale` (+ data-ui-scale) on <html>
  *   2. app.css: `html { font-size: calc(16px * var(--ui-scale)) }`
- *   3. All rem type / rem chrome across the shell follows
+ *   3. Rem type + rem chrome (paddings, pills, icons, hit targets) follow
  *
- * Rem-based type grows; layout/pointer geometry that must stay hit-stable
- * stays in CSS pixels — no CSS `zoom` (that desyncs clientX / overlays).
- *
- * Default when unset:
- * - Tiny phones (CSS width ≤375, e.g. old iPhone SE) → small (95%)
- * - Otherwise → normal (107%)
+ * Never use CSS `zoom` — it desyncs clientX / FloatPanel / chat overlays.
  */
 
 const KEY = 'alpha-admin-ui-scale';
@@ -27,16 +24,36 @@ export const UI_SCALE_TINY_MAX_WIDTH = 375;
 /** @typedef {'small' | 'normal' | 'large'} UiScaleChoice */
 
 /**
- * Scale factors — change these to retune Small / Normal / Large globally.
+ * Mobile factors — Normal is ~107% so touch chrome reads a touch larger.
  * @type {Record<UiScaleChoice, number>}
  */
-export const UI_SCALE_FACTORS = {
+export const UI_SCALE_FACTORS_MOBILE = {
 	small: 0.95,
 	normal: 1.07,
 	large: 1.18
 };
 
+/**
+ * Desktop factors — Normal is exactly 100% (no scaling vs pre-scale UI).
+ * Small / Large still scale via rem-root (coherent; no overlay zoom bugs).
+ * @type {Record<UiScaleChoice, number>}
+ */
+export const UI_SCALE_FACTORS_DESKTOP = {
+	small: 0.95,
+	normal: 1,
+	large: 1.18
+};
+
+/**
+ * @deprecated Prefer UI_SCALE_FACTORS_MOBILE / _DESKTOP — kept as mobile alias.
+ * @type {Record<UiScaleChoice, number>}
+ */
+export const UI_SCALE_FACTORS = UI_SCALE_FACTORS_MOBILE;
+
 export const uiScaleChoice = $state(/** @type {{ value: UiScaleChoice }} */ ({ value: 'normal' }));
+
+/** @type {(() => void) | null} */
+let removeViewportListener = null;
 
 /** @param {string | null | undefined} raw */
 export function parseUiScaleChoice(raw) {
@@ -44,9 +61,19 @@ export function parseUiScaleChoice(raw) {
 	return null;
 }
 
+export function isMobileViewport() {
+	if (typeof window === 'undefined') return false;
+	return (
+		window.matchMedia('(max-width: 767px)').matches ||
+		window.matchMedia('(pointer: coarse)').matches
+	);
+}
+
 /** @param {UiScaleChoice} choice */
 export function uiScaleFactor(choice) {
-	return UI_SCALE_FACTORS[choice] ?? 1.07;
+	const table = isMobileViewport() ? UI_SCALE_FACTORS_MOBILE : UI_SCALE_FACTORS_DESKTOP;
+	const fallback = isMobileViewport() ? 1.07 : 1;
+	return table[choice] ?? fallback;
 }
 
 /**
@@ -57,14 +84,6 @@ export function isTinyPhoneViewport() {
 	if (typeof window === 'undefined') return false;
 	const w = Math.min(window.innerWidth || 0, window.screen?.width || window.innerWidth || 0);
 	return w > 0 && w <= UI_SCALE_TINY_MAX_WIDTH;
-}
-
-function isMobileViewport() {
-	if (typeof window === 'undefined') return false;
-	return (
-		window.matchMedia('(max-width: 767px)').matches ||
-		window.matchMedia('(pointer: coarse)').matches
-	);
 }
 
 /** Default choice when localStorage has no preference. */
@@ -80,6 +99,7 @@ export function applyUiScale(choice) {
 	const root = document.documentElement;
 	root.style.setProperty('--ui-scale', String(factor));
 	root.dataset.uiScale = choice;
+	root.dataset.uiScaleViewport = isMobileViewport() ? 'mobile' : 'desktop';
 }
 
 /** @param {UiScaleChoice} choice */
@@ -89,9 +109,25 @@ export function setUiScale(choice) {
 	applyUiScale(choice);
 }
 
+function bindViewportListener() {
+	if (typeof window === 'undefined') return;
+	removeViewportListener?.();
+	const mqWidth = window.matchMedia('(max-width: 767px)');
+	const mqCoarse = window.matchMedia('(pointer: coarse)');
+	const onChange = () => applyUiScale(uiScaleChoice.value);
+	mqWidth.addEventListener('change', onChange);
+	mqCoarse.addEventListener('change', onChange);
+	removeViewportListener = () => {
+		mqWidth.removeEventListener('change', onChange);
+		mqCoarse.removeEventListener('change', onChange);
+		removeViewportListener = null;
+	};
+}
+
 export function initUiScale() {
 	const saved = parseUiScaleChoice(localStorage.getItem(KEY));
 	const choice = saved ?? defaultUiScaleChoice();
 	uiScaleChoice.value = choice;
 	applyUiScale(choice);
+	bindViewportListener();
 }

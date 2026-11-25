@@ -293,23 +293,27 @@
 			})();
 		</script>
 		<script>
-			/* Text size — apply --ui-scale before CSS rem-root paints (matches ui-scale.svelte.js). */
+			/* UI scale — apply --ui-scale before CSS rem-root paints (matches ui-scale.svelte.js).
+			 * Mobile Normal 1.07 · Desktop Normal 1.00 — no CSS zoom. */
 			(function () {
 				try {
-					var factors = { small: 0.95, normal: 1.07, large: 1.18 };
+					var mobileFactors = { small: 0.95, normal: 1.07, large: 1.18 };
+					var desktopFactors = { small: 0.95, normal: 1, large: 1.18 };
 					var saved = localStorage.getItem('alpha-admin-ui-scale');
 					var choice =
 						saved === 'small' || saved === 'normal' || saved === 'large' ? saved : null;
+					var mobile =
+						window.matchMedia('(max-width: 767px)').matches ||
+						window.matchMedia('(pointer: coarse)').matches;
 					if (!choice) {
 						var w = Math.min(window.innerWidth || 0, (screen && screen.width) || 0);
-						var mobile =
-							window.matchMedia('(max-width: 767px)').matches ||
-							window.matchMedia('(pointer: coarse)').matches;
 						choice = mobile && w > 0 && w <= 375 ? 'small' : 'normal';
 					}
-					var factor = factors[choice] || 1.07;
+					var factors = mobile ? mobileFactors : desktopFactors;
+					var factor = factors[choice] || (mobile ? 1.07 : 1);
 					document.documentElement.style.setProperty('--ui-scale', String(factor));
 					document.documentElement.dataset.uiScale = choice;
+					document.documentElement.dataset.uiScaleViewport = mobile ? 'mobile' : 'desktop';
 				} catch (e) {}
 			})();
 		</script>
