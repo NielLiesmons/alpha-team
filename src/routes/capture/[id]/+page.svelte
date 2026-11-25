@@ -204,13 +204,13 @@
 		border-radius: 999px;
 		background: var(--fg-8);
 		color: var(--fg);
-		font-size: 18px;
+		font-size: 1.125rem;
 		cursor: pointer;
 	}
 
 	h1 {
 		margin: 0;
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 700;
 	}
 
@@ -227,7 +227,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		color: var(--fg-66);
 	}
@@ -241,7 +241,7 @@
 		background: var(--bg, #111);
 		color: var(--fg);
 		font: inherit;
-		font-size: 18px;
+		font-size: 1.125rem;
 		font-weight: 500;
 		padding: 0 14px;
 	}
@@ -253,7 +253,7 @@
 		background: var(--button-primary-bg, var(--fg-8));
 		color: var(--button-primary-fg, var(--fg));
 		font: inherit;
-		font-size: 16px;
+		font-size: 1rem;
 		font-weight: 650;
 		cursor: pointer;
 		margin-top: 4px;
@@ -265,13 +265,13 @@
 
 	.err {
 		color: #b44;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		margin: 0;
 	}
 
 	.hint {
 		color: var(--fg-33);
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 
 	.recent {
@@ -280,7 +280,7 @@
 
 	.recent h2 {
 		margin: 0 0 10px;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 650;
 		color: var(--fg-66);
 	}
@@ -298,13 +298,13 @@
 		padding: 10px 12px;
 		border-radius: 12px;
 		background: var(--fg-4);
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 
 	.when {
 		display: block;
 		color: var(--fg-33);
-		font-size: 11px;
+		font-size: 0.6875rem;
 		margin-bottom: 2px;
 	}
 

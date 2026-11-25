@@ -135,7 +135,7 @@
 		background: var(--field-bg);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		outline: none;
 		box-sizing: border-box;
@@ -199,7 +199,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;

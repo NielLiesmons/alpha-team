@@ -124,7 +124,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 650;
 		color: var(--fg);
 		line-height: 1.25;

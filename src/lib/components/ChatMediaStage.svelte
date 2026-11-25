@@ -113,7 +113,7 @@
 		height: 100%;
 		padding: 16px;
 		color: var(--fg-66);
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		text-align: center;
 	}
@@ -127,7 +127,7 @@
 		border-radius: 999px;
 		background: color-mix(in srgb, var(--bg) 78%, transparent);
 		color: var(--fg);
-		font-size: 20px;
+		font-size: 1.25rem;
 		line-height: 1;
 		cursor: pointer;
 	}
@@ -139,7 +139,7 @@
 		border-radius: 999px;
 		background: color-mix(in srgb, var(--bg) 72%, transparent);
 		color: var(--fg);
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 	}
 	.strip {
@@ -180,7 +180,7 @@
 	.thumb-play {
 		position: absolute;
 		inset: auto 4px 4px auto;
-		font-size: 9px;
+		font-size: 0.5625rem;
 		color: #fff;
 		text-shadow: 0 1px 2px #000;
 	}
@@ -189,7 +189,7 @@
 		place-items: center;
 		width: 100%;
 		height: 100%;
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 600;
 		color: var(--fg-66);
 	}
@@ -199,7 +199,7 @@
 		border: 1.5px dashed color-mix(in srgb, var(--fg) 22%, transparent);
 		background: transparent;
 		color: var(--fg-66);
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 400;
 	}
 </style>

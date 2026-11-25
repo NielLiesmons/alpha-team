@@ -104,7 +104,7 @@
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 650;
 		flex-shrink: 0;
 		background: color-mix(in srgb, var(--fg, var(--ink)) 14%, transparent);
@@ -138,7 +138,7 @@
 	}
 
 	.name {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 650;
 		line-height: 1.2;
 		color: var(--fg, var(--ink));
@@ -150,7 +150,7 @@
 	.sub {
 		flex-shrink: 1;
 		min-width: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 450;
 		line-height: 1.2;
 		color: var(--fg-33, var(--ink33));
@@ -165,7 +165,7 @@
 		min-width: 0;
 		margin: 0;
 		padding: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 450;
 		color: var(--fg-33, var(--ink33));
 		line-height: 1.25;
@@ -185,7 +185,7 @@
 
 	.when {
 		margin: 0;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		line-height: 1.25;
 		color: var(--fg-33, var(--ink33));
@@ -211,7 +211,7 @@
 
 	.body {
 		margin: 0;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		line-height: 1.45;
 		color: var(--fg, var(--ink));

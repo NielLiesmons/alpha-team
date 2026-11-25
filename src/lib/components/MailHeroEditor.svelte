@@ -213,7 +213,7 @@
 
 	.brand-name {
 		font-family: 'Ovo', Georgia, 'Times New Roman', serif;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 400;
 		font-synthesis: none;
 		letter-spacing: -0.02em;
@@ -240,7 +240,7 @@
 		background: color-mix(in srgb, var(--mail-ink) 6%, transparent);
 		color: var(--mail-ink);
 		font-family: Inter, Helvetica, Arial, sans-serif;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 		max-width: 200px;
@@ -348,7 +348,7 @@
 		min-height: 1.4em;
 		field-sizing: content;
 		font-family: Inter, Helvetica, Arial, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.4;
 		color: color-mix(in srgb, var(--mail-ink) 62%, transparent);
 	}

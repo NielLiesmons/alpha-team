@@ -136,7 +136,7 @@
 	.hero-title {
 		margin: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 650;
 		letter-spacing: -0.02em;
 		color: var(--fg);
@@ -151,7 +151,7 @@
 		flex-wrap: wrap;
 		align-items: baseline;
 		gap: 8px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 	}
 
@@ -168,7 +168,7 @@
 		margin: 0;
 		padding: 16px 0;
 		color: var(--fg-33);
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 
 	.card-stack {
@@ -212,7 +212,7 @@
 		flex: 1;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 400;
 		color: var(--fg-66);
 		overflow: hidden;
@@ -234,7 +234,7 @@
 		display: grid;
 		place-items: center;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 8px;
+		font-size: 0.5rem;
 		font-weight: 700;
 		letter-spacing: 0.02em;
 		line-height: 1;
@@ -247,7 +247,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 	}
 

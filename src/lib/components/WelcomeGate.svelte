@@ -453,7 +453,7 @@
 	.subtitle {
 		margin: 0 0 10px;
 		text-align: center;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		color: var(--fg-33, var(--white33));
 	}
@@ -461,7 +461,7 @@
 	.hint-line {
 		margin: 0 0 2px;
 		text-align: center;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		color: var(--fg-66, var(--white66));
 	}
@@ -553,7 +553,7 @@
 		background: transparent;
 		color: var(--fg, var(--white));
 		font: inherit;
-		font-size: 16px;
+		font-size: 1rem;
 		font-weight: 400;
 		box-sizing: border-box;
 		outline: none;
@@ -639,7 +639,7 @@
 		background-color: transparent;
 		color: var(--button-primary-fg);
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 600;
 		cursor: pointer;
 		backdrop-filter: blur(var(--glass-blur));
@@ -685,7 +685,7 @@
 	.progress-pct {
 		position: relative;
 		z-index: 1;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		white-space: nowrap;
 	}
@@ -708,7 +708,7 @@
 		background: transparent;
 		color: var(--fg-33, var(--white33));
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -718,7 +718,7 @@
 		position: relative;
 		z-index: 2;
 		text-align: center;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66, var(--white66));
 	}
 
@@ -755,12 +755,12 @@
 	}
 
 	.pick-name {
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 600;
 	}
 
 	.pick-email {
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--white66);
 		overflow: hidden;
 		text-overflow: ellipsis;

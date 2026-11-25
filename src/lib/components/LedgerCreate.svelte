@@ -427,7 +427,7 @@
 		background: var(--fg-4);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -445,13 +445,13 @@
 	}
 
 	.currency {
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 600;
 		color: var(--fg-33);
 	}
 
 	.amount {
-		font-size: 22px !important;
+		font-size: 1.375rem !important;
 		font-weight: 600;
 	}
 
@@ -506,7 +506,7 @@
 		border: 0;
 		border-radius: 9999px;
 		background: var(--fg-4);
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		line-height: 1;
 		color: var(--fg-66);
@@ -574,7 +574,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		text-align: left;
 		cursor: pointer;
 	}
@@ -586,7 +586,7 @@
 	}
 
 	.code {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		color: var(--fg-33);
 		min-width: 4.5em;
 	}
@@ -594,7 +594,7 @@
 	.menu-empty {
 		margin: 0;
 		padding: 10px 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 

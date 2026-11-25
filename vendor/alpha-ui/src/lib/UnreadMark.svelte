@@ -51,7 +51,7 @@
 	}
 
 	.n {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 650;
 		color: var(--accent-1, #5a58fe);
 		letter-spacing: 0;

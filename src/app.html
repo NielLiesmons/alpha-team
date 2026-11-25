@@ -186,7 +186,11 @@
 						);
 						if (full) {
 							try {
-								var keep = { 'alpha-admin-theme': 1, 'alpha-admin-theme.v1': 1 };
+								var keep = {
+									'alpha-admin-theme': 1,
+									'alpha-admin-theme.v1': 1,
+									'alpha-admin-ui-scale': 1
+								};
 								var doomed = [];
 								for (var i = 0; i < localStorage.length; i++) {
 									var k = localStorage.key(i);
@@ -249,6 +253,27 @@
 							{ once: true }
 						);
 					}
+				} catch (e) {}
+			})();
+		</script>
+		<script>
+			/* Text size — apply --ui-scale before CSS rem-root paints (matches ui-scale.svelte.js). */
+			(function () {
+				try {
+					var factors = { small: 0.95, normal: 1.07, large: 1.18 };
+					var saved = localStorage.getItem('alpha-admin-ui-scale');
+					var choice =
+						saved === 'small' || saved === 'normal' || saved === 'large' ? saved : null;
+					if (!choice) {
+						var w = Math.min(window.innerWidth || 0, (screen && screen.width) || 0);
+						var mobile =
+							window.matchMedia('(max-width: 767px)').matches ||
+							window.matchMedia('(pointer: coarse)').matches;
+						choice = mobile && w > 0 && w <= 375 ? 'small' : 'normal';
+					}
+					var factor = factors[choice] || 1.07;
+					document.documentElement.style.setProperty('--ui-scale', String(factor));
+					document.documentElement.dataset.uiScale = choice;
 				} catch (e) {}
 			})();
 		</script>

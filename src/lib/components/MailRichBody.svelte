@@ -67,7 +67,7 @@
 		width: 100%;
 		background: transparent;
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 1.55;
 		color: var(--fg-83);
 		word-break: break-word;
@@ -131,7 +131,7 @@
 	}
 
 	.quote-text {
-		font-size: 14px;
+		font-size: 0.875rem;
 		color: var(--fg-66);
 	}
 </style>

@@ -602,7 +602,7 @@
 		border: 0;
 		border-radius: 8px;
 		background: transparent;
-		font-size: 26px;
+		font-size: 1.625rem;
 		line-height: 1;
 		cursor: pointer;
 		display: grid;

@@ -164,7 +164,7 @@
 
 	.hint {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.4;
 		color: var(--fg-66, var(--white66));
 	}
@@ -195,7 +195,7 @@
 		background: transparent;
 		color: var(--fg, var(--white));
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 500;
 		outline: none;
 	}
@@ -214,7 +214,7 @@
 		background: var(--button-primary-bg, var(--fg));
 		color: var(--button-primary-fg, var(--bg));
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 650;
 		cursor: pointer;
 	}
@@ -226,7 +226,7 @@
 
 	.link-out {
 		margin: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		word-break: break-all;
 		color: var(--fg-66, var(--white66));
 	}
@@ -247,7 +247,7 @@
 
 	.status {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66, var(--white66));
 	}
 </style>

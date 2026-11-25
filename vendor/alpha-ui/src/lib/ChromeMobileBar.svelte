@@ -116,7 +116,7 @@
 			max-width: 100%;
 			text-align: center;
 			font-family: 'Inter', var(--font), system-ui, sans-serif;
-			font-size: 17px;
+			font-size: 1.0625rem;
 			font-weight: 600;
 			letter-spacing: -0.01em;
 			line-height: 1.15;

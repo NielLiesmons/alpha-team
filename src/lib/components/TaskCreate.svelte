@@ -576,7 +576,7 @@
 	.mail-from-line {
 		margin: 0;
 		padding: 0 16px 8px;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		line-height: 1.3;
@@ -622,7 +622,7 @@
 	.menu-empty {
 		margin: 0;
 		padding: 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 
@@ -683,7 +683,7 @@
 		outline: none;
 		color: var(--fg);
 		font-family: 'Inter', sans-serif;
-		font-size: 18px;
+		font-size: 1.125rem;
 		font-weight: 600;
 	}
 
@@ -708,7 +708,7 @@
 
 	.moments-copy {
 		margin: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		line-height: 1.4;
 		color: var(--fg-66);
 	}
@@ -722,7 +722,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -733,7 +733,7 @@
 
 	.one-off {
 		margin: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-66);
 	}
 
@@ -763,7 +763,7 @@
 	}
 
 	.date-label {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -778,7 +778,7 @@
 		background: var(--fg-4);
 		color: var(--fg);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 	}
 
 	.assignee-block {
@@ -896,7 +896,7 @@
 		border: 0;
 		border-radius: 9999px;
 		background: var(--fg-4);
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		line-height: 1;
 		color: var(--fg-66);
@@ -934,7 +934,7 @@
 		align-items: center;
 		gap: 5px;
 		min-width: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 
 	.labels-trigger {
@@ -975,7 +975,7 @@
 
 	.trigger-count {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		font-variant-numeric: lining-nums;
 		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
@@ -988,7 +988,7 @@
 	}
 
 	.trigger-text {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		line-height: 1;
 		color: var(--fg-33);
@@ -1008,7 +1008,7 @@
 	.menu-empty {
 		margin: 0;
 		padding: 10px 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 

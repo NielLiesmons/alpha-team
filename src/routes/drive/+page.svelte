@@ -354,7 +354,7 @@
 
 	.group-count {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		font-variant-numeric: lining-nums;
 		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
@@ -362,7 +362,7 @@
 	}
 
 	.eyebrow-label-xs {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
@@ -372,7 +372,7 @@
 	.section-empty {
 		margin: 0;
 		padding: 10px 16px 6px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 
@@ -382,7 +382,7 @@
 		margin: 0;
 		padding: 12px 16px;
 		color: var(--fg-66);
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 
 	.err {
@@ -438,7 +438,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 400;
 		color: var(--fg-66);
 	}
@@ -457,7 +457,7 @@
 		display: grid;
 		place-items: center;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 8px;
+		font-size: 0.5rem;
 		font-weight: 700;
 		letter-spacing: 0.02em;
 		line-height: 1;
@@ -470,7 +470,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 	}
 

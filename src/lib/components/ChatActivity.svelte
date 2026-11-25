@@ -211,7 +211,7 @@
 	.empty {
 		margin: 28px 0;
 		padding: 0 16px;
-		font-size: 14px;
+		font-size: 0.875rem;
 		color: var(--fg-33);
 		text-align: center;
 	}
@@ -227,7 +227,7 @@
 	}
 
 	.eyebrow-label-xs {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
@@ -306,7 +306,7 @@
 
 	.emoji {
 		display: block;
-		font-size: 14.5px;
+		font-size: 0.9062rem;
 		line-height: 1;
 	}
 
@@ -334,7 +334,7 @@
 		gap: 8px;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		line-height: 1.2;
 	}
@@ -394,7 +394,7 @@
 		padding: 0;
 		margin: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		line-height: 1.2;
 		color: var(--fg-66);

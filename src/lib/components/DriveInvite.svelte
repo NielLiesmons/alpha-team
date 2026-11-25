@@ -468,7 +468,7 @@
 
 	.hint {
 		margin: 0 0 0.85rem;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.45;
 		color: var(--white66);
 	}
@@ -482,7 +482,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		margin-bottom: 0.75rem;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 	}
 
@@ -525,7 +525,7 @@
 
 	.domain {
 		flex-shrink: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--white66);
 	}
@@ -556,13 +556,13 @@
 
 	.m-name {
 		font-weight: 600;
-		font-size: 14px;
+		font-size: 0.875rem;
 		color: var(--white);
 	}
 
 	.m-email {
 		grid-column: 1;
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--white66);
 	}
 
@@ -578,7 +578,7 @@
 
 	.m-role,
 	.m-status {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -617,14 +617,14 @@
 		color: var(--whiteEnforced);
 		font: inherit;
 		font-weight: 600;
-		font-size: 14px;
+		font-size: 0.875rem;
 		cursor: pointer;
 	}
 
 	.btn.sm {
 		height: 1.85rem;
 		padding: 0 0.65rem;
-		font-size: 12px;
+		font-size: 0.75rem;
 	}
 
 	.btn:disabled {
@@ -641,7 +641,7 @@
 
 	.status {
 		margin: 0.25rem 0 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--white66);
 	}
 
@@ -650,7 +650,7 @@
 	}
 
 	.status code {
-		font-size: 12px;
+		font-size: 0.75rem;
 		word-break: break-all;
 	}
 
@@ -674,7 +674,7 @@
 		border-radius: 10px;
 		border: 1px solid var(--white11);
 		background: var(--surface);
-		font-size: 12px;
+		font-size: 0.75rem;
 		line-height: 1.4;
 		word-break: break-all;
 		color: var(--white66);

@@ -126,7 +126,7 @@
 		border: 0;
 		background: transparent;
 		font: inherit;
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 650;
 		color: var(--fg);
 		padding: 0;
@@ -137,7 +137,7 @@
 		flex-direction: column;
 		gap: 6px;
 		margin-bottom: 14px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		color: var(--fg-33);
 	}
@@ -149,13 +149,13 @@
 		background: var(--bg);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 400;
 		padding: 8px 10px;
 	}
 	.live {
 		margin: 8px 0;
-		font-size: 14px;
+		font-size: 0.875rem;
 		color: var(--fg-66);
 	}
 	.unit {
@@ -164,11 +164,11 @@
 	}
 	.hint {
 		margin: 16px 0 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-33);
 		line-height: 1.45;
 	}
 	.hint code {
-		font-size: 11px;
+		font-size: 0.6875rem;
 	}
 </style>

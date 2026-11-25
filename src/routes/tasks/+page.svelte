@@ -147,7 +147,7 @@
 	.banner {
 		margin: 0;
 		padding: 10px 16px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66);
 	}
 
@@ -193,7 +193,7 @@
 	}
 
 	.eyebrow-label-xs {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
@@ -202,7 +202,7 @@
 
 	.task-group-count {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		font-variant-numeric: lining-nums;
 		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;

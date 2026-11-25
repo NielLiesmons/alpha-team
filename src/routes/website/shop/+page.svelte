@@ -30,7 +30,7 @@
 
 	.hint {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.45;
 		color: var(--fg-33);
 		text-align: center;

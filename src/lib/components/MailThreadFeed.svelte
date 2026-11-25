@@ -759,7 +759,7 @@
 		background: color-mix(in srgb, var(--accent-1) 12%, var(--fg-8));
 		color: var(--accent-1);
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.01em;
 		line-height: 1.2;
@@ -840,7 +840,7 @@
 	}
 
 	.mail-panel-name {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 650;
 		line-height: 1.2;
 		color: var(--fg);
@@ -852,7 +852,7 @@
 	.mail-panel-domain {
 		flex-shrink: 1;
 		min-width: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 450;
 		line-height: 1.2;
 		color: var(--fg-33);
@@ -910,7 +910,7 @@
 		margin: 0;
 		/* +2px vs dots optical edge (⋯ glyph sits inside its box) */
 		padding: 0 4px 0 0;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		line-height: 1.25;
 		color: var(--fg-33);
@@ -957,7 +957,7 @@
 		border-radius: 0;
 		background: transparent;
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 450;
 		color: var(--fg-33);
 		line-height: 1.25;
@@ -1015,7 +1015,7 @@
 	.recipients-heading {
 		margin: 0;
 		padding: 2px 14px 4px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		color: var(--fg-33);
@@ -1053,7 +1053,7 @@
 	}
 
 	.recipient-email {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 450;
 		color: var(--fg-33);
 		overflow: hidden;
@@ -1086,7 +1086,7 @@
 		padding: 3px 9px;
 		border-radius: 999px;
 		background: var(--fg-8);
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		line-height: 1.3;
 		color: var(--fg-66);
@@ -1119,7 +1119,7 @@
 		width: 100%;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 1.55;
 		color: var(--fg-83);
 		/* Let UA / sanitizer adapt absolute ink; children inherit theme fg. */
@@ -1273,7 +1273,7 @@
 		background: color-mix(in srgb, var(--fg) 2.5%, transparent);
 		color: var(--fg-33);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;

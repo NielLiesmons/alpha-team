@@ -197,7 +197,7 @@
 		width: 100%;
 		height: 100%;
 		padding: 10px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		text-align: center;
 		color: var(--fg-33);

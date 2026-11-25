@@ -140,7 +140,7 @@
 	.banner {
 		margin: 0;
 		padding: 10px 16px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66);
 	}
 
@@ -163,7 +163,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 550;
 		cursor: pointer;
 		align-self: flex-start;

@@ -391,7 +391,7 @@
 	}
 
 	.name {
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 650;
 		color: var(--fg, var(--white));
 		overflow: hidden;
@@ -400,7 +400,7 @@
 	}
 
 	.email {
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-66, var(--white66));
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -504,7 +504,7 @@
 		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
 		color: var(--fg-66, var(--white66));
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
@@ -526,7 +526,7 @@
 		background: transparent;
 		color: var(--fg-66, var(--white66));
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		cursor: pointer;
 		text-align: left;
@@ -544,7 +544,7 @@
 		display: grid;
 		place-items: center;
 		border: 1.5px solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
-		font-size: 22px;
+		font-size: 1.375rem;
 		line-height: 1;
 		box-sizing: border-box;
 		flex-shrink: 0;
@@ -552,7 +552,7 @@
 
 	.toast {
 		margin: 10px 0 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66, var(--white66));
 	}
 
@@ -606,13 +606,13 @@
 	}
 
 	.section-title {
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 650;
 		color: var(--fg, var(--white));
 	}
 
 	.section-desc {
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-66, var(--white66));
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -620,7 +620,7 @@
 	}
 
 	.row-chev {
-		font-size: 22px;
+		font-size: 1.375rem;
 		line-height: 1;
 		color: var(--fg-33, var(--white44));
 	}

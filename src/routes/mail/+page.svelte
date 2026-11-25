@@ -508,7 +508,7 @@
 		padding: 8px 12px;
 		border-radius: 10px;
 		background: var(--fg-4);
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 
 	.err {
@@ -538,7 +538,7 @@
 	.empty-body {
 		margin: 0.55rem 0 0;
 		max-width: 16rem;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.5;
 		color: var(--fg-16);
 	}
@@ -648,7 +648,7 @@
 	.author {
 		flex: 1;
 		min-width: 0;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 650;
 		color: var(--fg);
 		overflow: hidden;
@@ -697,7 +697,7 @@
 		gap: 8px;
 		min-width: 0;
 		margin-top: 1px; /* +1px between author row and subject */
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-66);
 	}
@@ -713,7 +713,7 @@
 	.time {
 		flex-shrink: 0;
 		padding-right: 2px;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 	}
@@ -755,7 +755,7 @@
 
 	.convo-stack :global(.pill span) {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		color: var(--fg-33);
 		font-variant-numeric: lining-nums;
@@ -768,7 +768,7 @@
 		margin: 0;
 		padding: 0;
 		min-width: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 400;
 		line-height: 20px;
 		color: var(--fg-33);
@@ -806,7 +806,7 @@
 
 	.team-snippet {
 		min-width: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 400;
 		line-height: 1.3;
 		color: var(--fg-66);

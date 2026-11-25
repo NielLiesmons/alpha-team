@@ -2261,7 +2261,7 @@
 <style>
 	.pub-kicker {
 		margin: 0 0 8px;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -2270,7 +2270,7 @@
 
 	.pub-title {
 		margin: 0 0 16px;
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 650;
 		line-height: 1.25;
 		color: var(--fg);
@@ -2278,7 +2278,7 @@
 
 	.pub-summary {
 		margin: 0 0 12px;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.4;
 		color: var(--fg-66);
 	}
@@ -2299,7 +2299,7 @@
 		border: 0;
 		background: transparent;
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 1.55;
 		color: var(--fg-66);
 		white-space: pre-wrap;
@@ -2326,7 +2326,7 @@
 		background-color: transparent;
 		color: var(--button-primary-fg);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 650;
 		cursor: pointer;
 		backdrop-filter: blur(var(--glass-blur));
@@ -2431,7 +2431,7 @@
 		flex: 0 1 auto;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		letter-spacing: 0;
 		color: var(--white33);
@@ -2483,7 +2483,7 @@
 	.author-name {
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-66);
 		overflow: hidden;
@@ -2492,7 +2492,7 @@
 	}
 
 	.save-hint {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		padding-right: 4px;
@@ -2517,7 +2517,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		text-align: left;
@@ -2541,7 +2541,7 @@
 		resize: none;
 		background: transparent;
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 1.55;
 		color: var(--fg-83);
 		box-sizing: border-box;
@@ -2671,7 +2671,7 @@
 
 	.hint-pad {
 		margin: 24px 16px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.45;
 		color: var(--fg-33);
 		text-align: center;
@@ -2733,7 +2733,7 @@
 		display: grid;
 		place-items: center;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 700;
 		letter-spacing: 0.02em;
 		line-height: 1;
@@ -2743,7 +2743,7 @@
 		margin: 0;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 20px;
+		font-size: 1.25rem;
 		font-weight: 600;
 		letter-spacing: -0.02em;
 		overflow: hidden;
@@ -2783,7 +2783,7 @@
 		margin: 0;
 		padding-top: 4px;
 		padding-bottom: 8px;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 1.55;
 		color: var(--fg-83);
 		white-space: pre-wrap;
@@ -2807,7 +2807,7 @@
 
 	.muted {
 		margin: 0;
-		font-size: 14px;
+		font-size: 0.875rem;
 		color: var(--white33);
 	}
 
@@ -2847,7 +2847,7 @@
 		box-shadow: none;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		cursor: pointer;
@@ -2883,7 +2883,7 @@
 	}
 
 	.eyebrow-label-xs {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
@@ -2892,7 +2892,7 @@
 
 	.bento-count {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		font-variant-numeric: lining-nums;
@@ -2980,7 +2980,7 @@
 	}
 
 	.label {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
@@ -2990,7 +2990,7 @@
 	.note-body {
 		margin: 0;
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.55;
 		color: var(--white66);
 		white-space: pre-wrap;
@@ -3019,7 +3019,7 @@
 	.empty-body {
 		margin: 0.55rem 0 0;
 		max-width: 16rem;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.5;
 		color: var(--fg-16);
 	}

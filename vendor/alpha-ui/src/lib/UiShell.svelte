@@ -1357,7 +1357,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		color: inherit;
@@ -1395,7 +1395,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		outline: none;
 	}
 
@@ -1451,7 +1451,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 500;
 		outline: none;
 	}
@@ -1509,20 +1509,20 @@
 	}
 
 	.shell-search-hit-label {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--fg);
 	}
 
 	.shell-search-hit-group {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 	}
 
 	.shell-search-empty {
 		margin: 12px 4px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		text-align: center;
@@ -1584,7 +1584,7 @@
 	}
 
 	.create-tile-label {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		text-align: center;
@@ -1777,7 +1777,7 @@
 		background: transparent;
 		color: var(--white66);
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
@@ -1806,7 +1806,7 @@
 	}
 
 	.nav-group-eyebrow {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
@@ -1854,7 +1854,7 @@
 		background: transparent;
 		color: var(--white33, var(--fg-33));
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
@@ -1928,7 +1928,7 @@
 		margin: 0;
 		padding: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		font-style: normal;
 		line-height: 1;
@@ -2145,7 +2145,7 @@
 	.list-title {
 		margin: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		letter-spacing: 0;
 		color: var(--white33);
@@ -2226,7 +2226,7 @@
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		cursor: pointer;
 		line-height: 1;
@@ -2387,7 +2387,7 @@
 		}
 
 		.account-name {
-			font-size: 14px;
+			font-size: 0.875rem;
 		}
 
 		.top-search,
@@ -2629,7 +2629,7 @@
 			text-overflow: ellipsis;
 			white-space: nowrap;
 			font-family: 'Inter', var(--font), system-ui, sans-serif;
-			font-size: 15px;
+			font-size: 0.9375rem;
 			font-weight: 600;
 			letter-spacing: -0.01em;
 			line-height: 1.1;
@@ -2772,7 +2772,7 @@
 			max-width: 100%;
 			font-family: 'Inter', var(--font), system-ui, sans-serif;
 			/* Match deeper mobile chrome titles */
-			font-size: 17px;
+			font-size: 1.0625rem;
 			font-weight: 600;
 			letter-spacing: -0.01em;
 			line-height: 1.15;
@@ -2798,7 +2798,7 @@
 		/* Slotted ListTitleChrome / MailFolderTitle share the quieter centered look */
 		.list-top :global(.mobile-page-name),
 		.list-top :global(.mobile-name) {
-			font-size: 17px;
+			font-size: 1.0625rem;
 			font-weight: 600;
 			letter-spacing: -0.01em;
 			line-height: 1.15;

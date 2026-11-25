@@ -395,7 +395,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		cursor: pointer;
 		transition:
@@ -467,7 +467,7 @@
 	}
 
 	.label {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		color: var(--fg);
 		overflow: hidden;
@@ -480,7 +480,7 @@
 	}
 
 	.sub {
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -489,7 +489,7 @@
 
 	.file-glyph,
 	.emoji-glyph {
-		font-size: 20px;
+		font-size: 1.25rem;
 		line-height: 1;
 		width: 24px;
 		text-align: center;
@@ -512,7 +512,7 @@
 		align-items: center;
 		justify-content: center;
 		text-align: center;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 		grid-column: 1 / -1;
 	}

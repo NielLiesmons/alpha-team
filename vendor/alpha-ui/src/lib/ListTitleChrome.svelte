@@ -105,7 +105,7 @@
 		margin: 0;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		letter-spacing: 0;
 		color: var(--fg-33);
@@ -187,7 +187,7 @@
 		margin: 0;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 17px;
+		font-size: 1.0625rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		line-height: 1.15;
@@ -247,7 +247,7 @@
 			max-width: 100%;
 			text-align: center;
 			font-family: 'Inter', var(--font), system-ui, sans-serif;
-			font-size: 17px;
+			font-size: 1.0625rem;
 			font-weight: 600;
 			letter-spacing: -0.01em;
 			line-height: 1.15;

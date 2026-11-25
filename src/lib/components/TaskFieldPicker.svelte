@@ -194,7 +194,7 @@
 	}
 
 	.pill-text {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-66);
 		white-space: nowrap;
@@ -243,7 +243,7 @@
 	}
 
 	.option-label {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-66);
 	}

@@ -144,7 +144,7 @@
 
 	.detail-top-label {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		overflow: hidden;
@@ -222,7 +222,7 @@
 	.empty-body {
 		margin: 0.55rem 0 0;
 		max-width: 16rem;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.5;
 		color: var(--fg-16);
 	}

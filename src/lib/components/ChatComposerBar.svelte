@@ -1146,7 +1146,7 @@
 	}
 
 	.composer-quote-name {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 700;
 		line-height: 1.35;
 		white-space: nowrap;
@@ -1155,7 +1155,7 @@
 	}
 
 	.composer-quote-text {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.35;
 		color: var(--fg-66);
 		white-space: nowrap;
@@ -1176,7 +1176,7 @@
 		border-radius: 999px;
 		background: transparent;
 		color: var(--fg-33);
-		font-size: 18px;
+		font-size: 1.125rem;
 		line-height: 1;
 		cursor: pointer;
 	}
@@ -1298,7 +1298,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 20px;
 		field-sizing: content;
 	}
@@ -1330,7 +1330,7 @@
 		padding: 4px 8px;
 		border-radius: 999px;
 		background: var(--fg-8);
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-66);
 	}
 
@@ -1341,7 +1341,7 @@
 		color: var(--fg-33);
 		cursor: pointer;
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		padding: 0 2px;
 	}
 
@@ -1419,7 +1419,7 @@
 		flex: 0 0 auto;
 		font: inherit;
 		font-family: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		letter-spacing: 0.01em;
 		color: var(--fg-66);
@@ -1572,7 +1572,7 @@
 	}
 
 	.hold-delete-label {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		line-height: 1;
 		color: var(--fg-33);

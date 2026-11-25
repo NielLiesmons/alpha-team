@@ -181,7 +181,7 @@
 	}
 
 	.eyebrow {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
@@ -189,7 +189,7 @@
 	}
 
 	.preview {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg);
 		line-height: 1.35;
@@ -213,7 +213,7 @@
 
 	.hint {
 		margin: 24px 16px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.45;
 		color: var(--fg-33);
 		text-align: center;

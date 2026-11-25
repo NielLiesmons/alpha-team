@@ -278,7 +278,7 @@
 		display: inline-flex;
 		align-items: center;
 		padding: 0 12px;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		white-space: nowrap;

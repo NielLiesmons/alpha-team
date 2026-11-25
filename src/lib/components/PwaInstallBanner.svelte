@@ -83,7 +83,7 @@
 		border-radius: 999px;
 		background: var(--fg-8);
 		color: var(--fg-66);
-		font-size: 18px;
+		font-size: 1.125rem;
 		line-height: 1;
 		cursor: pointer;
 	}
@@ -91,7 +91,7 @@
 	.hint {
 		margin: 0;
 		padding-right: 28px;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		line-height: 1.35;
 		color: var(--fg);
@@ -99,7 +99,7 @@
 
 	.ios-steps {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		line-height: 1.4;
 		color: var(--fg-66);
@@ -119,7 +119,7 @@
 		background-color: var(--fg);
 		color: var(--button-primary-fg, var(--bg));
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 650;
 		cursor: pointer;
 	}

@@ -420,7 +420,7 @@
 	.lead {
 		margin: 0;
 		text-align: center;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.4;
 		color: var(--fg-66, var(--white66));
 	}
@@ -445,7 +445,7 @@
 	.field {
 		height: 48px;
 		padding: 0 16px;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 500;
 	}
 
@@ -488,7 +488,7 @@
 		background: transparent;
 		color: var(--fg, var(--white));
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 500;
 		outline: none;
 		box-sizing: border-box;
@@ -521,7 +521,7 @@
 
 	.domain {
 		flex-shrink: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33, var(--white33));
 	}
@@ -535,7 +535,7 @@
 		background: var(--button-primary-bg, var(--fg));
 		color: var(--button-primary-fg, var(--bg));
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 650;
 		cursor: pointer;
 	}
@@ -562,7 +562,7 @@
 		background: transparent;
 		color: var(--fg-66, var(--white66));
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -577,7 +577,7 @@
 		background: transparent;
 		color: var(--fg-33, var(--white33));
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		cursor: pointer;
 		padding: 4px;
@@ -591,7 +591,7 @@
 	.err {
 		margin: 0;
 		text-align: center;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66, var(--white66));
 	}
 
@@ -611,7 +611,7 @@
 
 	.meta {
 		margin: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		line-height: 1.4;
 		color: var(--fg-66, var(--white66));
 		word-break: break-all;
@@ -620,7 +620,7 @@
 
 	.meta.code,
 	.meta code {
-		font-size: 11px;
+		font-size: 0.6875rem;
 	}
 
 	.sr-only {

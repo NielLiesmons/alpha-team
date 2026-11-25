@@ -254,7 +254,7 @@
 		background: var(--fg-8);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		cursor: pointer;
 		box-sizing: border-box;
@@ -289,7 +289,7 @@
 		align-items: center;
 		gap: 5px;
 		min-width: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg);
 	}
 
@@ -304,7 +304,7 @@
 	.menu-empty {
 		margin: 0;
 		padding: 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 
@@ -319,7 +319,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		text-align: left;
 		cursor: pointer;
 	}

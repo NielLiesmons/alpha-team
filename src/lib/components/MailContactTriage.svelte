@@ -112,7 +112,7 @@
 		background: transparent;
 		color: var(--button-primary-fg, var(--fg));
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 650;
 		cursor: pointer;
 		white-space: nowrap;
@@ -181,7 +181,7 @@
 	}
 
 	.hint {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		color: var(--fg-33);
 	}

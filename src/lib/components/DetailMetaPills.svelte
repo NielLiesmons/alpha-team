@@ -642,7 +642,7 @@
 		border: 0;
 		border-radius: 9999px;
 		background: var(--fg-4);
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-66);
 		white-space: nowrap;
@@ -711,7 +711,7 @@
 		padding: 0 2px 0 12px;
 		background: var(--tip-bg);
 		border-radius: 12px 0 0 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		white-space: nowrap;
@@ -735,7 +735,7 @@
 	.menu-empty {
 		margin: 0;
 		padding: 10px 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 
@@ -799,7 +799,7 @@
 	}
 
 	.date-label {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -814,7 +814,7 @@
 		background: var(--fg-4);
 		color: var(--fg);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 	}
 
 	.assignee-block {

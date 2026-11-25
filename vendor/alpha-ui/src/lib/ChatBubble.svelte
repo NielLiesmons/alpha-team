@@ -109,7 +109,7 @@
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 650;
 		background: color-mix(in srgb, var(--fg, var(--ink)) 14%, transparent);
 		color: var(--fg, var(--ink));
@@ -185,12 +185,12 @@
 	}
 
 	.author {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 	}
 
 	.when {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		color: var(--fg-33, var(--ink33));
 		flex-shrink: 0;
@@ -199,7 +199,7 @@
 	.text {
 		margin: 0;
 		padding: 0 11px;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 1.4;
 		color: var(--fg-83, var(--ink));
 		white-space: pre-wrap;

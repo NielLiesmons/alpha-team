@@ -96,7 +96,7 @@
 	.new-count {
 		flex-shrink: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		font-variant-numeric: lining-nums;

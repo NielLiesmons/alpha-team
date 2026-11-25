@@ -308,7 +308,7 @@
 
 	.style-mark {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 650;
 		letter-spacing: -0.03em;
 		line-height: 1;
@@ -363,12 +363,12 @@
 	}
 
 	.style-preview.p {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 	}
 
 	.style-preview.quote {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		font-style: italic;
 		color: var(--fg-66);
@@ -390,7 +390,7 @@
 		width: 18px;
 		text-align: center;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 700;
 		color: var(--fg);
 	}

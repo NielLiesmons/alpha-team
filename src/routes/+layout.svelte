@@ -12,6 +12,7 @@
 	import { startRealtime, stopRealtime } from '$lib/realtime.svelte.js';
 	import { initLocale } from '$lib/i18n.svelte.js';
 	import { initTheme } from '$lib/theme.svelte.js';
+	import { initUiScale } from '$lib/ui-scale.svelte.js';
 	import { syncSpaceBrandDefaults } from '$lib/space-brand.svelte.js';
 	import { startViewportBridge } from '$lib/viewport.svelte.js';
 	import AppShell from '$lib/components/AppShell.svelte';
@@ -44,6 +45,7 @@
 		initBrand();
 		initTheme();
 		initLocale();
+		initUiScale();
 		syncSpaceBrandDefaults();
 		try {
 			window.dispatchEvent(new Event('alpha-boot-started'));

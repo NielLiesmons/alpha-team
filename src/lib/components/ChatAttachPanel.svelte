@@ -342,7 +342,7 @@
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		cursor: pointer;
@@ -425,7 +425,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 7px;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-66);
 		cursor: pointer;
@@ -447,7 +447,7 @@
 		background: var(--fg-8);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
@@ -508,7 +508,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
@@ -520,7 +520,7 @@
 
 	.hint {
 		margin: 12px 16px 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		text-align: center;

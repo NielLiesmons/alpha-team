@@ -156,7 +156,7 @@
 		background: transparent;
 		color: var(--white66);
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
@@ -214,7 +214,7 @@
 		margin: 0;
 		padding: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		line-height: 1;
 		font-variant-numeric: lining-nums;
@@ -347,7 +347,7 @@
 		}
 
 		.pill-label {
-			font-size: 9px;
+			font-size: 0.5625rem;
 			font-weight: 500;
 			letter-spacing: 0.02em;
 			max-width: 4.5rem;

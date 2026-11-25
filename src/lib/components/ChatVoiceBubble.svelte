@@ -283,7 +283,7 @@
 	}
 	.time {
 		flex: 0 0 auto;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		text-align: end;
@@ -300,7 +300,7 @@
 		padding: 3px 8px;
 		background: color-mix(in srgb, var(--fg) 10%, transparent);
 		color: var(--fg-66);
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 700;
 		cursor: pointer;
 		font-family: inherit;

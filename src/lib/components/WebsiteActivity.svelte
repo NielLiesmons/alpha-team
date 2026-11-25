@@ -232,7 +232,7 @@
 	}
 
 	.eyebrow {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
@@ -249,7 +249,7 @@
 	}
 
 	.count {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		font-variant-numeric: tabular-nums;
@@ -270,7 +270,7 @@
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -283,7 +283,7 @@
 
 	.hint {
 		margin: 0 0 10px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.45;
 		color: var(--fg-33);
 	}
@@ -326,14 +326,14 @@
 	}
 
 	.who {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--fg);
 	}
 
 	.when {
 		flex-shrink: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		padding-right: 2px;
@@ -341,7 +341,7 @@
 
 	.body {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.45;
 		color: var(--fg-66);
 		white-space: pre-wrap;
@@ -351,7 +351,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		color: var(--fg-33);
 	}
@@ -371,7 +371,7 @@
 		background: var(--fg-8);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 	}

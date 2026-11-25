@@ -1029,7 +1029,7 @@
 	.banner {
 		margin: 0;
 		padding: 10px 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 
 	.err {
@@ -1059,7 +1059,7 @@
 	.empty-body {
 		margin: 0.55rem 0 0;
 		max-width: 16rem;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.5;
 		color: var(--fg-16);
 	}
@@ -1268,7 +1268,7 @@
 
 	.pub-kind,
 	.pub-title {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 	}
 
@@ -1347,7 +1347,7 @@
 		background: var(--fg-8);
 		color: var(--fg-33);
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.01em;
 		line-height: 1.2;
@@ -1477,7 +1477,7 @@
 		background: var(--gradient-accent-1, radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%));
 		color: #fff;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 700;
 		font-variant-numeric: lining-nums;
 		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
@@ -1577,7 +1577,7 @@
 	}
 
 	.composer-quote-name {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 700;
 		line-height: 1.35;
 		white-space: nowrap;
@@ -1586,7 +1586,7 @@
 	}
 
 	.composer-quote-text {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.35;
 		color: var(--fg-66);
 		white-space: nowrap;
@@ -1607,7 +1607,7 @@
 		border-radius: 999px;
 		background: transparent;
 		color: var(--fg-33);
-		font-size: 18px;
+		font-size: 1.125rem;
 		line-height: 1;
 		cursor: pointer;
 	}
@@ -1719,7 +1719,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 20px;
 		field-sizing: content;
 	}
@@ -1751,7 +1751,7 @@
 		padding: 4px 8px;
 		border-radius: 999px;
 		background: var(--fg-8);
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-66);
 	}
 
@@ -1762,7 +1762,7 @@
 		color: var(--fg-33);
 		cursor: pointer;
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		padding: 0 2px;
 	}
 
@@ -1828,7 +1828,7 @@
 		flex: 0 0 auto;
 		font: inherit;
 		font-family: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		letter-spacing: 0.01em;
 		color: var(--fg-66);
@@ -1870,7 +1870,7 @@
 		background: var(--fg-8);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;

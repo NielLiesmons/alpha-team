@@ -150,7 +150,7 @@
 		gap: 0.55rem;
 		margin: 0;
 		padding: 12px 14px;
-		font-size: 14px;
+		font-size: 0.875rem;
 		color: var(--fg);
 		cursor: pointer;
 	}
@@ -171,7 +171,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 650;
 		cursor: pointer;
 	}
@@ -200,7 +200,7 @@
 
 	.err {
 		margin: 0 14px 8px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: #b44;
 	}
 </style>

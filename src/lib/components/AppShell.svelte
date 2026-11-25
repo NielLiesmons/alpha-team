@@ -754,7 +754,7 @@
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		cursor: pointer;
 		line-height: 1;
@@ -814,7 +814,7 @@
 	}
 
 	.activity-cats .cat-n {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		line-height: 1;
 		color: var(--fg-66);

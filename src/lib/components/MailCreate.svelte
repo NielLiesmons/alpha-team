@@ -757,7 +757,7 @@
 	.field-label {
 		flex-shrink: 0;
 		padding-top: 5px;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		color: var(--fg-33);
@@ -789,7 +789,7 @@
 		border-radius: 9999px;
 		background: var(--fg-8);
 		color: var(--fg-66);
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		cursor: pointer;
@@ -824,7 +824,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		line-height: 1;
 		color: var(--fg-66);
@@ -841,7 +841,7 @@
 		border-radius: 9999px;
 		background: transparent;
 		color: var(--fg-33);
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1;
 		cursor: pointer;
 		flex-shrink: 0;
@@ -863,7 +863,7 @@
 		color: var(--fg-83);
 		caret-color: var(--fg);
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 400;
 		line-height: 1.4;
 	}
@@ -986,7 +986,7 @@
 	}
 
 	.schedule-label {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-66);
 	}
@@ -1000,7 +1000,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		box-sizing: border-box;
 	}
 
@@ -1012,7 +1012,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 550;
 		cursor: pointer;
 	}
@@ -1025,7 +1025,7 @@
 	.err {
 		margin: 0;
 		padding: 0 16px 8px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66);
 	}
 
@@ -1078,7 +1078,7 @@
 	}
 
 	.label {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -1086,7 +1086,7 @@
 	}
 
 	.sub {
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -1096,7 +1096,7 @@
 	.empty {
 		margin: 0;
 		padding: 12px 16px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 </style>

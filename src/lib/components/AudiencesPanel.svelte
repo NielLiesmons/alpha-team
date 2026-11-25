@@ -365,7 +365,7 @@
 		margin: 0;
 		padding: 10px 14px;
 		border-radius: 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 	}
 	.banner.bad {
@@ -378,7 +378,7 @@
 	}
 	.eyebrow {
 		display: block;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -407,7 +407,7 @@
 		border-radius: 999px;
 		padding: 8px 14px;
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg);
 		min-width: 160px;
 	}
@@ -422,7 +422,7 @@
 		border-radius: 999px;
 		padding: 8px 14px;
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -467,14 +467,14 @@
 		background: var(--fg-4);
 	}
 	.card-title {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		display: flex;
 		align-items: center;
 		gap: 8px;
 	}
 	.badge {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -484,25 +484,25 @@
 		padding: 2px 8px;
 	}
 	.card-meta {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 	}
 	.title {
 		margin: 0;
-		font-size: 18px;
+		font-size: 1.125rem;
 		font-weight: 600;
 	}
 	.muted {
 		color: var(--fg-33);
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 	.muted.tight {
 		margin: 4px 0 0;
 	}
 	.hint {
 		margin: 0 0 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66);
 		line-height: 1.4;
 	}
@@ -538,17 +538,17 @@
 		min-width: 0;
 	}
 	.m-email {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 	.m-name {
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-66);
 	}
 	.m-meta {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		white-space: nowrap;

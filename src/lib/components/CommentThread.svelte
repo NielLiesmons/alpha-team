@@ -825,7 +825,7 @@
 		min-width: 0;
 		text-align: center;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		line-height: 1.2;
@@ -891,7 +891,7 @@
 	.hint {
 		margin: 24px 8px;
 		text-align: center;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 
@@ -911,7 +911,7 @@
 		bottom: calc(64px + env(safe-area-inset-bottom, 0px));
 		z-index: 5;
 		margin: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: #b44;
 		pointer-events: none;
 	}
@@ -995,7 +995,7 @@
 
 		.sheet-title {
 			/* Match ChromeMobileBar / page topbar titles. */
-			font-size: 17px;
+			font-size: 1.0625rem;
 			line-height: 1.15;
 		}
 

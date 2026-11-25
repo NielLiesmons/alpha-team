@@ -520,7 +520,7 @@
 	}
 
 	.pub-label {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 	}
@@ -536,7 +536,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -575,7 +575,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
@@ -606,7 +606,7 @@
 
 	.err {
 		margin: 0 14px 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66);
 	}
 
@@ -636,7 +636,7 @@
 		background: var(--fg-8);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		display: inline-flex;
 		align-items: center;
@@ -678,7 +678,7 @@
 		background: transparent;
 		color: inherit;
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 650;
 		cursor: pointer;
 	}
@@ -722,7 +722,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		text-align: left;
 		cursor: pointer;
@@ -737,7 +737,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		color: var(--fg-33);
 	}
@@ -750,6 +750,6 @@
 		background: var(--fg-4);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 </style>

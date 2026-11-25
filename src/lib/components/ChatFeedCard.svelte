@@ -945,7 +945,7 @@
 
 	.deleted-text {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		line-height: 1.3;
@@ -1132,7 +1132,7 @@
 		margin: 0;
 		/* Align with .text horizontal inset (11px). */
 		padding: 0 11px 2px;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		line-height: 1.35;
 		white-space: pre-wrap;
@@ -1200,12 +1200,12 @@
 	}
 
 	.att-name {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 	}
 
 	.att-size {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		opacity: 0.7;
 	}
 
@@ -1219,12 +1219,12 @@
 	}
 
 	.author {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 	}
 
 	.when {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		flex-shrink: 0;
@@ -1327,7 +1327,7 @@
 	}
 
 	.quote-name {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		white-space: nowrap;
 		overflow: hidden;
@@ -1335,7 +1335,7 @@
 	}
 
 	.quote-text {
-		font-size: 12px;
+		font-size: 0.75rem;
 		line-height: 1.3;
 		color: var(--fg-66);
 		white-space: nowrap;
@@ -1359,7 +1359,7 @@
 	.text {
 		margin: 0;
 		padding: 0 11px;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 1.4;
 		color: var(--fg-83);
 		white-space: pre-wrap;
@@ -1420,7 +1420,7 @@
 		background: var(--fg-8);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		line-height: 1.2;
 		text-align: center;
@@ -1550,7 +1550,7 @@
 	}
 
 	.reaction-pill .emoji {
-		font-size: 17px;
+		font-size: 1.0625rem;
 		line-height: 1;
 		/* Never inherit a translucent --fg-* — WebKit paints emoji with the text color’s alpha */
 		color: var(--fg);
@@ -1575,7 +1575,7 @@
 
 	.reaction-pill .count {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		color: var(--fg-33);
 		font-variant-numeric: lining-nums;

@@ -211,12 +211,12 @@
 		padding: 12px 16px;
 	}
 	.currency {
-		font-size: 20px;
+		font-size: 1.25rem;
 		font-weight: 600;
 		color: var(--fg-33);
 	}
 	.amount {
-		font-size: 20px !important;
+		font-size: 1.25rem !important;
 		font-weight: 600;
 	}
 	.per {
@@ -230,7 +230,7 @@
 		padding: 8px 10px;
 		color: var(--fg);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 	}
 	.task-bottom-row {
 		--ctrl-h: 36px;
@@ -257,7 +257,7 @@
 		background: var(--fg-4);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -292,7 +292,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		text-align: left;
 		cursor: pointer;
 	}

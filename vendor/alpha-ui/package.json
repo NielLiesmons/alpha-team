@@ -63,7 +63,10 @@
 		"./icons/Appearance.svelte": "./src/lib/icons/Appearance.svelte",
 		"./icons/Profile.svelte": "./src/lib/icons/Profile.svelte",
 		"./icons/Storage.svelte": "./src/lib/icons/Storage.svelte",
-		"./icons/OtherDevices.svelte": "./src/lib/icons/OtherDevices.svelte"
+		"./icons/OtherDevices.svelte": "./src/lib/icons/OtherDevices.svelte",
+		"./icons/Sun.svelte": "./src/lib/icons/Sun.svelte",
+		"./icons/Moon.svelte": "./src/lib/icons/Moon.svelte",
+		"./icons/ThemeSystem.svelte": "./src/lib/icons/ThemeSystem.svelte"
 	},
 	"files": [
 		"icons",

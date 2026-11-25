@@ -76,14 +76,14 @@
 	}
 	.ct-kind {
 		flex: 0 0 auto;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 	}
 	.ct-title {
 		flex: 1 1 auto;
 		min-width: 0;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--fg);
 		overflow: hidden;
@@ -93,7 +93,7 @@
 	.ct-summary {
 		flex: 0 1 auto;
 		max-width: 40%;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		overflow: hidden;

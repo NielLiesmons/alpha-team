@@ -261,7 +261,7 @@
 		background: var(--fg-8);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -277,7 +277,7 @@
 		padding: 10px 12px;
 		border-radius: 14px;
 		background: var(--fg-4);
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66);
 		line-height: 1.4;
 	}
@@ -295,7 +295,7 @@
 
 	.empty {
 		padding: 16px 8px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.4;
 		color: var(--fg-33);
 		text-align: center;
@@ -363,7 +363,7 @@
 	}
 
 	.title {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		line-height: 1.3;
 		color: var(--fg);
@@ -374,7 +374,7 @@
 	}
 
 	.snippet {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		line-height: 1.35;
 		color: var(--fg-66);

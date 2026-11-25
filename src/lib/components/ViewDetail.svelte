@@ -410,7 +410,7 @@
 
 	.title {
 		margin: 0 0 10px;
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 650;
 		line-height: 1.25;
 		color: var(--fg);
@@ -421,7 +421,7 @@
 		border: 0;
 		background: transparent;
 		font: inherit;
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 650;
 		color: var(--fg);
 		padding: 0;
@@ -446,7 +446,7 @@
 		background: var(--fg-4);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -484,7 +484,7 @@
 
 	.desc {
 		margin: 0 0 20px;
-		font-size: 14px;
+		font-size: 0.875rem;
 		color: var(--fg-66);
 	}
 
@@ -501,7 +501,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		padding: 8px 10px;
 		resize: vertical;
 	}
@@ -531,7 +531,7 @@
 
 	.block h3 {
 		margin: 0;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 650;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -543,7 +543,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -554,7 +554,7 @@
 
 	.hint {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 
@@ -588,7 +588,7 @@
 		border-radius: 4px;
 		background: transparent;
 		color: var(--fg-33);
-		font-size: 11px;
+		font-size: 0.6875rem;
 		line-height: 1;
 		cursor: pointer;
 	}
@@ -628,19 +628,19 @@
 
 	.m-title,
 	.t-title {
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--fg);
 	}
 
 	.m-val {
-		font-size: 18px;
+		font-size: 1.125rem;
 		font-weight: 650;
 		color: var(--fg);
 	}
 
 	.t-meta {
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-33);
 	}
 
@@ -649,7 +649,7 @@
 		border: 0;
 		background: transparent;
 		color: var(--fg-33);
-		font-size: 18px;
+		font-size: 1.125rem;
 		cursor: pointer;
 		border-radius: 8px;
 	}
@@ -676,7 +676,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		text-align: left;
 		cursor: pointer;
 	}
@@ -697,7 +697,7 @@
 	.menu-empty {
 		margin: 0;
 		padding: 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 </style>

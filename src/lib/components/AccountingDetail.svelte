@@ -200,7 +200,7 @@
 
 	.empty-body {
 		margin: 0;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.45;
 		color: var(--fg-16);
 	}
@@ -216,7 +216,7 @@
 	}
 
 	.detail-top-label {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -250,7 +250,7 @@
 		padding: 32px 16px;
 		margin: 0;
 		color: var(--fg-66);
-		font-size: 14px;
+		font-size: 0.875rem;
 	}
 
 	.card-stack {
@@ -300,7 +300,7 @@
 	.title {
 		flex: 1;
 		min-width: 0;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 600;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -309,7 +309,7 @@
 
 	.amt {
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums lining-nums;
 		font-feature-settings: 'tnum' 1, 'lnum' 1, 'onum' 0;
@@ -322,7 +322,7 @@
 
 	.preview {
 		padding-left: 22px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 		overflow: hidden;
 		text-overflow: ellipsis;

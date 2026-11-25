@@ -227,7 +227,7 @@
 	}
 
 	.eyebrow-label-xs {
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.18em;
@@ -266,7 +266,7 @@
 	}
 	.empty-body {
 		margin: 0;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		color: var(--fg-16);
 		max-width: 28ch;
@@ -278,7 +278,7 @@
 	.status {
 		margin: 0;
 		padding: 10px 16px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33);
 	}

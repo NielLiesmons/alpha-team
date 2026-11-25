@@ -188,7 +188,7 @@
 		flex: 1;
 		min-width: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		line-height: 1.25;
 		color: var(--fg);
@@ -216,7 +216,7 @@
 	.preview {
 		width: 100%;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.25;
 		/* Quieter than Chat preview — body snippet, not a message line */
 		color: var(--fg-33);

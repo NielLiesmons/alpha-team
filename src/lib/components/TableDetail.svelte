@@ -414,7 +414,7 @@
 		border: 0;
 		background: transparent;
 		font: inherit;
-		font-size: 22px;
+		font-size: 1.375rem;
 		font-weight: 650;
 		color: var(--fg);
 		padding: 0;
@@ -441,7 +441,7 @@
 		background: var(--fg-4);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -454,7 +454,7 @@
 		color: var(--fg-33);
 	}
 	.pill-k {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 650;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -472,7 +472,7 @@
 	}
 	.hint {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 	.grid-wrap {
@@ -481,7 +481,7 @@
 	.grid {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 	.grid th {
 		text-align: left;
@@ -490,7 +490,7 @@
 	}
 	.grid th.when {
 		padding: 8px 8px 8px 0;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 650;
 		color: var(--fg-33);
 		white-space: nowrap;
@@ -505,7 +505,7 @@
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 650;
 		text-align: left;
 		cursor: pointer;
@@ -532,7 +532,7 @@
 	.empty-cell {
 		padding: 16px 0 !important;
 		color: var(--fg-33);
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 	.cell {
 		width: 100%;
@@ -544,7 +544,7 @@
 		padding: 4px;
 	}
 	.save-hint {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		color: var(--fg-33);
 	}
 	.save-hint.err {
@@ -555,7 +555,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -572,7 +572,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		color: var(--fg-33);
 	}
@@ -584,7 +584,7 @@
 		background: var(--bg);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 	.done {
 		align-self: flex-end;
@@ -595,7 +595,7 @@
 		background: var(--fg-8);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -615,7 +615,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		text-align: left;
 		cursor: pointer;
 	}
@@ -654,7 +654,7 @@
 	}
 	.field-modal h3 {
 		margin: 0;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 650;
 		color: var(--fg);
 	}
@@ -662,7 +662,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		color: var(--fg-33);
 	}
@@ -675,7 +675,7 @@
 		background: var(--bg);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 	.modal-actions {
 		display: flex;
@@ -689,7 +689,7 @@
 		background: transparent;
 		color: var(--destructive, #b44);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -700,7 +700,7 @@
 		border: 0;
 		border-radius: 8px;
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		cursor: pointer;
 	}

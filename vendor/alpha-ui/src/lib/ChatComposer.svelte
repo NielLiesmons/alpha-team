@@ -199,7 +199,7 @@
 		min-width: 0;
 		padding: 6px 4px 7px;
 		color: var(--fg-33, var(--ink33));
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 500;
 		line-height: 20px;
 		text-align: left;

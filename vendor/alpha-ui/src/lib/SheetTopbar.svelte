@@ -68,7 +68,7 @@
 		min-width: 0;
 		text-align: center;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		line-height: 1.2;
@@ -99,7 +99,7 @@
 
 		.sheet-title {
 			/* Match ChromeMobileBar / page topbar titles. */
-			font-size: 17px;
+			font-size: 1.0625rem;
 			line-height: 1.15;
 		}
 

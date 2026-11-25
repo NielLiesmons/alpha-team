@@ -87,7 +87,7 @@
 
 	.empty-body {
 		margin: 0;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		line-height: 1.4;
 		color: var(--fg-16, var(--fg-33));
@@ -123,7 +123,7 @@
 	.progress-pct {
 		position: relative;
 		z-index: 1;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 		white-space: nowrap;
 	}

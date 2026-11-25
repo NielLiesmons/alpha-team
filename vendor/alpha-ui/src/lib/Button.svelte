@@ -81,7 +81,7 @@
 		border: 1px solid transparent;
 		border-radius: var(--radius-pill, 999px);
 		font-family: var(--font-sans, var(--font, inherit));
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 600;
 		cursor: pointer;
 		text-decoration: none;
@@ -98,14 +98,14 @@
 	.alpha-btn.md {
 		height: 46px;
 		padding: 0 22px;
-		font-size: 15px;
+		font-size: 0.9375rem;
 	}
 
 	.alpha-btn.sm {
 		height: 100%;
 		min-height: 34px;
 		padding: 0 0.95rem;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 	}
 
@@ -114,7 +114,7 @@
 		height: var(--ctrl-h, 44px);
 		min-height: var(--ctrl-h, 44px);
 		padding: 0 18px;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		border-radius: 9999px;
 		margin-left: auto;

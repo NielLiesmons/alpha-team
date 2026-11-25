@@ -15,6 +15,6 @@
 	.redir {
 		padding: 24px;
 		color: var(--fg-33);
-		font-size: 14px;
+		font-size: 0.875rem;
 	}
 </style>

@@ -496,7 +496,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
@@ -508,7 +508,7 @@
 
 	.publisher-note {
 		margin: 4px 8px 6px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		line-height: 1.35;
 		color: var(--fg-33);
 	}
@@ -521,7 +521,7 @@
 	}
 
 	.audience-label {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -534,7 +534,7 @@
 		border-radius: 999px;
 		padding: 10px 14px;
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg);
 		max-width: 100%;
@@ -557,13 +557,13 @@
 	}
 
 	.footer-label {
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 650;
 		color: var(--fg-66);
 	}
 
 	.footer-hint {
-		font-size: 11px;
+		font-size: 0.6875rem;
 		line-height: 1.35;
 		color: var(--fg-33);
 	}
@@ -577,7 +577,7 @@
 		background: var(--fg-4);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		line-height: 1.45;
 		resize: vertical;
 		box-sizing: border-box;
@@ -600,7 +600,7 @@
 		border-radius: 999px;
 		background: color-mix(in srgb, var(--fg) 5%, transparent);
 		color: var(--fg-33);
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 550;
 		letter-spacing: 0.01em;
 		pointer-events: none;
@@ -632,13 +632,13 @@
 
 	.err {
 		margin: 0 14px 8px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-66);
 	}
 
 	.hint {
 		margin: 0 14px 8px;
-		font-size: 12px;
+		font-size: 0.75rem;
 		line-height: 1.35;
 		color: var(--fg-33);
 	}

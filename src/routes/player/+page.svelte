@@ -15,6 +15,6 @@
 	.hint {
 		padding: 2rem 1.25rem;
 		color: var(--fg-66);
-		font-size: 14px;
+		font-size: 0.875rem;
 	}
 </style>

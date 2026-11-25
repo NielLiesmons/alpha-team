@@ -49,7 +49,7 @@
 		border-radius: 12px 0 0 12px;
 		max-width: 200px;
 		overflow: hidden;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 400;
 		color: var(--white66);
 		white-space: nowrap;
@@ -62,7 +62,7 @@
 		padding-right: 2px;
 		border-radius: 8px 0 0 8px;
 		max-width: 160px;
-		font-size: 12px;
+		font-size: 0.75rem;
 	}
 
 	.label.meta .content {
@@ -71,7 +71,7 @@
 		padding-right: 4px;
 		border-radius: 12px 0 0 12px;
 		max-width: 160px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 	}
 

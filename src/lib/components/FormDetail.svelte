@@ -101,7 +101,7 @@
 		padding: 0 10px;
 		border-radius: 8px;
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -134,7 +134,7 @@
 		flex-direction: column;
 		gap: 6px;
 		margin-bottom: 12px;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		color: var(--fg-33);
 		text-transform: uppercase;
@@ -147,7 +147,7 @@
 		background: var(--fg-4);
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 400;
 		text-transform: none;
 		padding: 0 10px;
@@ -159,7 +159,7 @@
 		margin: 8px 0;
 	}
 	.label {
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 650;
 		color: var(--fg);
 	}
@@ -168,7 +168,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -176,11 +176,11 @@
 		margin: 0;
 		padding-left: 18px;
 		color: var(--fg-66);
-		font-size: 13px;
+		font-size: 0.8125rem;
 	}
 	.hint {
 		margin-top: 16px;
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--fg-33);
 	}
 </style>

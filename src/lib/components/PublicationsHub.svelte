@@ -10,7 +10,7 @@
 <style>
 	.gone {
 		margin: 24px 16px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 		text-align: center;
 	}

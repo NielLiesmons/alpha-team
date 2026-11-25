@@ -404,7 +404,7 @@
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 550;
 		text-align: left;
 		cursor: pointer;
@@ -420,7 +420,7 @@
 		min-height: 8rem;
 		padding: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		line-height: 1.55;
 		color: var(--fg-83);
 		caret-color: var(--fg);

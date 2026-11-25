@@ -90,7 +90,7 @@
 
 	.status-text {
 		max-width: 28rem;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		line-height: 1.35;
 		color: var(--fg-33);

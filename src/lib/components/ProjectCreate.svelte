@@ -229,7 +229,7 @@
 		background: var(--fg-4);
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -259,7 +259,7 @@
 		background: transparent;
 		color: var(--fg-66);
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		text-align: left;
 		cursor: pointer;
 	}
@@ -283,7 +283,7 @@
 		min-width: 1.25rem;
 		text-align: center;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 650;
 		font-variant-numeric: lining-nums;
 		font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0;
@@ -293,7 +293,7 @@
 	.menu-empty {
 		margin: 0;
 		padding: 10px 12px;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 

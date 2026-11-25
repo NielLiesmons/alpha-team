@@ -83,7 +83,7 @@
 
 	.body {
 		margin: 0;
-		font-size: 14px;
+		font-size: 0.875rem;
 		line-height: 1.45;
 		color: var(--fg-66, var(--white66));
 	}
@@ -95,7 +95,7 @@
 		background: var(--button-primary-bg, var(--fg));
 		color: var(--button-primary-fg, var(--bg));
 		font: inherit;
-		font-size: 15px;
+		font-size: 0.9375rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -112,7 +112,7 @@
 		background: transparent;
 		color: var(--fg-33, var(--white33));
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		cursor: pointer;
 	}

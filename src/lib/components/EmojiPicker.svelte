@@ -320,7 +320,7 @@
 		padding: 0;
 		background: transparent;
 		font: inherit;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 500;
 		color: var(--fg);
 		outline: none;
@@ -341,7 +341,7 @@
 		background: transparent;
 		color: var(--destructive);
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -352,7 +352,7 @@
 
 	.err {
 		margin: 0;
-		font-size: 12px;
+		font-size: 0.75rem;
 		color: var(--accent-3, #b44);
 		flex-shrink: 0;
 	}
@@ -385,7 +385,7 @@
 	.eyebrow {
 		margin: 4px 2px 0;
 		padding: 0;
-		font-size: 10px;
+		font-size: 0.625rem;
 		font-weight: 650;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
@@ -431,7 +431,7 @@
 		border: 0;
 		border-radius: 8px;
 		background: transparent;
-		font-size: 22px;
+		font-size: 1.375rem;
 		line-height: 1;
 		cursor: pointer;
 		padding: 0;
@@ -459,7 +459,7 @@
 
 	.custom-empty-copy {
 		margin: 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33);
 		text-align: center;
@@ -473,7 +473,7 @@
 		background: var(--button-primary-bg, var(--fg));
 		color: var(--button-primary-fg, var(--bg));
 		font: inherit;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 650;
 		cursor: pointer;
 	}
@@ -487,7 +487,7 @@
 		grid-column: 1 / -1;
 		margin: 20px 0;
 		text-align: center;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--fg-33);
 	}
 </style>

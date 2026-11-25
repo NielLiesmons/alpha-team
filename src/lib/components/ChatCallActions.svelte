@@ -177,7 +177,7 @@
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		color: var(--fg-66);
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 600;
 		white-space: nowrap;
 		pointer-events: none;

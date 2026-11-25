@@ -1,4 +1,8 @@
 <script>
+	import SegmentedControl from '@alpha/ui/SegmentedControl.svelte';
+	import Moon from '@alpha/ui/icons/Moon.svelte';
+	import Sun from '@alpha/ui/icons/Sun.svelte';
+	import ThemeSystem from '@alpha/ui/icons/ThemeSystem.svelte';
 	import { onMount } from 'svelte';
 	import ProfileInviteModal from './ProfileInviteModal.svelte';
 	import ProfilePic from './ProfilePic.svelte';
@@ -38,6 +42,7 @@
 	import { clearLocalUiCache } from '$lib/ui-cache.js';
 	import { locale, localeChoices, setLocale, t } from '$lib/i18n.svelte.js';
 	import { setTheme, themeChoice } from '$lib/theme.svelte.js';
+	import { setUiScale, uiScaleChoice } from '$lib/ui-scale.svelte.js';
 	import { space } from '$lib/sections.js';
 	import { setSpaceIcon, spaceIconUrl } from '$lib/space-brand.svelte.js';
 	import { forceClearSelection, refreshFromDrive } from '$lib/workspace.svelte.js';
@@ -82,12 +87,37 @@
 	let memberMsg = $state('');
 	let memberBusy = $state(false);
 
-	const choices = $derived.by(() => {
+	const LANG_EMOJI = /** @type {Record<string, string>} */ ({
+		en: '🇬🇧',
+		fr: '🇫🇷',
+		nl: '🇳🇱',
+		es: '🇪🇸'
+	});
+
+	const themeOptions = $derived.by(() => {
 		locale.value;
 		return [
-			{ id: 'system', label: t('settings.themeSystem') },
-			{ id: 'light', label: t('settings.themeLight') },
-			{ id: 'dark', label: t('settings.themeDark') }
+			{ value: 'system', label: t('settings.themeSystem'), icon: ThemeSystem },
+			{ value: 'light', label: t('settings.themeLight'), icon: Sun },
+			{ value: 'dark', label: t('settings.themeDark'), icon: Moon }
+		];
+	});
+
+	const langOptions = $derived.by(() => {
+		locale.value;
+		return localeChoices.map((lang) => ({
+			value: lang.id,
+			label: lang.native,
+			emoji: LANG_EMOJI[lang.id] || '🌐'
+		}));
+	});
+
+	const scaleOptions = $derived.by(() => {
+		locale.value;
+		return [
+			{ value: 'small', label: t('settings.uiScaleSmall'), labelFontSize: '0.6875rem' },
+			{ value: 'normal', label: t('settings.uiScaleNormal'), labelFontSize: '0.8125rem' },
+			{ value: 'large', label: t('settings.uiScaleLarge'), labelFontSize: '1rem' }
 		];
 	});
 
@@ -537,32 +567,31 @@
 			{#if spaceIconMsg}<p class="status on">{spaceIconMsg}</p>{/if}
 		{/if}
 		<p class="field-label">{t('settings.language')}</p>
-		<div class="seg" role="radiogroup" aria-label={t('settings.language')}>
-			{#each localeChoices as lang (lang.id)}
-				<button
-					type="button"
-					class:on={locale.value === lang.id}
-					role="radio"
-					aria-checked={locale.value === lang.id}
-					onclick={() => setLocale(lang.id)}
-				>
-					{lang.native}
-				</button>
-			{/each}
+		<div class="seg-wrap">
+			<SegmentedControl
+				options={langOptions}
+				value={locale.value}
+				label={t('settings.language')}
+				onchange={(next) => setLocale(/** @type {typeof localeChoices[number]['id']} */ (next))}
+			/>
 		</div>
 		<p class="field-label">{t('settings.theme')}</p>
-		<div class="seg" role="radiogroup" aria-label={t('settings.appearance')}>
-			{#each choices as choice (choice.id)}
-				<button
-					type="button"
-					class:on={themeChoice.value === choice.id}
-					role="radio"
-					aria-checked={themeChoice.value === choice.id}
-					onclick={() => setTheme(choice.id)}
-				>
-					{choice.label}
-				</button>
-			{/each}
+		<div class="seg-wrap">
+			<SegmentedControl
+				options={themeOptions}
+				value={themeChoice.value}
+				label={t('settings.theme')}
+				onchange={(next) => setTheme(/** @type {'system' | 'light' | 'dark'} */ (next))}
+			/>
+		</div>
+		<p class="field-label">{t('settings.uiScale')}</p>
+		<div class="seg-wrap">
+			<SegmentedControl
+				options={scaleOptions}
+				value={uiScaleChoice.value}
+				label={t('settings.uiScale')}
+				onchange={(next) => setUiScale(/** @type {'small' | 'normal' | 'large'} */ (next))}
+			/>
 		</div>
 	</section>
 {:else if sectionId === 'storage'}
@@ -679,7 +708,7 @@
 	}
 	.field-label {
 		margin: 0 0 0.75rem;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -687,11 +716,14 @@
 	}
 	.hint {
 		margin: 0 0 0.85rem;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--white66);
 	}
 	.hint.tight {
 		margin-top: -0.35rem;
+	}
+	.seg-wrap {
+		margin-bottom: 1.15rem;
 	}
 	.pic-row {
 		display: flex;
@@ -710,7 +742,7 @@
 		align-items: stretch;
 		gap: 0.35rem;
 		margin-bottom: 0.75rem;
-		font-size: 14px;
+		font-size: 0.875rem;
 		font-weight: 600;
 	}
 	.row span {
@@ -745,7 +777,7 @@
 	.target-email {
 		display: block;
 		margin-top: 0.2rem;
-		font-size: 12px;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--fg-66, var(--white66));
 		text-transform: none;
@@ -757,7 +789,7 @@
 		padding: 0 1rem;
 		font: inherit;
 		font-weight: 600;
-		font-size: 14px;
+		font-size: 0.875rem;
 		cursor: pointer;
 		box-sizing: border-box;
 	}
@@ -776,7 +808,7 @@
 	.btn.danger.disconnect {
 		margin-top: 0.25rem;
 		min-height: 2.75rem;
-		font-size: 15px;
+		font-size: 0.9375rem;
 	}
 	.space-icon-row {
 		display: flex;
@@ -815,38 +847,10 @@
 	}
 	.status {
 		margin: 0.25rem 0 0;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		color: var(--white66);
 	}
 	.status.on {
 		color: var(--fg, var(--white));
-	}
-	.seg {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35rem;
-		padding: 0.25rem;
-		margin-bottom: 1rem;
-		border-radius: 12px;
-		background: color-mix(in srgb, var(--fg) 6%, transparent);
-		border: 1px solid var(--white11);
-	}
-	.seg button {
-		flex: 1 1 4.5rem;
-		min-width: 4.5rem;
-		height: 2.1rem;
-		border: 0;
-		border-radius: 9px;
-		background: transparent;
-		color: var(--white66);
-		font: inherit;
-		font-size: 13px;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.seg button.on {
-		background: var(--surface);
-		color: var(--white);
-		box-shadow: 0 1px 2px color-mix(in srgb, #000 18%, transparent);
 	}
 </style>
