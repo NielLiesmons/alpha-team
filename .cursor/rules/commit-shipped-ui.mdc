@@ -1,17 +1,19 @@
 ---
-description: Commit shipped UI/chrome fixes before reset/stash so design-system polish cannot vanish on deploy
+description: Commit every product UI/chrome step immediately so polish cannot vanish on reset/deploy
 alwaysApply: true
 ---
 
-# Commit shipped UI before reset / deploy
+# Commit every product UI step
 
-Settings hub/detail chrome, scroll fades, and design-system polish have been lost when agents left them **uncommitted** and then ran `git reset --hard` / stash-for-conflict while shipping unrelated features.
+Settings hub/detail chrome, scroll fades, UiShell, popovers, boot, and design-system polish have been lost when agents left them **uncommitted** and then ran `git reset --hard` / stash-for-conflict while shipping unrelated features.
 
-## Required
+## Required — commit after each step
 
-- **Commit** shipped product UI fixes (Settings hub/detail, detail pad/fade, shared chrome) to `main` **before** `git reset --hard`, conflict cleanup, or deploy of unrelated work.
+- After **each** coherent fix/edit that changes product behavior or UI, **create a git commit immediately** before moving to the next step.
+- Prefer **many small commits** over one big uncommitted pile.
+- Never leave Settings / UiShell / chrome / popover / boot / design-system fixes only in the working tree.
+- **Never** `git reset --hard` over uncommitted product UI.
 - Prefer `git stash push -m "…"` for unrelated WIP — **do not** discard committed Settings / design-system chrome.
-- **Never** hard-reset over uncommitted Settings / design-system polish when deploying unrelated features.
 - If a fix must ship now: commit that hunk alone (or stash unrelated WIP first), push, then continue.
 
 ## Why
