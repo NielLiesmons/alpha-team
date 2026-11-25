@@ -33,7 +33,7 @@
 		mailUnreadCountForCategory,
 		markMailRead,
 		markMailUnread,
-		moveMailThreadLocal,
+		moveMailThread,
 		preferReplyAll,
 		hydrateMailFromCache,
 		refreshMail,
@@ -124,7 +124,7 @@
 		const thread = menuThread;
 		closeRowMenu();
 		if (!thread?.id) return;
-		moveMailThreadLocal(thread.id, folder);
+		void moveMailThread(thread.id, folder);
 		if (ui.selection?.kind === 'mail' && ui.selection.id === thread.id) {
 			forceClearSelection();
 		}
@@ -133,7 +133,7 @@
 	/** @param {string} threadId */
 	function archiveThread(threadId) {
 		if (!threadId || mailView.folder === 'archive') return;
-		archiveMailThread(threadId);
+		void archiveMailThread(threadId);
 		if (ui.selection?.kind === 'mail' && ui.selection.id === threadId) {
 			forceClearSelection();
 		}

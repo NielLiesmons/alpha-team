@@ -32,7 +32,7 @@
 		mailCategoryFor,
 		mailComposeSeed,
 		markMailUnread,
-		moveMailThreadLocal,
+		moveMailThread,
 		refreshMailForStubOnce,
 		rememberMailTip,
 		threadMessages
@@ -643,17 +643,16 @@
 		menuOpen = false;
 		if (!mailMsg?.id) return;
 		const id = mailMsg.id;
-		autoReadMailId = '';
 		void markMailUnread(id);
 		/* Leave the thread so the open-effect cannot immediately re-mark read. */
 		forceClearSelection();
 	}
 
-	/** @param {'junk' | 'trash'} folder */
+	/** @param {'junk' | 'trash' | 'archive'} folder */
 	function mailMove(folder) {
 		menuOpen = false;
 		if (!mailMsg?.id) return;
-		moveMailThreadLocal(mailMsg.id, folder);
+		void moveMailThread(mailMsg.id, folder);
 		forceClearSelection();
 	}
 

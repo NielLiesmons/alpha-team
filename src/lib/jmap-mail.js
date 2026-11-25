@@ -851,6 +851,91 @@ export async function setJmapEmailsSeen(email, password, emailIds, seen) {
 	}
 }
 
+/** @type {Map<string, { at: number, byRole: Record<string, string> }>} */
+const mailboxRoleIdCache = new Map();
+
+/**
+ * Resolve a mailbox id by JMAP role (cached).
+ * @param {string} apiUrl
+ * @param {string} email
+ * @param {string} password
+ * @param {string} accountId
+ * @param {string} role
+ */
+async function mailboxIdForRole(apiUrl, email, password, accountId, role) {
+	const want = String(role || '').trim();
+	if (!want) return '';
+	const key = String(accountId);
+	const hit = mailboxRoleIdCache.get(key);
+	if (hit && Date.now() - hit.at < MAILBOX_TTL_MS && hit.byRole[want]) {
+		return hit.byRole[want];
+	}
+	const boxes = await jmapCall(apiUrl, email, password, [
+		['Mailbox/get', { accountId, ids: null, properties: ['id', 'name', 'role'] }, '0']
+	]);
+	const list = firstResult(boxes.methodResponses, 'Mailbox/get')?.list || [];
+	/** @type {Record<string, string>} */
+	const byRole = {};
+	for (const m of list) {
+		const r = String(m?.role || '').trim();
+		const id = m?.id ? String(m.id) : '';
+		if (r && id) byRole[r] = id;
+	}
+	mailboxRoleIdCache.set(key, { at: Date.now(), byRole });
+	return byRole[want] || '';
+}
+
+/**
+ * Move JMAP Emails into a role mailbox (archive / junk / trash).
+ * Removes other mailboxes so folder queries on other devices stay correct.
+ * @param {string} email
+ * @param {string} password
+ * @param {string[]} emailIds
+ * @param {string} role JMAP Mailbox role (`archive`, `junk`, `trash`, …)
+ * @param {Record<string, Record<string, boolean>>} [mailboxIdsByEmail] optional current map per Email id
+ */
+export async function moveJmapEmailsToRole(email, password, emailIds, role, mailboxIdsByEmail = {}) {
+	const ids = [...new Set((emailIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+	if (!ids.length) return;
+	const session = await jmapSession(email, password);
+	const accountId = primaryMailAccountId(session);
+	const apiUrl = session.apiUrl || `${jmapBase()}/`;
+	const targetId = await mailboxIdForRole(apiUrl, email, password, accountId, role);
+	if (!targetId) throw new Error(`No ${role} mailbox on this account`);
+
+	/** @type {Record<string, Record<string, any>>} */
+	const update = {};
+	for (const id of ids) {
+		const current = mailboxIdsByEmail[id];
+		if (current && typeof current === 'object' && Object.keys(current).length) {
+			/** @type {Record<string, boolean | null>} */
+			const patch = { [`mailboxIds/${targetId}`]: true };
+			for (const boxId of Object.keys(current)) {
+				if (boxId && boxId !== targetId && current[boxId]) {
+					patch[`mailboxIds/${boxId}`] = null;
+				}
+			}
+			update[id] = patch;
+		} else {
+			/* Unknown current boxes — replace with target only. */
+			update[id] = { mailboxIds: { [targetId]: true } };
+		}
+	}
+
+	const res = await jmapCall(apiUrl, email, password, [
+		['Email/set', { accountId, update }, '0']
+	]);
+	const set = firstResult(res.methodResponses, 'Email/set');
+	if (set?.notUpdated && Object.keys(set.notUpdated).length) {
+		const first = Object.values(set.notUpdated)[0];
+		const detail =
+			first && typeof first === 'object'
+				? /** @type {any} */ (first).description || /** @type {any} */ (first).type
+				: '';
+		throw new Error(detail || `JMAP could not move to ${role}`);
+	}
+}
+
 /**
  * @param {string} email
  * @param {string} password

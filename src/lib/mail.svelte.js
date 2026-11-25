@@ -14,6 +14,7 @@ import {
 	groupMailThreads,
 	listJmapFolder,
 	mailPersonName,
+	moveJmapEmailsToRole,
 	sendJmapMail,
 	setJmapEmailsSeen
 } from './jmap-mail.js';
@@ -22,7 +23,7 @@ import {
 	contactBucket,
 	contactBucketsVersion
 } from './mail-contacts.svelte.js';
-import { mailView } from './mail-view.svelte.js';
+import { MAIL_FOLDER_ROLES, mailView } from './mail-view.svelte.js';
 import { displayNameFromEmail } from './actor.svelte.js';
 
 /** Thread rows (or flat Drive messages). */
@@ -338,6 +339,9 @@ export function mailThreadsForCurrentFolder() {
 
 	/* Drive interim — filter then thread by subject */
 	const filtered = list.filter((m) => {
+		const archived = Boolean(m.archived);
+		if (folder === 'archive') return archived;
+		if (archived) return false;
 		if (folder === 'mailbox' || folder === 'inbox') {
 			return isInboxFor(m, me) || isSentFor(m, me);
 		}
@@ -1540,14 +1544,13 @@ export function mailComposeSeed(thread, mode) {
 }
 
 /**
- * Soft-remove a thread from the current folder list (local until JMAP move exists).
+ * Soft-remove a thread from the painted list (optimistic UI).
  * @param {string} id
  * @param {'junk' | 'trash' | 'archive' | 'inbox'} folder
  */
 export function moveMailThreadLocal(id, folder) {
 	const idx = mailMessages.findIndex((m) => String(m.id) === String(id));
 	if (idx < 0) return false;
-	/* Drop from the painted list; refreshMail will reconcile on next folder load. */
 	if (folder === 'junk' || folder === 'trash' || folder === 'archive') {
 		mailMessages.splice(idx, 1);
 		return true;
@@ -1556,11 +1559,82 @@ export function moveMailThreadLocal(id, folder) {
 }
 
 /**
- * Archive a mail thread (swipe / filter). Drops it from the current folder list.
+ * JMAP Email ids + current mailboxIds for a move patch.
+ * @param {any} thread
+ * @returns {{ ids: string[], mailboxIdsByEmail: Record<string, Record<string, boolean>> }}
+ */
+function jmapMovePayload(thread) {
+	const msgs = Array.isArray(thread?.messages) ? thread.messages : thread ? [thread] : [];
+	/** @type {string[]} */
+	const ids = [];
+	/** @type {Record<string, Record<string, boolean>>} */
+	const mailboxIdsByEmail = {};
+	for (const m of msgs) {
+		const id = String(m?.id || '').trim();
+		if (!id) continue;
+		ids.push(id);
+		const boxes = m?._jmap?.mailboxIds;
+		if (boxes && typeof boxes === 'object') {
+			/** @type {Record<string, boolean>} */
+			const copy = {};
+			for (const [boxId, on] of Object.entries(boxes)) {
+				if (on) copy[String(boxId)] = true;
+			}
+			mailboxIdsByEmail[id] = copy;
+		}
+	}
+	return { ids, mailboxIdsByEmail };
+}
+
+/**
+ * Move a mail thread to junk / trash / archive and persist so other devices see it.
+ * JMAP → Email/set mailboxIds; Drive interim → `archived` leaf flag.
+ * @param {string} id
+ * @param {'junk' | 'trash' | 'archive'} folder
+ */
+export async function moveMailThread(id, folder) {
+	const thread = findMail(id);
+	if (!thread) return false;
+	if (folder !== 'junk' && folder !== 'trash' && folder !== 'archive') return false;
+
+	moveMailThreadLocal(id, folder);
+
+	const me = mailActorEmail();
+	const pw = me ? getMailboxPassword(me) : '';
+	if (thread.transport === 'jmap' || Array.isArray(thread.messages)) {
+		if (!me || !pw) return true;
+		const role = MAIL_FOLDER_ROLES[folder] || folder;
+		const { ids, mailboxIdsByEmail } = jmapMovePayload(thread);
+		if (!ids.length) return true;
+		try {
+			await moveJmapEmailsToRole(me, pw, ids, role, mailboxIdsByEmail);
+		} catch (e) {
+			mailUi.error = e instanceof Error ? e.message : String(e);
+		}
+		return true;
+	}
+
+	/* Drive interim — archive flag syncs via putMailMessage. */
+	if (folder === 'archive') {
+		const next = { ...thread, archived: true };
+		const session = activeSession();
+		if (session && !thread._local) {
+			try {
+				await putMailMessage(session, next);
+			} catch (e) {
+				mailUi.error = e instanceof Error ? e.message : String(e);
+			}
+		}
+	}
+	return true;
+}
+
+/**
+ * Archive a mail thread (swipe / filter). Persists via JMAP or Drive.
  * @param {string} id
  */
-export function archiveMailThread(id) {
-	return moveMailThreadLocal(id, 'archive');
+export async function archiveMailThread(id) {
+	return moveMailThread(id, 'archive');
 }
 
 /** Preview line for list rows. */
