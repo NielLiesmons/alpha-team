@@ -3,7 +3,9 @@
  * Rightward swipes are left alone for shell back / nav-menu gestures.
  * Vertical motion wins over horizontal so list scroll is not fought.
  *
- * Reveals a subtle Archive strip under the row; past threshold commits.
+ * Reveals a rounded Archive strip that expands with swipe progress —
+ * width equals the opened gap only (never sits behind the card).
+ * Icon-only; opacity fades in over the first ~20px of drag.
  *
  * @param {HTMLElement} node
  * @param {{
@@ -14,6 +16,10 @@
  *   disabled?: boolean
  * }} params
  */
+import { ARCHIVE_PATH } from '@alpha/ui/archive-path.js';
+
+const FADE_PX = 20;
+
 export function swipeLeftArchive(node, params = {}) {
 	let onArchive = params.onArchive;
 	let label = params.label ?? 'Archive';
@@ -33,13 +39,9 @@ export function swipeLeftArchive(node, params = {}) {
 	/** @type {HTMLElement | null} */
 	let reveal = null;
 
-	/* Simple archive-box glyph (stroke, matches Reply chip weight). */
-	const ARCHIVE_PATH =
-		'M3.5 5.25h11M5.25 5.25V4.2A1.2 1.2 0 0 1 6.45 3h5.1a1.2 1.2 0 0 1 1.2 1.2v1.05M6.2 7.5v5.1M9 7.5v5.1M11.8 7.5v5.1M4.35 5.25l.72 8.1A1.35 1.35 0 0 0 6.4 14.55h5.2a1.35 1.35 0 0 0 1.33-1.2l.72-8.1';
-
 	function ensureReveal() {
 		if (reveal?.isConnected) {
-			paintLabel();
+			paintAria();
 			return reveal;
 		}
 		const parent = node.parentElement;
@@ -47,22 +49,22 @@ export function swipeLeftArchive(node, params = {}) {
 		const el = document.createElement('div');
 		el.className = 'swipe-archive-reveal';
 		el.setAttribute('aria-hidden', 'true');
-		el.innerHTML = `<span class="swipe-archive-panel"><span class="swipe-archive-chip"><svg width="15" height="15" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="${ARCHIVE_PATH}" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="swipe-archive-label"></span></span>`;
+		el.innerHTML = `<span class="swipe-archive-panel"><span class="swipe-archive-chip"><svg viewBox="0 0 12 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="${ARCHIVE_PATH}" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/></svg></span></span>`;
 		parent.insertBefore(el, node);
 		if (getComputedStyle(parent).position === 'static') {
 			parent.dataset.swipeArchiveParent = '1';
 			parent.style.position = 'relative';
 		}
 		reveal = el;
-		paintLabel();
+		paintAria();
 		layoutReveal();
 		setProgress(0);
 		return el;
 	}
 
-	function paintLabel() {
-		const el = reveal?.querySelector('.swipe-archive-label');
-		if (el) el.textContent = label;
+	function paintAria() {
+		if (!reveal) return;
+		reveal.setAttribute('aria-label', label);
 	}
 
 	function layoutReveal() {
@@ -75,23 +77,32 @@ export function swipeLeftArchive(node, params = {}) {
 		el.style.top = `${top}px`;
 		el.style.height = `${nodeRect.height}px`;
 		el.style.right = `${Math.max(0, parentRect.right - nodeRect.right)}px`;
-		el.style.width = `${Math.max(maxPx, Math.abs(dx) || maxPx)}px`;
+		/* Width tracks swipe only — never pre-size to maxPx (peek-through). */
+		el.style.width = `${Math.abs(dx)}px`;
 		el.style.borderRadius = getComputedStyle(node).borderRadius || '12px';
 	}
 
-	/** @param {number} p 0..1 */
+	/** @param {number} p 0..1 overall progress toward maxPx */
 	function setProgress(p) {
 		const el = reveal;
 		if (!el) return;
 		const clamped = Math.max(0, Math.min(1, p));
+		const opened = Math.abs(dx);
+		const fade = Math.max(0, Math.min(1, opened / FADE_PX));
 		el.style.setProperty('--swipe-p', String(clamped));
-		el.classList.toggle('on', clamped > 0.02);
+		el.style.setProperty('--swipe-fade', String(fade));
+		el.classList.toggle('on', opened > 0.5);
 	}
 
 	function resetVisual() {
 		node.style.transform = '';
 		node.style.transition = '';
 		node.classList.remove('swipe-archiving');
+		dx = 0;
+		if (reveal) {
+			reveal.style.width = '0px';
+			reveal.style.transition = '';
+		}
 		setProgress(0);
 	}
 
@@ -119,6 +130,7 @@ export function swipeLeftArchive(node, params = {}) {
 		dx = 0;
 		node.style.transition = 'none';
 		ensureReveal();
+		if (reveal) reveal.style.transition = 'none';
 		layoutReveal();
 		setProgress(0);
 	}
@@ -146,7 +158,7 @@ export function swipeLeftArchive(node, params = {}) {
 		dx = Math.max(-maxPx, Math.min(0, rawDx));
 		node.style.transform = `translate3d(${dx}px,0,0)`;
 		if (reveal) {
-			reveal.style.width = `${Math.max(maxPx, Math.abs(dx))}px`;
+			reveal.style.width = `${Math.abs(dx)}px`;
 		}
 		setProgress(Math.abs(dx) / maxPx);
 	}
@@ -159,10 +171,15 @@ export function swipeLeftArchive(node, params = {}) {
 		claimed = false;
 		const fire = wasClaimed && progress >= threshold && typeof onArchive === 'function';
 		node.style.transition = 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)';
-		if (reveal) reveal.style.transition = 'opacity 0.18s ease, width 0.22s ease';
+		if (reveal) {
+			reveal.style.transition =
+				'width 0.22s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.18s ease';
+		}
 		if (fire) {
 			const off = Math.max(node.offsetWidth + 24, maxPx * 1.4);
 			node.style.transform = `translate3d(${-off}px,0,0)`;
+			dx = -Math.min(off, node.offsetWidth);
+			if (reveal) reveal.style.width = `${Math.abs(dx)}px`;
 			setProgress(1);
 			suppressClick = true;
 			window.setTimeout(() => {
@@ -172,12 +189,18 @@ export function swipeLeftArchive(node, params = {}) {
 					node.classList.remove('swipe-archiving');
 					node.style.transition = '';
 					node.style.transform = '';
-					if (reveal) reveal.style.transition = '';
+					dx = 0;
+					if (reveal) {
+						reveal.style.transition = '';
+						reveal.style.width = '0px';
+					}
 					setProgress(0);
 				}
 			}, 200);
 		} else {
 			node.style.transform = '';
+			if (reveal) reveal.style.width = '0px';
+			dx = 0;
 			setProgress(0);
 			window.setTimeout(() => {
 				node.classList.remove('swipe-archiving');
@@ -185,7 +208,6 @@ export function swipeLeftArchive(node, params = {}) {
 				if (reveal) reveal.style.transition = '';
 			}, 240);
 		}
-		dx = 0;
 	}
 
 	/** @param {MouseEvent} e */
@@ -216,7 +238,7 @@ export function swipeLeftArchive(node, params = {}) {
 			onArchive = next.onArchive;
 			if (typeof next.label === 'string') {
 				label = next.label;
-				paintLabel();
+				paintAria();
 			}
 			if (typeof next.threshold === 'number') threshold = next.threshold;
 			if (typeof next.maxPx === 'number') maxPx = next.maxPx;
