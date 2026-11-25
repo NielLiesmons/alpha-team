@@ -11,10 +11,7 @@
 	import { spaceBrand } from '$lib/space-brand.svelte.js';
 	import { actor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
-	import {
-		activityUnreadByKind,
-		activityUnreadCount
-	} from '$lib/chat-activity.svelte.js';
+	import { activityUnreadCount } from '$lib/chat-activity.svelte.js';
 	import {
 		hydratePersonCursorsLocal,
 		loadPersonCursors,
@@ -35,9 +32,6 @@
 	import UnreadMark from '@alpha/ui/UnreadMark.svelte';
 	import Menu from '@alpha/ui/icons/Menu.svelte';
 	import Archive from './icons/Archive.svelte';
-	import At from './icons/At.svelte';
-	import Heart from './icons/Heart.svelte';
-	import Reply from './icons/Reply.svelte';
 	import UnreadDot from './icons/UnreadDot.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
@@ -111,13 +105,6 @@
 		if (!chatList) return 0;
 		return activityUnreadCount();
 	});
-	const chatNotifCats = $derived.by(() => {
-		if (!chatList) return { reaction: 0, reply: 0, assigned: 0 };
-		return activityUnreadByKind();
-	});
-	const chatNotifHasCats = $derived(
-		chatNotifCats.reaction + chatNotifCats.reply + chatNotifCats.assigned > 0
-	);
 
 	function openChatActivity() {
 		if (
@@ -686,34 +673,12 @@
 			<button
 				type="button"
 				class="chrome-btn chat-activity-btn"
-				class:cats={chatNotifHasCats}
+				class:has-count={chatNotifCount > 0}
 				class:on={ui.selection?.kind === 'chat' && ui.selection.id === 'notifications'}
 				aria-label={t('chat.activityOpen')}
 				onclick={openChatActivity}
 			>
-				<span class="activity-mark">
-					<UnreadMark count={chatNotifCount || 0} />
-				</span>
-				<span class="activity-cats" aria-hidden="true">
-					{#if chatNotifCats.reaction > 0}
-						<span class="cat">
-							<Heart size={14} />
-							<span class="cat-n">{chatNotifCats.reaction > 9 ? '9+' : chatNotifCats.reaction}</span>
-						</span>
-					{/if}
-					{#if chatNotifCats.reply > 0}
-						<span class="cat">
-							<Reply size={14} />
-							<span class="cat-n">{chatNotifCats.reply > 9 ? '9+' : chatNotifCats.reply}</span>
-						</span>
-					{/if}
-					{#if chatNotifCats.assigned > 0}
-						<span class="cat">
-							<At size={14} />
-							<span class="cat-n">{chatNotifCats.assigned > 9 ? '9+' : chatNotifCats.assigned}</span>
-						</span>
-					{/if}
-				</span>
+				<UnreadMark count={chatNotifCount || 0} />
 			</button>
 		{/if}
 	{/snippet}
@@ -800,46 +765,41 @@
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
+	/* Empty: quiet round chrome. Unread: content-hugging pill — accent-1 dot + ink count only. */
 	.chat-activity-btn {
 		position: relative;
-		/* Stay a round chrome control — never width:auto (that ovalized mobile). */
 		width: 28px;
 		min-width: 28px;
+		height: 28px;
 		padding: 0;
 		gap: 0;
 		flex-shrink: 0;
+		border-radius: 9999px;
+		transition: transform 0.15s ease;
 	}
 
-	.activity-mark {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
+	.chat-activity-btn.has-count {
+		width: auto;
+		min-width: 28px;
+		padding: 0 10px;
 	}
 
-	.activity-cats {
-		display: none;
-		align-items: center;
-		gap: 8px;
-		color: var(--fg-66);
-	}
-
-	.activity-cats .cat {
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
-		line-height: 0;
-	}
-
-	.activity-cats .cat-n {
-		font-size: 0.6875rem;
+	/* Ink/muted count — accent stays on the gradient dot only (DS whisper). */
+	.chat-activity-btn :global(.unread-mark .n) {
+		color: var(--fg);
 		font-weight: 600;
-		line-height: 1;
-		color: var(--fg-66);
-		font-variant-numeric: lining-nums;
+	}
+
+	.chat-activity-btn:hover,
+	.chat-activity-btn.on {
+		transform: scale(1.06);
+	}
+
+	.chat-activity-btn:active {
+		transform: scale(0.96);
 	}
 
 	@media (max-width: 767px) {
-		/* Match UiShell mobile chrome-btn — fixed 44 round glass. */
 		.chat-activity-btn {
 			width: 44px;
 			min-width: 44px;
@@ -849,30 +809,11 @@
 			flex-shrink: 0;
 		}
 
-		.chat-activity-btn.cats {
+		.chat-activity-btn.has-count {
 			width: auto;
 			min-width: 44px;
 			height: 44px;
-			padding: 0 12px;
-			border-radius: 9999px;
-		}
-
-		.chat-activity-btn.cats .activity-mark {
-			display: none;
-		}
-
-		.chat-activity-btn.cats .activity-cats {
-			display: inline-flex;
-		}
-
-		.chat-activity-btn:not(.cats) .activity-cats {
-			display: none;
-		}
-	}
-
-	@media (min-width: 768px) {
-		.activity-cats {
-			display: none !important;
+			padding: 0 14px;
 		}
 	}
 
