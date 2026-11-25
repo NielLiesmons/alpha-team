@@ -967,12 +967,12 @@
 	.space-icon-row {
 		display: flex;
 		align-items: center;
-		gap: 14px;
+		gap: 0.875rem;
 		margin: 0.35rem 0 1rem;
 	}
 	.space-icon-preview {
-		width: 56px;
-		height: 56px;
+		width: 3.5rem;
+		height: 3.5rem;
 		border-radius: 999px;
 		object-fit: cover;
 		box-sizing: border-box;
@@ -1014,14 +1014,14 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 0.375rem;
 	}
 	.member-card {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
-		padding: 10px 10px 12px;
-		border-radius: 14px;
+		gap: 0.375rem;
+		padding: 0.625rem 0.625rem 0.75rem;
+		border-radius: 0.875rem;
 		background: transparent;
 		box-sizing: border-box;
 	}
@@ -1032,7 +1032,7 @@
 		width: 100%;
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: 0.75rem;
 		padding: 0;
 		border: 0;
 		background: transparent;
@@ -1046,12 +1046,12 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 0.125rem;
 	}
 	.member-name {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.375rem;
 		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--fg, var(--white));
@@ -1071,13 +1071,14 @@
 	.member-actions {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding-left: 52px;
+		gap: 0.375rem;
+		/* Align under member meta: pic (2.5rem) + row gap (0.75rem) */
+		padding-left: 3.25rem;
 		flex-wrap: wrap;
 	}
 	.text-pill {
 		height: 2rem;
-		padding: 0 12px;
+		padding: 0 0.75rem;
 		border: 0;
 		border-radius: 999px;
 		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));

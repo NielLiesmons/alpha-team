@@ -282,7 +282,7 @@
 	.sheet {
 		display: flex;
 		flex-direction: column;
-		max-height: min(78vh, 640px);
+		max-height: min(78vh, 40rem);
 		overflow: auto;
 		box-sizing: border-box;
 	}
@@ -291,27 +291,27 @@
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		gap: 14px;
-		padding: 8px 16px 20px;
+		gap: 0.875rem;
+		padding: 0.5rem 1rem 1.25rem;
 		box-sizing: border-box;
 		transition: gap 0.28s ease;
 	}
 
 	.body.compact {
-		gap: 10px;
+		gap: 0.625rem;
 	}
 
 	.invite-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 0.75rem;
 		transition:
 			min-height 0.28s ease,
 			gap 0.28s ease;
 	}
 
 	.invite-panel.compact {
-		gap: 10px;
+		gap: 0.625rem;
 	}
 
 	.field {
@@ -323,7 +323,7 @@
 	.field input {
 		width: 100%;
 		box-sizing: border-box;
-		border-radius: 18px;
+		border-radius: 1.125rem;
 		border: 1px solid var(--fg-8, var(--hairline));
 		background: color-mix(in srgb, var(--fg) 4%, transparent);
 		color: var(--fg, var(--white));
@@ -331,15 +331,15 @@
 		font-size: 0.9375rem;
 		font-weight: 500;
 		outline: none;
-		padding: 14px 16px;
+		padding: 0.875rem 1rem;
 		resize: none;
 		line-height: 1.4;
 	}
 
 	.field.pass-field input {
 		border-radius: 999px;
-		min-height: 48px;
-		padding: 0 16px;
+		min-height: 3rem;
+		padding: 0 1rem;
 	}
 
 	.field textarea:focus,
@@ -368,7 +368,7 @@
 	}
 
 	.cta {
-		height: 48px;
+		height: 3rem;
 		border: 0;
 		border-radius: 999px;
 		background: var(--button-primary-bg, var(--fg));
@@ -392,7 +392,7 @@
 		font-size: 0.8125rem;
 		font-weight: 500;
 		cursor: pointer;
-		padding: 4px;
+		padding: 0.25rem;
 		align-self: center;
 	}
 
@@ -420,9 +420,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px;
-		min-height: 48px;
-		padding: 0 14px;
+		gap: 0.625rem;
+		min-height: 3rem;
+		padding: 0 0.875rem;
 		border-radius: 999px;
 		border: 1px solid var(--fg-8, var(--hairline));
 		background: color-mix(in srgb, var(--fg) 4%, transparent);
