@@ -22,7 +22,11 @@ jobs:
           bun-version: latest
 
       - name: Install
-        run: bun install --frozen-lockfile
+        run: |
+          # file:vendor/alpha-ui is copied into node_modules by version —
+          # always refresh so UiShell/nav fixes in vendor actually ship.
+          rm -rf node_modules/@alpha/ui
+          bun install --frozen-lockfile
 
       - name: Build
         env:
