@@ -152,6 +152,14 @@
 </div>
 
 <style>
+	/*
+	 * Clear floating list-top while this view is mounted (X must not sit under Chat chrome).
+	 * :has is the reliable path — AppShell listTopHidden is a belt-and-suspenders.
+	 */
+	:global(.list-col:has(.call-view) > .list-top) {
+		display: none !important;
+	}
+
 	.call-view {
 		flex: 1;
 		min-height: 0;
