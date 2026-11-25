@@ -343,8 +343,9 @@
 	.voice.mine .bar {
 		background: rgba(255, 255, 255, 0.28);
 	}
+	/* Played = fuller ink only — never accent (whisper is for checks, not wave chrome). */
 	.bar-col.on .bar {
-		background: color-mix(in srgb, var(--accent-1, #6c5ce7) 90%, transparent);
+		background: color-mix(in srgb, var(--fg) 66%, transparent);
 	}
 	.voice.mine .bar-col.on .bar {
 		background: rgba(255, 255, 255, 0.66);
