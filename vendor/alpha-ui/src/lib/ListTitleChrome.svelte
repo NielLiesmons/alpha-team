@@ -91,13 +91,13 @@
 		display: flex;
 		align-items: center;
 		/* Title ↔ loader breathing room (desktop) */
-		gap: 12px;
+		gap: 0.75rem;
 		min-width: 0;
 	}
 
 	@media (min-width: 768px) {
 		.list-title-row {
-			height: 48px;
+			height: 3rem;
 		}
 	}
 
@@ -120,10 +120,10 @@
 		justify-content: center;
 		align-self: center;
 		flex: 0 0 auto;
-		margin-left: 2px;
+		margin-left: 0.125rem;
 		line-height: 0;
 		overflow: visible;
-		padding-top: 2px;
+		padding-top: 0.125rem;
 		box-sizing: content-box;
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
@@ -136,20 +136,20 @@
 		width: 200px;
 		max-width: 200px;
 		box-sizing: border-box;
-		padding-right: 8px;
+		padding-right: 0.5rem;
 	}
 
 	/* Match DetailChrome / Admin desktop glass icon-hit */
 	.title-back {
 		flex-shrink: 0;
-		width: 28px;
-		height: 28px;
+		width: 1.75rem;
+		height: 1.75rem;
 		display: grid;
 		place-items: center;
 		margin: 0;
 		padding: 0;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 0.625rem;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -177,10 +177,10 @@
 	.mobile-title-stack {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.375rem;
 		min-width: 0;
 		flex: 1;
-		height: 44px;
+		height: 2.75rem;
 	}
 
 	.mobile-page-name {
@@ -218,7 +218,7 @@
 			justify-content: center;
 			min-width: 0;
 			flex: 1;
-			height: 44px;
+			height: 2.75rem;
 		}
 
 		.mobile-page-title:not(.nested) .mobile-title-stack {
@@ -227,18 +227,18 @@
 		}
 
 		.mobile-page-title.nested {
-			gap: 4px;
+			gap: 0.25rem;
 		}
 
 		.mobile-page-title.nested .mobile-title-stack.centered {
 			flex: 1;
 			min-width: 0;
-			height: 44px;
+			height: 2.75rem;
 			display: flex;
 			flex-direction: row;
 			align-items: center;
 			justify-content: center;
-			gap: 6px;
+			gap: 0.375rem;
 		}
 
 		.mobile-type {
@@ -260,8 +260,8 @@
 		.chrome-btn {
 			display: grid;
 			place-items: center;
-			width: 44px;
-			height: 44px;
+			width: 2.75rem;
+			height: 2.75rem;
 			flex-shrink: 0;
 			margin: 0;
 			padding: 0;
@@ -284,12 +284,12 @@
 		}
 
 		.chrome-btn :global(svg) {
-			width: 22px;
-			height: 22px;
+			width: 1.375rem;
+			height: 1.375rem;
 		}
 
 		.chrome-btn.chev-back :global(svg) {
-			padding-right: 2px;
+			padding-right: 0.125rem;
 			box-sizing: content-box;
 		}
 	}

@@ -96,8 +96,8 @@
 		/* Fixed equal radii — never a full pill (multi-line drafts look broken with 9999). */
 		--composer-radius: 23.5px;
 		/* Match Admin ChatComposerBar control box (pad + 1.25rem lh); inherits if set. */
-		--composer-control-h: calc(6px + 1.25rem + 7px);
-		--composer-row-pad-y: 7px;
+		--composer-control-h: calc(0.375rem + 1.25rem + 0.4375rem);
+		--composer-row-pad-y: 0.4375rem;
 		--composer-row-h: calc(var(--composer-control-h) + 2 * var(--composer-row-pad-y));
 		display: flex;
 		flex-direction: column;
@@ -143,7 +143,7 @@
 	}
 
 	.composer-quote-wrap {
-		padding: 8px 8px 0;
+		padding: 0.5rem 0.5rem 0;
 		box-sizing: border-box;
 		position: relative;
 		z-index: 2;
@@ -152,7 +152,7 @@
 	.composer-row {
 		display: flex;
 		align-items: flex-end;
-		gap: 7px;
+		gap: 0.4375rem;
 		min-height: var(--composer-row-h);
 		padding: var(--composer-row-pad-y);
 		box-sizing: border-box;
@@ -161,7 +161,7 @@
 	}
 
 	.composer-pill.chrome-expanded .composer-row {
-		padding-top: 4px;
+		padding-top: 0.25rem;
 	}
 
 	.side-btn {
@@ -202,11 +202,11 @@
 	.composer-ph {
 		flex: 1;
 		min-width: 0;
-		padding: 6px 4px 7px;
+		padding: 0.375rem 0.25rem 0.4375rem;
 		color: var(--fg-33, var(--ink33));
 		font-size: 0.9375rem;
 		font-weight: 500;
-		line-height: 20px;
+		line-height: 1.25rem;
 		text-align: left;
 	}
 </style>

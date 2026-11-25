@@ -1401,8 +1401,8 @@
 		/* Pad ≈ control row; fade is short/soft so content stays readable until the bar */
 		/* Clears the solid control row; fade veil is scroll-driven */
 		/* Default = Chat / reverse-scroll; `.feed-pad` aligns Tasks / Mail / … */
-		--feed-pad-top: 44px;
-		--feed-pad-bottom: 36px;
+		--feed-pad-top: var(--chrome-mobile, 2.75rem);
+		--feed-pad-bottom: 2.25rem;
 		--chrome-fade: var(--bg);
 		--chrome-scroll-fade: 0;
 		display: flex;
@@ -1417,12 +1417,12 @@
 	.sidebar {
 		width: var(--side);
 		flex-shrink: 0;
-		padding: 17px 16px 12px;
+		padding: 1.0625rem 1rem 0.75rem;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
 		overflow: hidden;
-		gap: 10px;
+		gap: 0.625rem;
 		background: var(--shell);
 		color: var(--white);
 		box-sizing: border-box;
@@ -1433,7 +1433,7 @@
 		flex-direction: column;
 		min-height: 0;
 		flex: 1;
-		gap: 10px;
+		gap: 0.625rem;
 		overflow: hidden;
 	}
 
@@ -1451,9 +1451,9 @@
 	.side-top {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 0.625rem;
 		flex-shrink: 0;
-		min-height: 44px;
+		min-height: 2.75rem;
 		padding: 0;
 	}
 
@@ -1461,13 +1461,13 @@
 	.account-pill {
 		display: inline-flex;
 		align-items: center;
-		gap: 10px;
+		gap: 0.625rem;
 		flex: 1 1 auto;
 		min-width: 0;
-		height: 44px;
+		height: 2.75rem;
 		margin: 0;
 		/* 5px around 34px pfp → 44px outer, same as round chrome */
-		padding: 5px 12px 5px 5px;
+		padding: 0.3125rem 0.75rem 0.3125rem 0.3125rem;
 		border: 1px solid transparent;
 		border-radius: 9999px;
 		background: transparent;
@@ -1513,13 +1513,13 @@
 	.search {
 		flex: 1;
 		min-width: 0;
-		height: 28px;
+		height: 1.75rem;
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 0 10px;
+		gap: 0.5rem;
+		padding: 0 0.625rem;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 0.625rem;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -1559,8 +1559,8 @@
 	.shell-modal-body {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
-		padding: 4px 12px 16px;
+		gap: 0.75rem;
+		padding: 0.25rem 0.75rem 1rem;
 		box-sizing: border-box;
 		min-height: 0;
 	}
@@ -1568,10 +1568,10 @@
 	.shell-search-field {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		min-height: 44px;
-		padding: 0 12px;
-		border-radius: 14px;
+		gap: 0.5rem;
+		min-height: 2.75rem;
+		padding: 0 0.75rem;
+		border-radius: 0.875rem;
 		border: 1px solid var(--fg-8);
 		background: var(--fg-4);
 		color: var(--fg-66);
@@ -1592,7 +1592,7 @@
 	.shell-search-field input {
 		flex: 1;
 		min-width: 0;
-		height: 40px;
+		height: 2.5rem;
 		border: 0;
 		background: transparent;
 		color: var(--fg);
@@ -1610,21 +1610,21 @@
 	.shell-search-hits {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 0.125rem;
 		min-height: 0;
 		overflow-y: auto;
-		margin: 0 -4px;
-		padding: 0 4px;
+		margin: 0 -0.25rem;
+		padding: 0 0.25rem;
 	}
 
 	.shell-search-hit {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 0.625rem;
 		width: 100%;
-		padding: 10px 10px;
+		padding: 0.625rem 0.625rem;
 		border: 0;
-		border-radius: 12px;
+		border-radius: 0.75rem;
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
@@ -1639,8 +1639,8 @@
 
 	.shell-search-hit-ico {
 		flex-shrink: 0;
-		width: 22px;
-		height: 22px;
+		width: 1.375rem;
+		height: 1.375rem;
 		display: grid;
 		place-items: center;
 		color: var(--fg-66);
@@ -1667,7 +1667,7 @@
 	}
 
 	.shell-search-empty {
-		margin: 12px 4px;
+		margin: 0.75rem 0.25rem;
 		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--fg-33);
@@ -1677,7 +1677,7 @@
 	.create-grid {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 10px;
+		gap: 0.625rem;
 	}
 
 	.create-tile {
@@ -1685,11 +1685,11 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 8px;
+		gap: 0.5rem;
 		min-height: 96px;
-		padding: 14px 8px 12px;
+		padding: 0.875rem 0.5rem 0.75rem;
 		border: 1px solid var(--fg-8);
-		border-radius: 18px;
+		border-radius: 1.125rem;
 		background: var(--fg-4);
 		color: var(--fg);
 		font: inherit;
@@ -1708,8 +1708,8 @@
 	}
 
 	.create-tile-ico {
-		width: 36px;
-		height: 36px;
+		width: 2.25rem;
+		height: 2.25rem;
 		display: grid;
 		place-items: center;
 		color: var(--fg-66);
@@ -1717,10 +1717,10 @@
 
 	.create-tile-png {
 		display: block;
-		width: 32px;
-		height: 32px;
+		width: 2rem;
+		height: 2rem;
 		object-fit: contain;
-		border-radius: 8px;
+		border-radius: 0.5rem;
 	}
 
 	.create-tile-nav {
@@ -1752,12 +1752,12 @@
 	/* Match desktop list-top chrome-btn (rounded square) */
 	.top-search,
 	.top-plus {
-		width: 28px;
-		height: 28px;
+		width: 1.75rem;
+		height: 1.75rem;
 		display: grid;
 		place-items: center;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 0.625rem;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -1783,16 +1783,16 @@
 
 	.icon-wrap.png,
 	.icon-wrap.empty {
-		width: 18px;
-		height: 18px;
+		width: 1.125rem;
+		height: 1.125rem;
 	}
 
 	.nav-png {
 		display: block;
-		width: 18px;
-		height: 18px;
+		width: 1.125rem;
+		height: 1.125rem;
 		object-fit: contain;
-		border-radius: 4px;
+		border-radius: 0.25rem;
 	}
 
 	.menu-scrim {
@@ -1807,7 +1807,7 @@
 	.create-menu,
 	.filter-menu {
 		position: absolute;
-		top: calc(100% + 6px);
+		top: calc(100% + 0.375rem);
 		right: 0;
 		z-index: 50;
 		min-width: 168px;
@@ -1818,7 +1818,7 @@
 	/* Legacy create-menu rows (pre-popover). Filter uses .alpha-popover-* */
 	.create-menu {
 		border: 1px solid var(--glass-border);
-		border-radius: 12px;
+		border-radius: 0.75rem;
 		background: var(--glass);
 		box-shadow: 0 8px 28px var(--shadow);
 		backdrop-filter: blur(var(--glass-blur));
@@ -1828,7 +1828,7 @@
 	.create-menu button {
 		display: block;
 		width: 100%;
-		padding: 8px 12px;
+		padding: 0.5rem 0.75rem;
 		border: 0;
 		border-radius: 0;
 		background: transparent;
@@ -1852,7 +1852,7 @@
 	.sidebar-nav {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 0.125rem;
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
@@ -1862,7 +1862,7 @@
 		flex-shrink: 0;
 		margin-top: auto;
 		min-width: 0;
-		padding-top: 8px;
+		padding-top: 0.5rem;
 	}
 
 	/*
@@ -1873,9 +1873,9 @@
 	 */
 	.nav-block {
 		--nav-ico: 18px;
-		--nav-gap: 10px;
+		--nav-gap: 0.625rem;
 		--nav-pad-x: 10px;
-		--nav-pad-y: 8px;
+		--nav-pad-y: 0.5rem;
 		--nav-expanded-radius: calc(var(--nav-pad-y) + (var(--nav-ico) / 2) + 1px);
 		border: 1px solid transparent;
 		border-radius: 999px;
@@ -1894,7 +1894,7 @@
 
 	.nav-block.expanded {
 		border-radius: var(--nav-expanded-radius);
-		padding-bottom: 4px;
+		padding-bottom: 0.25rem;
 	}
 
 	.nav-row {
@@ -1916,10 +1916,10 @@
 	.nav-item {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 0.625rem;
 		flex: 1;
 		min-width: 0;
-		padding: 8px 10px;
+		padding: 0.5rem 0.625rem;
 		border: 0;
 		border-radius: 999px;
 		background: transparent;
@@ -1939,17 +1939,17 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
-		margin-top: 10px;
-		padding-top: 4px;
+		margin-top: 0.625rem;
+		padding-top: 0.25rem;
 	}
 
 	.nav-group-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 8px;
-		padding: 4px 12px 6px;
-		min-height: 28px;
+		gap: 0.5rem;
+		padding: 0.25rem 0.75rem 0.375rem;
+		min-height: 1.75rem;
 		box-sizing: border-box;
 	}
 
@@ -1963,9 +1963,9 @@
 
 	.nav-favicon {
 		display: block;
-		width: 18px;
-		height: 18px;
-		border-radius: 4px;
+		width: 1.125rem;
+		height: 1.125rem;
+		border-radius: 0.25rem;
 		object-fit: cover;
 	}
 
@@ -1977,7 +1977,7 @@
 
 	.icon-wrap.favicon {
 		overflow: hidden;
-		border-radius: 4px;
+		border-radius: 0.25rem;
 	}
 
 	.icon-wrap.favicon.space-brand {
@@ -1989,29 +1989,29 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 18px;
-		height: 18px;
+		width: 1.125rem;
+		height: 1.125rem;
 	}
 
 	.nav-sub {
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-		padding: 0 0 2px;
+		padding: 0 0 0.125rem;
 	}
 
 	/* Left pad = nav-item pad + icon + gap so labels line up with Mail. */
 	.nav-sub-item {
 		display: block;
 		width: 100%;
-		padding: 3px var(--nav-pad-x, 10px) 3px
-			calc(var(--nav-pad-x, 10px) + var(--nav-ico, 18px) + var(--nav-gap, 10px));
+		padding: 0.1875rem var(--nav-pad-x, 0.625rem) 0.1875rem
+			calc(var(--nav-pad-x, 0.625rem) + var(--nav-ico, 1.125rem) + var(--nav-gap, 0.625rem));
 		border: 0;
 		border-radius: 0;
 		background: transparent;
 		color: var(--white33, var(--fg-33));
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 13px;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
@@ -2028,12 +2028,12 @@
 
 	.nav-row.creatable .nav-item,
 	.nav-row:has(.row-end) .nav-item {
-		padding-right: 56px;
+		padding-right: 3.5rem;
 	}
 
 	.icon-wrap {
-		width: 18px;
-		height: 18px;
+		width: 1.125rem;
+		height: 1.125rem;
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
@@ -2051,22 +2051,22 @@
 
 	.row-end {
 		position: absolute;
-		right: 6px;
+		right: 0.375rem;
 		top: 50%;
-		min-width: 24px;
-		height: 24px;
+		min-width: 1.5rem;
+		height: 1.5rem;
 		transform: translateY(-50%);
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
-		gap: 6px;
+		gap: 0.375rem;
 		pointer-events: none;
 	}
 
 	.row-end-stack {
 		position: relative;
-		width: 24px;
-		height: 24px;
+		width: 1.5rem;
+		height: 1.5rem;
 		display: grid;
 		place-items: center;
 		flex-shrink: 0;
@@ -2080,8 +2080,8 @@
 	.count {
 		display: grid;
 		place-items: center;
-		width: 24px;
-		height: 24px;
+		width: 1.5rem;
+		height: 1.5rem;
 		margin: 0;
 		padding: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
@@ -2102,8 +2102,8 @@
 	}
 
 	.row-plus {
-		width: 24px;
-		height: 24px;
+		width: 1.5rem;
+		height: 1.5rem;
 		display: grid;
 		place-items: center;
 		border: 0;
@@ -2144,7 +2144,7 @@
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
-		padding: 12px 12px 12px 0;
+		padding: 0.75rem 0.75rem 0.75rem 0;
 		box-sizing: border-box;
 		display: flex;
 		position: relative;
@@ -2158,7 +2158,7 @@
 		flex-direction: row;
 		align-items: stretch;
 		overflow: hidden;
-		border-radius: 20px;
+		border-radius: 1.25rem;
 		/* Follows theme page bg; comms feeds use --feed-bg in light */
 		background: var(--bg);
 		border: 1px solid var(--hairline);
@@ -2238,10 +2238,10 @@
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
-		gap: 10px;
+		gap: 0.625rem;
 		/* Control row ~48px; extra height is the scroll-driven fade zone */
 		height: 72px;
-		padding: 0 10px 0 16px;
+		padding: 0 0.625rem 0 1rem;
 		border-bottom: none;
 		box-sizing: border-box;
 		pointer-events: none;
@@ -2277,7 +2277,7 @@
 		.list-top > :global(.list-title-row),
 		.list-top > .list-actions,
 		.list-top > :global(.zoom-seg) {
-			height: 48px;
+			height: 3rem;
 			display: flex;
 			align-items: center;
 		}
@@ -2299,7 +2299,7 @@
 		display: flex;
 		align-items: center;
 		/* Title ↔ loader breathing room on desktop */
-		gap: 10px;
+		gap: 0.625rem;
 		min-width: 0;
 	}
 
@@ -2318,10 +2318,10 @@
 		justify-content: center;
 		align-self: center;
 		flex: 0 0 auto;
-		margin-left: 2px;
+		margin-left: 0.125rem;
 		line-height: 0;
 		overflow: visible;
-		padding-top: 2px;
+		padding-top: 0.125rem;
 		box-sizing: content-box;
 		--loader-ink: var(--fg-66);
 		color: var(--fg-66);
@@ -2338,11 +2338,11 @@
 		width: 200px;
 		max-width: 200px;
 		box-sizing: border-box;
-		padding-right: 8px;
+		padding-right: 0.5rem;
 	}
 
 	.list-top.planning-top {
-		padding-left: 16px;
+		padding-left: 1rem;
 		/* Merge visually with Planning’s sticky head row */
 		background: transparent;
 		z-index: 8;
@@ -2358,18 +2358,18 @@
 	 * Desktop matches Tasks “In Progress” group header; mobile sits +4px lower.
 	 */
 	.shell.feed-pad {
-		--feed-pad-top: 48px;
+		--feed-pad-top: 3rem;
 	}
 
 	.zoom-seg {
 		display: inline-flex;
 		align-items: center;
-		gap: 2px;
-		height: 28px;
-		padding: 2px;
+		gap: 0.125rem;
+		height: 1.75rem;
+		padding: 0.125rem;
 		box-sizing: border-box;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 0.625rem;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -2381,9 +2381,9 @@
 
 	.zoom-seg button {
 		height: 100%;
-		padding: 0 10px;
+		padding: 0 0.625rem;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 0.5rem;
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
@@ -2401,18 +2401,18 @@
 	.list-actions {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.375rem;
 	}
 
-	/* Desktop: 28px squared chrome (between prior 26 and nav 32); circles mobile-only */
+	/* Desktop: chrome-desk squared; circles mobile-only — rem tracks --ui-scale */
 	.chrome-btn {
-		width: 28px;
-		height: 28px;
+		width: var(--chrome-desk, 1.75rem);
+		height: var(--chrome-desk, 1.75rem);
 		display: grid;
 		place-items: center;
 		padding: 0;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: var(--chrome-radius-desk, 0.625rem);
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -2437,8 +2437,8 @@
 
 	.chrome-ico {
 		display: block;
-		width: 16px;
-		height: 16px;
+		width: var(--chrome-icon-desk, 1rem);
+		height: var(--chrome-icon-desk, 1rem);
 	}
 
 	.pane {
@@ -2491,8 +2491,8 @@
 			--menu-progress: 0;
 			/* Page peeks ~33% when drawer open; sidebar fills the rest */
 			--mobile-drawer: 67vw;
-			--feed-pad-top: calc(52px + env(safe-area-inset-top, 0px));
-			--feed-pad-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+			--feed-pad-top: calc(3.25rem + env(safe-area-inset-top, 0px));
+			--feed-pad-bottom: calc(1.75rem + env(safe-area-inset-bottom, 0px));
 			position: relative;
 			flex-direction: row;
 			padding-bottom: 0;
@@ -2501,7 +2501,7 @@
 		}
 
 		.shell.feed-pad {
-			--feed-pad-top: calc(60px + env(safe-area-inset-top, 0px));
+			--feed-pad-top: calc(3.75rem + env(safe-area-inset-top, 0px));
 		}
 
 		/*
@@ -2516,7 +2516,7 @@
 			bottom: 0;
 			width: var(--mobile-drawer);
 			z-index: 1;
-			padding: calc(36px + env(safe-area-inset-top, 0px)) 14px
+			padding: calc(2.25rem + env(safe-area-inset-top, 0px)) 0.875rem
 				calc(12px + env(safe-area-inset-bottom, 0px));
 			background: var(--bg);
 			/* Glass/lift come from theme tokens — do not re-mix ink into bg here */
@@ -2542,9 +2542,9 @@
 
 		/* Align account / search / plus with the 44px compact title chevron */
 		.side-top {
-			height: 44px;
+			height: 2.75rem;
 			padding: 0;
-			gap: 8px;
+			gap: 0.5rem;
 		}
 
 		.account-name {
@@ -2553,24 +2553,24 @@
 
 		.top-search,
 		.top-plus {
-			width: 44px;
-			height: 44px;
+			width: 2.75rem;
+			height: 2.75rem;
 			border-radius: 9999px;
 		}
 
 		/* Nav Search glyph — fully :global so Svelte won’t strip unused .icon */
 		:global(.top-search .icon),
 		:global(.top-search svg) {
-			width: 18px !important;
-			height: 18px !important;
+			width: 1.125rem !important;
+			height: 1.125rem !important;
 		}
 
 		/* Match chat bubble body; scale icons/Mail pill with it (~20px radius). */
 		.sidebar-nav .nav-block {
 			--nav-ico: 20px;
-			--nav-gap: 12px;
+			--nav-gap: 0.75rem;
 			--nav-pad-x: 12px;
-			--nav-pad-y: 9px;
+			--nav-pad-y: 0.5625rem;
 			--nav-label-size: 0.9375rem;
 		}
 
@@ -2591,9 +2591,9 @@
 			transform: translate3d(calc(var(--mobile-drawer) * var(--menu-progress)), 0, 0)
 				scale(calc(1 - 0.045 * var(--menu-progress)));
 			transform-origin: left center;
-			border-radius: calc(32px * var(--menu-progress));
+			border-radius: calc(2rem * var(--menu-progress));
 			margin-block: calc(12px * var(--menu-progress));
-			height: calc(100% - (24px * var(--menu-progress)));
+			height: calc(100% - (1.5rem * var(--menu-progress)));
 			/* Quiet edge only — no fill/scrim that changes the page look */
 			box-shadow:
 				0 0 0 calc(1px * var(--menu-progress))
@@ -2619,7 +2619,7 @@
 		.nav-peek {
 			display: block;
 			position: absolute;
-			top: calc(56px + env(safe-area-inset-top, 0px));
+			top: calc(3.5rem + env(safe-area-inset-top, 0px));
 			right: 0;
 			bottom: 0;
 			left: 0;
@@ -2657,7 +2657,7 @@
 			transform-origin: left center;
 			transform: translate3d(calc(-30% * var(--detail-progress, 0)), 0, 0)
 				scale(calc(1 - 0.08 * var(--detail-progress, 0)));
-			border-radius: calc(14px * var(--detail-progress, 0));
+			border-radius: calc(0.875rem * var(--detail-progress, 0));
 			transition:
 				transform 0.4s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
 				border-radius 0.4s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
@@ -2682,11 +2682,11 @@
 		}
 
 		.list-top {
-			height: calc(88px + env(safe-area-inset-top, 0px));
-			padding: calc(6px + env(safe-area-inset-top, 0px)) 14px 34px 14px;
+			height: calc(5.5rem + env(safe-area-inset-top, 0px));
+			padding: calc(0.375rem + env(safe-area-inset-top, 0px)) 0.875rem 2.125rem 0.875rem;
 			align-items: center;
 			background: transparent;
-			gap: 8px;
+			gap: 0.5rem;
 		}
 
 		.list-top::after {
@@ -2715,11 +2715,11 @@
 			display: inline-flex;
 			align-items: center;
 			/* Tight chevron → icon → title; do not flex-grow the label away from the PNG. */
-			gap: 6px;
+			gap: 0.375rem;
 			max-width: min(58vw, 240px);
-			height: 44px;
+			height: 2.75rem;
 			margin: 0;
-			padding: 0 14px 0 10px;
+			padding: 0 0.875rem 0 0.625rem;
 			border: 1px solid transparent;
 			border-radius: 9999px;
 			background:
@@ -2743,9 +2743,9 @@
 		}
 
 		.mobile-title-pill.compact {
-			width: 44px;
-			max-width: 44px;
-			min-width: 44px;
+			width: 2.75rem;
+			max-width: 2.75rem;
+			min-width: 2.75rem;
 			padding: 0;
 			gap: 0;
 			justify-content: center;
@@ -2765,8 +2765,8 @@
 			display: grid;
 			place-items: center;
 			flex-shrink: 0;
-			width: 22px;
-			height: 22px;
+			width: 1.375rem;
+			height: 1.375rem;
 			color: var(--fg-33);
 		}
 
@@ -2778,23 +2778,23 @@
 			display: grid;
 			place-items: center;
 			flex-shrink: 0;
-			width: 22px;
-			height: 22px;
+			width: 1.375rem;
+			height: 1.375rem;
 			/* Pull PNG a hair closer to the title (gap already 6px). */
 			margin-left: 0;
 			color: inherit;
 		}
 
 		.pill-ico.png {
-			width: 22px;
-			height: 22px;
+			width: 1.375rem;
+			height: 1.375rem;
 		}
 
 		.pill-ico.favicon {
-			width: 22px;
-			height: 22px;
+			width: 1.375rem;
+			height: 1.375rem;
 			overflow: hidden;
-			border-radius: 4px;
+			border-radius: 0.25rem;
 		}
 
 		.pill-ico.favicon.space-brand {
@@ -2803,14 +2803,14 @@
 		}
 
 		.pill-ico .nav-favicon {
-			width: 22px;
-			height: 22px;
+			width: 1.375rem;
+			height: 1.375rem;
 		}
 
 		.pill-title-stack {
 			display: inline-flex;
 			align-items: center;
-			gap: 6px;
+			gap: 0.375rem;
 			min-width: 0;
 			/* Intrinsic — never flex-grow and invent space after the icon. */
 			flex: 0 1 auto;
@@ -2835,10 +2835,10 @@
 			align-items: center;
 			justify-content: center;
 			flex: 0 0 auto;
-			margin-left: 2px;
+			margin-left: 0.125rem;
 			line-height: 0;
 			overflow: visible;
-			padding-top: 2px;
+			padding-top: 0.125rem;
 			box-sizing: content-box;
 			--loader-ink: var(--fg-66);
 			color: var(--fg-66);
@@ -2870,7 +2870,7 @@
 			right: 0;
 			bottom: 0;
 			z-index: 5;
-			height: calc(40px + env(safe-area-inset-bottom, 0px));
+			height: calc(2.5rem + env(safe-area-inset-bottom, 0px));
 			background: linear-gradient(
 				to top,
 				color-mix(in srgb, var(--chrome-fade) 90%, transparent) 0%,
@@ -2895,7 +2895,7 @@
 			justify-content: center;
 			min-width: 0;
 			flex: 1;
-			height: 44px;
+			height: 2.75rem;
 			transition: transform 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 		}
 
@@ -2906,8 +2906,8 @@
 			position: absolute;
 			left: 0;
 			right: 0;
-			top: calc(6px + env(safe-area-inset-top, 0px));
-			height: 44px;
+			top: calc(0.375rem + env(safe-area-inset-top, 0px));
+			height: 2.75rem;
 			flex: none;
 			width: auto;
 			padding: 0 58px;
@@ -2949,7 +2949,7 @@
 			justify-content: center;
 			min-width: 0;
 			flex: 1;
-			height: 44px;
+			height: 2.75rem;
 			transition: align-items 0.34s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
 		}
 
@@ -3021,12 +3021,12 @@
 		}
 
 		.list-actions {
-			gap: 8px;
+			gap: 0.5rem;
 		}
 
 		.chrome-btn {
-			width: 44px;
-			height: 44px;
+			width: var(--chrome-mobile, 2.75rem);
+			height: var(--chrome-mobile, 2.75rem);
 			border-radius: 9999px;
 			border: 1px solid transparent;
 			background:
@@ -3044,8 +3044,8 @@
 		}
 
 		.chrome-ico {
-			width: 22px;
-			height: 22px;
+			width: var(--chrome-icon, 1.375rem);
+			height: var(--chrome-icon, 1.375rem);
 		}
 
 		.pane {

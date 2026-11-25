@@ -717,12 +717,12 @@
 	.zoom-seg {
 		display: inline-flex;
 		align-items: center;
-		gap: 2px;
-		height: 28px;
-		padding: 2px;
+		gap: 0.125rem;
+		height: 1.75rem;
+		padding: 0.125rem;
 		box-sizing: border-box;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 0.625rem;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -732,9 +732,9 @@
 
 	.zoom-seg button {
 		height: 100%;
-		padding: 0 10px;
+		padding: 0 0.625rem;
 		border: 0;
-		border-radius: 8px;
+		border-radius: 0.5rem;
 		background: transparent;
 		color: var(--fg-33);
 		font: inherit;
@@ -750,13 +750,13 @@
 	}
 
 	.chrome-btn {
-		width: 28px;
-		height: 28px;
+		width: 1.75rem;
+		height: 1.75rem;
 		display: grid;
 		place-items: center;
 		padding: 0;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 0.625rem;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -770,9 +770,9 @@
 	/* Empty: quiet round chrome. Unread: content-hugging pill — accent-1 dot + ink count only. */
 	.chat-activity-btn {
 		position: relative;
-		width: 28px;
-		min-width: 28px;
-		height: 28px;
+		width: 1.75rem;
+		min-width: 1.75rem;
+		height: 1.75rem;
 		padding: 0;
 		gap: 0;
 		flex-shrink: 0;
@@ -782,8 +782,8 @@
 
 	.chat-activity-btn.has-count {
 		width: auto;
-		min-width: 28px;
-		padding: 0 10px;
+		min-width: 1.75rem;
+		padding: 0 0.625rem;
 	}
 
 	/* Ink/muted count — accent stays on the gradient dot only (DS whisper). */
@@ -803,9 +803,9 @@
 
 	@media (max-width: 767px) {
 		.chat-activity-btn {
-			width: 44px;
-			min-width: 44px;
-			height: 44px;
+			width: 2.75rem;
+			min-width: 2.75rem;
+			height: 2.75rem;
 			padding: 0;
 			border-radius: 9999px;
 			flex-shrink: 0;
@@ -813,28 +813,28 @@
 
 		.chat-activity-btn.has-count {
 			width: auto;
-			min-width: 44px;
-			height: 44px;
-			padding: 0 14px;
+			min-width: 2.75rem;
+			height: 2.75rem;
+			padding: 0 0.875rem;
 		}
 	}
 
 	.chrome-ico {
 		display: block;
-		width: 16px;
-		height: 16px;
+		width: 1rem;
+		height: 1rem;
 	}
 
 	@media (max-width: 767px) {
 		.chrome-btn {
-			width: 44px;
-			height: 44px;
+			width: 2.75rem;
+			height: 2.75rem;
 			border-radius: 9999px;
 		}
 
 		.chrome-ico {
-			width: 22px;
-			height: 22px;
+			width: 1.375rem;
+			height: 1.375rem;
 		}
 	}
 </style>

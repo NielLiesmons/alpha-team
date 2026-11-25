@@ -30,8 +30,20 @@
  */
 
 :root {
-	/* Text size — set by ui-scale.svelte.js; rem root (no CSS zoom) */
+	/* UI scale — set by ui-scale.svelte.js; rem root (no CSS zoom) */
 	--ui-scale: 1;
+
+	/*
+	 * Coherent chrome sizes (rem). At --ui-scale:1, 1rem = 16px so these
+	 * match the pre-scale px design. Mobile Normal (1.07) grows type +
+	 * paddings + pills + icons together — never rem text with fixed px chrome.
+	 */
+	--chrome-desk: 1.75rem; /* 28 */
+	--chrome-mobile: 2.75rem; /* 44 */
+	--chrome-icon-desk: 1rem; /* 16 */
+	--chrome-icon: 1.375rem; /* 22 */
+	--chrome-icon-md: 1.25rem; /* 20 */
+	--chrome-radius-desk: 0.625rem; /* 10 */
 
 	/*
 	 * Three accents (Zapstore lineage):
@@ -170,24 +182,24 @@
 	--list: calc(var(--side) * var(--phi));
 	/* Chat expanded feed (~50% wider than prior); narrows to `--list` when detail opens */
 	--list-chat: clamp(480px, calc(var(--list) * 2.13), 780px);
-	--radius-16: 16px;
-	/* Mobile sheet top corners concentric with 44px chrome buttons (12 pad + 22). */
-	--radius-hero: 34px;
-	/* Top-bar Close (X): desktop via size prop (~18); mobile matches inside 44 hit target */
-	--close-icon-size-mobile: 18px;
+	--radius-16: 1rem;
+	/* Mobile sheet top corners concentric with chrome-mobile (0.75rem pad + 1.375rem). */
+	--radius-hero: 2.125rem;
+	/* Top-bar Close (X): desktop via size prop (~18); mobile matches inside chrome hit target */
+	--close-icon-size-mobile: 1.125rem;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 	/*
 	 * Detail entity title row (Notes / Tasks / Mail / Projects) — @alpha/ui DetailTitleRow.
 	 * Scroll pad clears the solid band under ChromeMobileBar (bar is taller / translucent).
 	 */
-	--detail-scroll-pad-top: 56px;
-	--detail-scroll-pad-top-mobile: calc(56px + env(safe-area-inset-top, 0px));
+	--detail-scroll-pad-top: 3.5rem;
+	--detail-scroll-pad-top-mobile: calc(3.5rem + env(safe-area-inset-top, 0px));
 	--detail-title-size: 1.55rem;
 	--detail-title-line-height: 1.2;
-	--detail-title-row-pad-y-start: 4px;
-	--detail-title-row-pad-y-start-mobile: 10px;
-	--detail-title-row-pad-y-end: 10px;
+	--detail-title-row-pad-y-start: 0.25rem;
+	--detail-title-row-pad-y-start-mobile: 0.625rem;
+	--detail-title-row-pad-y-end: 0.625rem;
 
 	--ink: var(--fg);
 	--ink-raw: var(--fg-raw);
@@ -395,14 +407,14 @@
 }
 
 /*
- * Text size (Settings → Appearance) — single source of truth.
- * Factors live in ui-scale.svelte.js (UI_SCALE_FACTORS): Small 0.95 ·
- * Normal 1.07 · Large 1.18. Applied as --ui-scale on :root / html.
+ * UI scale (Settings → Appearance) — single source of truth.
+ * Factors: ui-scale.svelte.js — Mobile Normal 1.07 · Desktop Normal 1.00
+ * (Small 0.95 / Large 1.18). Applied as --ui-scale on :root / html.
  *
- * Rem-root on ALL viewports (mobile + desktop). Type in rem follows;
- * layout/pointer geometry that must stay hit-stable stays in px.
- * Never set a fixed px font-size on html/body/.app — that resets the
- * scale. Not CSS zoom (breaks FloatPanel / overlays / clientX).
+ * Rem-root scales type + rem chrome together. Prefer rem / --chrome-* tokens
+ * for paddings, pills, icons — not rem text with fixed px chrome.
+ * Never set a fixed px font-size on html/body/.app — that resets the scale.
+ * Not CSS zoom (breaks FloatPanel / overlays / clientX).
  */
 html {
 	margin: 0;

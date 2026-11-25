@@ -154,11 +154,17 @@
 	--list: calc(var(--side) * var(--phi));
 	/* Chat equalizes 2nd/3rd columns in UiShell (.list-chat); token kept for callers */
 	--list-chat: var(--list);
-	--radius-16: 16px;
+	--chrome-desk: 1.75rem;
+	--chrome-mobile: 2.75rem;
+	--chrome-icon-desk: 1rem;
+	--chrome-icon: 1.375rem;
+	--chrome-icon-md: 1.25rem;
+	--chrome-radius-desk: 0.625rem;
+	--radius-16: 1rem;
 	/* Mobile sheet top corners concentric with 44px chrome buttons (12 pad + 22). */
-	--radius-hero: 34px;
+	--radius-hero: 2.125rem;
 	/* Top-bar Close (X): desktop via size prop (~18); mobile ~50% larger inside 44 hit target */
-	--close-icon-size-mobile: 27px;
+	--close-icon-size-mobile: 1.6875rem;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 	/*
@@ -166,13 +172,13 @@
 	 * Scroll pad clears the solid band under ChromeMobileBar (bar is taller / translucent).
 	 * Do not use the full 88px bar height as content pad — that overshoots Notes/Tasks.
 	 */
-	--detail-scroll-pad-top: 56px;
-	--detail-scroll-pad-top-mobile: calc(56px + env(safe-area-inset-top, 0px));
+	--detail-scroll-pad-top: 3.5rem;
+	--detail-scroll-pad-top-mobile: calc(3.5rem + env(safe-area-inset-top, 0px));
 	--detail-title-size: 1.55rem;
 	--detail-title-line-height: 1.2;
-	--detail-title-row-pad-y-start: 4px;
-	--detail-title-row-pad-y-start-mobile: 10px;
-	--detail-title-row-pad-y-end: 10px;
+	--detail-title-row-pad-y-start: 0.25rem;
+	--detail-title-row-pad-y-start-mobile: 0.625rem;
+	--detail-title-row-pad-y-end: 0.625rem;
 
 	--ink: var(--fg);
 	--ink-raw: var(--fg-raw);

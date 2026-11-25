@@ -14,7 +14,7 @@
 	isolation: isolate;
 	background: var(--composer-bg, var(--modal-bg, var(--glass-panel, transparent)));
 	border: 0;
-	border-radius: 14px;
+	border-radius: 0.875rem;
 	box-shadow: 0 10px 36px var(--shadow);
 	backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.2);
 	-webkit-backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.2);
@@ -63,10 +63,10 @@
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	gap: 10px;
+	gap: 0.625rem;
 	width: 100%;
-	min-height: 40px;
-	padding: 10px 14px;
+	min-height: 2.5rem;
+	padding: 0.625rem 0.875rem;
 	border: 0;
 	border-radius: 0;
 	background: transparent;
@@ -112,8 +112,8 @@
 /* Unstyled square — sizes glyphs only (no bg / border / radius). */
 .alpha-popover-ico {
 	flex-shrink: 0;
-	width: 18px;
-	height: 18px;
+	width: 1.125rem;
+	height: 1.125rem;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -166,10 +166,10 @@
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	gap: 10px;
+	gap: 0.625rem;
 	width: 100%;
-	min-height: 40px;
-	padding: 10px 14px;
+	min-height: 2.5rem;
+	padding: 0.625rem 0.875rem;
 	border: 0;
 	border-radius: 0;
 	background: transparent;

@@ -26,8 +26,8 @@
 		flex-shrink: 0;
 		line-height: 0;
 		color: inherit;
-		width: var(--close-size, 18px);
-		height: var(--close-size, 18px);
+		width: var(--close-size, 1.125rem);
+		height: var(--close-size, 1.125rem);
 	}
 	.icon :global(svg) {
 		display: block;
@@ -38,8 +38,8 @@
 	/* One shared mobile rule — SheetTopbar, comments, lightbox, voice player, etc. */
 	@media (max-width: 767px) {
 		.icon {
-			width: var(--close-icon-size-mobile, 27px);
-			height: var(--close-icon-size-mobile, 27px);
+			width: var(--close-icon-size-mobile, 1.6875rem);
+			height: var(--close-icon-size-mobile, 1.6875rem);
 		}
 		/* Beat ChromeActionButton / local .chrome-btn svg size clamps */
 		.icon :global(svg) {

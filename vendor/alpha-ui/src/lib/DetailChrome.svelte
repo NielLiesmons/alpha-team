@@ -123,9 +123,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px;
-		height: 48px;
-		padding: 0 12px 0 10px;
+		gap: 0.625rem;
+		height: 3rem;
+		padding: 0 0.75rem 0 0.625rem;
 		pointer-events: none;
 		box-sizing: border-box;
 	}
@@ -138,7 +138,7 @@
 		display: flex;
 		align-items: center;
 		/* Match ListTitleChrome / Admin detail-top back ↔ title */
-		gap: 12px;
+		gap: 0.75rem;
 		min-width: 0;
 	}
 
@@ -166,16 +166,16 @@
 	.detail-top-actions {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 0.25rem;
 	}
 
 	.icon-hit {
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
+		width: 1.75rem;
+		height: 1.75rem;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: 0.625rem;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
@@ -197,7 +197,7 @@
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
-		padding-top: 48px;
+		padding-top: 3rem;
 	}
 
 	.empty {
@@ -263,10 +263,10 @@
 		}
 
 		.body {
-			padding-top: var(--detail-scroll-pad-top-mobile, calc(56px + env(safe-area-inset-top, 0px)));
-			padding-left: 14px;
-			padding-right: 14px;
-			padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+			padding-top: var(--detail-scroll-pad-top-mobile, calc(3.5rem + env(safe-area-inset-top, 0px)));
+			padding-left: 0.875rem;
+			padding-right: 0.875rem;
+			padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
 		}
 	}
 </style>

@@ -53,12 +53,12 @@
 		z-index: 5;
 		flex-shrink: 0;
 		/* 10 + 28btn + 10 — top pad matches horizontal pad of the button row. */
-		height: 48px;
+		height: 3rem;
 		display: grid;
 		grid-template-columns: 28px 1fr 28px;
 		align-items: center;
-		gap: 8px;
-		padding: 10px;
+		gap: 0.5rem;
+		padding: 0.625rem;
 		box-sizing: border-box;
 		pointer-events: none;
 	}
@@ -84,8 +84,8 @@
 	}
 
 	.top-spacer {
-		width: 28px;
-		height: 28px;
+		width: 1.75rem;
+		height: 1.75rem;
 		pointer-events: none;
 	}
 
@@ -94,7 +94,7 @@
 			/* 12 + 44btn + 12 — concentric with --radius-hero (34 = 12+22). */
 			height: 68px;
 			grid-template-columns: 44px 1fr 44px;
-			padding: 12px;
+			padding: 0.75rem;
 		}
 
 		.sheet-title {
@@ -104,8 +104,8 @@
 		}
 
 		.top-spacer {
-			width: 44px;
-			height: 44px;
+			width: 2.75rem;
+			height: 2.75rem;
 		}
 	}
 </style>

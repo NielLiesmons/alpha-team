@@ -1543,8 +1543,8 @@
 		 * share one padding box — fixed 33px left the rem-scaled field taller
 		 * and idle→holding shrank the row (hold gesture slips off the mic).
 		 */
-		--composer-control-h: calc(6px + 1.25rem + 7px);
-		--composer-row-pad-y: 7px;
+		--composer-control-h: calc(0.375rem + 1.25rem + 0.4375rem);
+		--composer-row-pad-y: 0.4375rem;
 		--composer-row-h: calc(var(--composer-control-h) + 2 * var(--composer-row-pad-y));
 		pointer-events: auto;
 		position: relative;
@@ -1561,7 +1561,7 @@
 	}
 
 	.composer-quote-wrap {
-		padding: 8px 8px 0;
+		padding: 0.5rem 0.5rem 0;
 		box-sizing: border-box;
 		position: relative;
 		z-index: 2;
@@ -1586,7 +1586,7 @@
 		align-items: stretch;
 		min-width: 0;
 		width: 100%;
-		border-radius: 8px;
+		border-radius: 0.5rem;
 		overflow: hidden;
 		background: color-mix(in srgb, var(--fg) 8%, transparent);
 	}
@@ -1603,7 +1603,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
-		padding: 4px 8px 5px;
+		padding: 0.25rem 0.5rem 0.3125rem;
 	}
 
 	.composer-quote-name {
@@ -1627,11 +1627,11 @@
 	.composer-quote-clear {
 		flex-shrink: 0;
 		align-self: flex-start;
-		width: 28px;
-		height: 28px;
+		width: var(--chrome-desk, 1.75rem);
+		height: var(--chrome-desk, 1.75rem);
 		display: grid;
 		place-items: center;
-		margin: 2px 2px 0 0;
+		margin: 0.125rem 0.125rem 0 0;
 		padding: 0;
 		border: 0;
 		border-radius: 999px;
@@ -1652,7 +1652,7 @@
 		display: flex;
 		/* Empty + single line: center plus / field / send together (same as fresh open). */
 		align-items: center;
-		gap: 7px;
+		gap: 0.4375rem;
 		/* border-box: min-height includes pad — same chrome idle ↔ voice. */
 		min-height: var(--composer-row-h);
 		padding: var(--composer-row-pad-y);
@@ -1667,7 +1667,7 @@
 	}
 
 	.composer-row.chrome-expanded {
-		padding-top: 4px;
+		padding-top: 0.25rem;
 	}
 
 	/*
@@ -1728,7 +1728,7 @@
 	.side-btn.send .send-ico,
 	.mic-glow .send-ico {
 		display: inline-flex;
-		padding-bottom: 2px;
+		padding-bottom: 0.125rem;
 		line-height: 0;
 	}
 
@@ -1746,9 +1746,9 @@
 	/* Sibling under the CE so caret paints above (never hidden behind placeholder). */
 	.composer-placeholder {
 		position: absolute;
-		left: 4px;
-		right: 4px;
-		top: 6px;
+		left: 0.25rem;
+		right: 0.25rem;
+		top: 0.375rem;
 		z-index: 0;
 		color: var(--fg-33);
 		font-size: 0.9375rem;
@@ -1792,10 +1792,10 @@
 		flex: 1;
 		min-width: 0;
 		width: 100%;
-		min-height: 20px;
-		max-height: 140px;
+		min-height: 1.25rem;
+		max-height: 8.75rem;
 		margin: 0;
-		padding: 6px 4px 7px;
+		padding: 0.375rem 0.25rem 0.4375rem;
 		border: 0;
 		outline: none;
 		resize: none;
@@ -1816,14 +1816,14 @@
 
 	/* Empty: lock single-line footprint even if the engine briefly injects a caret <br>. */
 	.composer-input.is-empty {
-		min-height: 20px;
+		min-height: 1.25rem;
 		height: auto;
 	}
 
 	.composer-input :global(.ce-emoji) {
 		display: inline-block;
-		width: 20px;
-		height: 20px;
+		width: 1.25rem;
+		height: 1.25rem;
 		object-fit: contain;
 		vertical-align: -0.25em;
 		margin: 0 1px;
@@ -1851,15 +1851,15 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 6px;
-		padding: 8px 10px 0;
+		gap: 0.375rem;
+		padding: 0.5rem 0.625rem 0;
 	}
 
 	.attach-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
-		padding: 4px 8px;
+		gap: 0.25rem;
+		padding: 0.25rem 0.5rem;
 		border-radius: 999px;
 		background: var(--fg-8);
 		font-size: 0.75rem;
@@ -1874,11 +1874,11 @@
 		cursor: pointer;
 		font: inherit;
 		font-size: 0.75rem;
-		padding: 0 2px;
+		padding: 0 0.125rem;
 	}
 
 	.voice-row {
-		--voice-dot: 10px;
+		--voice-dot: 0.625rem;
 		align-items: center;
 		min-width: 0;
 	}
@@ -1895,8 +1895,8 @@
 		height: var(--composer-control-h);
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 0 12px 0 11.5px;
+		gap: 0.5rem;
+		padding: 0 0.75rem 0 0.71875rem;
 		border-radius: 999px;
 		background: var(--fg-8);
 		box-sizing: border-box;
@@ -1966,7 +1966,7 @@
 		flex: 1 1 auto;
 		min-width: 0;
 		width: 100%;
-		height: 22px;
+		height: var(--chrome-icon, 1.375rem);
 		display: flex;
 		align-items: center;
 		justify-content: stretch;
@@ -2064,8 +2064,8 @@
 	}
 
 	.mic-glow.locked {
-		width: 56px;
-		height: 56px;
+		width: 3.5rem;
+		height: 3.5rem;
 		background: var(--gradient-accent-1);
 		box-shadow: 0 0 14px 3px color-mix(in srgb, var(--accent-1, #5c5fff) 32%, transparent);
 	}
@@ -2082,7 +2082,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: flex-start;
-		gap: 7px;
+		gap: 0.4375rem;
 		/* Right pad clears the 64px hold circle; negative margin fills mic-slot under it. */
 		padding: 0 50px 0 14px;
 		margin-right: calc(-1 * var(--composer-control-h));
@@ -2101,7 +2101,7 @@
 		pointer-events: auto;
 		cursor: pointer;
 		/* Locked send glow is 56px — slightly less overhang than the hold circle. */
-		padding-right: 48px;
+		padding-right: 3rem;
 	}
 
 	.hold-delete-pill.armed {
@@ -2156,7 +2156,7 @@
 	.scroll-fab.voice-scroll-fab {
 		position: absolute;
 		right: 0;
-		bottom: calc(100% + 2px);
+		bottom: calc(100% + 0.125rem);
 		width: 47px;
 		height: 47px;
 		display: grid;
