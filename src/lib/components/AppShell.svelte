@@ -796,7 +796,7 @@
 
 	.chat-activity-btn :global(.unread-mark .n) {
 		color: var(--fg-66);
-		font-weight: 600;
+		font-weight: 500;
 	}
 
 	.chat-activity-btn:hover,

@@ -30,6 +30,8 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.3125rem;
+		/* Stable box so the accent/quiet dot stays vertically centered with or without a count. */
+		min-height: 0.75rem;
 		line-height: 1;
 		flex-shrink: 0;
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
