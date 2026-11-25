@@ -4,7 +4,12 @@
  */
 
 import { refreshMembersAndAvatars } from './avatar.svelte.js';
-import { refreshChatFeed, chatUi, markIncomingMessagesRead } from './chat.svelte.js';
+import {
+	hydrateChatFeedFromCache,
+	refreshChatFeed,
+	chatUi,
+	markIncomingMessagesRead
+} from './chat.svelte.js';
 import {
 	CHAT_TIP_NAME,
 	getNamedTip,
@@ -197,13 +202,65 @@ function onVisibility() {
 let pendingPushOpen = null;
 
 /**
- * Notification tap / push deep-link: force chat pull (and tip wake when known).
+ * Deep-link target from a notification tap. ChatChannelPanel scrolls here ASAP
+ * (cache first; tip delta second) — mid must survive boot / warm focus races.
+ * @type {{ tip: string, messageId: string, gen: number, until: number }}
+ */
+export const pushOpenUi = $state({
+	tip: '',
+	messageId: '',
+	gen: 0,
+	until: 0
+});
+
+/**
+ * @param {{ tip?: string, messageId?: string }} opts
+ */
+function stashPushOpenTarget(opts = {}) {
+	const tip = String(opts.tip || '').trim();
+	const messageId = String(opts.messageId || '').trim();
+	if (!tip && !messageId) return;
+	if (tip) pushOpenUi.tip = tip;
+	if (messageId) pushOpenUi.messageId = messageId;
+	pushOpenUi.gen += 1;
+	pushOpenUi.until = Date.now() + 20_000;
+}
+
+/** Clear after the panel lands on the notif message (or deadline). */
+export function clearPushScrollTarget() {
+	pushOpenUi.messageId = '';
+	pushOpenUi.tip = '';
+	pushOpenUi.until = 0;
+}
+
+/** @returns {string} */
+export function peekPushScrollTarget() {
+	const mid = String(pushOpenUi.messageId || '').trim();
+	if (!mid) return '';
+	if (pushOpenUi.until && Date.now() > pushOpenUi.until) {
+		clearPushScrollTarget();
+		return '';
+	}
+	return mid;
+}
+
+/**
+ * Notification tap / push deep-link: paint cache, open Chat, scroll to mid,
+ * then tip-wake / pull only the delta (not a fat crawl).
  * Queues until Drive session exists (cold start from killed PWA).
  * @param {{ tip?: string, messageId?: string }} [opts]
  */
 export function openChatFromPush(opts = {}) {
 	const tip = String(opts.tip || '').trim();
 	const messageId = String(opts.messageId || '').trim();
+	/* Stash mid before any await/goto so the panel can scroll on first paint. */
+	stashPushOpenTarget({ tip, messageId });
+	/* Local cache / IDB-backed feed snapshot — scroll without waiting on network. */
+	try {
+		hydrateChatFeedFromCache();
+	} catch {
+		/* ignore */
+	}
 	if (typeof window !== 'undefined') {
 		try {
 			const path = window.location?.pathname || '';
@@ -231,6 +288,7 @@ export function openChatFromPush(opts = {}) {
 	}
 	pendingPushOpen = null;
 	startChatTipPoll();
+	/* Prefer tip delta when known — same fast path as in-app tip-wake. */
 	if (tip) void wakeChatFromTip(tip);
 	else void pullChatIfNeeded(true);
 }
@@ -261,6 +319,11 @@ function consumePushOpenQuery() {
 	} catch {
 		/* ignore */
 	}
+}
+
+/* Stash tip/mid before layout onMount / panel anchor — cold PWA starts here. */
+if (typeof window !== 'undefined') {
+	consumePushOpenQuery();
 }
 
 function onSwMessage(/** @type {MessageEvent} */ ev) {

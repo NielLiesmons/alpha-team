@@ -38,7 +38,13 @@
 		visibleChatMessages
 	} from '$lib/chat.svelte.js';
 	import { mailTipCache } from '$lib/mail.svelte.js';
-	import { startChatTipPoll, stopChatTipPoll } from '$lib/chat-sync.svelte.js';
+	import {
+		clearPushScrollTarget,
+		peekPushScrollTarget,
+		pushOpenUi,
+		startChatTipPoll,
+		stopChatTipPoll
+	} from '$lib/chat-sync.svelte.js';
 	import { ui } from '$lib/workspace.svelte.js';
 	import { chatStackFlags } from '$lib/chat-stack.js';
 	import { compareChatMessageAsc } from '$lib/drive/entities.js';
@@ -269,13 +275,21 @@
 			chatUi.loading = false;
 			chatUi.settled = true;
 			lastTailId = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
-			void anchorOpenScroll();
+			/* Push mid wins over unread-boundary open scroll. */
+			void fulfillPushScroll().then((hit) => {
+				if (!hit) void anchorOpenScroll();
+			});
 		} else if (chatFeed.length === 0) {
 			chatUi.loading = true;
 		}
 		void refreshChatFeed().then(() => {
 			const nextTail = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
 			lastTailId = nextTail;
+			/* Push deep-link still pending — keep trying; don't clobber with unread/bottom. */
+			if (peekPushScrollTarget()) {
+				void fulfillPushScroll();
+				return;
+			}
 			/* Re-anchor after hydrate — prefer first unread when still at open boundary. */
 			if (visitBoundaryChannel !== channelId || !visitFirstNewId) {
 				void anchorOpenScroll();
@@ -290,6 +304,20 @@
 			if (highlightTimer != null) clearTimeout(highlightTimer);
 			/* Voice tick / recorder cleanup lives in ChatComposerBar.onDestroy. */
 		};
+	});
+
+	/*
+	 * Notification tap: scroll to mid as soon as the bubble exists (cache or tip delta).
+	 * pushOpenUi.gen re-arms warm background taps for the same message id.
+	 */
+	$effect(() => {
+		const mid = pushOpenUi.messageId;
+		const gen = pushOpenUi.gen;
+		void mid;
+		void gen;
+		void chronological.length;
+		if (!peekPushScrollTarget()) return;
+		void fulfillPushScroll();
 	});
 
 	/* Prefetch comment threads for tip panels so “view more” can appear. */
@@ -464,12 +492,46 @@
 	}
 
 	/**
+	 * Land on the push-notification message when tip/mid was handed off.
+	 * @returns {Promise<boolean>} true when the bubble was found and scrolled into view
+	 */
+	async function fulfillPushScroll() {
+		const mid = peekPushScrollTarget();
+		if (!mid) return false;
+		/* Prefer cache paint — tip wake may still be in flight. */
+		if (!chatFeed.length) hydrateChatFeedFromCache();
+		pinBottom = false;
+		leaveBottomIntent = true;
+		visitBoundaryChannel = channelId;
+		visitFirstNewId = mid;
+		await scrollToMessage(mid, { smooth: false, block: 'center', flash: true });
+		const root = messagesEl;
+		if (!root) return false;
+		const found =
+			root.querySelector(`[data-chat-bubble="${CSS.escape(mid)}"]`) ||
+			root.querySelector(`[data-msg-id="${CSS.escape(mid)}"]`);
+		if (!(found instanceof HTMLElement)) return false;
+		clearPushScrollTarget();
+		showScrollFab = true;
+		measureScroll();
+		return true;
+	}
+
+	/**
 	 * Open / channel switch: land on first unread when any exist; else bottom.
 	 * @param {{ force?: boolean }} [opts]
 	 */
 	async function anchorOpenScroll(opts = {}) {
 		const force = Boolean(opts.force);
 		await tick();
+		if (peekPushScrollTarget()) {
+			const hit = await fulfillPushScroll();
+			if (hit) return;
+			/* Mid not in feed yet — stay unpinned; tip wake + effect will retry. */
+			pinBottom = false;
+			leaveBottomIntent = true;
+			return;
+		}
 		const msgs = chronological;
 		if (!msgs.length) {
 			if (force || pinBottom) void goBottom(true, false);

@@ -178,6 +178,13 @@ export async function bootApp() {
 		}
 		appBoot.listsReady = true;
 		ensurePendingFlushListeners();
+		/* Notification tap queued before session — open Chat + tip-wake ASAP. */
+		try {
+			const { flushPendingPushOpen } = await import('./chat-sync.svelte.js');
+			flushPendingPushOpen();
+		} catch {
+			/* ignore */
+		}
 
 		/* After Drive is up, sync space secrets so Mail/pubs work without Settings. */
 		try {
@@ -226,6 +233,7 @@ export async function bootApp() {
 					console.warn('mail approved sync', e);
 				}
 				await refreshChatFeed();
+				/* Re-flush in case a tap landed between session-up and this crawl. */
 				try {
 					const { flushPendingPushOpen } = await import('./chat-sync.svelte.js');
 					flushPendingPushOpen();

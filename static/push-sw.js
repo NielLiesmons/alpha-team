@@ -2,7 +2,7 @@
  * Imported by the Workbox-generated service worker (vite-pwa).
  * Handles Web Push + notification taps for Home Screen PWAs (incl. iOS 16.4+).
  *
- * alpha-sw-boot: v5 — bump after create-sheet / comments morph + shared composer ship.
+ * alpha-sw-boot: v6 — push tap focuses warm client (no navigate reload) + tip/mid handoff.
  */
 /* eslint-disable no-undef */
 
@@ -159,13 +159,11 @@ async function openOrFocus(path, meta = {}) {
 			} catch {
 				/* ignore */
 			}
-			if ('navigate' in client) {
-				try {
-					await client.navigate(url);
-				} catch {
-					/* older WebKit — postMessage + focus still pull chat */
-				}
-			}
+			/*
+			 * Never client.navigate() on a warm window — that full-reloads the SPA
+			 * and makes the user wait on boot while the message is already cached.
+			 * tip/mid ride on postMessage → openChatFromPush → scrollToMessage.
+			 */
 			return;
 		}
 	}
