@@ -1,5 +1,6 @@
 <script>
 	import { onMount, tick, untrack } from 'svelte';
+	import FeedEmpty from '$lib/components/FeedEmpty.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import PhotoTile from '$lib/components/PhotoTile.svelte';
 	import { listEntries, uploadLibraryMedia } from '$lib/drive/entities.js';
@@ -169,10 +170,7 @@
 	{:else if err && items.length === 0}
 		<p class="empty-body err">{err}</p>
 	{:else if items.length === 0}
-		<div class="empty">
-			<p class="empty-title">{t('photos.emptyTitle')}</p>
-			<p class="empty-body">{t('photos.emptyBody')}</p>
-		</div>
+		<FeedEmpty title={t('photos.emptyTitle')} body={t('photos.emptyBody')} />
 	{:else}
 		{#if uploading}
 			<p class="status">{t('photos.uploading')}</p>
@@ -246,30 +244,6 @@
 		.grid {
 			grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
 		}
-	}
-	.empty {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		text-align: center;
-		min-height: 42vh;
-		padding: 24px 20px;
-		gap: 8px;
-	}
-	.empty-title {
-		margin: 0;
-		font-size: 1.65rem;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		color: var(--fg-33);
-	}
-	.empty-body {
-		margin: 0;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--fg-16);
-		max-width: 28ch;
 	}
 	.empty-body.err,
 	.status.err {

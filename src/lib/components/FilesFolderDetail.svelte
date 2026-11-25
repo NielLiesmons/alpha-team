@@ -4,6 +4,7 @@
 	 * Top bar shows type "Folder"; hero carries the name + summary.
 	 */
 	import folderUrl from '@alpha/ui/icons/folder.png';
+	import FeedEmpty from '$lib/components/FeedEmpty.svelte';
 	import {
 		fileDisplayTitle,
 		fileTypeColors,
@@ -59,7 +60,7 @@
 	</section>
 
 	{#if items.length === 0}
-		<p class="empty">{t('drive.emptyFolder')}</p>
+		<FeedEmpty title={t('drive.emptyFolder')} body={t('drive.emptyFolderBody')} />
 	{:else}
 		<div class="card-stack">
 			{#each items as item (item.path)}
@@ -162,13 +163,6 @@
 	.hero-enc {
 		color: var(--fg-33);
 		font-weight: 500;
-	}
-
-	.empty {
-		margin: 0;
-		padding: 16px 0;
-		color: var(--fg-33);
-		font-size: 0.8125rem;
 	}
 
 	.card-stack {

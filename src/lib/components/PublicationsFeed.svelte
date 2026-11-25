@@ -4,6 +4,7 @@
 	 * Selecting a row opens newsletter/post via selectEntity — list stays in col 2.
 	 */
 	import { onMount } from 'svelte';
+	import FeedEmpty from '$lib/components/FeedEmpty.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
 	import MoreDots from '$lib/components/icons/MoreDots.svelte';
@@ -223,7 +224,7 @@
 		{/each}
 
 		{#if !pubsUi.loading && filtered.length === 0 && getAdminToken() && !pubsUi.error}
-			<p class="empty">{t('pub.nothingYet')}</p>
+			<FeedEmpty title={t('pub.emptyTitle')} body={t('pub.emptyBody')} />
 		{/if}
 	</div>
 </div>
@@ -291,14 +292,6 @@
 		font-weight: 600;
 		color: var(--fg);
 		text-decoration: underline;
-	}
-
-	.empty {
-		padding: 16px 8px;
-		font-size: 0.8125rem;
-		line-height: 1.4;
-		color: var(--fg-33);
-		text-align: center;
 	}
 
 	.bento-stack {
