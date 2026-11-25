@@ -6,6 +6,7 @@
 	 */
 	import At from './icons/At.svelte';
 	import Reply from './icons/Reply.svelte';
+	import FeedEmpty from './FeedEmpty.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import TaskBox from './TaskBox.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
@@ -127,7 +128,7 @@
 <!-- class "feed" so detail-top chrome scroll fade can find this scroller -->
 <div class="activity feed" class:embedded>
 	{#if items.length === 0}
-		<p class="empty">{t('chat.activityEmpty')}</p>
+		<FeedEmpty title={t('chat.activityEmpty')} body={t('chat.activitySub')} />
 	{:else}
 		{#each groups as group (group.key)}
 			<div class="task-group-header">
@@ -206,14 +207,6 @@
 		padding: 48px 0 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
-	}
-
-	.empty {
-		margin: 28px 0;
-		padding: 0 16px;
-		font-size: 0.875rem;
-		color: var(--fg-33);
-		text-align: center;
 	}
 
 	/* Vertical stack gutters only — horizontal inset matches top-bar back */
