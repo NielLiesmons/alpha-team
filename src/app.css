@@ -472,7 +472,8 @@ label {
 .device-badge,
 .upload-chip .chip-label,
 .chat-pill,
-.reaction-pill .count {
+.reaction-pill .count,
+.unread-mark .n {
 	font-family: 'Inter', var(--font), system-ui, sans-serif !important;
 	font-style: normal !important;
 	font-weight: 500 !important;
@@ -481,11 +482,6 @@ label {
 	font-variant-numeric: lining-nums !important;
 	font-feature-settings: 'lnum' 1, 'tnum' 0, 'onum' 0, 'kern' 1 !important;
 	font-optical-sizing: auto;
-}
-
-.chat-pill .count,
-.fab-badge {
-	font-weight: 600 !important;
 }
 
 button,

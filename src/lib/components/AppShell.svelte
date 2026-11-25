@@ -767,7 +767,7 @@
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
-	/* Empty: quiet round chrome. Unread: content-hugging pill — accent-1 dot + ink count only. */
+	/* Empty: quiet round chrome. Unread: content-hugging pill — accent dot + muted count. */
 	.chat-activity-btn {
 		position: relative;
 		width: 1.75rem;
@@ -777,6 +777,9 @@
 		gap: 0;
 		flex-shrink: 0;
 		border-radius: 9999px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		transition: transform 0.15s ease;
 	}
 
@@ -786,9 +789,13 @@
 		padding: 0 0.625rem;
 	}
 
-	/* Ink/muted count — accent stays on the gradient dot only (DS whisper). */
+	/* Muted count — accent stays on the gradient dot only (DS whisper). */
+	.chat-activity-btn :global(.unread-mark) {
+		min-height: 0.75rem;
+	}
+
 	.chat-activity-btn :global(.unread-mark .n) {
-		color: var(--fg);
+		color: var(--fg-66);
 		font-weight: 600;
 	}
 
