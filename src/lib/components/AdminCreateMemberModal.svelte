@@ -106,6 +106,9 @@
 				password: mailboxPassword,
 				displayName: createName.trim()
 			});
+			if (!provision.ok && !provision.deferred) {
+				throw new Error(provision.error || 'Mailbox provision failed');
+			}
 			await persistInviteSecrets(createEmail, mailboxPassword);
 			const inviteSession = await buildInviteSession({
 				email: createEmail,

@@ -1,9 +1,13 @@
 /**
- * Stalwart mailbox provisioning — called from Admin, never from the Stalwart UI.
+ * Stalwart mailbox provisioning — called from Admin invite mint, never from the Stalwart UI.
  *
- * v0: stub. Wire to Stalwart management / principals API next so Invite creates
- * the IMAP/JMAP account automatically.
+ * Creates/resets the IMAP/JMAP account via alpha-api → Stalwart JMAP management
+ * (`POST /v1/projects/{project}/mailboxes`). Invitee never types mail fields —
+ * the invite carries the password and redeem hydrates localStorage + space-secrets.
  */
+
+import { adminApi } from './mail-api.js';
+import { projectSlug } from './space-host.js';
 
 /**
  * @typedef {{
@@ -17,12 +21,13 @@
  * @typedef {{
  *   ok: boolean,
  *   deferred?: boolean,
- *   error?: string
+ *   error?: string,
+ *   created?: boolean
  * }} ProvisionResult
  */
 
 /**
- * Create or update a mailbox principal.
+ * Create or update a mailbox principal on Stalwart for this Space.
  * @param {ProvisionInput} input
  * @returns {Promise<ProvisionResult>}
  */
@@ -37,16 +42,34 @@ export async function provisionMailbox(input) {
 		return { ok: false, error: 'Password required' };
 	}
 
-	/*
-	 * TODO: POST to Stalwart management API (or local alpha-api proxy) to:
-	 *   - create principal for `email`
-	 *   - set password
-	 *   - ensure domain tenant exists
-	 * Until then, owner creates the box once in Stalwart (or we seed) and the
-	 * invite still carries the password so the invitee never types mail fields.
-	 */
-	console.info('[stalwart-provision] deferred', email, input.displayName || '');
-	return { ok: false, deferred: true };
+	const project = projectSlug();
+	try {
+		const data = await adminApi(`/v1/projects/${encodeURIComponent(project)}/mailboxes`, {
+			method: 'POST',
+			body: JSON.stringify({
+				email,
+				password: String(input.password).trim(),
+				display_name: input.displayName?.trim() || undefined
+			})
+		});
+		if (data?.deferred) {
+			console.info('[stalwart-provision] deferred (API missing STALWART_ADMIN_SECRET)', email);
+			return { ok: false, deferred: true };
+		}
+		if (data?.ok) {
+			console.info(
+				'[stalwart-provision] ok',
+				email,
+				data.created === false ? 'updated' : 'created'
+			);
+			return { ok: true, created: data.created !== false };
+		}
+		return { ok: false, error: data?.error || data?.message || 'Mailbox provision failed' };
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		console.warn('[stalwart-provision] failed', email, msg);
+		return { ok: false, error: msg };
+	}
 }
 
 /**
