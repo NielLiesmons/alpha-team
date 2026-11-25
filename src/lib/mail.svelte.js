@@ -1268,9 +1268,14 @@ export async function markMailRead(id) {
 	const thread = findMail(id);
 	if (!me || !thread) return thread;
 
-	const ov = unreadOverrides.get(String(id));
-	/* Don't clobber a fresh mark-unread while the thread is still open / refreshing. */
-	if (ov?.unread && Date.now() < ov.until) return thread;
+	/*
+	 * Reopen / explicit mark-read always wins. The unread override only exists so
+	 * list refresh does not paint-stale $seen before JMAP catches up — it must
+	 * not stick after the user opens the thread again.
+	 */
+	const ovKey = String(id);
+	const ov = unreadOverrides.get(ovKey);
+	if (ov?.unread) unreadOverrides.delete(ovKey);
 
 	if (thread.transport === 'jmap' || Array.isArray(thread.messages)) {
 		const msgs = Array.isArray(thread.messages) ? thread.messages : [thread];

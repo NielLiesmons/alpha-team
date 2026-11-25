@@ -195,7 +195,11 @@
 
 	$effect(() => {
 		const id = threadId;
-		if (!id) return;
+		if (!id) {
+			/* Leave clears the open-id so reopen runs mark-read again. */
+			loadedThreadId = '';
+			return;
+		}
 		rememberMailTip(mailMsg);
 		/* Prefetch comments for the FAB panel; keep mail feed independent. */
 		void loadComments('mail', id).catch(() => {});
