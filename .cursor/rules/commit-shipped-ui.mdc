@@ -1,0 +1,19 @@
+---
+description: Commit shipped UI/chrome fixes before reset/stash so design-system polish cannot vanish on deploy
+alwaysApply: true
+---
+
+# Commit shipped UI before reset / deploy
+
+Settings hub/detail chrome, scroll fades, and design-system polish have been lost when agents left them **uncommitted** and then ran `git reset --hard` / stash-for-conflict while shipping unrelated features.
+
+## Required
+
+- **Commit** shipped product UI fixes (Settings hub/detail, detail pad/fade, shared chrome) to `main` **before** `git reset --hard`, conflict cleanup, or deploy of unrelated work.
+- Prefer `git stash push -m "…"` for unrelated WIP — **do not** discard committed Settings / design-system chrome.
+- **Never** hard-reset over uncommitted Settings / design-system polish when deploying unrelated features.
+- If a fix must ship now: commit that hunk alone (or stash unrelated WIP first), push, then continue.
+
+## Why
+
+Hub restore landed in git (`cac9672`) while detail pad/fade stayed in stash / working tree — deploy agents wiped the latter. Committed chrome survives; WIP does not.

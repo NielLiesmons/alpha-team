@@ -189,7 +189,7 @@
 
 	/** @type {HTMLElement | undefined} */
 	let detailRoot = $state();
-	/** 0 at rest → 1 after ~16px scroll (detail-top / mobile-bar fade) */
+	/** 0 at rest → 1 over CHROME_SCROLL_FADE_PX (detail-top / mobile-bar fade) */
 	let detailFade = $state(0);
 
 	$effect(() => {
@@ -2677,8 +2677,10 @@
 		text-align: center;
 	}
 
+	/* Match Tasks / Notes detail scroll pad + top fader clearance */
 	.body.settings-section-body {
-		padding: 16px 18px 24px;
+		padding: var(--detail-scroll-pad-top, 56px) 24px
+			max(32px, var(--comments-fab-clearance, 0px));
 		overflow: auto;
 	}
 
