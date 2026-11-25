@@ -527,6 +527,8 @@
 	const fabCountLabel = $derived(messages.length > 0 ? String(messages.length) : '');
 	const showFabStack = $derived(messages.length > 0);
 	const showFabSpinner = $derived(commentsPending);
+	/** Round (icon-only) while loading/empty unknown — no pill/width flash. */
+	const fabIconOnly = $derived(!showFabStack);
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -551,38 +553,41 @@
 		<button
 			type="button"
 			class="chat-pill"
-			class:icon-only={!showFabStack && !showFabSpinner}
+			class:icon-only={fabIconOnly}
+			class:loading={showFabSpinner}
 			aria-label={t('comments.title')}
 			aria-busy={showFabSpinner ? 'true' : undefined}
 			onclick={() => void openSheet()}
 		>
-			<svg
-				width="18"
-				height="18"
-				viewBox="0 0 18 19"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1.5"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				<path
-					d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
-				/>
-			</svg>
 			{#if showFabSpinner}
-				<span class="count loader" aria-hidden="true">
+				<span class="fab-loader" aria-hidden="true">
 					<MetaballLoader size="sm" label={t('common.loading')} />
 				</span>
-			{:else if showFabStack}
-				<span class="pill-stack">
-					<ProfilePicStack
-						profiles={commentatorProfiles}
-						size="xxs"
-						text={fabCountLabel}
+			{:else}
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 18 19"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<path
+						d="M9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 13.6944 13.6944 17.5 9 17.5C7.77335 17.5 6.60815 17.2386 5.55507 16.7706C5.3323 16.6716 5.08291 16.6441 4.84737 16.7069L1.79379 17.5216C1.02463 17.7269 0.335703 16.9948 0.587211 16.2395L1.4629 13.6098C1.55241 13.341 1.52084 13.0482 1.39409 12.7948C0.822691 11.6525 0.5 10.3641 0.5 9C0.5 4.30563 4.30565 0.500084 9 0.5Z"
 					/>
-				</span>
+				</svg>
+				{#if showFabStack}
+					<span class="pill-stack">
+						<ProfilePicStack
+							profiles={commentatorProfiles}
+							size="xxs"
+							text={fabCountLabel}
+						/>
+					</span>
+				{/if}
 			{/if}
 		</button>
 	{:else}
@@ -770,21 +775,29 @@
 	}
 
 	.chat-pill.icon-only {
-		/* Symmetric pad when stack/count is hidden */
-		padding: 0 14px;
+		/* Fixed circle — loading + empty share the same footprint (no pill/count expand). */
+		width: 44px;
+		min-width: 44px;
+		padding: 0;
+		justify-content: center;
+		gap: 0;
 	}
 
 	.chat-pill:hover {
 		color: var(--fg);
 	}
 
-	.count.loader {
+	/* Wave replaces chat icon — title-loader ink, stay round via .icon-only. */
+	.chat-pill.loading {
+		--loader-ink: var(--fg-66);
+		color: var(--fg-66);
+	}
+
+	.fab-loader {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 18px;
-		--loader-ink: var(--fg-66);
-		color: var(--fg-66);
+		line-height: 0;
 	}
 
 	.pill-stack {
