@@ -210,10 +210,17 @@ export function createVoiceRecorder() {
 					return;
 				}
 				const ext = mime.includes('mp4') ? 'm4a' : mime.includes('ogg') ? 'ogg' : 'webm';
-				const file = new File([blob], `voice-${Date.now()}.${ext}`, {
-					type: blob.type || mime
-				});
-				resolve({ file, blob, durationMs, bytes: blob.size });
+				/*
+				 * Force an audio/* content type. Some engines report video/webm for
+				 * MediaRecorder opus — that made peers classify the clip as video
+				 * (image skeleton → filename) instead of a voice bubble.
+				 */
+				let type = String(blob.type || mime || '').trim();
+				if (!type.startsWith('audio/')) {
+					type = ext === 'm4a' ? 'audio/mp4' : ext === 'ogg' ? 'audio/ogg' : 'audio/webm';
+				}
+				const file = new File([blob], `voice-${Date.now()}.${ext}`, { type });
+				resolve({ file, blob: new Blob([blob], { type }), durationMs, bytes: blob.size });
 			};
 			try {
 				if (rec.state === 'paused') rec.resume();

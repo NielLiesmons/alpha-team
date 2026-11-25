@@ -286,23 +286,37 @@ async function putMediaSidecars(session, folder, file, kind) {
  *
  * @param {import('./client.js').DriveSession} session
  * @param {File} file
- * @param {{ hd?: boolean }} [opts]
+ * @param {{ hd?: boolean, kind?: 'image' | 'video' | 'voice' | 'file' }} [opts]
  * @returns {Promise<ChatAttachmentMeta>}
  */
 export async function uploadChatAttachment(session, file, opts = {}) {
 	const id = newId();
 	let upload = file;
-	let kind = inferMediaKind({ content_type: upload.type, name: upload.name });
+	const forced =
+		opts.kind === 'image' || opts.kind === 'video' || opts.kind === 'voice' || opts.kind === 'file'
+			? opts.kind
+			: null;
+	let kind =
+		forced ||
+		inferMediaKind({ content_type: upload.type, name: upload.name });
 	if (kind === 'image') {
 		try {
 			upload = await compressImageFile(upload, { hd: Boolean(opts.hd) });
 		} catch {
 			/* keep original if canvas decode fails */
 		}
-		kind = inferMediaKind({ content_type: upload.type, name: upload.name });
+		kind =
+			forced ||
+			inferMediaKind({ content_type: upload.type, name: upload.name });
 	}
 	const safe = upload.name.replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'file';
-	const contentType = mimeFromNameAndType(upload.name, upload.type);
+	let contentType = mimeFromNameAndType(upload.name, upload.type);
+	/* Forced voice + bare .webm must not keep a video/* content_type on the leaf. */
+	if (kind === 'voice' && String(contentType).toLowerCase().startsWith('video/')) {
+		contentType = upload.type?.startsWith?.('audio/')
+			? upload.type
+			: 'audio/webm';
+	}
 	const bytes = new Uint8Array(await upload.arrayBuffer());
 	const chunked = upload.size > 512 * 1024 || kind === 'video' || kind === 'voice';
 	const created_at = fileCreatedAt(upload);
@@ -343,11 +357,15 @@ export async function uploadChatAttachment(session, file, opts = {}) {
 
 	if (kind === 'voice') {
 		const path = `media/audio/clips/${id}/media.json`;
-		await putMediaBlob(session, path, contentType, bytes, { created_at });
+		/* Peers classify by content_type when kind is dropped — never store video/*. */
+		const voiceType = contentType.startsWith('audio/')
+			? contentType
+			: mimeFromNameAndType(upload.name, 'audio/webm');
+		await putMediaBlob(session, path, voiceType, bytes, { created_at });
 		/** @type {ChatAttachmentMeta} */
 		const meta = {
 			path,
-			content_type: contentType,
+			content_type: voiceType,
 			kind: 'voice',
 			name: upload.name,
 			bytes: upload.size
@@ -2784,25 +2802,43 @@ export async function createChatMessage(session, input, opts = {}) {
 		...(input.reply_to ? { reply_to: input.reply_to } : {}),
 		...(Array.isArray(input.attachments) && input.attachments.length
 			? {
-					attachments: input.attachments.map((a) => ({
-						path: String(a.path || ''),
-						content_type: String(a.content_type || 'application/octet-stream'),
-						kind: a.kind === 'image' || a.kind === 'video' || a.kind === 'voice' ? a.kind : 'file',
-						...(a.name ? { name: String(a.name) } : {}),
-						...(typeof a.bytes === 'number' ? { bytes: a.bytes } : {}),
-						...(typeof a.duration_ms === 'number' ? { duration_ms: a.duration_ms } : {}),
-						...(typeof a.caption === 'string' && a.caption.trim()
-							? { caption: a.caption.trim().slice(0, 2000) }
-							: {}),
-						...(typeof a.blurhash === 'string' && a.blurhash
-							? { blurhash: String(a.blurhash).slice(0, 128) }
-							: {}),
-						...(typeof a.thumb_path === 'string' && a.thumb_path
-							? { thumb_path: String(a.thumb_path) }
-							: {}),
-						...(typeof a.width === 'number' ? { width: a.width } : {}),
-						...(typeof a.height === 'number' ? { height: a.height } : {})
-					}))
+					attachments: input.attachments.map((a) => {
+						const inferred = inferMediaKind(a);
+						const kind =
+							a.kind === 'image' || a.kind === 'video' || a.kind === 'voice'
+								? a.kind
+								: inferred === 'image' || inferred === 'video' || inferred === 'voice'
+									? inferred
+									: 'file';
+						const rawCt = String(
+							a.content_type ||
+								mimeFromNameAndType(a.name, '') ||
+								'application/octet-stream'
+						);
+						const content_type =
+							kind === 'voice' && !rawCt.toLowerCase().startsWith('audio/')
+								? mimeFromNameAndType(a.name, 'audio/webm')
+								: rawCt;
+						return {
+							path: String(a.path || ''),
+							content_type,
+							kind,
+							...(a.name ? { name: String(a.name) } : {}),
+							...(typeof a.bytes === 'number' ? { bytes: a.bytes } : {}),
+							...(typeof a.duration_ms === 'number' ? { duration_ms: a.duration_ms } : {}),
+							...(typeof a.caption === 'string' && a.caption.trim()
+								? { caption: a.caption.trim().slice(0, 2000) }
+								: {}),
+							...(typeof a.blurhash === 'string' && a.blurhash
+								? { blurhash: String(a.blurhash).slice(0, 128) }
+								: {}),
+							...(typeof a.thumb_path === 'string' && a.thumb_path
+								? { thumb_path: String(a.thumb_path) }
+								: {}),
+							...(typeof a.width === 'number' ? { width: a.width } : {}),
+							...(typeof a.height === 'number' ? { height: a.height } : {})
+						};
+					})
 				}
 			: {})
 	};

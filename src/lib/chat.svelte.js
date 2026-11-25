@@ -18,6 +18,7 @@ import {
 } from './drive/entities.js';
 import { recentEmojis, rememberEmoji } from './emoji.js';
 import { peekCachedChatTip } from './drive/client.js';
+import { normalizeChatAttachment } from './drive/media-kind.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
 import { mailTipFor } from './mail.svelte.js';
@@ -462,12 +463,11 @@ function mergeFeedRows(list, prev) {
 				const nextAtt = Array.isArray(server.attachments) ? server.attachments : [];
 				const merged = {
 					...server,
-					attachments: nextAtt.map((a) => ({
-						...a,
-						...(prevAtt.find((p) => p?.path === a?.path)?.previewUrl
-							? { previewUrl: prevAtt.find((p) => p?.path === a?.path)?.previewUrl }
-							: {})
-					}))
+					attachments: nextAtt.map((a) => {
+						const norm = normalizeChatAttachment(a);
+						const prevUrl = prevAtt.find((p) => p?.path === a?.path)?.previewUrl;
+						return prevUrl ? { ...norm, previewUrl: prevUrl } : norm;
+					})
 				};
 				delete merged._hint;
 				byId.set(id, merged);
@@ -925,6 +925,10 @@ export function applyMessageHint(hint) {
 	/* Message landed — drop "is typing" under the new bubble immediately. */
 	clearChatEphemeralForActor(author, { channel_id: channelId, at: createdAt });
 
+	const attachments = Array.isArray(hint.attachments)
+		? hint.attachments.map((a) => normalizeChatAttachment(a))
+		: undefined;
+
 	const existingIdx = chatFeed.findIndex((m) => String(m?.id || '') === id);
 	if (existingIdx >= 0) {
 		const prev = chatFeed[existingIdx];
@@ -937,6 +941,7 @@ export function applyMessageHint(hint) {
 			id,
 			author,
 			kind,
+			...(attachments ? { attachments } : {}),
 			_hint: true,
 			delivery: prev.delivery || 'sent',
 			read_by: Array.isArray(prev.read_by) ? prev.read_by : []
@@ -956,6 +961,7 @@ export function applyMessageHint(hint) {
 		channel_id: channelId,
 		delivery: 'sent',
 		read_by: Array.isArray(hint.read_by) ? hint.read_by : [],
+		...(attachments ? { attachments } : {}),
 		_hint: true
 	});
 	writeChatCache(chatFeed);

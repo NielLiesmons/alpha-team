@@ -913,11 +913,16 @@
 				...(pubRef ? {} : { channel_id: channelId }),
 				attachments: [localAtt],
 				resolveAttachments: async () => {
-					const meta = await uploadChatAttachment(session, result.file);
+					/* Force voice so .webm never lands under media/video as a misclassified clip. */
+					const meta = await uploadChatAttachment(session, result.file, { kind: 'voice' });
 					return [
 						{
 							...meta,
 							kind: 'voice',
+							content_type:
+								meta.content_type ||
+								result.file.type ||
+								mimeFromNameAndType(result.file.name, 'audio/webm'),
 							previewUrl,
 							duration_ms: result.durationMs
 						}

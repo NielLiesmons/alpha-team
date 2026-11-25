@@ -187,13 +187,46 @@ function messageHintPayload(message) {
 	if (Array.isArray(message.attachments) && message.attachments.length) {
 		out.attachments = message.attachments.slice(0, 8).map((a) => {
 			const row = /** @type {Record<string, unknown>} */ (a || {});
+			/* Infer when kind was dropped — peers must paint voice player, not file chip. */
+			let kind =
+				row.kind === 'image' || row.kind === 'video' || row.kind === 'voice'
+					? row.kind
+					: 'file';
+			if (kind === 'file') {
+				try {
+					/* Lazy import avoided — keep hint sync + tiny. Inline path/MIME checks. */
+					const ct = String(row.content_type || '').toLowerCase();
+					const name = String(row.name || '');
+					const path = String(row.path || '');
+					if (
+						ct.startsWith('audio/') ||
+						path.includes('/audio/clips/') ||
+						/^voice[-_]/i.test(name)
+					) {
+						kind = 'voice';
+					} else if (ct.startsWith('image/') || path.includes('/photos/')) {
+						kind = 'image';
+					} else if (ct.startsWith('video/') || path.includes('/video/items/')) {
+						kind = 'video';
+					}
+				} catch {
+					/* keep file */
+				}
+			}
+			const contentType = String(
+				row.content_type ||
+					(kind === 'voice'
+						? 'audio/webm'
+						: kind === 'image'
+							? 'image/jpeg'
+							: kind === 'video'
+								? 'video/mp4'
+								: 'application/octet-stream')
+			);
 			return {
 				path: String(row.path || ''),
-				content_type: String(row.content_type || 'application/octet-stream'),
-				kind:
-					row.kind === 'image' || row.kind === 'video' || row.kind === 'voice'
-						? row.kind
-						: 'file',
+				content_type: contentType,
+				kind,
 				...(row.name ? { name: String(row.name) } : {}),
 				...(typeof row.bytes === 'number' ? { bytes: row.bytes } : {}),
 				...(typeof row.duration_ms === 'number' ? { duration_ms: row.duration_ms } : {}),
