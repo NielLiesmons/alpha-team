@@ -33,9 +33,12 @@
 		ui
 	} from '$lib/workspace.svelte.js';
 	import UnreadMark from '@alpha/ui/UnreadMark.svelte';
+	import Menu from '@alpha/ui/icons/Menu.svelte';
+	import Archive from './icons/Archive.svelte';
 	import At from './icons/At.svelte';
 	import Heart from './icons/Heart.svelte';
 	import Reply from './icons/Reply.svelte';
+	import UnreadDot from './icons/UnreadDot.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
@@ -163,9 +166,9 @@
 		}
 		if (path.startsWith('/mail')) {
 			return [
-				{ id: 'all', label: t('filter.all') },
-				{ id: 'unread', label: t('filter.unread') },
-				{ id: 'archived', label: t('filter.archived') }
+				{ id: 'all', label: t('filter.all'), icon: Menu },
+				{ id: 'unread', label: t('filter.unread'), icon: UnreadDot },
+				{ id: 'archived', label: t('filter.archived'), icon: Archive }
 			];
 		}
 		if (path.startsWith('/photos')) {

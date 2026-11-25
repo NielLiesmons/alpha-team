@@ -10,8 +10,8 @@
 	import TaskFieldPicker from './TaskFieldPicker.svelte';
 	import ArrowRight from './icons/ArrowRight.svelte';
 	import Junk from './icons/Junk.svelte';
-	import MailUnread from './icons/MailUnread.svelte';
 	import Pen from './icons/Pen.svelte';
+	import UnreadDot from './icons/UnreadDot.svelte';
 	import Reply from './icons/Reply.svelte';
 	import ReplyAll from './icons/ReplyAll.svelte';
 	import Share from './icons/Share.svelte';
@@ -75,7 +75,10 @@
 	import ChromeMobileBar from '@alpha/ui/ChromeMobileBar.svelte';
 	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 	import DetailTitleRow from '@alpha/ui/DetailTitleRow.svelte';
+	import Heart from './icons/Heart.svelte';
+	import Menu from '@alpha/ui/icons/Menu.svelte';
 	import MoreDots from './icons/MoreDots.svelte';
+	import TaskOpen from './icons/TaskOpen.svelte';
 	import TipTypeIcon from './TipTypeIcon.svelte';
 	import NotifFilterButton from './NotifFilterButton.svelte';
 	import { sectionForPath } from '$lib/drive/change-summary.svelte.js';
@@ -741,12 +744,12 @@
 
 	const activityFilterOptions = $derived.by(() => {
 		locale.value;
-		/** @type {{ id: 'all' | 'reaction' | 'reply' | 'assigned', label: string }[]} */
+		/** @type {{ id: 'all' | 'reaction' | 'reply' | 'assigned', label: string, icon: import('svelte').Component<any> }[]} */
 		return [
-			{ id: 'all', label: t('filter.all') },
-			{ id: 'reaction', label: t('chat.activityFilterReactions') },
-			{ id: 'reply', label: t('chat.activityFilterReplies') },
-			{ id: 'assigned', label: t('chat.activityFilterAssigned') }
+			{ id: 'all', label: t('filter.all'), icon: Menu },
+			{ id: 'reaction', label: t('chat.activityFilterReactions'), icon: Heart },
+			{ id: 'reply', label: t('chat.activityFilterReplies'), icon: Reply },
+			{ id: 'assigned', label: t('chat.activityFilterAssigned'), icon: TaskOpen }
 		];
 	});
 	/** 0..1 while edge-swiping back; null when idle. Drives list underlay in UiShell. */
@@ -983,7 +986,7 @@
 						<span class="alpha-popover-label">{t('mail.forward')}</span>
 					</button>
 					<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={mailMarkUnread}>
-						<span class="alpha-popover-ico"><MailUnread size={14} /></span>
+						<span class="alpha-popover-ico"><UnreadDot size={14} /></span>
 						<span class="alpha-popover-label">{t('mail.markUnread')}</span>
 					</button>
 					<button type="button" class="alpha-popover-item dropdown-item" role="menuitem" onclick={() => mailMove('junk')}>

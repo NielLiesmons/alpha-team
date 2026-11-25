@@ -1,13 +1,13 @@
 <script>
 	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
+	import Archive from '$lib/components/icons/Archive.svelte';
 	import ArrowRight from '$lib/components/icons/ArrowRight.svelte';
-	import Folder from '$lib/components/icons/Folder.svelte';
 	import Junk from '$lib/components/icons/Junk.svelte';
-	import MailUnread from '$lib/components/icons/MailUnread.svelte';
 	import Reply from '$lib/components/icons/Reply.svelte';
 	import ReplyAll from '$lib/components/icons/ReplyAll.svelte';
 	import Trash from '$lib/components/icons/Trash.svelte';
+	import UnreadDot from '$lib/components/icons/UnreadDot.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import ProfilePicStack from '$lib/components/ProfilePicStack.svelte';
 	import SegmentedControl from '@alpha/ui/SegmentedControl.svelte';
@@ -160,7 +160,7 @@
 			{
 				id: 'read',
 				label: unread ? t('mail.markRead') : t('mail.markUnread'),
-				icon: MailUnread,
+				icon: UnreadDot,
 				onclick: () => menuToggleRead()
 			},
 			...(mailView.folder === 'archive'
@@ -169,7 +169,7 @@
 						{
 							id: 'archive',
 							label: t('mail.moveToArchive'),
-							icon: Folder,
+							icon: Archive,
 							onclick: () => menuMove('archive')
 						}
 					]),
@@ -687,7 +687,10 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 999px;
-		background: var(--fg);
+		background: var(
+			--gradient-accent-1,
+			radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%)
+		);
 		flex-shrink: 0;
 	}
 
