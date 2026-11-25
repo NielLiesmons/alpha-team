@@ -220,7 +220,8 @@
 			selected = (selected - 1 + items.length) % items.length;
 			return true;
 		}
-		if (e.key === 'Enter' || e.key === 'Tab') {
+		/* Plain Enter / Tab choose; leave Cmd/Ctrl+Enter for composer send. */
+		if ((e.key === 'Enter' && !e.metaKey && !e.ctrlKey) || e.key === 'Tab') {
 			e.preventDefault();
 			e.stopImmediatePropagation();
 			choose(items[selected]);

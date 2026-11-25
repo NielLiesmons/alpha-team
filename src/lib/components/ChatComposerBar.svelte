@@ -1143,7 +1143,11 @@
 
 	/** @param {KeyboardEvent} e */
 	function onKey(e) {
-		if (e.key === 'Enter' && !e.shiftKey) {
+		/*
+		 * Send = button or Cmd/Ctrl+Enter (desktop). Plain Enter inserts a
+		 * newline in the contenteditable — never submits.
+		 */
+		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault();
 			void send();
 			return;
