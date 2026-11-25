@@ -54,6 +54,11 @@
 	 *   mobileSections?: (ShellSection | ShellNavGroup)[] | null,
 	 *   activeHref?: string,
 	 *   title?: string,
+	 *   /**
+	 *    * Mobile title-pill section icon. `false` = text (+ chevron) only;
+	 *    * string = force that nav key; omit = matched active section PNG.
+	 *    */
+	 *   titleIcon?: string | false,
 	 *   counts?: Record<string, number>,
 	 *   unreadCounts?: Record<string, number>,
 	 *   wideList?: boolean,
@@ -95,6 +100,8 @@
 		mobileSections: _mobileSections = null,
 		activeHref = '',
 		title = '',
+		/** @type {string | false | undefined} */
+		titleIcon = undefined,
 		counts = {},
 		/** Targeted-at-you unread (accent UnreadMark). `counts` = muted “new” totals. */
 		unreadCounts = {},
@@ -815,7 +822,7 @@
 			<span class="side-spacer"></span>
 			{#if searchEnabled}
 				<button type="button" class="top-search" aria-label="Search" onclick={openSearch}>
-					<Search size={13} />
+					<Search size={isMobileViewport ? 18 : 13} />
 				</button>
 			{/if}
 			{#if createMenuItems.length}
@@ -1071,9 +1078,31 @@
 					aria-hidden={listTopHidden || undefined}
 				>
 					{#if isMobileViewport}
-						{@const pillFav = String(activeItem.faviconUrl || '').trim()}
+						{@const pillMatched =
+							Boolean(activeHref) &&
+							(activeItem.href === activeHref ||
+								(activeItem.href
+									? activeHref.startsWith(`${activeItem.href}/`)
+									: false) ||
+								active(activeItem.href))}
+						{@const pillFav =
+							titleIcon === false
+								? ''
+								: typeof titleIcon === 'string'
+									? ''
+									: pillMatched
+										? String(activeItem.faviconUrl || '').trim()
+										: ''}
 						{@const pillBrand = Boolean(pillFav && activeItem.spaceBrand)}
-						{@const pillPng = pillFav ? null : navPngUrl(activeItem.icon)}
+						{@const pillPng =
+							titleIcon === false || pillFav
+								? null
+								: typeof titleIcon === 'string'
+									? navPngUrl(titleIcon)
+									: /* Off-nav roots (Settings) fall back to Chat in activeItem — never paint Chat’s PNG on a foreign title. */
+										pillMatched
+										? navPngUrl(activeItem.icon)
+										: null}
 						{@const pillCompact = menuProgress > 0.55}
 						<button
 							type="button"
@@ -2533,15 +2562,11 @@
 			border-radius: 9999px;
 		}
 
-		/* Search glyph a touch larger than desktop chrome */
-		.top-search :global(.icon) {
+		/* Nav Search glyph — fully :global so Svelte won’t strip unused .icon */
+		:global(.top-search .icon),
+		:global(.top-search svg) {
 			width: 18px !important;
 			height: 18px !important;
-		}
-
-		.top-search :global(svg) {
-			width: 18px;
-			height: 18px;
 		}
 
 		/* Match chat bubble body; scale icons/Mail pill with it (~20px radius). */

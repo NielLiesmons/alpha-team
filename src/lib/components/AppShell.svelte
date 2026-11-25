@@ -568,11 +568,13 @@
 	}
 </script>
 
+<!-- Settings: text-only title pill (no section PNG). Detail back chevrons stay in DetailChrome. -->
 <UiShell
 	sections={roleNav}
 	mobileSections={roleMobileNav}
 	activeHref={activeItem.href}
 	title={chromeTitle}
+	titleIcon={path.startsWith('/settings') ? false : undefined}
 	{counts}
 	{unreadCounts}
 	{wideList}
