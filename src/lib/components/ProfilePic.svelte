@@ -30,19 +30,22 @@
 			? `rgba(${color.r}, ${color.g}, ${color.b}, 0.24)`
 			: 'color-mix(in srgb, var(--fg) 10%, transparent)'
 	);
-	const fontSize = $derived(Math.round(size * 0.56));
-	const iconW = $derived(Math.round(size * 0.42));
+	/* `size` is design-px at --ui-scale:1; render rem so avatars track root rem. */
+	const rem = $derived(size / 16);
+	const fontSizeRem = $derived((Math.round(size * 0.56) / 16));
+	const iconWRem = $derived((Math.round(size * 0.42) / 16));
+	const iconHRem = $derived((Math.round(Math.round(size * 0.42) * (20 / 16)) / 16));
 	const hasPicture = $derived(Boolean(pictureUrl && String(pictureUrl).trim()));
 </script>
 
 <div
 	class="profile-pic"
 	class:bare
-	style:width="{size}px"
-	style:height="{size}px"
+	style:width="{rem}rem"
+	style:height="{rem}rem"
 	aria-hidden="true"
 >
-	<div class="inner" style:background={bg} style:color={text} style:font-size="{fontSize}px">
+	<div class="inner" style:background={bg} style:color={text} style:font-size="{fontSizeRem}rem">
 		{#if hasPicture}
 			<img class="photo" src={pictureUrl} alt="" />
 		{:else if initial}
@@ -51,8 +54,8 @@
 			<!-- Zapstore person glyph (head + shoulders) -->
 			<svg
 				class="user-icon"
-				width={iconW}
-				height={Math.round(iconW * (20 / 16))}
+				style:width="{iconWRem}rem"
+				style:height="{iconHRem}rem"
 				viewBox="0 0 16 20"
 				fill="currentColor"
 				aria-hidden="true"

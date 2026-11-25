@@ -21,6 +21,9 @@
 
 	const displayed = $derived(profiles.slice(0, 3));
 	const metrics = $derived(sizeMap[size] ?? sizeMap.xs);
+	/* Design-px → rem so stack geometry tracks --ui-scale with ProfilePic. */
+	const overlapRem = $derived(`${metrics.overlap / 16}rem`);
+	const heightRem = $derived(`${metrics.height / 16}rem`);
 	/* Keep numeric 0 — `{#if text}` is false for number 0. */
 	const pillLabel = $derived(text == null || text === '' ? '' : String(text));
 </script>
@@ -33,7 +36,7 @@
 					<div
 						class="pic"
 						style:z-index={displayed.length - i}
-						style:margin-left={i === 0 ? '0' : `-${metrics.overlap}px`}
+						style:margin-left={i === 0 ? '0' : `-${overlapRem}`}
 					>
 						<ProfilePic
 							name={profile.name ?? ''}
@@ -48,8 +51,8 @@
 		{#if pillLabel}
 			<div
 				class="pill"
-				style:height="{metrics.height}px"
-				style:margin-left={displayed.length ? `-${metrics.overlap}px` : '0'}
+				style:height={heightRem}
+				style:margin-left={displayed.length ? `-${overlapRem}` : '0'}
 			>
 				<span>{pillLabel}</span>
 			</div>
@@ -63,7 +66,7 @@
 					<div
 						class="pic"
 						style:z-index={displayed.length - i}
-						style:margin-left={i === 0 ? '0' : `-${metrics.overlap}px`}
+						style:margin-left={i === 0 ? '0' : `-${overlapRem}`}
 					>
 						<ProfilePic
 							name={profile.name ?? ''}
@@ -78,8 +81,8 @@
 		{#if pillLabel}
 			<div
 				class="pill"
-				style:height="{metrics.height}px"
-				style:margin-left={displayed.length ? `-${metrics.overlap}px` : '0'}
+				style:height={heightRem}
+				style:margin-left={displayed.length ? `-${overlapRem}` : '0'}
 			>
 				<span>{pillLabel}</span>
 			</div>
@@ -121,7 +124,7 @@
 	}
 
 	.pic:not(:last-child) :global(.profile-pic) {
-		box-shadow: 4px 0 8px -2px var(--black66);
+		box-shadow: 0.25rem 0 0.5rem -0.125rem var(--black66);
 	}
 
 	.pill {
@@ -131,7 +134,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 0 8px;
+		padding: 0 0.5rem;
 		background: var(--white8, var(--fg-8, color-mix(in srgb, var(--fg, var(--ink)) 8%, transparent)));
 		border-radius: 9999px;
 		min-width: 0;
@@ -143,7 +146,7 @@
 
 	/* Overlap into the last avatar when stack is present. */
 	.pics + .pill {
-		padding: 0 10px 0 14px;
+		padding: 0 0.625rem 0 0.875rem;
 	}
 
 	.pill span {
