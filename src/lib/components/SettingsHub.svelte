@@ -246,7 +246,12 @@
 								toggleProfiles();
 							}}
 						>
-							<svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+							<svg
+								style="width:1.125rem;height:1.125rem"
+								viewBox="0 0 16 16"
+								fill="none"
+								aria-hidden="true"
+							>
 								<path
 									d="M4 6.5 8 10.5 12 6.5"
 									stroke="currentColor"
@@ -290,7 +295,7 @@
 					{/each}
 					<button type="button" class="add-row" onclick={() => (addProfileOpen = true)}>
 						<span class="add-plus" aria-hidden="true">
-							<svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+							<svg style="width:1.125rem;height:1.125rem" viewBox="0 0 16 16" fill="none">
 								<path
 									d="M8 3.25v9.5M3.25 8h9.5"
 									stroke="currentColor"
@@ -362,7 +367,7 @@
 <style>
 	/* Match Tasks feed card-stack inset — feed already owns top/bottom chrome pad */
 	.hub {
-		padding: 4px 6px 10px;
+		padding: 0.25rem 0.375rem 0.625rem;
 		box-sizing: border-box;
 		max-width: 720px;
 	}
@@ -382,11 +387,11 @@
 		position: relative;
 		z-index: 4;
 		width: 100%;
-		border-radius: 16px;
+		border-radius: var(--radius-16, 1rem);
 		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
 		overflow: hidden;
 		box-sizing: border-box;
-		/* Slightly larger selected — grow inward so hub L/R pad (Tasks 6px) stays */
+		/* Slightly larger selected — grow inward so hub L/R pad (Tasks 0.375rem) stays */
 		transform: scale(1);
 		transform-origin: top center;
 		transition:
@@ -403,18 +408,18 @@
 
 	/* Flat bottom only while decoy stack layers sit underneath */
 	.card.stacked {
-		border-radius: 16px 16px 0 0;
+		border-radius: var(--radius-16, 1rem) var(--radius-16, 1rem) 0 0;
 	}
 
 	.face {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 16px 10px 16px 14px;
+		gap: 0.5rem;
+		padding: 1rem 0.625rem 1rem 0.875rem;
 		box-sizing: border-box;
 		margin: 0;
 		background: transparent;
-		min-height: 84px;
+		min-height: 5.25rem;
 	}
 
 	.face-main,
@@ -423,7 +428,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: 0.75rem;
 		border: 0;
 		background: transparent;
 		padding: 0;
@@ -436,21 +441,21 @@
 	.face-actions {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.375rem;
 		flex-shrink: 0;
 	}
 
 	.meta {
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 0.1875rem;
 		min-width: 0;
 	}
 
 	.name-row {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.375rem;
 		min-width: 0;
 	}
 
@@ -522,11 +527,11 @@
 
 	.layer {
 		--i: 1;
-		width: calc(100% - var(--i) * 18px);
-		height: calc(10px - var(--i) * 1.5px);
+		width: calc(100% - var(--i) * 1.125rem);
+		height: calc(0.625rem - var(--i) * 0.09375rem);
 		margin: 0;
 		margin-top: 0;
-		border-radius: 0 0 calc(14px - var(--i) * 3px) calc(14px - var(--i) * 3px);
+		border-radius: 0 0 calc(0.875rem - var(--i) * 0.1875rem) calc(0.875rem - var(--i) * 0.1875rem);
 		background: color-mix(in srgb, var(--fg) calc(7.5% - var(--i) * 1.5%), transparent);
 		z-index: calc(3 - var(--i));
 		pointer-events: none;
@@ -554,20 +559,20 @@
 	.row-card {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 14px 10px 14px 16px;
+		gap: 0.5rem;
+		padding: 0.875rem 0.625rem 0.875rem 1rem;
 		border-top: 1px solid var(--fg-8, var(--white11));
 		box-sizing: border-box;
 		margin: 0;
-		min-height: 76px;
+		min-height: 4.75rem;
 	}
 
 	.add-row {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: 0.75rem;
 		width: 100%;
-		padding: 14px 16px;
+		padding: 0.875rem 1rem;
 		border: 0;
 		border-top: 1px solid var(--fg-8, var(--white11));
 		background: transparent;
@@ -577,7 +582,7 @@
 		font-weight: 600;
 		cursor: pointer;
 		text-align: left;
-		min-height: 72px;
+		min-height: 4.5rem;
 		box-sizing: border-box;
 	}
 
@@ -587,12 +592,12 @@
 
 	/* Match list-plus chrome: stroked circle + glyph, not a one-off text + */
 	.add-plus {
-		width: 40px;
-		height: 40px;
+		width: 2.5rem;
+		height: 2.5rem;
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		border: 1.5px solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
+		border: 0.09375rem solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
 		color: var(--fg-66, var(--white66));
 		box-sizing: border-box;
 		flex-shrink: 0;
@@ -605,14 +610,14 @@
 	}
 
 	.toast {
-		margin: 10px 0 0;
+		margin: 0.625rem 0 0;
 		font-size: 0.8125rem;
 		color: var(--fg-66, var(--white66));
 	}
 
 	.sections {
 		list-style: none;
-		margin: 18px 0 0;
+		margin: 1.125rem 0 0;
 		padding: 0;
 		display: flex;
 		flex-direction: column;
@@ -623,18 +628,18 @@
 	}
 
 	.sections.pushed {
-		margin-top: 22px;
-		transform: translateY(4px);
+		margin-top: 1.375rem;
+		transform: translateY(0.25rem);
 	}
 
 	.section-row {
 		width: 100%;
 		display: flex;
 		align-items: center;
-		gap: 12px;
-		padding: 10px;
+		gap: 0.75rem;
+		padding: 0.625rem;
 		border: 0;
-		border-radius: 14px;
+		border-radius: 0.875rem;
 		background: transparent;
 		color: inherit;
 		font: inherit;
@@ -655,9 +660,9 @@
 	/* Glass rounded square + quiet glyph fill (--fg-66) for every section */
 	.section-ico {
 		flex-shrink: 0;
-		width: 44px;
-		height: 44px;
-		border-radius: 12px;
+		width: var(--chrome-mobile, 2.75rem);
+		height: var(--chrome-mobile, 2.75rem);
+		border-radius: 0.75rem;
 		display: grid;
 		place-items: center;
 		border: 1px solid transparent;
@@ -678,8 +683,8 @@
 
 	.admin-glyph {
 		display: block;
-		width: 20px;
-		height: 15px;
+		width: 1.25rem;
+		height: 0.9375rem;
 		background: var(
 			--gradient-accent-2,
 			radial-gradient(circle at top left, #ffc736 0%, #ffa037 100%)
@@ -697,9 +702,9 @@
 	/* Nested glass square + accent-1 unread-style dot at top-right */
 	.notif-inner {
 		position: relative;
-		width: 22px;
-		height: 22px;
-		border-radius: 7px;
+		width: var(--chrome-icon, 1.375rem);
+		height: var(--chrome-icon, 1.375rem);
+		border-radius: 0.4375rem;
 		border: 1px solid transparent;
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
@@ -709,16 +714,16 @@
 
 	.notif-dot {
 		position: absolute;
-		top: -3px;
-		right: -3px;
-		width: 9px;
-		height: 9px;
+		top: -0.1875rem;
+		right: -0.1875rem;
+		width: 0.5625rem;
+		height: 0.5625rem;
 		border-radius: 999px;
 		background: var(
 			--gradient-accent-1,
 			radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%)
 		);
-		box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--bg, #000) 55%, transparent);
+		box-shadow: 0 0 0 0.09375rem color-mix(in srgb, var(--bg, #000) 55%, transparent);
 	}
 
 	.section-text {
@@ -726,7 +731,7 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 0.125rem;
 	}
 
 	.section-title {
