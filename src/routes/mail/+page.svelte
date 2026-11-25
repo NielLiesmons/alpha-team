@@ -273,7 +273,7 @@
 >
 
 <div class="feed mail">
-	{#if mailView.folder === 'inbox'}
+	{#if mailView.folder === 'mailbox' || mailView.folder === 'inbox'}
 		<div class="category-seg">
 			<SegmentedControl
 				options={categoryOptions}

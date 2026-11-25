@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * List chrome title for Mail — plain Inbox/Sent/… text (no chevron / dropdown).
-	 * Folder picks live in the nav drawer children.
+	 * List chrome title for Mail — plain In / Out / Drafts / … (no chevron / dropdown).
+	 * Folder picks live as nested sub-items under the Mail nav title row.
 	 */
 	import { mailFolderLabel, mailView } from '$lib/mail-view.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
@@ -10,7 +10,7 @@
 	import { t } from '$lib/i18n.svelte.js';
 	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 
-	const label = $derived(mailFolderLabel(mailView.folder) || t('mail.inbox'));
+	const label = $derived(mailFolderLabel(mailView.folder) || t('mail.mailbox'));
 	const syncing = $derived(
 		isSectionSyncing('mail') || mailUi.loading || driveSession.syncing
 	);

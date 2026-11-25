@@ -1,14 +1,14 @@
 /**
- * Mail folder (Inbox / Sent / …) + triage category (Primary / New / …).
+ * Mail folder (In / Out / Drafts / …) + triage category (Primary / New / …).
  */
 import { t } from '$lib/i18n.svelte.js';
 
-/** @typedef {'inbox' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'} MailFolder */
+/** @typedef {'mailbox' | 'inbox' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'} MailFolder */
 /** @typedef {'primary' | 'new' | 'updates' | 'other'} MailCategory */
 
+/** Nav folders — unified inbox+sent is `mailbox` (“In / Out”). */
 export const MAIL_FOLDERS = /** @type {const} */ ([
-	'inbox',
-	'sent',
+	'mailbox',
 	'drafts',
 	'archive',
 	'junk',
@@ -17,6 +17,7 @@ export const MAIL_FOLDERS = /** @type {const} */ ([
 
 /** i18n keys per folder — use mailFolderLabel() to translate. */
 export const MAIL_FOLDER_LABEL_KEYS = {
+	mailbox: 'mail.mailbox',
 	inbox: 'mail.inbox',
 	sent: 'mail.sent',
 	drafts: 'mail.drafts',
@@ -31,8 +32,9 @@ export function mailFolderLabel(folder) {
 	return key ? t(key) : folder;
 }
 
-/** JMAP Mailbox role for each folder. */
+/** JMAP Mailbox role for each folder. `mailbox` is inbox+sent (handled in refresh). */
 export const MAIL_FOLDER_ROLES = {
+	mailbox: 'inbox',
 	inbox: 'inbox',
 	sent: 'sent',
 	drafts: 'drafts',
@@ -60,17 +62,20 @@ export function mailCategoryLabel(category) {
 
 export const mailView = $state({
 	/** @type {MailFolder} */
-	folder: 'inbox',
+	folder: 'mailbox',
 	/** @type {MailCategory} */
 	category: 'primary'
 });
 
 /**
- * @param {MailFolder} folder
+ * @param {MailFolder | string} folder
  */
 export function setMailFolder(folder) {
-	if (!MAIL_FOLDERS.includes(folder)) return;
-	mailView.folder = folder;
+	/* Legacy inbox/sent nav ids collapse into unified mailbox. */
+	const next =
+		folder === 'inbox' || folder === 'sent' ? 'mailbox' : folder;
+	if (!MAIL_FOLDERS.includes(/** @type {typeof MAIL_FOLDERS[number]} */ (next))) return;
+	mailView.folder = /** @type {MailFolder} */ (next);
 }
 
 /**

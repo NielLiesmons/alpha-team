@@ -371,7 +371,7 @@ export default {
 	'mail.unread': 'Unread',
 	'mail.newMailsChip': '{n} New Mails',
 	'mail.category': 'Mail category',
-	'mail.mailbox': 'Mailbox',
+	'mail.mailbox': 'In / Out',
 	'mail.closeMailboxMenu': 'Close mailbox menu',
 	'mail.message': 'Message',
 	'mail.cancelReply': 'Cancel reply',

@@ -11,6 +11,7 @@
 	import SheetTopbar from './SheetTopbar.svelte';
 	import UnreadMark from './UnreadMark.svelte';
 	import Search from './icons/Search.svelte';
+	import ChevronRight from './icons/ChevronRight.svelte';
 	import PullToRefresh from './PullToRefresh.svelte';
 
 	/**
@@ -62,7 +63,7 @@
 	 *   syncing?: boolean,
 	 *   searchEnabled?: boolean,
 	 *   feedPadClass?: string,
-	 *   filterOptions?: { id: string, label: string }[] | null,
+	 *   filterOptions?: { id: string, label: string, icon?: import('svelte').Component<any> }[] | null,
 	 *   filterValue?: string,
 	 *   createMenuItems?: { kind: string, label: string, icon?: string }[],
 	 *   createKind?: string | undefined,
@@ -1101,17 +1102,32 @@
 											aria-label="Close filter"
 											onclick={() => (filterOpen = false)}
 										></button>
-										<div class="filter-menu" role="listbox">
-											{#each filterOptions as opt (opt.id)}
-												<button
-													type="button"
-													class:on={filterValue === opt.id}
-													onclick={() => {
-														onFilterChange(opt.id);
-														filterOpen = false;
-													}}>{opt.label}</button
-												>
-											{/each}
+										<div class="filter-menu alpha-popover" role="listbox">
+											<div class="alpha-popover-list">
+												{#each filterOptions as opt (opt.id)}
+													{@const Icon = opt.icon}
+													<button
+														type="button"
+														class="alpha-popover-item"
+														class:on={filterValue === opt.id}
+														role="option"
+														aria-selected={filterValue === opt.id}
+														onclick={() => {
+															onFilterChange(opt.id);
+															filterOpen = false;
+														}}
+													>
+														<span class="alpha-popover-ico" aria-hidden="true">
+															{#if Icon}
+																<Icon size={16} />
+															{:else}
+																<ChevronRight size={14} />
+															{/if}
+														</span>
+														<span class="alpha-popover-label">{opt.label}</span>
+													</button>
+												{/each}
+											</div>
 										</div>
 									{/if}
 								</div>
@@ -1666,17 +1682,20 @@
 		z-index: 50;
 		min-width: 168px;
 		padding: 0;
+		overflow: hidden;
+	}
+
+	/* Legacy create-menu rows (pre-popover). Filter uses .alpha-popover-* */
+	.create-menu {
 		border: 1px solid var(--glass-border);
 		border-radius: 12px;
 		background: var(--glass);
-		overflow: hidden;
 		box-shadow: 0 8px 28px var(--shadow);
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 	}
 
-	.create-menu button,
-	.filter-menu button {
+	.create-menu button {
 		display: block;
 		width: 100%;
 		padding: 8px 12px;
@@ -1691,20 +1710,13 @@
 		cursor: pointer;
 	}
 
-	.create-menu button:not(:last-child),
-	.filter-menu button:not(:last-child) {
+	.create-menu button:not(:last-child) {
 		border-bottom: 0.33px solid var(--fg-8);
 	}
 
-	.create-menu button:hover,
-	.filter-menu button:hover,
-	.filter-menu button.on {
+	.create-menu button:hover {
 		background: var(--fg-4);
 		color: var(--fg);
-	}
-
-	.filter-menu button.on {
-		font-weight: 600;
 	}
 
 	.sidebar-nav {
@@ -1725,10 +1737,16 @@
 
 	/*
 	 * Selected glass lives on the block so Mail can expand the same pill into a
-	 * panel that contains subitems. Always-on 1px transparent border + fixed
-	 * icon box keep row height stable when switching sections.
+	 * title + quiet sub-items panel. Always-on 1px transparent border + fixed
+	 * icon box keep row height stable when switching sections. Expanded radius
+	 * = half the collapsed pill height (pad-y*2 + ico + 2px border).
 	 */
 	.nav-block {
+		--nav-ico: 18px;
+		--nav-gap: 10px;
+		--nav-pad-x: 10px;
+		--nav-pad-y: 8px;
+		--nav-expanded-radius: calc(var(--nav-pad-y) + (var(--nav-ico) / 2) + 1px);
 		border: 1px solid transparent;
 		border-radius: 999px;
 		box-sizing: border-box;
@@ -1745,7 +1763,7 @@
 	}
 
 	.nav-block.expanded {
-		border-radius: 22px;
+		border-radius: var(--nav-expanded-radius);
 		padding-bottom: 4px;
 	}
 
@@ -1844,17 +1862,18 @@
 		padding: 0 0 2px;
 	}
 
-	/* Left pad = nav-item pad (10) + icon (18) + gap (10) so labels line up with Mail. */
+	/* Left pad = nav-item pad + icon + gap so labels line up with Mail. */
 	.nav-sub-item {
 		display: block;
 		width: 100%;
-		padding: 3px 10px 3px 38px;
+		padding: 3px var(--nav-pad-x, 10px) 3px
+			calc(var(--nav-pad-x, 10px) + var(--nav-ico, 18px) + var(--nav-gap, 10px));
 		border: 0;
 		border-radius: 0;
 		background: transparent;
 		color: var(--white33, var(--fg-33));
 		font-family: 'Inter', var(--font), system-ui, sans-serif;
-		font-size: 0.8125rem;
+		font-size: 13px;
 		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
@@ -2395,6 +2414,15 @@
 			width: 44px;
 			height: 44px;
 			border-radius: 9999px;
+		}
+
+		/* Match chat bubble body; scale icons/Mail pill with it (~20px radius). */
+		.sidebar-nav .nav-block {
+			--nav-ico: 20px;
+			--nav-gap: 12px;
+			--nav-pad-x: 12px;
+			--nav-pad-y: 9px;
+			--nav-label-size: 0.9375rem;
 		}
 
 		.workspace-wrap {

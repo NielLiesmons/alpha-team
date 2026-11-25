@@ -338,8 +338,10 @@ export function mailThreadsForCurrentFolder() {
 
 	/* Drive interim — filter then thread by subject */
 	const filtered = list.filter((m) => {
+		if (folder === 'mailbox' || folder === 'inbox') {
+			return isInboxFor(m, me) || isSentFor(m, me);
+		}
 		if (folder === 'sent') return isSentFor(m, me);
-		if (folder === 'inbox') return isInboxFor(m, me);
 		return false;
 	});
 	const asMsgs = filtered.map((m) => ({
@@ -893,7 +895,38 @@ export async function refreshMail() {
 		if (!keepError) mailUi.error = null;
 		try {
 			if (me && pw) {
-				const list = await listJmapFolder(me, pw, folder, 80);
+				/** @type {any[]} */
+				let list;
+				if (folder === 'mailbox') {
+					const [inbox, sent] = await Promise.all([
+						listJmapFolder(me, pw, 'inbox', 80),
+						listJmapFolder(me, pw, 'sent', 80)
+					]);
+					/** @type {Map<string, any>} */
+					const byThread = new Map();
+					for (const t of [...inbox, ...sent]) {
+						const key = String(t?.threadId || t?.id || '');
+						if (!key) continue;
+						const prev = byThread.get(key);
+						if (!prev) {
+							byThread.set(key, t);
+							continue;
+						}
+						const prevN = Array.isArray(prev.messages) ? prev.messages.length : 1;
+						const nextN = Array.isArray(t.messages) ? t.messages.length : 1;
+						if (
+							nextN > prevN ||
+							String(t.created_at || '') > String(prev.created_at || '')
+						) {
+							byThread.set(key, t);
+						}
+					}
+					list = [...byThread.values()].sort((a, b) =>
+						String(b.created_at || '').localeCompare(String(a.created_at || ''))
+					);
+				} else {
+					list = await listJmapFolder(me, pw, folder, 80);
+				}
 				if (mailUi.sending) {
 					refreshMailQueued = true;
 					return;

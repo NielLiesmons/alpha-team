@@ -374,7 +374,7 @@ export default {
 	'mail.unread': 'Non lus',
 	'mail.newMailsChip': '{n} nouveaux mails',
 	'mail.category': 'Catégorie de courrier',
-	'mail.mailbox': 'Boîte mail',
+	'mail.mailbox': 'Entrant / Sortant',
 	'mail.closeMailboxMenu': 'Fermer le menu des boîtes mail',
 	'mail.message': 'Message',
 	'mail.cancelReply': 'Annuler la réponse',

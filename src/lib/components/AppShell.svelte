@@ -395,7 +395,7 @@
 		const p = path;
 		locale.value;
 		mailView.folder;
-		if (p.startsWith('/mail')) return mailFolderLabel(mailView.folder) || t('mail.inbox');
+		if (p.startsWith('/mail')) return mailFolderLabel(mailView.folder) || t('mail.mailbox');
 		if (p.startsWith('/photos')) return t('nav.photos');
 		if (p.startsWith('/website') || p.startsWith('/publications')) {
 			return activeWebsite()?.host || t('nav.website');
@@ -464,8 +464,8 @@
 		const replace = Boolean(typeof history !== 'undefined' && history.state?.alphaLayer);
 		/* Clear before goto so detail never keeps Chat activity on Mail/Photos. */
 		forceClearSelection();
-		/* Fresh entry to Mail always lands on Inbox; in-section folder picks keep state. */
-		if (href === '/mail' && !path.startsWith('/mail')) setMailFolder('inbox');
+		/* Fresh entry to Mail always lands on In / Out; in-section folder picks keep state. */
+		if (href === '/mail' && !path.startsWith('/mail')) setMailFolder('mailbox');
 		goto(href, { replaceState: replace });
 	}
 
@@ -593,7 +593,7 @@
 		/* Mail Archive filter ↔ archive folder (JMAP role). */
 		if (path.startsWith('/mail')) {
 			if (id === 'archived') setMailFolder('archive');
-			else if (mailView.folder === 'archive') setMailFolder('inbox');
+			else if (mailView.folder === 'archive') setMailFolder('mailbox');
 		}
 	}}
 	onRefresh={() => refreshAllDrive()}

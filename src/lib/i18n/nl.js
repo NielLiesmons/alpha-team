@@ -373,7 +373,7 @@ export default {
 	'mail.unread': 'Ongelezen',
 	'mail.newMailsChip': '{n} nieuwe mails',
 	'mail.category': 'Mailcategorie',
-	'mail.mailbox': 'Mailbox',
+	'mail.mailbox': 'In / Uit',
 	'mail.closeMailboxMenu': 'Mailboxmenu sluiten',
 	'mail.message': 'Bericht',
 	'mail.cancelReply': 'Antwoord annuleren',

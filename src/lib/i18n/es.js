@@ -373,7 +373,7 @@ export default {
 	'mail.unread': 'No leídos',
 	'mail.newMailsChip': '{n} correos nuevos',
 	'mail.category': 'Categoría de correo',
-	'mail.mailbox': 'Buzón',
+	'mail.mailbox': 'Entrada / Salida',
 	'mail.closeMailboxMenu': 'Cerrar menú de buzones',
 	'mail.message': 'Mensaje',
 	'mail.cancelReply': 'Cancelar respuesta',
