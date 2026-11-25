@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import EnterpriseCard from '$lib/components/EnterpriseCard.svelte';
+	import FeedEmpty from '$lib/components/FeedEmpty.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
@@ -17,7 +18,6 @@
 		enterprises,
 		metrics,
 		notes,
-		openComposer,
 		projects,
 		tasks,
 		ui
@@ -106,12 +106,9 @@
 	{#if (!appBoot.listsReady || !ui.entitiesReady) && enterprises.length === 0 && dataTables.length === 0}
 		<FeedSkeleton rows={6} />
 	{:else if enterprises.length === 0}
-		<p class="empty">{t('ent.empty')}</p>
-		<button type="button" class="empty-add" onclick={() => openComposer('enterprise')}
-			>{t('ent.create')}</button
-		>
+		<FeedEmpty title={t('ent.empty')} body={t('ent.emptyBody')} />
 	{:else if sortedEnterprises.length === 0}
-		<p class="empty">{t('ent.emptyFilter')}</p>
+		<FeedEmpty title={t('ent.emptyFilter')} body={t('ent.emptyFilterBody')} />
 	{:else}
 		<div class="card-stack">
 			{#each sortedEnterprises as ent (ent.id)}
@@ -133,6 +130,7 @@
 	.feed {
 		display: flex;
 		flex-direction: column;
+		flex: 1;
 		min-height: 0;
 		overflow: auto;
 	}
@@ -146,27 +144,6 @@
 
 	.err {
 		color: #b44;
-	}
-
-	.empty {
-		padding: 48px 16px 12px;
-		color: var(--fg-66);
-		margin: 0;
-	}
-
-	.empty-add {
-		margin: 0 16px 24px;
-		height: 36px;
-		padding: 0 16px;
-		border: 0;
-		border-radius: 9999px;
-		background: var(--fg-8);
-		color: var(--fg);
-		font: inherit;
-		font-size: 0.8125rem;
-		font-weight: 550;
-		cursor: pointer;
-		align-self: flex-start;
 	}
 
 	.card-stack {

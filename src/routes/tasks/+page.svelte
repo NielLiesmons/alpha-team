@@ -1,4 +1,5 @@
 <script>
+	import FeedEmpty from '$lib/components/FeedEmpty.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import TaskCard from '$lib/components/TaskCard.svelte';
 	import { appBoot } from '$lib/boot.svelte.js';
@@ -92,9 +93,9 @@
 	{#if (!appBoot.listsReady || !ui.entitiesReady) && tasks.length === 0}
 		<FeedSkeleton rows={8} />
 	{:else if tasks.length === 0}
-		<p class="empty">{t('tasks.empty')}</p>
+		<FeedEmpty title={t('tasks.empty')} body={t('tasks.emptyBody')} />
 	{:else if groups.length === 0}
-		<p class="empty">{t('tasks.emptyFilter')}</p>
+		<FeedEmpty title={t('tasks.emptyFilter')} body={t('tasks.emptyFilterBody')} />
 	{:else}
 		{#each groups as group (group.key)}
 			<div class="task-group-header">
@@ -140,9 +141,10 @@
 	.feed {
 		display: flex;
 		flex-direction: column;
+		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		}
+	}
 
 	.banner {
 		margin: 0;
@@ -157,11 +159,6 @@
 	}
 
 	.banner .err {
-		color: var(--fg-66);
-	}
-
-	.empty {
-		padding: 48px 16px;
 		color: var(--fg-66);
 	}
 

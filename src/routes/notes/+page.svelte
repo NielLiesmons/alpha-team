@@ -1,4 +1,5 @@
 <script>
+	import FeedEmpty from '$lib/components/FeedEmpty.svelte';
 	import FeedSkeleton from '$lib/components/FeedSkeleton.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
@@ -60,9 +61,9 @@
 	{#if (!appBoot.listsReady || !ui.entitiesReady) && notes.length === 0}
 		<FeedSkeleton rows={8} />
 	{:else if notes.length === 0}
-		<p class="empty">{t('notes.empty')}</p>
+		<FeedEmpty title={t('notes.empty')} body={t('notes.emptyBody')} />
 	{:else if filtered.length === 0}
-		<p class="empty">{t('notes.emptyFilter')}</p>
+		<FeedEmpty title={t('notes.emptyFilter')} body={t('notes.emptyFilterBody')} />
 	{:else}
 		<div class="card-stack">
 			{#each filtered as note (note.id)}
@@ -122,13 +123,9 @@
 	.feed {
 		display: flex;
 		flex-direction: column;
+		flex: 1;
 		min-height: 0;
 		overflow: auto;
-	}
-
-	.empty {
-		padding: 48px 16px;
-		color: var(--fg-66);
 	}
 
 	.card-stack {
