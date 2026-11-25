@@ -1565,6 +1565,8 @@
 	}
 
 	.reaction-pill {
+		position: relative;
+		isolation: isolate;
 		display: inline-flex;
 		flex-direction: row;
 		align-items: center;
@@ -1572,28 +1574,65 @@
 		gap: 4px;
 		/* Right pad matches top/bottom around the pfp */
 		padding: 3px 3px 3px 5px;
-		border: 1px solid var(--glass-border, color-mix(in srgb, var(--fg) 8%, transparent));
+		border: 0;
 		border-radius: 999px;
-		/* Peer reactions: same glass as the reactions popover */
-		background: var(--glass-panel, var(--glass, var(--popover)));
+		/* Peer reactions: same composer/modal glass + blur as `.alpha-popover` */
+		background: var(--composer-bg, var(--modal-bg, var(--glass-panel, transparent)));
 		color: var(--fg);
 		font: inherit;
 		cursor: pointer;
 		line-height: 1;
-		backdrop-filter: blur(var(--glass-blur, 22px));
-		-webkit-backdrop-filter: blur(var(--glass-blur, 22px));
-		box-shadow: 0 4px 14px color-mix(in srgb, #000 12%, transparent);
+		box-sizing: border-box;
+		backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.2);
+		-webkit-backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.2);
+		box-shadow: 0 4px 14px var(--shadow, color-mix(in srgb, #000 12%, transparent));
+	}
+
+	/* Specular hairline — same as `.alpha-popover::after` / scroll-FAB */
+	.reaction-pill::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		padding: 1px;
+		pointer-events: none;
+		z-index: 1;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
+			color-mix(in srgb, var(--fg) 9%, transparent) 100%
+		);
+		-webkit-mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
 	}
 
 	.reaction-pill.mine {
-		/* Own reaction: accent wash on top of glass */
+		/* Own reaction: accent whisper wash on top of popover glass */
 		background: color-mix(
 			in srgb,
 			var(--accent-1) 28%,
-			var(--glass-panel, var(--popover))
+			var(--composer-bg, var(--modal-bg, var(--glass-panel, transparent)))
 		);
-		border-color: color-mix(in srgb, var(--accent-1) 35%, transparent);
 		box-shadow: none;
+	}
+
+	.reaction-pill.mine::after {
+		/* Accent-tinted specular so own reactions keep a quiet selected edge */
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--accent-1) 40%, transparent) 0%,
+			color-mix(in srgb, var(--accent-1) 12%, transparent) 45%,
+			color-mix(in srgb, var(--accent-1) 12%, transparent) 55%,
+			color-mix(in srgb, var(--accent-1) 28%, transparent) 100%
+		);
 	}
 
 	.reaction-pill .emoji {
