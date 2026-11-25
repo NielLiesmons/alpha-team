@@ -192,7 +192,8 @@ export async function bootApp() {
 				const session = activeSession();
 				const localPw = getMailboxPassword(email);
 				const localTok = getAdminToken();
-				/* Push this device’s secrets up so invites/reinstall stay complete. */
+				/* Push this device’s secrets up so invites/reinstall stay complete.
+				 * PUBLIC_ALPHA_API_TOKEN (via getAdminToken) also seeds space-secrets. */
 				if (localPw) void upsertMailboxSecret(email, localPw, session).catch(() => {});
 				if (localTok) void upsertAdminTokenSecret(localTok, session).catch(() => {});
 				await hydrateDeviceFromSpaceSecrets(session, email, {
@@ -200,6 +201,11 @@ export async function bootApp() {
 					setAdminToken,
 					getAdminToken
 				});
+				/* After Drive hydrate, push again if we learned a token. */
+				const afterTok = getAdminToken();
+				if (afterTok && afterTok !== localTok) {
+					void upsertAdminTokenSecret(afterTok, session).catch(() => {});
+				}
 			}
 		} catch (e) {
 			console.warn('space secrets hydrate', e);

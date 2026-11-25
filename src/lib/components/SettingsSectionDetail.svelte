@@ -151,6 +151,8 @@
 	let mailboxBusy = $state(false);
 	let apiTokenDraft = $state('');
 	let apiTokenMsg = $state('');
+	/** Hide pubs token field once invite/space-secrets (or recovery save) hydrated it. */
+	let pubsTokenReady = $state(Boolean(getAdminToken()));
 	let url = $state(driveSession.url);
 	let token = $state(driveSession.token);
 	let rootKey = $state(driveSession.rootKey);
@@ -243,6 +245,7 @@
 
 	onMount(() => {
 		apiTokenDraft = getAdminToken();
+		pubsTokenReady = Boolean(getAdminToken());
 		mailboxPw = getMailboxPassword(actor.email);
 		void refreshPwaStatus();
 		void storageEstimate().then((e) => {
@@ -250,6 +253,23 @@
 		});
 		if (driveSession.connected) {
 			void ensureMembers().catch(() => {});
+			/* Re-check pubs token after space-secrets hydrate (invite / boot). */
+			void (async () => {
+				try {
+					const { hydrateDeviceFromSpaceSecrets } = await import('$lib/drive/space-secrets.js');
+					const { setMailboxPassword } = await import('$lib/jmap-mail.js');
+					const { setAdminToken } = await import('$lib/mail-api.js');
+					await hydrateDeviceFromSpaceSecrets(driveSession, actor.email, {
+						setMailboxPassword,
+						setAdminToken,
+						getAdminToken
+					});
+				} catch {
+					/* ignore */
+				}
+				pubsTokenReady = Boolean(getAdminToken());
+				apiTokenDraft = getAdminToken();
+			})();
 		}
 	});
 
@@ -333,6 +353,7 @@
 	async function saveApiToken() {
 		setAdminToken(apiTokenDraft);
 		apiTokenMsg = t('settings.tokenSaved');
+		pubsTokenReady = Boolean(getAdminToken());
 		try {
 			const { upsertAdminTokenSecret } = await import('$lib/drive/space-secrets.js');
 			await upsertAdminTokenSecret(apiTokenDraft);
@@ -757,17 +778,24 @@
 		{#if mailboxMsg}<p class="status on">{mailboxMsg}</p>{/if}
 
 		{#if isOperator}
-			<hr class="rule" />
-			<p class="field-label">{t('settings.publicationsTitle')}</p>
-			<p class="hint">{t('settings.publicationsHint')}</p>
-			<label class="row stack">
-				<span>{t('settings.adminToken')}</span>
-				<input type="password" bind:value={apiTokenDraft} autocomplete="off" spellcheck="false" />
-			</label>
-			<div class="actions">
-				<PrimaryButton size="sm" onclick={saveApiToken}>{t('settings.saveToken')}</PrimaryButton>
-			</div>
-			{#if apiTokenMsg}<p class="status on">{apiTokenMsg}</p>{/if}
+			{#if !pubsTokenReady}
+				<hr class="rule" />
+				<p class="field-label">{t('settings.publicationsTitle')}</p>
+				<p class="hint">{t('settings.publicationsRecoveryHint')}</p>
+				<label class="row stack">
+					<span>{t('settings.adminToken')}</span>
+					<input
+						type="password"
+						bind:value={apiTokenDraft}
+						autocomplete="off"
+						spellcheck="false"
+					/>
+				</label>
+				<div class="actions">
+					<PrimaryButton size="sm" onclick={saveApiToken}>{t('settings.saveToken')}</PrimaryButton>
+				</div>
+				{#if apiTokenMsg}<p class="status on">{apiTokenMsg}</p>{/if}
+			{/if}
 
 			<hr class="rule" />
 			<p class="field-label">{t('settings.filesTitle')}</p>

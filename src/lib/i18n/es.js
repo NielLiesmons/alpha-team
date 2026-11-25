@@ -274,6 +274,8 @@ export default {
 	'settings.mailboxConnected': 'Conectado.',
 	'settings.publicationsTitle': 'Publicaciones',
 	'settings.publicationsHint': 'Token Bearer para la API de boletines. Se guarda en este dispositivo.',
+	'settings.publicationsRecoveryHint':
+		'Las publicaciones deberían llegar con la invitación. Solo pega un token aquí si las cartas siguen fallando tras reconectar.',
 	'settings.adminToken': 'Token de admin',
 	'settings.saveToken': 'Guardar token',
 	'settings.tokenSaved': 'Guardado en este dispositivo.',

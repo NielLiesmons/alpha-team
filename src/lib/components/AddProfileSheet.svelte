@@ -16,7 +16,7 @@
 	} from '$lib/drive/invite.js';
 	import { applyInviteBootstrap } from '$lib/invite-bootstrap.js';
 	import { saveSession } from '$lib/drive/session.svelte.js';
-	import { markMemberJoined } from '$lib/members.svelte.js';
+	import { markMemberJoined, upsertMember } from '$lib/members.svelte.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 
@@ -147,6 +147,22 @@
 			await applyInviteBootstrap(session);
 			progressPct = 90;
 			await refreshFromDrive();
+			/* Persist invite role so admin codes unlock full Admin roster on this device. */
+			const role =
+				session.role === 'owner' || session.role === 'admin' || session.role === 'member'
+					? session.role
+					: 'member';
+			try {
+				await upsertMember({
+					email: session.email,
+					name: session.displayName || session.email.split('@')[0] || session.email,
+					role,
+					status: 'active',
+					joined_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+				});
+			} catch (e) {
+				console.warn('add-profile upsert member', e);
+			}
 			await markMemberJoined(session.email);
 			progressPct = 100;
 			await new Promise((r) => setTimeout(r, 180));

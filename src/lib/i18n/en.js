@@ -273,6 +273,8 @@ export default {
 	'settings.mailboxConnected': 'Connected.',
 	'settings.publicationsTitle': 'Publications',
 	'settings.publicationsHint': 'Bearer token for the letters API. Stored on this device.',
+	'settings.publicationsRecoveryHint':
+		'Publications should arrive with the invite. Only paste a token here if letters still fail after reconnecting.',
 	'settings.adminToken': 'Admin token',
 	'settings.saveToken': 'Save token',
 	'settings.tokenSaved': 'Saved on this device.',

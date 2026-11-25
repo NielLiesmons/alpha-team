@@ -274,6 +274,8 @@ export default {
 	'settings.mailboxConnected': 'Verbonden.',
 	'settings.publicationsTitle': 'Publicaties',
 	'settings.publicationsHint': 'Bearer-token voor de nieuwsbrief-API. Opgeslagen op dit apparaat.',
+	'settings.publicationsRecoveryHint':
+		'Publicaties horen met de uitnodiging mee te komen. Plak hier alleen een token als brieven na opnieuw verbinden nog falen.',
 	'settings.adminToken': 'Beheerderstoken',
 	'settings.saveToken': 'Token opslaan',
 	'settings.tokenSaved': 'Opgeslagen op dit apparaat.',

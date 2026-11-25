@@ -234,7 +234,8 @@
 			setActiveEmail(session.email);
 			await connectSession(session);
 			await applyInviteBootstrap(session);
-			/* Genesis / first invite: directory may be empty — upsert from the invite itself. */
+			/* Genesis / first invite: directory may be empty — upsert from the invite itself.
+			 * upsertMember hydrates Drive first so redeem cannot wipe the Space roster. */
 			const role =
 				session.role === 'owner' || session.role === 'admin' || session.role === 'member'
 					? session.role

@@ -274,6 +274,8 @@ export default {
 	'settings.mailboxConnected': 'Connecté.',
 	'settings.publicationsTitle': 'Publications',
 	'settings.publicationsHint': 'Jeton Bearer pour l’API des lettres. Stocké sur cet appareil.',
+	'settings.publicationsRecoveryHint':
+		'Les publications devraient arriver avec l’invitation. Ne collez un jeton ici que si les lettres échouent encore après reconnexion.',
 	'settings.adminToken': 'Jeton admin',
 	'settings.saveToken': 'Enregistrer le jeton',
 	'settings.tokenSaved': 'Enregistré sur cet appareil.',

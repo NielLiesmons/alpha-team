@@ -39,17 +39,28 @@ export async function buildInviteSession(profile) {
 		},
 		localPw
 	);
-	const adminToken = getAdminToken();
-	/** Prefer live local token; fall back to Drive-stored. */
-	let token = adminToken;
-	if (!token) {
+	/** Prefer live local / env token; fall back to Drive-stored space secrets. */
+	let token = getAdminToken();
+	{
 		const { loadSpaceSecrets } = await import('./drive/space-secrets.js');
 		const secrets = await loadSpaceSecrets({
 			url: driveSession.url,
 			token: driveSession.token,
 			rootKey: driveSession.rootKey
 		});
-		token = secrets.adminToken || '';
+		if (!token && secrets.adminToken) token = secrets.adminToken;
+		/* Keep Drive warm when this device already has the pubs token. */
+		if (token && secrets.adminToken !== token) {
+			try {
+				await upsertAdminTokenSecret(token, {
+					url: driveSession.url,
+					token: driveSession.token,
+					rootKey: driveSession.rootKey
+				});
+			} catch {
+				/* read-only */
+			}
+		}
 	}
 	return {
 		url: driveSession.url,

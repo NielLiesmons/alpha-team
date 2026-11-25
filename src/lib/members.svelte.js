@@ -145,14 +145,23 @@ export function hydrateMembersFromCache(session = activeSession()) {
 }
 
 /**
+ * Persist members. By default merges with the live Drive directory first so a
+ * partial in-memory list (invite redeem race) cannot wipe other profiles.
+ * Pass `{ replace: true }` for intentional full replaces (removeMember).
  * @param {import('./drive/client.js').DriveSession} session
  * @param {Member[]} list
+ * @param {{ replace?: boolean }} [opts]
  */
-export async function saveMembers(session, list = members) {
+export async function saveMembers(session, list = members, opts = {}) {
+	let next = Array.isArray(list) ? list.slice() : [];
+	if (!opts.replace) {
+		const remote = await loadRemoteMembers(session);
+		if (remote.length) next = unionMembers(remote, next);
+	}
 	const doc = {
 		schema: 'alpha.members/1',
 		updated_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-		members: list.map((m) => ({
+		members: next.map((m) => ({
 			email: normalizeEmail(m.email),
 			name: m.name,
 			role: m.role,
@@ -169,10 +178,6 @@ export async function saveMembers(session, list = members) {
 }
 
 /**
- * Load members from Drive; seed defaults on first visit.
- * @param {import('./drive/client.js').DriveSession} [session]
- */
-/**
  * Ensure every default mailbox exists in the loaded list (no overwrites).
  * @param {Member[]} list
  */
@@ -188,34 +193,68 @@ function mergeDefaultMembers(list) {
 	return { list: [...by.values()], changed };
 }
 
-export async function ensureMembers(session = activeSession()) {
-	if (!session) return members;
-	hydrateMembersFromCache(session);
+/**
+ * Read members.json from Drive (empty on miss).
+ * @param {import('./drive/client.js').DriveSession} session
+ * @returns {Promise<Member[]>}
+ */
+async function loadRemoteMembers(session) {
 	try {
 		const bytes = await getPath(session, MEMBERS_PATH);
 		const text = typeof bytes === 'string' ? bytes : new TextDecoder().decode(bytes);
-		const list = parseMembersDoc(text);
-		if (list.length) {
-			const { list: merged, changed } = mergeDefaultMembers(list);
-			replaceMembers(merged);
-			persistMembersCache(session, merged);
-			if (changed) {
-				try {
-					await saveMembers(session, merged);
-				} catch {
-					/* read-only session — in-memory merge still helps switcher */
-				}
-			}
-			return members;
-		}
+		return parseMembersDoc(text);
 	} catch {
-		/* missing file */
+		return [];
+	}
+}
+
+/**
+ * Union by email; `overlay` wins on overlap.
+ * @param {Member[]} base
+ * @param {Member[]} overlay
+ */
+function unionMembers(base, overlay) {
+	const by = new Map();
+	for (const m of base) {
+		if (m?.email) by.set(m.email, m);
+	}
+	for (const m of overlay) {
+		if (m?.email) by.set(m.email, m);
+	}
+	return [...by.values()];
+}
+
+/**
+ * Load members from Drive into memory (cache warm, then remote SoT).
+ * @param {import('./drive/client.js').DriveSession} [session]
+ */
+export async function ensureMembers(session = activeSession()) {
+	if (!session) return members;
+	hydrateMembersFromCache(session);
+	const remote = await loadRemoteMembers(session);
+	if (remote.length) {
+		/* Drive is SoT; keep local-only rows (just invited, not yet on remote). */
+		const by = new Map(remote.map((m) => [m.email, m]));
+		for (const m of members) {
+			if (m?.email && !by.has(m.email)) by.set(m.email, m);
+		}
+		const { list: merged, changed } = mergeDefaultMembers([...by.values()]);
+		replaceMembers(merged);
+		persistMembersCache(session, merged);
+		if (changed) {
+			try {
+				await saveMembers(session, merged, { replace: true });
+			} catch {
+				/* read-only session — in-memory merge still helps switcher */
+			}
+		}
+		return members;
 	}
 	/* No personal seed rows — first Admin invite / upsert creates the directory. */
 	if (DEFAULT_MEMBERS.length) {
 		const seed = DEFAULT_MEMBERS.map((m) => ({ ...m }));
-		await saveMembers(session, seed);
-	} else {
+		await saveMembers(session, seed, { replace: true });
+	} else if (!members.length) {
 		replaceMembers([]);
 	}
 	return members;
@@ -255,6 +294,15 @@ export function canInvite(email) {
  * @param {Partial<Member> & { email: string, name: string, role: MemberRole, clearPicture?: boolean }} input
  */
 export async function upsertMember(input) {
+	const session = activeSession();
+	/* Always hydrate Drive first — never write a singleton over the roster. */
+	if (session) {
+		try {
+			await ensureMembers(session);
+		} catch {
+			/* offline / read-only — mutate local and best-effort save below */
+		}
+	}
 	const email = normalizeEmail(input.email);
 	const idx = members.findIndex((m) => m.email === email);
 	const prev = idx >= 0 ? members[idx] : null;
@@ -282,7 +330,6 @@ export async function upsertMember(input) {
 	if (idx >= 0) members[idx] = next;
 	else members.push(next);
 
-	const session = activeSession();
 	if (session) await saveMembers(session, [...members]);
 	if (isNew) {
 		const { announceMemberStatus } = await import('./chat.svelte.js');
@@ -296,10 +343,17 @@ export async function upsertMember(input) {
  * @param {MemberStatus} status
  */
 export async function setMemberStatus(email, status) {
+	const session = activeSession();
+	if (session) {
+		try {
+			await ensureMembers(session);
+		} catch {
+			/* ignore */
+		}
+	}
 	const m = memberFor(email);
 	if (!m) throw new Error('Unknown member');
 	m.status = status;
-	const session = activeSession();
 	if (session) await saveMembers(session, [...members]);
 }
 
@@ -308,11 +362,18 @@ export async function setMemberStatus(email, status) {
  * @param {string} email
  */
 export async function markMemberJoined(email) {
+	const session = activeSession();
+	if (session) {
+		try {
+			await ensureMembers(session);
+		} catch {
+			/* ignore */
+		}
+	}
 	const m = memberFor(email);
 	if (!m) return;
 	m.status = 'active';
 	m.joined_at = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-	const session = activeSession();
 	if (session) {
 		try {
 			await saveMembers(session, [...members]);
@@ -330,6 +391,14 @@ export async function markMemberJoined(email) {
  * @param {{ actorEmail?: string }} [opts]
  */
 export async function removeMember(email, opts = {}) {
+	const session = activeSession();
+	if (session) {
+		try {
+			await ensureMembers(session);
+		} catch {
+			/* ignore */
+		}
+	}
 	const e = normalizeEmail(email);
 	const m = memberFor(e);
 	if (!m) throw new Error('Unknown member');
@@ -342,8 +411,7 @@ export async function removeMember(email, opts = {}) {
 		if (owners.length <= 1) throw new Error('Cannot delete the last owner.');
 	}
 	const next = members.filter((x) => x.email !== e);
-	const session = activeSession();
-	if (session) await saveMembers(session, next);
+	if (session) await saveMembers(session, next, { replace: true });
 	else replaceMembers(next);
 	const { announceMemberStatus } = await import('./chat.svelte.js');
 	announceMemberStatus(e, 'removed', m.name);
