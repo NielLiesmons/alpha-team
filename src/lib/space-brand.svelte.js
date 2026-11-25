@@ -8,7 +8,7 @@
 
 import { getPath, putPaths } from './drive/client.js';
 import { activeSession } from './drive/session.svelte.js';
-import { getAttachmentObjectUrl } from './drive/media-cache.js';
+import { getAttachmentObjectUrl, pinMediaPath } from './drive/media-cache.js';
 import { parentDomain } from './space-host.js';
 import { space, websites } from './sections.js';
 
@@ -210,6 +210,8 @@ async function ensureIconObjectUrl(path, opts = {}) {
 	const session = activeSession();
 	if (!session || !path) return null;
 	try {
+		/* Pin before fetch so LRU cannot revoke the nav/welcome object URL. */
+		pinMediaPath(session, path);
 		const res = await getAttachmentObjectUrl(
 			session,
 			{

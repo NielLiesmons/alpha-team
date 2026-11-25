@@ -277,7 +277,7 @@
 	/** Flat nav hits for the Search modal (sidebar always shows full `sections`). */
 	const searchHits = $derived.by(() => {
 		const q = search.trim().toLowerCase();
-		/** @type {{ href: string, label: string, icon?: string, faviconUrl?: string, group?: string }[]} */
+		/** @type {{ href: string, label: string, icon?: string, faviconUrl?: string, spaceBrand?: boolean, group?: string }[]} */
 		const out = [];
 		for (const entry of sections) {
 			if (isNavGroup(entry)) {
@@ -290,6 +290,7 @@
 							label: item.label,
 							icon: item.icon,
 							faviconUrl: item.faviconUrl,
+							spaceBrand: item.spaceBrand,
 							group: group.label
 						});
 					}
@@ -302,12 +303,41 @@
 					href: item.href,
 					label: item.label,
 					icon: item.icon,
-					faviconUrl: item.faviconUrl
+					faviconUrl: item.faviconUrl,
+					spaceBrand: item.spaceBrand
 				});
 			}
 		}
 		return out;
 	});
+
+	/** Bundled image fallback when a space-brand blob/favicon fails — never NavIcon/globe. */
+	const SPACE_BRAND_IMG_FALLBACK = '/icons/icon-192.png';
+
+	/**
+	 * Favicon / space-brand rows stay on <img>. Space brand never reveals stroke NavIcon.
+	 * @param {Event} e
+	 * @param {boolean} brand
+	 */
+	function onNavFaviconError(e, brand) {
+		const el = /** @type {HTMLImageElement} */ (e.currentTarget);
+		if (brand) {
+			const cur = String(el.getAttribute('src') || '');
+			if (el.dataset.fallback !== '1' && !cur.endsWith(SPACE_BRAND_IMG_FALLBACK)) {
+				el.dataset.fallback = '1';
+				el.style.display = '';
+				el.src = SPACE_BRAND_IMG_FALLBACK;
+				return;
+			}
+			el.style.display = 'none';
+			el.dataset.failed = '1';
+			return;
+		}
+		el.style.display = 'none';
+		el.dataset.failed = '1';
+		const fallback = el.nextElementSibling;
+		if (fallback instanceof HTMLElement) fallback.hidden = false;
+	}
 
 	/** @param {string | undefined} kind */
 	function createIconFor(kind) {
@@ -864,11 +894,13 @@
 													width="18"
 													height="18"
 													loading="lazy"
-													onerror={(e) => {
-														const el = /** @type {HTMLImageElement} */ (e.currentTarget);
-														el.style.display = 'none';
-													}}
+													onerror={(e) => onNavFaviconError(e, brand)}
 												/>
+												{#if !brand && item.icon}
+													<span class="nav-ico-fallback" hidden>
+														<NavIcon name={item.icon} size={18} />
+													</span>
+												{/if}
 											{:else if item.icon}
 												<NavIcon name={item.icon} size={18} />
 											{/if}
@@ -889,7 +921,9 @@
 					{@const rowActive = active(item.href)}
 					{@const kids = item.children || []}
 					{@const expanded = rowActive && kids.length > 0}
-					{@const png = rowActive && item.icon ? navPngUrl(item.icon) : null}
+					{@const fav = String(item.faviconUrl || '').trim()}
+					{@const brand = Boolean(item.spaceBrand)}
+					{@const png = !fav && rowActive && item.icon ? navPngUrl(item.icon) : null}
 					<div
 						class="nav-block"
 						class:active={rowActive}
@@ -905,8 +939,30 @@
 								class:active={rowActive}
 								onclick={() => go(item.href)}
 							>
-								<span class="icon-wrap" class:png={Boolean(png)} class:empty={rowActive && !png}>
-									{#if rowActive}
+								<span
+									class="icon-wrap"
+									class:favicon={Boolean(fav)}
+									class:space-brand={brand}
+									class:png={Boolean(png)}
+									class:empty={rowActive && !fav && !png}
+								>
+									{#if fav}
+										<img
+											class="nav-favicon"
+											class:space-brand={brand}
+											src={fav}
+											alt=""
+											width="18"
+											height="18"
+											loading="lazy"
+											onerror={(e) => onNavFaviconError(e, brand)}
+										/>
+										{#if !brand && item.icon}
+											<span class="nav-ico-fallback" hidden>
+												<NavIcon name={item.icon} size={18} />
+											</span>
+										{/if}
+									{:else if rowActive}
 										{#if png}
 											<img class="nav-png" src={png} alt="" width="18" height="18" />
 										{/if}
@@ -1015,7 +1071,9 @@
 					aria-hidden={listTopHidden || undefined}
 				>
 					{#if isMobileViewport}
-						{@const pillPng = navPngUrl(activeItem.icon)}
+						{@const pillFav = String(activeItem.faviconUrl || '').trim()}
+						{@const pillBrand = Boolean(pillFav && activeItem.spaceBrand)}
+						{@const pillPng = pillFav ? null : navPngUrl(activeItem.icon)}
 						{@const pillCompact = menuProgress > 0.55}
 						<button
 							type="button"
@@ -1051,7 +1109,19 @@
 									</svg>
 								{/if}
 							</span>
-							{#if !pillCompact && pillPng}
+							{#if !pillCompact && pillFav}
+								<span class="pill-ico favicon" class:space-brand={pillBrand} aria-hidden="true">
+									<img
+										class="nav-favicon"
+										class:space-brand={pillBrand}
+										src={pillFav}
+										alt=""
+										width="22"
+										height="22"
+										onerror={(e) => onNavFaviconError(e, pillBrand)}
+									/>
+								</span>
+							{:else if !pillCompact && pillPng}
 								<span class="pill-ico png" aria-hidden="true">
 									<img class="nav-png" src={pillPng} alt="" width="22" height="22" />
 								</span>
@@ -1228,6 +1298,7 @@
 					<div class="shell-search-hits" role="listbox" aria-label="Results">
 						{#each searchHits as hit (hit.href + (hit.group || '') + hit.label)}
 							{@const fav = String(hit.faviconUrl || '').trim()}
+							{@const brand = Boolean(hit.spaceBrand)}
 							{@const png = !fav && hit.icon ? navPngUrl(hit.icon) : null}
 							<button
 								type="button"
@@ -1237,7 +1308,15 @@
 							>
 								<span class="shell-search-hit-ico" aria-hidden="true">
 									{#if fav}
-										<img class="nav-favicon" src={fav} alt="" width="18" height="18" />
+										<img
+											class="nav-favicon"
+											class:space-brand={brand}
+											src={fav}
+											alt=""
+											width="18"
+											height="18"
+											onerror={(e) => onNavFaviconError(e, brand)}
+										/>
 									{:else if png}
 										<img class="nav-png" src={png} alt="" width="18" height="18" />
 									{:else}
@@ -1881,6 +1960,14 @@
 		border-radius: 999px;
 	}
 
+	.nav-ico-fallback {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+	}
+
 	.nav-sub {
 		display: flex;
 		flex-direction: column;
@@ -2446,6 +2533,17 @@
 			border-radius: 9999px;
 		}
 
+		/* Search glyph a touch larger than desktop chrome */
+		.top-search :global(.icon) {
+			width: 18px !important;
+			height: 18px !important;
+		}
+
+		.top-search :global(svg) {
+			width: 18px;
+			height: 18px;
+		}
+
 		/* Match chat bubble body; scale icons/Mail pill with it (~20px radius). */
 		.sidebar-nav .nav-block {
 			--nav-ico: 20px;
@@ -2667,6 +2765,23 @@
 		}
 
 		.pill-ico.png {
+			width: 22px;
+			height: 22px;
+		}
+
+		.pill-ico.favicon {
+			width: 22px;
+			height: 22px;
+			overflow: hidden;
+			border-radius: 4px;
+		}
+
+		.pill-ico.favicon.space-brand {
+			overflow: visible;
+			border-radius: 999px;
+		}
+
+		.pill-ico .nav-favicon {
 			width: 22px;
 			height: 22px;
 		}

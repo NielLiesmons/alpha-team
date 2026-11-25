@@ -38,6 +38,13 @@ const MAX_TOTAL_BYTES = 220 * 1024 * 1024;
 /** @type {Map<string, MediaCacheEntry>} */
 const memory = new Map();
 
+/**
+ * Paths that must survive LRU (space brand icon for nav / welcome / PWA).
+ * Keys match cacheKey(session, path).
+ * @type {Set<string>}
+ */
+const pinnedKeys = new Set();
+
 /** In-flight fetches so parallel bubbles share one decrypt. */
 /** @type {Map<string, Promise<MediaCacheEntry | null>>} */
 const inflight = new Map();
@@ -132,12 +139,18 @@ async function idbDelBlob(key) {
 }
 
 async function trimCaches() {
-	const entries = [...memory.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed);
-	let total = entries.reduce((n, [, e]) => n + (e.size || 0), 0);
-	while (entries.length > MAX_ENTRIES || total > MAX_TOTAL_BYTES) {
+	const entries = [...memory.entries()]
+		.filter(([key]) => !pinnedKeys.has(key))
+		.sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+	let total = [...memory.values()].reduce((n, e) => n + (e.size || 0), 0);
+	while (
+		(memory.size > MAX_ENTRIES || total > MAX_TOTAL_BYTES) &&
+		entries.length > 0
+	) {
 		const next = entries.shift();
 		if (!next) break;
 		const [key, ent] = next;
+		if (pinnedKeys.has(key) || !memory.has(key)) continue;
 		total -= ent.size || 0;
 		memory.delete(key);
 		try {
@@ -147,6 +160,17 @@ async function trimCaches() {
 		}
 		void idbDelBlob(key);
 	}
+}
+
+/**
+ * Keep a Drive path's object URL out of LRU eviction (nav space icon, etc.).
+ * @param {import('./client.js').DriveSession} session
+ * @param {string} path
+ */
+export function pinMediaPath(session, path) {
+	const p = String(path || '').trim();
+	if (!session || !p) return;
+	pinnedKeys.add(cacheKey(session, p));
 }
 
 /**
