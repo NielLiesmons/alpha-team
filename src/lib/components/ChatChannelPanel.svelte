@@ -56,6 +56,7 @@
 		snapFeedToBottomSoon
 	} from '$lib/feed-scroll.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import { isMobileViewport } from '$lib/ui-scale.svelte.js';
 	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 
 	/** @type {{ channelId?: string }} */
@@ -378,6 +379,30 @@
 		} else if (!mountedChannel) {
 			mountedChannel = id;
 		}
+	});
+
+	/*
+	 * Desktop: autofocus the composer when a channel is open / switched so the
+	 * caret is ready without an extra click. Skip mobile — don’t fight the kb.
+	 */
+	$effect(() => {
+		const id = channelId;
+		const el = inputEl;
+		void id;
+		if (!el || typeof window === 'undefined' || isMobileViewport()) return;
+		if (callViewOpenFor(id)) return;
+		queueMicrotask(() => {
+			if (inputEl !== el) return;
+			try {
+				el.focus({ preventScroll: true });
+			} catch {
+				try {
+					el.focus();
+				} catch {
+					/* ignore */
+				}
+			}
+		});
 	});
 
 	/** Only follow the tail when pinned — never on reactions / mid-feed edits. */
