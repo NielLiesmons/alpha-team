@@ -418,6 +418,15 @@ function materializeMailboxMessages(newestFirst, limit, seedMessages = []) {
 		if (kind === 'message' && entry.message?.id) {
 			const id = String(entry.message.id);
 			if (retracted.has(id)) continue;
+			const prev = byId.get(id);
+			const prevDeleted = Boolean(prev?.deleted || prev?.deleted_at);
+			const msgDeleted = Boolean(entry.message.deleted || entry.message.deleted_at);
+			/*
+			 * Seed / prior tombstone wins over a later-replayed non-deleted
+			 * message payload (optimistic delete + rematerialize race).
+			 * Real tombstone ops still apply via the tombstone branch below.
+			 */
+			if (prevDeleted && !msgDeleted) continue;
 			byId.set(id, { ...entry.message });
 		} else if (kind === 'retract') {
 			const id = String(entry.message_id || '');

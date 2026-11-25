@@ -659,12 +659,12 @@
 	 */
 	.panel {
 		/*
-		 * Fixed radius for FAB ↔ sheet morph. 34px = mobile sheet hero
-		 * (12 pad + 22 half-btn) so expanded corners stay concentric with chrome
-		 * buttons; when collapsed to 44px height CSS clamps to a pill. Only
-		 * width/height/position animate — never transition border-radius.
+		 * Fixed --comments-radius per breakpoint so FAB ↔ sheet morph only
+		 * animates width/height/position — never transition border-radius.
+		 * Desktop: half of 44px FAB → 22px (full rounded floating card).
+		 * Mobile: --radius-hero (34px) concentric with chrome buttons.
 		 */
-		--comments-radius: 34px;
+		--comments-radius: 22px;
 		--fab-right: 20px;
 		--fab-bottom: max(20px, env(safe-area-inset-bottom));
 		/* Expose clearance for detail scroll padding (height + inset + gap). */
@@ -951,6 +951,7 @@
 
 	@media (max-width: 767px) {
 		.panel {
+			--comments-radius: var(--radius-hero, 34px);
 			--fab-right: 14px;
 			--fab-bottom: max(14px, env(safe-area-inset-bottom));
 		}

@@ -140,7 +140,16 @@ export function navForRole() {
 		{ href: '/planning', label: 'Planning', icon: 'planning' }
 	];
 
-	const brandIcon = String(space.iconUrl || '').trim();
+	/*
+	 * Space brand icon (Settings → Appearance / meta/brand) for Website rows.
+	 * Prefer space.iconUrl (synced from spaceBrand); fall back to site favicon /
+	 * bundled PWA icon — always an <img>, never stroke NavIcon/globe.
+	 * UiShell renders spaceBrand with round + thin stroke.
+	 */
+	const brandIcon =
+		String(space.iconUrl || '').trim() ||
+		String(websites[0]?.faviconUrl || '').trim() ||
+		'/icons/icon-192.png';
 	if (websites.length > 0) {
 		items.push({
 			type: 'group',
@@ -151,9 +160,8 @@ export function navForRole() {
 			items: websites.map((w) => ({
 				href: '/website',
 				label: w.host,
-				/* Space icon in front of website rows (round + stroke in shell). */
-				faviconUrl: brandIcon || w.faviconUrl,
-				spaceBrand: Boolean(brandIcon),
+				faviconUrl: brandIcon,
+				spaceBrand: true,
 				icon: 'website',
 				id: w.id
 			}))
@@ -163,8 +171,8 @@ export function navForRole() {
 			href: '/website',
 			label: 'Websites',
 			icon: 'website',
-			faviconUrl: brandIcon || undefined,
-			spaceBrand: Boolean(brandIcon)
+			faviconUrl: brandIcon,
+			spaceBrand: true
 		});
 	}
 

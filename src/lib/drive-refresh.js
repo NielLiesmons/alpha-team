@@ -109,7 +109,7 @@ export async function refreshBackgroundDrive() {
 	}
 
 	hydrateChangeSummaryLocal(session);
-	driveSession.syncing = true;
+	/* Do not flip global syncing — title chrome is section-scoped via beginSync. */
 	driveSession.error = null;
 
 	try {
@@ -166,8 +166,62 @@ export async function refreshBackgroundDrive() {
 }
 
 /**
- * Pull-to-refresh / boot: chat first, then background domains.
+ * Pull-to-refresh: refresh ONLY the open section’s data.
+ * Never sets driveSession.syncing (keeps unrelated title Metaballs quiet).
+ */
+export async function refreshCurrentSectionDrive() {
+	const session = activeSession();
+	if (!session) return;
+
+	const route = currentSection();
+	if (!route) return;
+
+	if (isOffline() && hasLocalWorkspace()) {
+		if (route === 'chat') {
+			try {
+				await refreshChatFeed();
+			} catch {
+				/* ignore */
+			}
+		}
+		return;
+	}
+
+	hydrateChangeSummaryLocal(session);
+	driveSession.error = null;
+	beginSync('', [route]);
+
+	try {
+		if (route === 'chat') {
+			await refreshChatFeed();
+			return;
+		}
+		if (route === 'mail') {
+			await refreshMail();
+			return;
+		}
+		if (route === 'files') {
+			const { listEntries } = await import('./drive/entities.js');
+			const { setFilesEntries, filesView } = await import('./files-view.svelte.js');
+			const list = await listEntries(session);
+			setFilesEntries(list);
+			filesView.loading = false;
+			return;
+		}
+
+		await flushPendingWorkspace();
+		await refreshFromDrive({ skipTipGate: true, outerProgress: true });
+	} catch (e) {
+		driveSession.error = e instanceof Error ? e.message : String(e);
+	} finally {
+		endSync([route]);
+	}
+}
+
+/**
+ * Boot / full crawl: chat first, then background domains.
  * Tip-unchanged still refreshes chat (peer messages).
+ * Prefer refreshCurrentSectionDrive for pull-to-refresh.
  */
 export async function refreshAllDrive() {
 	const session = activeSession();
@@ -186,7 +240,7 @@ export async function refreshAllDrive() {
 	}
 
 	hydrateChangeSummaryLocal(session);
-	driveSession.syncing = true;
+	/* Keep global syncing false — title chrome is section-scoped via beginSync. */
 	driveSession.error = null;
 
 	try {
@@ -200,7 +254,7 @@ export async function refreshAllDrive() {
 			tip = '';
 		}
 
-		/* Title chrome: spin the open section for the whole refresh (PTR / boot). */
+		/* Title chrome: spin the open section for the whole refresh (boot). */
 		const route = currentSection();
 		if (route) beginSync('', [route]);
 		/* Chat always first — never wait on workspace crawl. */

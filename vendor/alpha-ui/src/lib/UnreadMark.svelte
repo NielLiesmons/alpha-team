@@ -39,7 +39,10 @@
 		width: var(--dot, 7px);
 		height: var(--dot, 7px);
 		border-radius: 999px;
-		background: var(--accent-1, #5a58fe);
+		background: var(
+			--gradient-accent-1,
+			radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%)
+		);
 		flex-shrink: 0;
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg, #000) 35%, transparent);
 	}

@@ -4,16 +4,14 @@
 	 * Folder picks live as nested sub-items under the Mail nav title row.
 	 */
 	import { mailFolderLabel, mailView } from '$lib/mail-view.svelte.js';
-	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { mailUi } from '$lib/mail.svelte.js';
 	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import MetaballLoader from '@alpha/ui/MetaballLoader.svelte';
 
 	const label = $derived(mailFolderLabel(mailView.folder) || t('mail.mailbox'));
-	const syncing = $derived(
-		isSectionSyncing('mail') || mailUi.loading || driveSession.syncing
-	);
+	/* Section-local only — never spin off global driveSession.syncing. */
+	const syncing = $derived(isSectionSyncing('mail') || mailUi.loading);
 </script>
 
 <div class="mail-title" class:titles-syncing={syncing} aria-busy={syncing || undefined}>

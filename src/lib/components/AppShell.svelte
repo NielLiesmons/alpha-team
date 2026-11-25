@@ -43,7 +43,7 @@
 	import { resetAccountingBrowse } from '$lib/accounting.svelte.js';
 	import { requestDriveUpload } from '$lib/drive/upload-ui.svelte.js';
 	import { requestPhotosUpload } from '$lib/photos-upload.svelte.js';
-	import { refreshAllDrive } from '$lib/drive-refresh.js';
+	import { refreshCurrentSectionDrive } from '$lib/drive-refresh.js';
 	import { bindDetailPopstate } from '$lib/nav-stack.js';
 	import {
 		PLANNING_ZOOMS,
@@ -58,7 +58,6 @@
 	} from '$lib/mail-view.svelte.js';
 	import { chatUi } from '$lib/chat.svelte.js';
 	import { sectionForPath } from '$lib/drive/change-summary.svelte.js';
-	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { mailUi } from '$lib/mail.svelte.js';
 	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
 	import { locale, t } from '$lib/i18n.svelte.js';
@@ -272,11 +271,16 @@
 		websites.length;
 		const site = activeWebsite();
 		if (websiteOpen && site) {
+			const brand =
+				String(spaceBrand.iconUrl || space.iconUrl || '').trim() ||
+				String(site.faviconUrl || '').trim() ||
+				'/icons/icon-192.png';
 			return {
 				href: '/website',
 				label: site.host,
 				icon: 'website',
-				faviconUrl: site.faviconUrl,
+				faviconUrl: brand,
+				spaceBrand: true,
 				createKind: 'newsletter'
 			};
 		}
@@ -428,16 +432,20 @@
 	});
 
 	/**
-	 * Title-chrome loading: section sync + feed/list loads for the open section.
-	 * Keeps the metaball visible during real refreshes, not only tip-mismatch crawls.
+	 * Title-chrome loading: section-scoped only.
+	 * Never spin Chat/Mail titles off global driveSession.syncing — background
+	 * workspace crawl must not wipe a warm local-first feed chrome.
 	 */
 	const titleSyncing = $derived.by(() => {
 		const section = sectionForPath(path);
 		if (isSectionSyncing(section)) return true;
-		if (section === 'chat' && (chatUi.loading || !chatUi.settled)) return true;
-		if (section === 'mail' && mailUi.loading) return true;
-		/* Active Drive refresh — covers tip-match PTR before section flags stamp. */
-		if (section && driveSession.syncing) return true;
+		/* Chat: only while empty + unresolved — warm cache ⇒ no Metaball. */
+		if (section === 'chat') {
+			return Boolean(chatUi.loading && !chatUi.settled);
+		}
+		if (section === 'mail') {
+			return Boolean(mailUi.loading);
+		}
 		return false;
 	});
 
@@ -604,7 +612,7 @@
 			else if (mailView.folder === 'archive') setMailFolder('mailbox');
 		}
 	}}
-	onRefresh={() => refreshAllDrive()}
+	onRefresh={() => refreshCurrentSectionDrive()}
 	feedPadClass={chatList ? '' : 'feed-pad'}
 	listTopHidden={callChromeOpen}
 	accountLabel={displayNameFromEmail()}

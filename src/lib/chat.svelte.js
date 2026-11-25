@@ -322,6 +322,45 @@ export function hydrateChatFeedFromCache() {
 	return true;
 }
 
+/** Soft-delete / tombstone marker on a feed row. */
+function rowIsDeleted(m) {
+	return Boolean(m && (m.deleted || m.deleted_at));
+}
+
+/**
+ * Sticky delete: local tombstone wins over a stale non-deleted tip/leaf payload
+ * until the server acks deleted. No undo path — deleted stays deleted.
+ * @param {any} local
+ * @param {any} incoming
+ */
+function mergePreferDeleted(local, incoming) {
+	const localDel = rowIsDeleted(local);
+	const inDel = rowIsDeleted(incoming);
+	if (localDel && !inDel) {
+		return {
+			...incoming,
+			...local,
+			body: '',
+			attachments: [],
+			deleted: true,
+			deleted_at: local.deleted_at || incoming.deleted_at || '',
+			_failed: Boolean(local._failed),
+			_pending: false,
+			_local: false
+		};
+	}
+	if (inDel) {
+		const next = { ...local, ...incoming, body: '', attachments: [], deleted: true };
+		delete next._failed;
+		delete next._pending;
+		delete next._local;
+		delete next._outbox;
+		delete next._localId;
+		return next;
+	}
+	return null;
+}
+
 /**
  * Merge server rows with in-memory pending / recent settles. Never drops in-flight sends.
  * @param {any[]} list
@@ -345,9 +384,14 @@ function mergeFeedRows(list, prev) {
 		const id = String(m?.id || '');
 		if (!id) continue;
 		if (byId.has(id)) {
+			const server = byId.get(id);
+			const stuck = mergePreferDeleted(m, server);
+			if (stuck) {
+				byId.set(id, stuck);
+				continue;
+			}
 			/* Tip listed this id — prefer server row; keep in-memory previewUrls (incl. live blob:). */
 			if (Array.isArray(m.attachments)) {
-				const server = byId.get(id);
 				const prevAtt = m.attachments;
 				const nextAtt = Array.isArray(server.attachments) ? server.attachments : [];
 				byId.set(id, {
@@ -1407,6 +1451,8 @@ export async function retryChatMessage(msg) {
 
 /**
  * Soft-delete a chat bubble — leaves a muted tombstone in the feed.
+ * Optimistic: paints Deleted immediately and never rolls back to body content.
+ * Failed deletes keep the tombstone + `_failed` retry chrome (same as send).
  * @param {string} messageId
  */
 export async function softDeleteChatMessageUi(messageId) {
@@ -1416,14 +1462,15 @@ export async function softDeleteChatMessageUi(messageId) {
 	if (!id) return;
 	const idx = chatFeed.findIndex((m) => m.id === id);
 	const prev = idx >= 0 ? chatFeed[idx] : null;
-	if (prev?.deleted || prev?.deleted_at) return;
+	/* Already tombstoned and ack'd — skip. Retry only when `_failed`. */
+	if (rowIsDeleted(prev) && !prev?._failed) return;
 	const mediaAtts = Array.isArray(prev?.attachments) ? prev.attachments : [];
 	const tombstone = {
 		...(prev || { schema: 'alpha.chat_message/1', id, kind: 'chat', author }),
 		body: '',
 		attachments: [],
 		deleted: true,
-		deleted_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+		deleted_at: prev?.deleted_at || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
 		_pending: false,
 		_failed: false,
 		_local: false
@@ -1439,7 +1486,14 @@ export async function softDeleteChatMessageUi(messageId) {
 	try {
 		const saved = await softDeleteChatMessage(session, id, { author: author || prev?.author });
 		const i2 = chatFeed.findIndex((m) => m.id === id);
-		if (i2 >= 0) chatFeed[i2] = { ...chatFeed[i2], ...saved, deleted: true };
+		if (i2 >= 0) {
+			const next = { ...chatFeed[i2], ...saved, deleted: true, _failed: false };
+			delete next._pending;
+			delete next._local;
+			delete next._outbox;
+			delete next._localId;
+			chatFeed[i2] = next;
+		}
 		writeChatCache(chatFeed);
 		/* softDelete also cleans Drive media; feed atts cover any path the tip row still had. */
 		try {
@@ -1449,7 +1503,20 @@ export async function softDeleteChatMessageUi(messageId) {
 		}
 		return saved;
 	} catch (e) {
-		if (idx >= 0 && prev) chatFeed[idx] = prev;
+		/* Keep Deleted — never restore body. Surface same retry affordance as failed send. */
+		const iFail = chatFeed.findIndex((m) => m.id === id);
+		if (iFail >= 0) {
+			chatFeed[iFail] = {
+				...chatFeed[iFail],
+				body: '',
+				attachments: [],
+				deleted: true,
+				deleted_at: chatFeed[iFail].deleted_at || tombstone.deleted_at,
+				_failed: true,
+				_pending: false,
+				_local: false
+			};
+		}
 		writeChatCache(chatFeed);
 		chatUi.error = e instanceof Error ? e.message : String(e);
 		throw e;

@@ -2494,7 +2494,33 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	for (const row of seedRows) {
 		const id = String(row?.id || '');
 		if (!id) continue;
-		if (id.startsWith('local-') || row?._pending || row?._failed) {
+		if (id.startsWith('local-') || row?._pending) {
+			byId.set(id, row);
+			continue;
+		}
+		const tip = byId.get(id);
+		const seedDeleted = Boolean(row?.deleted || row?.deleted_at);
+		const tipDeleted = Boolean(tip?.deleted || tip?.deleted_at);
+		/*
+		 * Optimistic / sticky soft-delete must not lose to a stale tip leaf
+		 * that has not yet applied the tombstone (or remigrated Space json).
+		 */
+		if (seedDeleted && !tipDeleted) {
+			byId.set(id, {
+				...(tip || {}),
+				...row,
+				body: '',
+				attachments: [],
+				deleted: true,
+				deleted_at: row.deleted_at || tip?.deleted_at || ''
+			});
+			continue;
+		}
+		if (tipDeleted) {
+			/* Server acked tombstone — drop local retry chrome. */
+			continue;
+		}
+		if (row?._failed) {
 			byId.set(id, row);
 			continue;
 		}

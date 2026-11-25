@@ -82,9 +82,8 @@
 	import TipTypeIcon from './TipTypeIcon.svelte';
 	import NotifFilterButton from './NotifFilterButton.svelte';
 	import { sectionForPath } from '$lib/drive/change-summary.svelte.js';
-	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { isSectionSyncing } from '$lib/sync-progress.svelte.js';
-	import { refreshAllDrive } from '$lib/drive-refresh.js';
+	import { refreshCurrentSectionDrive } from '$lib/drive-refresh.js';
 	import { attachChromeScrollFade } from '$lib/chrome-scroll-fade.js';
 	import { openEntreprisesEntity } from '$lib/entity-routes.js';
 	import { commentsHistoryActive } from '$lib/nav-stack.js';
@@ -907,7 +906,8 @@
 		const section = sectionForPath(
 			typeof location !== 'undefined' ? location.pathname : ''
 		);
-		return Boolean(section && (isSectionSyncing(section) || driveSession.syncing));
+		/* Section-local only — never spin off global driveSession.syncing. */
+		return Boolean(section && isSectionSyncing(section));
 	});
 </script>
 
@@ -1027,7 +1027,7 @@
 
 	{#key `${selection?.kind ?? 'none'}:${selection?.id ?? 'none'}`}
 	<div class="detail-page">
-	<PullToRefresh onRefresh={() => refreshAllDrive()}>
+	<PullToRefresh onRefresh={() => refreshCurrentSectionDrive()}>
 	{#if task}
 		<header class="detail-top desktop-head">
 			<div class="detail-top-start">

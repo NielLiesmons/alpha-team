@@ -44,7 +44,7 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 - **Never** show a visual drag handle / grabber pill on Modal, CreateSheet, or generic bottom sheets — not on mobile, not on desktop.
 - Shared top chrome (`SheetTopbar`): close **X** (left) + centered title + trailing. Desktop 28 glass / 14px title; mobile 44 round / **17px** title (match `ChromeMobileBar`). Create sheets: **no** SheetTopbar row — content owns title/actions (overlay / Escape / drag-dismiss). Nav Create/Search still use Modal + SheetTopbar. Chrome icon pills: **scale only** on hover — no color wash.
 - **Exception — comment panels:** X + centered “Comments” + `Drag` grabber (right) for resize / drag-under-min dismiss. Same pattern in Admin `CommentThread` and public `CommentSection`.
-- Comment FAB ↔ panel morph: use a **fixed** `--comments-radius` (34px = mobile `--radius-hero`, clamps to pill when FAB is 44 tall) so only width/height animate — never transition `border-radius`.
+- Comment FAB ↔ panel morph: fixed `--comments-radius` per breakpoint so only width/height animate — never transition `border-radius`. Desktop: **22px** (half of 44px FAB) on the full rounded floating card; mobile: `--radius-hero` (**34px**) top radii only.
 - Mobile modal/sheet top radii: `--radius-hero` (34px) concentric with round chrome buttons (12 pad + 22). Desktop cards: `calc(var(--radius-hero) - 2px)`, centered.
 - Mobile sheets may still support drag-down-to-dismiss as a gesture.
 - Comment / chat entity panels: FAB inset inside the detail column (`~20px`); open panel matches Modal glass (`--modal-bg` / `--glass-panel`). Desktop floating card keeps **full** rounded corners (incl. bottom). Composer chrome matches Chat (`ChatComposer` + quote bar).
