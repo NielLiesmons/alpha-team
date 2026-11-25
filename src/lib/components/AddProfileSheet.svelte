@@ -1,99 +1,139 @@
 <script>
 	/**
-	 * Add Profile — claim an invite on this device, or (operators) create a new Space profile.
-	 * Field chrome: quiet grayscale shell, CTA inside the field, dismiss via scrim / ✕ (no Cancel).
+	 * Add Profile — paste invite / profile code (WelcomeGate UX) inside DS Modal.
+	 * Admin account creation lives in Admin → Create member, not here.
 	 */
 	import { tick } from 'svelte';
-	import QRCode from 'qrcode';
-	import Close from '@alpha/ui/icons/Close.svelte';
-	import AlphaLogo from '$lib/components/icons/AlphaLogo.svelte';
-	import { actor, setActiveEmail } from '$lib/actor.svelte.js';
+	import SheetTopbar from '@alpha/ui/SheetTopbar.svelte';
+	import Modal from './Modal.svelte';
+	import { setActiveEmail } from '$lib/actor.svelte.js';
 	import { addDeviceProfile } from '$lib/device-profiles.svelte.js';
 	import { health } from '$lib/drive/client.js';
-	import { decodeInvite, encodeInvite, inviteShareUrl, isInvitePayload } from '$lib/drive/invite.js';
 	import {
-		applyInviteBootstrap,
-		buildInviteSession,
-		persistInviteSecrets
-	} from '$lib/invite-bootstrap.js';
-	import { driveSession, saveSession } from '$lib/drive/session.svelte.js';
-	import { canInvite, markMemberJoined, upsertMember } from '$lib/members.svelte.js';
-	import { generateMailboxPassword, provisionMailbox } from '$lib/stalwart-provision.js';
-	import { mailDomain as spaceMailDomain } from '$lib/space-host.js';
+		decodeInvite,
+		extractInvitePayload,
+		isInvitePayload
+	} from '$lib/drive/invite.js';
+	import { applyInviteBootstrap } from '$lib/invite-bootstrap.js';
+	import { saveSession } from '$lib/drive/session.svelte.js';
+	import { markMemberJoined } from '$lib/members.svelte.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 
 	/** @type {{ open: boolean, onclose?: () => void }} */
-	let { open = false, onclose = () => {} } = $props();
+	let { open = $bindable(false), onclose = () => {} } = $props();
 
-	const inviter = $derived(canInvite(actor.email));
-	const mailDomain = $derived(spaceMailDomain());
-
-	/** @type {'create' | 'code' | 'password' | 'qr'} */
+	/** @type {'code' | 'password' | 'warm'} */
 	let step = $state('code');
 	let invitePayload = $state('');
 	let invitePass = $state('');
-	let createName = $state('');
-	let createLocal = $state('');
-	/** @type {'admin' | 'member'} */
-	let createRole = $state('member');
-	let createPass = $state('');
 	let busy = $state(false);
 	let error = $state('');
-	let qr = $state('');
-	let inviteLink = $state('');
-	let mailboxPw = $state('');
+	let flashCode = $state(false);
+	let panelCompact = $state(false);
+	let progressPct = $state(0);
+	let progressLabel = $state('');
 
-	/** @type {HTMLInputElement | HTMLTextAreaElement | undefined} */
+	/** @type {HTMLTextAreaElement | HTMLInputElement | undefined} */
 	let focusEl = $state();
-
-	const createEmail = $derived(
-		createLocal.trim()
-			? `${createLocal.trim().toLowerCase().replace(/@.*$/, '')}@${mailDomain}`
-			: ''
-	);
 
 	$effect(() => {
 		if (!open) return;
-		step = inviter ? 'create' : 'code';
+		step = 'code';
 		invitePayload = '';
 		invitePass = '';
-		createName = '';
-		createLocal = '';
-		createRole = 'member';
-		createPass = '';
 		busy = false;
 		error = '';
-		qr = '';
-		inviteLink = '';
-		mailboxPw = '';
+		flashCode = false;
+		panelCompact = false;
+		progressPct = 0;
+		progressLabel = '';
 		void tick().then(() => focusEl?.focus());
 	});
 
-	function dismiss() {
+	function close() {
 		if (busy) return;
+		open = false;
 		onclose();
 	}
 
-	function goPassword() {
+	/**
+	 * @param {string} raw
+	 */
+	async function flashThenPassphrase(raw) {
 		error = '';
 		try {
-			if (!isInvitePayload(invitePayload)) throw new Error('Not an Alpha invite');
-			step = 'password';
-			void tick().then(() => focusEl?.focus());
+			invitePayload = extractInvitePayload(raw);
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
+			return;
 		}
+		if (!isInvitePayload(invitePayload)) {
+			error = t('welcome.pasteInvite');
+			return;
+		}
+		step = 'code';
+		flashCode = true;
+		panelCompact = false;
+		await tick();
+		await new Promise((r) => setTimeout(r, 720));
+		flashCode = false;
+		panelCompact = true;
+		await new Promise((r) => setTimeout(r, 280));
+		step = 'password';
+		await tick();
+		focusEl?.focus();
+	}
+
+	async function pasteInvite() {
+		error = '';
+		/** @type {string} */
+		let text = '';
+		try {
+			text = await navigator.clipboard.readText();
+		} catch {
+			focusEl?.focus();
+			error = t('welcome.clipboardBlocked');
+			return;
+		}
+		const trimmed = String(text || '').trim();
+		if (!trimmed) {
+			error = t('welcome.pasteInvite');
+			return;
+		}
+		await flashThenPassphrase(trimmed);
+	}
+
+	/** @param {ClipboardEvent} e */
+	function onPaste(e) {
+		const text = e.clipboardData?.getData('text') || '';
+		if (!text.trim()) return;
+		e.preventDefault();
+		void flashThenPassphrase(text);
+	}
+
+	function backToCode() {
+		error = '';
+		invitePass = '';
+		panelCompact = false;
+		flashCode = false;
+		step = 'code';
+		void tick().then(() => focusEl?.focus());
 	}
 
 	async function submitPassword() {
 		error = '';
 		busy = true;
+		panelCompact = true;
+		step = 'warm';
+		progressPct = 12;
+		progressLabel = t('welcome.loadingSpace');
 		try {
 			const session = await decodeInvite(invitePayload, invitePass);
 			if (!session.email) {
 				throw new Error('This invite has no profile — ask for a new member invite QR.');
 			}
+			progressPct = 40;
 			const ok = await health(session);
 			if (ok !== 'ok') throw new Error(`Drive health returned “${ok}”`);
 			saveSession(session);
@@ -102,440 +142,223 @@
 				name: session.displayName || session.email.split('@')[0]
 			});
 			setActiveEmail(session.email);
+			progressPct = 70;
+			progressLabel = t('welcome.loadingChat');
 			await applyInviteBootstrap(session);
+			progressPct = 90;
 			await refreshFromDrive();
 			await markMemberJoined(session.email);
-			onclose();
+			progressPct = 100;
+			await new Promise((r) => setTimeout(r, 180));
+			close();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
+			step = 'password';
+			panelCompact = true;
 		} finally {
 			busy = false;
 		}
 	}
 
-	async function createProfile() {
-		error = '';
-		qr = '';
-		inviteLink = '';
-		mailboxPw = '';
-		/* TODO i18n: deferred-mailbox invite message has no key yet */
-		if (!inviter) {
-			error = t('invite.onlyAdmins');
-			return;
+	function onCodeKeydown(e) {
+		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+			e.preventDefault();
+			if (invitePayload.trim()) void flashThenPassphrase(invitePayload);
+			else void pasteInvite();
 		}
-		if (!driveSession.connected) {
-			error = t('settings.connectDriveFirst');
-			return;
-		}
-		if (!createName.trim()) {
-			error = t('invite.enterName');
-			return;
-		}
-		if (!createEmail.includes('@')) {
-			error = t('invite.enterMailbox');
-			return;
-		}
-		if (createPass.trim().length < 6) {
-			error = t('invite.passphraseMin');
-			return;
-		}
-		busy = true;
-		try {
-			const mailboxPassword = generateMailboxPassword();
-			const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-			await upsertMember({
-				email: createEmail,
-				name: createName.trim(),
-				role: createRole,
-				status: 'invited',
-				invited_at: now
-			});
-			const provision = await provisionMailbox({
-				email: createEmail,
-				password: mailboxPassword,
-				displayName: createName.trim()
-			});
-			await persistInviteSecrets(createEmail, mailboxPassword);
-			const inviteSession = await buildInviteSession({
-				email: createEmail,
-				displayName: createName.trim(),
-				role: createRole,
-				mailboxPassword
-			});
-			const payload = await encodeInvite(inviteSession, createPass);
-			inviteLink = inviteShareUrl(payload);
-			mailboxPw = mailboxPassword;
-			qr = await QRCode.toDataURL(inviteLink, {
-				errorCorrectionLevel: 'L',
-				margin: 1,
-				width: 280,
-				color: { dark: '#111111', light: '#ffffff' }
-			});
-			step = 'qr';
-			error = provision.deferred
-				? 'Invite ready. Set the mailbox password in Stalwart once, then share QR + passphrase.'
-				: t('invite.readyHint');
-		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
-		} finally {
-			busy = false;
+	}
+
+	function onPassKeydown(e) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			void submitPassword();
 		}
 	}
 </script>
 
-{#if open}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="scrim" role="presentation" onclick={dismiss}>
-		<div
-			class="sheet"
-			role="dialog"
-			aria-modal="true"
-			aria-label={t('settings.addProfile')}
-			onclick={(e) => e.stopPropagation()}
-		>
-			<header class="head">
-				<div class="mark" aria-hidden="true"><AlphaLogo size={36} /></div>
-				<button type="button" class="icon-pill" aria-label={t('common.close')} disabled={busy} onclick={dismiss}>
-					<Close size={18} />
-				</button>
-			</header>
-
-			{#if step === 'create'}
-				<p class="lead">{t('invite.createProfile')}</p>
-				<label class="quiet">
-					<span class="sr-only">{t('invite.displayName')}</span>
-					<input
-						bind:this={focusEl}
-						class="field"
-						type="text"
-						bind:value={createName}
-						autocomplete="name"
-						placeholder={t('invite.displayName')}
-					/>
-				</label>
-				<label class="quiet">
-					<span class="sr-only">{t('invite.mailbox')}</span>
-					<div class="local-row field">
-						<input
-							class="bare"
-							type="text"
-							bind:value={createLocal}
-							autocomplete="off"
+<Modal bind:open label={t('settings.addProfile')}>
+	<div class="sheet">
+		<SheetTopbar
+			title={t('settings.addProfile')}
+			trailing="none"
+			closeLabel={t('common.close')}
+			onclose={close}
+		/>
+		<div class="body" class:compact={panelCompact || step === 'warm'}>
+			<div
+				class="invite-panel"
+				class:compact={panelCompact || step === 'warm'}
+				class:flash={flashCode}
+				class:pass={step === 'password'}
+				class:warming={step === 'warm'}
+			>
+				{#if step === 'code'}
+					<label class="field">
+						<span class="sr-only">{t('welcome.inviteCode')}</span>
+						<textarea
+							bind:this={focusEl}
+							rows="3"
+							bind:value={invitePayload}
 							spellcheck="false"
-							placeholder={t('invite.mailboxHint')}
+							placeholder={flashCode ? '' : t('welcome.invitePlaceholder')}
+							class:flash-text={flashCode}
+							onpaste={onPaste}
+							onkeydown={onCodeKeydown}
+						></textarea>
+					</label>
+					{#if error}
+						<p class="err" role="alert">{error}</p>
+					{/if}
+					<button type="button" class="cta" onclick={pasteInvite}>
+						{t('welcome.pasteCta')}
+					</button>
+				{:else if step === 'password'}
+					<label class="field pass-field">
+						<span class="sr-only">{t('welcome.passphrase')}</span>
+						<input
+							bind:this={focusEl}
+							type="password"
+							bind:value={invitePass}
+							autocomplete="off"
+							placeholder={t('welcome.passphrase')}
+							onkeydown={onPassKeydown}
 						/>
-						<span class="domain">@{mailDomain}</span>
-					</div>
-				</label>
-				<div class="seg" role="radiogroup" aria-label={t('settings.spaceRole')}>
-					<button
-						type="button"
-						class:on={createRole === 'member'}
-						role="radio"
-						aria-checked={createRole === 'member'}
-						onclick={() => (createRole = 'member')}>{t('settings.roleMember')}</button
-					>
-					<button
-						type="button"
-						class:on={createRole === 'admin'}
-						role="radio"
-						aria-checked={createRole === 'admin'}
-						onclick={() => (createRole = 'admin')}>{t('settings.roleAdmin')}</button
-					>
-				</div>
-				<div class="field-shell">
-					<input
-						class="bare"
-						type="password"
-						bind:value={createPass}
-						autocomplete="new-password"
-						placeholder={t('invite.passphrase')}
-						onkeydown={(e) => e.key === 'Enter' && createProfile()}
-					/>
-					<button
-						type="button"
-						class="cta"
-						disabled={busy || createPass.trim().length < 6}
-						onclick={() => void createProfile()}
-					>
-						{busy ? '…' : t('invite.create')}
-					</button>
-				</div>
-				{#if error}
-					<p class="err" role="alert">{error}</p>
-				{/if}
-				<button type="button" class="ghost" onclick={() => (step = 'code')}>
-					{t('invite.haveCode')}
-				</button>
-			{:else if step === 'code'}
-				<p class="lead">{t('welcome.pasteInvite')}</p>
-				<div class="field-shell tall">
-					<textarea
-						bind:this={focusEl}
-						class="bare area"
-						rows="2"
-						bind:value={invitePayload}
-						spellcheck="false"
-						placeholder={t('invite.codeOrLink')}
-						onkeydown={(e) => {
-							if (e.key === 'Enter' && !e.shiftKey) {
-								e.preventDefault();
-								goPassword();
-							}
-						}}
-					></textarea>
-					<button
-						type="button"
-						class="cta"
-						disabled={!invitePayload.trim()}
-						onclick={goPassword}
-					>
-						{t('common.continue')}
-					</button>
-				</div>
-				{#if error}
-					<p class="err" role="alert">{error}</p>
-				{/if}
-				{#if inviter}
-					<button type="button" class="ghost" onclick={() => (step = 'create')}>
-						{t('invite.createProfile')}
-					</button>
-				{/if}
-			{:else if step === 'password'}
-				<p class="lead">{t('invite.enterPassphrase')}</p>
-				<div class="field-shell">
-					<input
-						bind:this={focusEl}
-						class="bare"
-						type="password"
-						bind:value={invitePass}
-						autocomplete="off"
-						placeholder={t('invite.passphrase')}
-						onkeydown={(e) => e.key === 'Enter' && submitPassword()}
-					/>
+					</label>
+					{#if error}
+						<p class="err" role="alert">{error}</p>
+					{/if}
 					<button
 						type="button"
 						class="cta"
 						disabled={busy || !invitePass.trim()}
 						onclick={() => void submitPassword()}
 					>
-						{busy ? '…' : t('invite.add')}
+						{t('welcome.enter')}
 					</button>
-				</div>
-				{#if error}
-					<p class="err" role="alert">{error}</p>
+				{:else}
+					<div
+						class="progress-bar"
+						role="progressbar"
+						aria-valuemin="0"
+						aria-valuemax="100"
+						aria-valuenow={progressPct}
+						aria-label={progressLabel}
+					>
+						<div class="progress-fill" style={`width: ${progressPct}%`}></div>
+						<span class="progress-label">{progressLabel}</span>
+						<span class="progress-pct">{progressPct}%</span>
+					</div>
 				{/if}
-				<button type="button" class="ghost" disabled={busy} onclick={() => (step = 'code')}
+			</div>
+
+			{#if step === 'password'}
+				<button type="button" class="ghost" disabled={busy} onclick={backToCode}
 					>{t('common.back')}</button
 				>
-			{:else}
-				<p class="lead">{error || t('invite.shareQr')}</p>
-				{#if qr}
-					<figure class="qr-wrap">
-						<img src={qr} alt={t('invite.ready')} width="240" height="240" />
-					</figure>
-				{/if}
-				{#if mailboxPw}
-					<p class="meta">{t('invite.mailboxPasswordOnce')} <code>{mailboxPw}</code></p>
-				{/if}
-				{#if inviteLink}
-					<p class="meta link">{inviteLink}</p>
-				{/if}
-				<button type="button" class="ghost" onclick={() => (step = 'create')}>{t('invite.createAnother')}</button>
+			{:else if step === 'code'}
+				<p class="hint">{t('settings.addProfileHint')}</p>
 			{/if}
 		</div>
 	</div>
-{/if}
+</Modal>
 
 <style>
-	.scrim {
-		position: fixed;
-		inset: 0;
-		z-index: 80;
-		display: grid;
-		place-items: end center;
-		padding: 16px;
-		padding-bottom: max(16px, env(safe-area-inset-bottom));
-		background: color-mix(in srgb, #000 45%, transparent);
+	.sheet {
+		display: flex;
+		flex-direction: column;
+		max-height: min(78vh, 640px);
+		overflow: auto;
 		box-sizing: border-box;
 	}
 
-	@media (min-width: 768px) {
-		.scrim {
-			place-items: center;
-		}
+	.body {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 14px;
+		padding: 8px 16px 20px;
+		box-sizing: border-box;
+		transition: gap 0.28s ease;
 	}
 
-	.sheet {
-		width: min(400px, 100%);
-		padding: 16px 18px 18px;
-		border-radius: 20px;
-		background: var(--bg);
-		border: 1px solid var(--fg-8, var(--hairline));
-		box-shadow: 0 20px 60px var(--shadow-strong);
+	.body.compact {
+		gap: 10px;
+	}
+
+	.invite-panel {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
-		box-sizing: border-box;
+		transition:
+			min-height 0.28s ease,
+			gap 0.28s ease;
 	}
 
-	.head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
+	.invite-panel.compact {
+		gap: 10px;
 	}
 
-	.mark {
-		display: grid;
-		place-items: center;
-		color: var(--fg, var(--white));
-		flex: 1;
-	}
-
-	.icon-pill {
-		width: 2rem;
-		height: 2rem;
-		display: grid;
-		place-items: center;
-		padding: 0;
-		border-radius: 999px;
-		border: 0;
-		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
-		color: var(--fg-66, var(--white66));
-		cursor: pointer;
-		font: inherit;
-		line-height: 0;
-		flex-shrink: 0;
-		box-sizing: border-box;
-	}
-
-	@media (max-width: 767px) {
-		.icon-pill {
-			width: 44px;
-			height: 44px;
-		}
-	}
-
-	.lead {
-		margin: 0;
-		text-align: center;
-		font-size: 0.875rem;
-		line-height: 1.4;
-		color: var(--fg-66, var(--white66));
-	}
-
-	.quiet {
+	.field {
 		display: block;
 		margin: 0;
 	}
 
-	.field,
-	.field-shell {
+	.field textarea,
+	.field input {
 		width: 100%;
 		box-sizing: border-box;
-		border-radius: 999px;
+		border-radius: 18px;
 		border: 1px solid var(--fg-8, var(--hairline));
 		background: color-mix(in srgb, var(--fg) 4%, transparent);
 		color: var(--fg, var(--white));
 		font: inherit;
-		outline: none;
-	}
-
-	.field {
-		height: 48px;
-		padding: 0 16px;
-		font-size: 0.9375rem;
-		font-weight: 500;
-	}
-
-	.field::placeholder {
-		color: var(--fg-33, var(--white33));
-		font-weight: 500;
-	}
-
-	.field:focus {
-		outline: none;
-		border-color: var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
-	}
-
-	.field-shell {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		min-height: 48px;
-		padding: 4px;
-	}
-
-	.field-shell.tall {
-		align-items: flex-end;
-		border-radius: 18px;
-		min-height: 96px;
-	}
-
-	.field-shell:focus-within {
-		outline: none;
-		border-color: var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
-	}
-
-	.bare {
-		flex: 1;
-		min-width: 0;
-		height: 100%;
-		min-height: 40px;
-		padding: 0 12px 0 14px;
-		border: 0;
-		background: transparent;
-		color: var(--fg, var(--white));
-		font: inherit;
 		font-size: 0.9375rem;
 		font-weight: 500;
 		outline: none;
-		box-sizing: border-box;
-	}
-
-	.bare::placeholder {
-		color: var(--fg-33, var(--white33));
-		font-weight: 500;
-	}
-
-	.bare.area {
-		padding: 10px 12px 10px 14px;
-		min-height: 72px;
+		padding: 14px 16px;
 		resize: none;
 		line-height: 1.4;
 	}
 
-	.local-row {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		height: 48px;
-		padding: 0 14px 0 4px;
+	.field.pass-field input {
 		border-radius: 999px;
+		min-height: 48px;
+		padding: 0 16px;
 	}
 
-	.local-row .bare {
-		padding-left: 12px;
+	.field textarea:focus,
+	.field input:focus {
+		border-color: var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
 	}
 
-	.domain {
-		flex-shrink: 0;
-		font-size: 0.8125rem;
-		font-weight: 500;
+	.field textarea::placeholder,
+	.field input::placeholder {
 		color: var(--fg-33, var(--white33));
+		font-weight: 500;
+	}
+
+	.field textarea.flash-text {
+		animation: flash-pulse 0.72s ease;
+	}
+
+	@keyframes flash-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		40% {
+			opacity: 0.55;
+		}
 	}
 
 	.cta {
-		flex-shrink: 0;
-		height: 40px;
-		padding: 0 16px;
+		height: 48px;
 		border: 0;
 		border-radius: 999px;
 		background: var(--button-primary-bg, var(--fg));
 		color: var(--button-primary-fg, var(--bg));
 		font: inherit;
-		font-size: 0.875rem;
+		font-size: 0.9375rem;
 		font-weight: 650;
 		cursor: pointer;
 	}
@@ -543,33 +366,6 @@
 	.cta:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
-	}
-
-	.seg {
-		display: flex;
-		gap: 4px;
-		padding: 4px;
-		border-radius: 999px;
-		border: 1px solid var(--fg-8, var(--hairline));
-		background: color-mix(in srgb, var(--fg) 4%, transparent);
-	}
-
-	.seg button {
-		flex: 1;
-		height: 36px;
-		border: 0;
-		border-radius: 999px;
-		background: transparent;
-		color: var(--fg-66, var(--white66));
-		font: inherit;
-		font-size: 0.8125rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.seg button.on {
-		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
-		color: var(--fg, var(--white));
 	}
 
 	.ghost {
@@ -588,6 +384,14 @@
 		color: var(--fg-66, var(--white66));
 	}
 
+	.hint {
+		margin: 0;
+		text-align: center;
+		font-size: 0.8125rem;
+		line-height: 1.4;
+		color: var(--fg-33, var(--white33));
+	}
+
 	.err {
 		margin: 0;
 		text-align: center;
@@ -595,32 +399,41 @@
 		color: var(--fg-66, var(--white66));
 	}
 
-	.qr-wrap {
-		margin: 0 auto;
-		padding: 10px;
-		border-radius: 16px;
-		background: #fff;
-		width: fit-content;
+	.progress-bar {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		min-height: 48px;
+		padding: 0 14px;
+		border-radius: 999px;
+		border: 1px solid var(--fg-8, var(--hairline));
+		background: color-mix(in srgb, var(--fg) 4%, transparent);
+		overflow: hidden;
+		box-sizing: border-box;
 	}
 
-	.qr-wrap img {
-		display: block;
-		width: 220px;
-		height: 220px;
+	.progress-fill {
+		position: absolute;
+		inset: 0 auto 0 0;
+		background: var(--button-primary-bg, var(--fg-8));
+		opacity: 0.55;
+		transition: width 0.25s ease;
 	}
 
-	.meta {
-		margin: 0;
-		font-size: 0.75rem;
-		line-height: 1.4;
+	.progress-label,
+	.progress-pct {
+		position: relative;
+		z-index: 1;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--fg, var(--white));
+	}
+
+	.progress-pct {
 		color: var(--fg-66, var(--white66));
-		word-break: break-all;
-		text-align: center;
-	}
-
-	.meta.code,
-	.meta code {
-		font-size: 0.6875rem;
+		font-weight: 500;
 	}
 
 	.sr-only {

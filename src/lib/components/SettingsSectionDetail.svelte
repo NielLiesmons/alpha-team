@@ -4,13 +4,17 @@
 	import Sun from '@alpha/ui/icons/Sun.svelte';
 	import ThemeSystem from '@alpha/ui/icons/ThemeSystem.svelte';
 	import { onMount } from 'svelte';
+	import AdminCreateMemberModal from './AdminCreateMemberModal.svelte';
 	import ProfileInviteModal from './ProfileInviteModal.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import PrimaryButton from './PrimaryButton.svelte';
+	import Crown from './icons/Crown.svelte';
+	import Share from './icons/Share.svelte';
 	import { actor, clearActor, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import {
 		deviceProfiles,
-		removeDeviceProfile
+		removeDeviceProfile,
+		switchDeviceProfile
 	} from '$lib/device-profiles.svelte.js';
 	import {
 		clearMemberPicture,
@@ -28,7 +32,9 @@
 	import {
 		canManageMembers,
 		canManageSpace,
+		ensureMembers,
 		memberFor,
+		members,
 		removeMember,
 		upsertMember
 	} from '$lib/members.svelte.js';
@@ -45,14 +51,22 @@
 	import { setUiScale, uiScaleChoice } from '$lib/ui-scale.svelte.js';
 	import { space } from '$lib/sections.js';
 	import { setSpaceIcon, spaceIconUrl } from '$lib/space-brand.svelte.js';
-	import { forceClearSelection, refreshFromDrive } from '$lib/workspace.svelte.js';
+	import { setProfileTarget } from '$lib/settings-ui.svelte.js';
+	import { forceClearSelection, refreshFromDrive, selectEntity } from '$lib/workspace.svelte.js';
 	import { formatBytes, storageEstimate } from '$lib/offline-store.js';
 
 	/** @type {{ sectionId: string, profileEmail?: string }} */
 	let { sectionId, profileEmail = '' } = $props();
 
+	/** Legacy bookmarks: advanced → admin */
+	const sid = $derived(sectionId === 'advanced' ? 'admin' : sectionId);
+
 	let deviceCodeOpen = $state(false);
 	let deviceCodeMsg = $state('');
+	let inviteOpen = $state(false);
+	let inviteEmail = $state('');
+	let createMemberOpen = $state(false);
+	let rosterMsg = $state('');
 
 	/** Profile sheet target (may differ from signed-in actor when editing another card). */
 	const targetEmail = $derived(
@@ -120,6 +134,13 @@
 			{ value: 'large', label: t('settings.uiScaleLarge'), labelFontSize: '1rem' }
 		];
 	});
+
+	const spaceMembers = $derived.by(() =>
+		members
+			.filter((m) => m.status !== 'disabled')
+			.slice()
+			.sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email))
+	);
 
 	let nameDraft = $state('');
 	let picBusy = $state(false);
@@ -227,6 +248,9 @@
 		void storageEstimate().then((e) => {
 			if (e.quota) storageLabel = `${formatBytes(e.usage)} / ${formatBytes(e.quota)}`;
 		});
+		if (driveSession.connected) {
+			void ensureMembers().catch(() => {});
+		}
 	});
 
 	async function onTogglePush() {
@@ -391,9 +415,42 @@
 			cacheBusy = false;
 		}
 	}
+
+	/** @param {string} email */
+	function openMemberProfile(email) {
+		setProfileTarget(email);
+		selectEntity('settings', 'profile');
+	}
+
+	/** @param {string} email */
+	function openInviteFor(email) {
+		inviteEmail = String(email || '')
+			.trim()
+			.toLowerCase();
+		inviteOpen = true;
+	}
+
+	/** @param {string} email */
+	function switchToMember(email) {
+		rosterMsg = '';
+		try {
+			switchDeviceProfile(email);
+			rosterMsg = t('settings.switchedTo', {
+				name: displayNameFromEmail(email) || email
+			});
+		} catch (err) {
+			rosterMsg = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	const activeEmail = $derived(
+		String(actor.email || '')
+			.trim()
+			.toLowerCase()
+	);
 </script>
 
-{#if sectionId === 'profile'}
+{#if sid === 'profile'}
 	<section class="block">
 		<p class="field-label">
 			{t('settings.editProfile')}
@@ -443,22 +500,17 @@
 		{#if canAdminMembers && me && me.role !== 'owner'}
 			<hr class="rule" />
 			<p class="field-label">{t('settings.spaceRole')}</p>
-			<div class="seg" role="radiogroup" aria-label={t('settings.spaceRole')}>
-				<button
-					type="button"
-					class:on={roleDraft === 'member'}
-					role="radio"
-					aria-checked={roleDraft === 'member'}
-					onclick={() => (roleDraft = 'member')}>{t('settings.roleMember')}</button
-				>
-				<button
-					type="button"
-					class:on={roleDraft === 'admin'}
-					role="radio"
-					aria-checked={roleDraft === 'admin'}
-					onclick={() => (roleDraft = 'admin')}>{t('settings.roleAdmin')}</button
-				>
-			</div>
+			<SegmentedControl
+				options={[
+					{ value: 'member', label: t('settings.roleMember') },
+					{ value: 'admin', label: t('settings.roleAdmin') }
+				]}
+				value={roleDraft}
+				label={t('settings.spaceRole')}
+				onchange={(next) => {
+					roleDraft = /** @type {'admin' | 'member'} */ (next);
+				}}
+			/>
 			<div class="actions">
 				<PrimaryButton size="sm" disabled={memberBusy} onclick={() => void saveRole()}
 					>{memberBusy ? t('common.saving') : t('settings.saveRole')}</PrimaryButton
@@ -477,12 +529,21 @@
 		{/if}
 
 		<hr class="rule" />
+		<button type="button" class="btn danger disconnect" onclick={() => void disconnectThisProfile()}>
+			{displayNameFromEmail(targetEmail)
+				? t('settings.disconnectProfile', { name: displayNameFromEmail(targetEmail) })
+				: t('settings.disconnectProfileFallback')}
+		</button>
+		{#if memberMsg}<p class="status">{memberMsg}</p>{/if}
+	</section>
+{:else if sid === 'devices'}
+	<section class="block">
 		<p class="field-label">{t('settings.otherDevices')}</p>
 		<p class="hint">{t('settings.otherDevicesHint')}</p>
 		<div class="actions">
 			<PrimaryButton
 				size="sm"
-				disabled={!targetEmail || !driveSession.connected}
+				disabled={!activeEmail || !driveSession.connected}
 				onclick={() => {
 					deviceCodeMsg = '';
 					if (!driveSession.connected) {
@@ -496,17 +557,9 @@
 			</PrimaryButton>
 		</div>
 		{#if deviceCodeMsg}<p class="status">{deviceCodeMsg}</p>{/if}
-
-		<hr class="rule" />
-		<button type="button" class="btn danger disconnect" onclick={() => void disconnectThisProfile()}>
-			{displayNameFromEmail(targetEmail)
-				? t('settings.disconnectProfile', { name: displayNameFromEmail(targetEmail) })
-				: t('settings.disconnectProfileFallback')}
-		</button>
-		{#if memberMsg}<p class="status">{memberMsg}</p>{/if}
 	</section>
-	<ProfileInviteModal bind:open={deviceCodeOpen} email={targetEmail} mode="device" />
-{:else if sectionId === 'notifications'}
+	<ProfileInviteModal bind:open={deviceCodeOpen} email={activeEmail} mode="device" />
+{:else if sid === 'notifications'}
 	<section class="block">
 		<p class="field-label">{t('settings.notificationsTitle')}</p>
 		{#if pwaUi.standalone}
@@ -540,32 +593,8 @@
 		</p>
 		{#if pwaUi.message}<p class="status on">{pwaUi.message}</p>{/if}
 	</section>
-{:else if sectionId === 'appearance'}
+{:else if sid === 'appearance'}
 	<section class="block">
-		{#if isOperator}
-			<p class="field-label">{t('settings.spaceIcon')}</p>
-			<p class="hint">{t('settings.spaceIconHint')}</p>
-			<div class="space-icon-row">
-				<img class="space-icon-preview" src={spaceIconSrc} alt="" width="56" height="56" />
-				<div class="actions">
-					<PrimaryButton
-						size="sm"
-						disabled={spaceIconBusy}
-						onclick={() => spaceIconInput?.click()}
-					>
-						{spaceIconBusy ? t('common.uploading') : t('settings.changeSpaceIcon')}
-					</PrimaryButton>
-				</div>
-			</div>
-			<input
-				bind:this={spaceIconInput}
-				type="file"
-				accept="image/png,image/webp,image/jpeg"
-				hidden
-				onchange={onSpaceIconPick}
-			/>
-			{#if spaceIconMsg}<p class="status on">{spaceIconMsg}</p>{/if}
-		{/if}
 		<p class="field-label">{t('settings.language')}</p>
 		<div class="seg-wrap">
 			<SegmentedControl
@@ -594,7 +623,7 @@
 			/>
 		</div>
 	</section>
-{:else if sectionId === 'storage'}
+{:else if sid === 'storage'}
 	<section class="block">
 		<p class="field-label">{t('settings.storageTitle')}</p>
 		<p class="hint">
@@ -610,17 +639,106 @@
 				{cacheBusy ? t('settings.clearing') : t('settings.clearCache')}
 			</PrimaryButton>
 		</div>
-		<p class="hint tight">
-			{t('settings.clearCacheHint')}
-		</p>
+		<p class="hint tight">{t('settings.clearCacheHint')}</p>
 		{#if cacheMsg}<p class="status on">{cacheMsg}</p>{/if}
 	</section>
-{:else if sectionId === 'mail'}
+{:else if sid === 'admin' || sid === 'mail' || sid === 'publications' || sid === 'drive'}
 	<section class="block">
+		<p class="lede">{t('settings.adminLede')}</p>
+
+		<p class="field-label">{t('settings.spaceIcon')}</p>
+		<p class="hint">{t('settings.spaceIconHint')}</p>
+		<div class="space-icon-row">
+			<img class="space-icon-preview" src={spaceIconSrc} alt="" width="56" height="56" />
+			<div class="actions">
+				<PrimaryButton
+					size="sm"
+					disabled={spaceIconBusy}
+					onclick={() => spaceIconInput?.click()}
+				>
+					{spaceIconBusy ? t('common.uploading') : t('settings.changeSpaceIcon')}
+				</PrimaryButton>
+			</div>
+		</div>
+		<input
+			bind:this={spaceIconInput}
+			type="file"
+			accept="image/png,image/webp,image/jpeg"
+			hidden
+			onchange={onSpaceIconPick}
+		/>
+		{#if spaceIconMsg}<p class="status on">{spaceIconMsg}</p>{/if}
+
+		<hr class="rule" />
+		<p class="field-label">{t('settings.members')}</p>
+		<p class="hint">{t('settings.membersHint')}</p>
+		<ul class="member-list">
+			{#each spaceMembers as m (m.email)}
+				{@const isActive = m.email === activeEmail}
+				<li class="member-card" class:on={isActive}>
+					<button type="button" class="member-row" onclick={() => openMemberProfile(m.email)}>
+						<ProfilePic
+							name={displayNameFromEmail(m.email) || m.name}
+							email={m.email}
+							pictureUrl={pictureUrlFor(m.email)}
+							size={40}
+						/>
+						<span class="member-meta">
+							<span class="member-name">
+								{displayNameFromEmail(m.email) || m.name}
+								{#if m.role === 'owner' || m.role === 'admin'}
+									<span class="member-crown" aria-hidden="true"><Crown size={11} /></span>
+								{/if}
+							</span>
+							<span class="member-email">{m.email}</span>
+						</span>
+					</button>
+					<div class="member-actions">
+						{#if !isActive}
+							<button
+								type="button"
+								class="text-pill"
+								onclick={() => switchToMember(m.email)}
+							>
+								{t('settings.switchTo')}
+							</button>
+						{/if}
+						<button
+							type="button"
+							class="text-pill"
+							onclick={() => openMemberProfile(m.email)}
+						>
+							{t('settings.manage')}
+						</button>
+						<button
+							type="button"
+							class="icon-pill"
+							aria-label={t('settings.shareInvite')}
+							onclick={() => openInviteFor(m.email)}
+						>
+							<Share size={13} />
+						</button>
+					</div>
+				</li>
+			{/each}
+		</ul>
+		{#if rosterMsg}<p class="status on">{rosterMsg}</p>{/if}
+		<div class="actions">
+			<PrimaryButton
+				size="sm"
+				disabled={!driveSession.connected || !canAdminMembers}
+				onclick={() => {
+					if (!driveSession.connected) return;
+					createMemberOpen = true;
+				}}
+			>
+				{t('invite.createProfile')}
+			</PrimaryButton>
+		</div>
+
+		<hr class="rule" />
 		<p class="field-label">{t('settings.mailTitle')}</p>
-		<p class="hint">
-			{t('settings.mailHint')}
-		</p>
+		<p class="hint">{t('settings.mailHint')}</p>
 		<label class="row stack">
 			<span>{t('settings.password')}</span>
 			<input
@@ -637,67 +755,69 @@
 			</PrimaryButton>
 		</div>
 		{#if mailboxMsg}<p class="status on">{mailboxMsg}</p>{/if}
-	</section>
-{:else if sectionId === 'publications' && isOperator}
-	<section class="block">
-		<p class="field-label">{t('settings.publicationsTitle')}</p>
-		<p class="hint">{t('settings.publicationsHint')}</p>
-		<label class="row stack">
-			<span>{t('settings.adminToken')}</span>
-			<input type="password" bind:value={apiTokenDraft} autocomplete="off" spellcheck="false" />
-		</label>
-		<div class="actions">
-			<PrimaryButton size="sm" onclick={saveApiToken}>{t('settings.saveToken')}</PrimaryButton>
-		</div>
-		{#if apiTokenMsg}<p class="status on">{apiTokenMsg}</p>{/if}
-	</section>
-{:else if sectionId === 'drive' && isOperator}
-	<section class="block">
-		<p class="field-label">{t('settings.filesTitle')}</p>
-		<p class="hint">
-			{#if driveSession.connected}
-				{t('settings.driveConnected')} ({driveSession.url}).
-			{:else}
-				{t('settings.notConnected')}
-			{/if}
-		</p>
-		<button type="button" class="btn ghost" onclick={() => (advancedOpen = !advancedOpen)}>
-			{advancedOpen ? t('settings.hideManual') : t('settings.showManual')}
-		</button>
-		{#if advancedOpen}
+
+		{#if isOperator}
+			<hr class="rule" />
+			<p class="field-label">{t('settings.publicationsTitle')}</p>
+			<p class="hint">{t('settings.publicationsHint')}</p>
 			<label class="row stack">
-				<span>{t('settings.url')}</span>
-				<input type="url" bind:value={url} autocomplete="off" spellcheck="false" />
-			</label>
-			<label class="row stack">
-				<span>{t('settings.apiToken')}</span>
-				<input type="password" bind:value={token} autocomplete="off" spellcheck="false" />
-			</label>
-			<label class="row stack">
-				<span>{t('settings.rootKey')}</span>
-				<input type="password" bind:value={rootKey} autocomplete="off" spellcheck="false" />
+				<span>{t('settings.adminToken')}</span>
+				<input type="password" bind:value={apiTokenDraft} autocomplete="off" spellcheck="false" />
 			</label>
 			<div class="actions">
-				<PrimaryButton
-					size="sm"
-					disabled={busy || !token.trim() || !rootKey.trim()}
-					onclick={connect}
-				>
-					{busy
-						? t('common.connecting')
-						: driveSession.connected
-							? t('settings.reconnect')
-							: t('settings.connect')}
-				</PrimaryButton>
-				{#if driveSession.connected}
-					<button type="button" class="btn ghost" disabled={busy} onclick={disconnectDrive}
-						>{t('settings.disconnect')}</button
-					>
-				{/if}
+				<PrimaryButton size="sm" onclick={saveApiToken}>{t('settings.saveToken')}</PrimaryButton>
 			</div>
+			{#if apiTokenMsg}<p class="status on">{apiTokenMsg}</p>{/if}
+
+			<hr class="rule" />
+			<p class="field-label">{t('settings.filesTitle')}</p>
+			<p class="hint">
+				{#if driveSession.connected}
+					{t('settings.driveConnected')} ({driveSession.url}).
+				{:else}
+					{t('settings.notConnected')}
+				{/if}
+			</p>
+			<button type="button" class="btn ghost" onclick={() => (advancedOpen = !advancedOpen)}>
+				{advancedOpen ? t('settings.hideManual') : t('settings.showManual')}
+			</button>
+			{#if advancedOpen}
+				<label class="row stack">
+					<span>{t('settings.url')}</span>
+					<input type="url" bind:value={url} autocomplete="off" spellcheck="false" />
+				</label>
+				<label class="row stack">
+					<span>{t('settings.apiToken')}</span>
+					<input type="password" bind:value={token} autocomplete="off" spellcheck="false" />
+				</label>
+				<label class="row stack">
+					<span>{t('settings.rootKey')}</span>
+					<input type="password" bind:value={rootKey} autocomplete="off" spellcheck="false" />
+				</label>
+				<div class="actions">
+					<PrimaryButton
+						size="sm"
+						disabled={busy || !token.trim() || !rootKey.trim()}
+						onclick={connect}
+					>
+						{busy
+							? t('common.connecting')
+							: driveSession.connected
+								? t('settings.reconnect')
+								: t('settings.connect')}
+					</PrimaryButton>
+					{#if driveSession.connected}
+						<button type="button" class="btn ghost" disabled={busy} onclick={disconnectDrive}
+							>{t('settings.disconnect')}</button
+						>
+					{/if}
+				</div>
+			{/if}
+			{#if msg}<p class="status">{msg}</p>{/if}
 		{/if}
-		{#if msg}<p class="status">{msg}</p>{/if}
 	</section>
+	<ProfileInviteModal bind:open={inviteOpen} email={inviteEmail} mode="invite" />
+	<AdminCreateMemberModal bind:open={createMemberOpen} />
 {:else}
 	<p class="hint">{t('settings.unknownSection')}</p>
 {/if}
@@ -706,18 +826,24 @@
 	.block {
 		max-width: 520px;
 	}
+	.lede {
+		margin: 0 0 1.15rem;
+		font-size: 0.875rem;
+		line-height: 1.45;
+		color: var(--fg-66, var(--white66));
+	}
 	.field-label {
 		margin: 0 0 0.75rem;
-		font-size: 0.8125rem;
-		font-weight: 600;
-		letter-spacing: 0.04em;
+		font-size: 0.625rem;
+		font-weight: 500;
+		letter-spacing: 0.18em;
 		text-transform: uppercase;
-		color: var(--white66);
+		color: var(--fg-66, var(--white66));
 	}
 	.hint {
 		margin: 0 0 0.85rem;
 		font-size: 0.8125rem;
-		color: var(--white66);
+		color: var(--fg-66, var(--white66));
 	}
 	.hint.tight {
 		margin-top: -0.35rem;
@@ -746,7 +872,7 @@
 		font-weight: 600;
 	}
 	.row span {
-		color: var(--white66);
+		color: var(--fg-66, var(--white66));
 		font-weight: 500;
 	}
 	.row input {
@@ -842,15 +968,121 @@
 	.btn.ghost {
 		background-image: none;
 		background: transparent;
-		color: var(--white66);
-		border: 1px solid var(--white11);
+		color: var(--fg-66, var(--white66));
+		border: 1px solid var(--fg-8, var(--white11));
+		border-radius: 999px;
 	}
 	.status {
 		margin: 0.25rem 0 0;
 		font-size: 0.8125rem;
-		color: var(--white66);
+		color: var(--fg-66, var(--white66));
 	}
 	.status.on {
 		color: var(--fg, var(--white));
+	}
+	.member-list {
+		list-style: none;
+		margin: 0 0 0.5rem;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.member-card {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 10px 10px 12px;
+		border-radius: 14px;
+		background: transparent;
+		box-sizing: border-box;
+	}
+	.member-card.on {
+		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
+	}
+	.member-row {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		box-sizing: border-box;
+	}
+	.member-meta {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.member-name {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--fg, var(--white));
+	}
+	.member-crown {
+		color: var(--fg-33, var(--white44));
+		display: inline-grid;
+		place-items: center;
+	}
+	.member-email {
+		font-size: 0.75rem;
+		color: var(--fg-66, var(--white66));
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.member-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding-left: 52px;
+		flex-wrap: wrap;
+	}
+	.text-pill {
+		height: 2rem;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
+		color: var(--fg-66, var(--white66));
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.text-pill:hover {
+		color: var(--fg, var(--white));
+	}
+	.icon-pill {
+		width: 2rem;
+		height: 2rem;
+		border: 1px solid transparent;
+		border-radius: 999px;
+		background:
+			linear-gradient(var(--glass), var(--glass)) padding-box,
+			var(--glass-shine) border-box;
+		color: var(--fg-66, var(--white66));
+		display: grid;
+		place-items: center;
+		cursor: pointer;
+		padding: 0;
+		font: inherit;
+		line-height: 1;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		box-sizing: border-box;
+	}
+	.icon-pill:hover {
+		color: var(--fg, var(--white));
+		transform: scale(1.06);
 	}
 </style>
