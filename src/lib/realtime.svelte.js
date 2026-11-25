@@ -103,12 +103,25 @@ function flushPendingTipWake() {
 	}
 }
 
-/** Tip-wake after a chat tip write. Queues if the socket is mid-reconnect. */
-export function publishTipWake(tip) {
+/**
+ * Tip-wake after a chat tip write. Queues if the socket is mid-reconnect.
+ * Optional `message` lets peers paint the bubble from the bus before Drive pull
+ * (same instant path as reaction hints).
+ * @param {string} tip
+ * @param {Record<string, unknown> | null} [message]
+ */
+export function publishTipWake(tip, message = null) {
 	const t = String(tip || '').trim();
 	if (!t) return false;
 	ensureRealtime();
-	if (publishRealtime({ type: 'tip', tip: t })) {
+	const hint = messageHintPayload(message);
+	if (
+		publishRealtime({
+			type: 'tip',
+			tip: t,
+			...(hint ? { message: hint } : {})
+		})
+	) {
 		pendingTipWake = null;
 		realtimeUi.lastPublishedTip = t;
 		return true;
@@ -141,6 +154,76 @@ export function publishReactionHint(payload) {
 			author: String(payload.author),
 			...(payload.id ? { id: String(payload.id) } : {})
 		}
+	});
+}
+
+/**
+ * Strip a chat row down to a bus-safe hint (64KiB frame cap).
+ * @param {Record<string, unknown> | null | undefined} message
+ * @returns {Record<string, unknown> | null}
+ */
+function messageHintPayload(message) {
+	if (!message || typeof message !== 'object') return null;
+	const id = String(message.id || '').trim();
+	const author = String(message.author || '').trim();
+	if (!id || !author) return null;
+	const kind = String(message.kind || 'chat');
+	if (kind === 'reaction') return null;
+	const body = String(message.body || '').slice(0, 8_000);
+	/** @type {Record<string, unknown>} */
+	const out = {
+		schema: 'alpha.chat_message/1',
+		id,
+		kind,
+		author,
+		body,
+		created_at: String(message.created_at || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')),
+		channel_id: String(message.channel_id || 'general'),
+		delivery: 'sent',
+		read_by: []
+	};
+	if (message.reply_to) out.reply_to = String(message.reply_to);
+	if (message.ref && typeof message.ref === 'object') out.ref = message.ref;
+	if (Array.isArray(message.attachments) && message.attachments.length) {
+		out.attachments = message.attachments.slice(0, 8).map((a) => {
+			const row = /** @type {Record<string, unknown>} */ (a || {});
+			return {
+				path: String(row.path || ''),
+				content_type: String(row.content_type || 'application/octet-stream'),
+				kind:
+					row.kind === 'image' || row.kind === 'video' || row.kind === 'voice'
+						? row.kind
+						: 'file',
+				...(row.name ? { name: String(row.name) } : {}),
+				...(typeof row.bytes === 'number' ? { bytes: row.bytes } : {}),
+				...(typeof row.duration_ms === 'number' ? { duration_ms: row.duration_ms } : {}),
+				...(typeof row.blurhash === 'string' && row.blurhash
+					? { blurhash: String(row.blurhash).slice(0, 128) }
+					: {}),
+				...(typeof row.thumb_path === 'string' && row.thumb_path
+					? { thumb_path: String(row.thumb_path) }
+					: {}),
+				...(typeof row.width === 'number' ? { width: row.width } : {}),
+				...(typeof row.height === 'number' ? { height: row.height } : {})
+			};
+		});
+	}
+	return out;
+}
+
+/**
+ * Instant chat message fan-out (paint before mailbox pull). Tip wake still heals.
+ * @param {Record<string, unknown>} message
+ * @param {string} [tip]
+ */
+export function publishMessageHint(message, tip = '') {
+	const hint = messageHintPayload(message);
+	if (!hint) return false;
+	ensureRealtime();
+	return publishRealtime({
+		type: 'message',
+		...(tip ? { tip: String(tip) } : {}),
+		message: hint
 	});
 }
 
@@ -249,10 +332,37 @@ function onMessage(ev) {
 		const tip = String(data.tip);
 		realtimeUi.lastReceivedTip = tip;
 		realtimeUi.lastReceivedAt = Date.now();
+		/* Paint from tip payload immediately — don't wait on Drive mailbox walk. */
+		if (data.message) {
+			try {
+				void import('./chat.svelte.js').then(({ applyMessageHint }) => {
+					applyMessageHint(data.message);
+				});
+			} catch (e) {
+				console.warn('tip message hint', e);
+			}
+		}
 		try {
 			void wakeChatFromTip(tip);
 		} catch (e) {
 			console.warn('tip-wake handler', e);
+		}
+		return;
+	}
+	if (type === 'message' && data.message) {
+		try {
+			void import('./chat.svelte.js').then(({ applyMessageHint }) => {
+				applyMessageHint(data.message);
+			});
+		} catch (e) {
+			console.warn('message hint', e);
+		}
+		if (data.tip) {
+			try {
+				void wakeChatFromTip(String(data.tip));
+			} catch {
+				/* ignore */
+			}
 		}
 		return;
 	}

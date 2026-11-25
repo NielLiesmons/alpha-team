@@ -123,8 +123,10 @@ export function flushChatWake() {
 
 /**
  * Realtime bus tip-wake: refresh feed ASAP (Drive remains SoT).
- * Do not stamp lastTip before refresh — a premature stamp skipped later polls
- * when Drive was briefly behind the bus tip.
+ * Pass the bus tip into the mailbox walk so we never reuse a stale in-flight
+ * getNamedTip from the 500ms poll (that raced wakes and skipped new messages).
+ * Only stamp lastTip after the walk remembers that tip — never the bare bus
+ * hash alone (that skipped later polls when the pull missed the leaf).
  * @param {string} tip
  */
 export async function wakeChatFromTip(tip) {
@@ -150,12 +152,15 @@ export async function wakeChatFromTip(tip) {
 	inFlight = true;
 	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	try {
-		await refreshChatFeed();
+		await refreshChatFeed({ tip: t });
+		const cached = peekCachedChatTip(session) || '';
 		/*
-		 * Prefer chat named tip after load so poll self-heals if the bus tip raced
-		 * ahead of a visible putNamedTip. Fall back to the bus hash when cache is empty.
+		 * Only advance lastTip when the mailbox walk actually landed on this tip.
+		 * Falling back to bare bus `t` marked the tip "seen" without the leaf and
+		 * made the 500ms poll skip tipChanged forever.
 		 */
-		lastTip = peekCachedChatTip(session) || t;
+		if (cached === t) lastTip = t;
+		else if (cached) lastTip = cached;
 		lastChatPull = Date.now();
 		scheduleReadReceipts();
 		if (typeof console !== 'undefined' && console.debug) {
@@ -163,7 +168,8 @@ export async function wakeChatFromTip(tip) {
 				ms: Math.round(
 					(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
 				),
-				tip: t.slice(0, 12)
+				tip: t.slice(0, 12),
+				cached: cached.slice(0, 12)
 			});
 		}
 	} finally {

@@ -2447,7 +2447,7 @@ export async function listFeedIds(session) {
  * Incomplete local tip caches force a full reconcile (Drive tip = authority).
  * @param {import('./client.js').DriveSession} session
  * @param {number} [limit]
- * @param {{ onPartial?: (rows: any[]) => void, seedRows?: any[] }} [opts]
+ * @param {{ onPartial?: (rows: any[]) => void, seedRows?: any[], tip?: string }} [opts]
  */
 export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	const seedRows = Array.isArray(opts.seedRows) ? opts.seedRows : [];
@@ -2456,15 +2456,18 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	}
 	const meta = peekMailboxFeedMeta(session);
 	const cachedTip = peekCachedChatTip(session) || '';
+	const busTip = String(opts.tip || '').trim();
 	/*
 	 * Incremental tip→stopAt only when local chain is known-complete.
 	 * Truncated IDB (tip match, missing rows) must full-walk once.
+	 * Bus tip skips getNamedTip (avoids stale in-flight poll racing the wake).
 	 */
 	const canIncremental = Boolean(cachedTip && meta?.complete);
 	let { messages } = await loadMailboxMessages(session, {
 		limit,
 		stopAt: canIncremental ? cachedTip : '',
 		force: !canIncremental && Boolean(meta && !meta.complete),
+		...(busTip ? { tip: busTip } : {}),
 		onPartial: opts.onPartial
 	});
 	/*

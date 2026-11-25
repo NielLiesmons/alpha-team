@@ -387,14 +387,16 @@ function mergeFeedRows(list, prev) {
 			const server = byId.get(id);
 			const stuck = mergePreferDeleted(m, server);
 			if (stuck) {
-				byId.set(id, stuck);
+				const next = { ...stuck };
+				delete next._hint;
+				byId.set(id, next);
 				continue;
 			}
 			/* Tip listed this id — prefer server row; keep in-memory previewUrls (incl. live blob:). */
 			if (Array.isArray(m.attachments)) {
 				const prevAtt = m.attachments;
 				const nextAtt = Array.isArray(server.attachments) ? server.attachments : [];
-				byId.set(id, {
+				const merged = {
 					...server,
 					attachments: nextAtt.map((a) => ({
 						...a,
@@ -402,7 +404,13 @@ function mergeFeedRows(list, prev) {
 							? { previewUrl: prevAtt.find((p) => p?.path === a?.path)?.previewUrl }
 							: {})
 					}))
-				});
+				};
+				delete merged._hint;
+				byId.set(id, merged);
+			} else if (m._hint) {
+				const next = { ...server };
+				delete next._hint;
+				byId.set(id, next);
 			}
 			continue;
 		}
@@ -425,7 +433,10 @@ function mergeFeedRows(list, prev) {
 	return sortChatMessagesNewestFirst([...byId.values()]);
 }
 
-export async function refreshChatFeed() {
+/**
+ * @param {{ tip?: string }} [opts] — bus tip hash skips a raced getNamedTip.
+ */
+export async function refreshChatFeed(opts = {}) {
 	const session = activeSession();
 	if (!session) {
 		/* Keep cache / in-memory — never wipe to an empty flash. */
@@ -446,6 +457,7 @@ export async function refreshChatFeed() {
 	chatUi.error = null;
 	const gen = ++feedFetchGen;
 	const seedRows = chatFeed.slice();
+	const busTip = String(opts.tip || '').trim();
 	try {
 		const apply = (/** @type {any[]} */ list) => {
 			if (gen !== feedFetchGen) return;
@@ -478,6 +490,7 @@ export async function refreshChatFeed() {
 		const list = await listFeedMessages(session, CHAT_FEED_LIMIT, {
 			/* Reuse warm rows so tip wakes only download new leaves (keeps tip I/O free). */
 			seedRows,
+			...(busTip ? { tip: busTip } : {}),
 			onPartial: (partial) => {
 				/* Leaf-cache hits / early batches — drop skeleton before network misses finish. */
 				if (partial?.length) apply(partial);
@@ -810,6 +823,59 @@ export function announceMemberStatus(email, action = 'added', name = '') {
 		ref: { type: 'member', id: e, action },
 		channel_id: 'general'
 	}).catch((err) => console.warn('chat member status', err));
+}
+
+/**
+ * Apply a peer chat message hint from the realtime bus (paint before mailbox pull).
+ * Durable tip-wake replaces `_hint` rows with the same mailbox id.
+ * @param {any} hint
+ */
+export function applyMessageHint(hint) {
+	if (!hint || typeof hint !== 'object') return;
+	const id = String(hint.id || '').trim();
+	const author = String(hint.author || '').trim();
+	if (!id || !author) return;
+	const kind = String(hint.kind || 'chat');
+	if (kind === 'reaction') return;
+	const me = (activePerson().email || '').trim().toLowerCase();
+	if (me && author.toLowerCase() === me) return;
+
+	const existingIdx = chatFeed.findIndex((m) => String(m?.id || '') === id);
+	if (existingIdx >= 0) {
+		const prev = chatFeed[existingIdx];
+		/* Never resurrect a locally soft-deleted row from a stale bus hint. */
+		if (rowIsDeleted(prev)) return;
+		if (!prev._hint) return;
+		chatFeed[existingIdx] = {
+			...prev,
+			...hint,
+			id,
+			author,
+			kind,
+			_hint: true,
+			delivery: prev.delivery || 'sent',
+			read_by: Array.isArray(prev.read_by) ? prev.read_by : []
+		};
+		writeChatCache(chatFeed);
+		return;
+	}
+
+	chatFeed.unshift({
+		schema: 'alpha.chat_message/1',
+		...hint,
+		id,
+		author,
+		kind,
+		body: String(hint.body || ''),
+		created_at:
+			String(hint.created_at || '') ||
+			new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+		channel_id: String(hint.channel_id || 'general'),
+		delivery: 'sent',
+		read_by: Array.isArray(hint.read_by) ? hint.read_by : [],
+		_hint: true
+	});
+	writeChatCache(chatFeed);
 }
 
 /**
@@ -1334,6 +1400,8 @@ export async function postChatMessage(input) {
 			}
 
 			let tipWritten = '';
+			/** @type {any | null} */
+			let leafForWake = null;
 			const created = await createChatMessage(
 				session,
 				{
@@ -1351,16 +1419,38 @@ export async function postChatMessage(input) {
 					knownFeedIds: knownFeedIds().filter((id) => id !== localId),
 					knownCommentIds: knownComments,
 					onLeafStored: (leafMsg) => {
-						adoptLeaf({
+						const leaf = {
 							...leafMsg,
 							...(attachments.length ? { attachments } : {})
-						});
+						};
+						leafForWake = leaf;
+						adoptLeaf(leaf);
+						/*
+						 * Peer paint ASAP (before tip CAS) — same path as reaction hints.
+						 * Tip wake below still heals Drive SoT.
+						 */
+						if (!isReaction && kind !== 'reaction') {
+							void import('./realtime.svelte.js').then(({ publishMessageHint }) => {
+								publishMessageHint(leaf);
+							});
+						}
 					},
-					/* Publish tip hash the instant putTip lands — queues if WS is reconnecting. */
+					/* Tip + message payload so peers paint even if `message` type is old API. */
 					onTipWritten: (tip) => {
 						tipWritten = String(tip || '');
+						const wakeMsg = leafForWake || {
+							id: serverId,
+							author,
+							body,
+							kind,
+							channel_id: channelId,
+							created_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+							...(refWithSeq ? { ref: refWithSeq } : {}),
+							...(input.reply_to ? { reply_to: input.reply_to } : {}),
+							...(attachments.length ? { attachments } : {})
+						};
 						void import('./realtime.svelte.js').then(({ publishTipWake }) => {
-							publishTipWake(tip);
+							publishTipWake(tip, isReaction || kind === 'reaction' ? null : wakeMsg);
 						});
 					}
 				}
