@@ -1,109 +1,52 @@
 <script>
 	/**
-	 * Chat list chrome: one glass pill — audio/video icon + chevron options.
-	 * Default selected mode = audio. Coming soon until media is wired.
-	 * Menu uses shared DropdownMenu `items` (FloatPanel + popover.css rows).
+	 * Chat list chrome: round phone pill → opens full-page call setup (replaces feed).
 	 */
 	import Phone from '@alpha/ui/icons/Phone.svelte';
-	import VideoCall from '@alpha/ui/icons/VideoCall.svelte';
-	import DropdownMenu from './DropdownMenu.svelte';
+	import { acceptIncoming, callUi, dismissIncoming, openCallSetup } from '$lib/calls.svelte.js';
+	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
 
-	/** @typedef {'audio' | 'video'} CallMode */
+	const active = $derived(
+		callUi.phase === 'setup' || callUi.phase === 'connecting' || callUi.phase === 'in_call'
+	);
 
-	/** @type {CallMode} */
-	let mode = $state('audio');
-	let menuOpen = $state(false);
-	/** @type {HTMLElement | null} */
-	let pillEl = $state(null);
-	let soonToast = $state(false);
-	/** @type {ReturnType<typeof setTimeout> | null} */
-	let soonTimer = null;
-
-	const callLabel = $derived(mode === 'video' ? t('chat.videoCall') : t('chat.audioCall'));
-
-	const menuItems = $derived([
-		{
-			id: 'audio',
-			label: t('chat.audioCall'),
-			icon: Phone,
-			active: mode === 'audio',
-			hint: t('chat.callSoon'),
-			onclick: () => chooseMode('audio')
-		},
-		{
-			id: 'video',
-			label: t('chat.videoCall'),
-			icon: VideoCall,
-			active: mode === 'video',
-			hint: t('chat.callSoon'),
-			onclick: () => chooseMode('video')
-		}
-	]);
-
-	function showComingSoon() {
-		soonToast = true;
-		if (soonTimer) clearTimeout(soonTimer);
-		soonTimer = setTimeout(() => {
-			soonToast = false;
-			soonTimer = null;
-		}, 1800);
-	}
-
-	/** @param {CallMode} next */
-	function chooseMode(next) {
-		mode = next;
-		showComingSoon();
-	}
-
-	function onPillClick() {
-		menuOpen = !menuOpen;
+	function onClick() {
+		if (active) return;
+		openCallSetup('audio');
 	}
 </script>
 
 <div class="chat-call" role="group" aria-label={t('chat.call')}>
 	<button
 		type="button"
-		class="chrome-btn call-pill"
-		bind:this={pillEl}
-		aria-label={callLabel}
-		aria-expanded={menuOpen}
-		aria-haspopup="menu"
-		onclick={onPillClick}
+		class="chrome-btn call-btn"
+		class:on={active}
+		aria-label={t('chat.audioCall')}
+		aria-pressed={active}
+		onclick={onClick}
 	>
 		<span class="call-ico" aria-hidden="true">
-			{#if mode === 'video'}
-				<VideoCall size={16} />
-			{:else}
-				<Phone size={14} />
-			{/if}
+			<Phone size={14} />
 		</span>
-		<svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-			<path
-				d="M3 4.5 6 7.5 9 4.5"
-				stroke="currentColor"
-				stroke-width="1.2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			/>
-		</svg>
 	</button>
 
-	{#if soonToast}
-		<p class="soon-toast" role="status">{t('chat.callSoon')}</p>
+	{#if callUi.incoming && !active}
+		<div class="incoming" role="status">
+			<p class="incoming-text">
+				{t('chat.incomingCall', { name: displayNameFromEmail(callUi.incoming.from) })}
+			</p>
+			<div class="incoming-actions">
+				<button type="button" class="incoming-join" onclick={() => acceptIncoming()}>
+					{t('chat.joinCall')}
+				</button>
+				<button type="button" class="incoming-decline" onclick={() => dismissIncoming()}>
+					{t('chat.declineCall')}
+				</button>
+			</div>
+		</div>
 	{/if}
 </div>
-
-<DropdownMenu
-	open={menuOpen}
-	anchor={pillEl}
-	placement="below"
-	align="end"
-	width={220}
-	maxHeight={280}
-	items={menuItems}
-	onclose={() => (menuOpen = false)}
-/>
 
 <style>
 	.chat-call {
@@ -114,14 +57,12 @@
 	}
 
 	.chrome-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 2px;
+		display: grid;
+		place-items: center;
+		width: 28px;
 		height: 28px;
-		width: auto;
 		min-width: 28px;
-		padding: 0 8px;
+		padding: 0;
 		border: 1px solid transparent;
 		border-radius: 9999px;
 		background:
@@ -138,7 +79,7 @@
 	}
 
 	.chrome-btn:hover,
-	.chrome-btn[aria-expanded='true'] {
+	.chrome-btn.on {
 		transform: scale(1.06);
 	}
 
@@ -152,60 +93,79 @@
 		line-height: 0;
 	}
 
-	.call-ico :global(svg),
-	.chevron {
+	.call-ico :global(svg) {
 		display: block;
 	}
 
-	.chevron {
-		opacity: 0.85;
-		flex-shrink: 0;
-	}
-
-	.soon-toast {
+	.incoming {
 		position: absolute;
 		top: calc(100% + 8px);
 		right: 0;
-		z-index: 20;
-		margin: 0;
-		padding: 8px 12px;
-		border-radius: 10px;
+		z-index: 30;
+		min-width: 220px;
+		padding: 12px;
+		border-radius: 14px;
 		border: 1px solid transparent;
 		background:
 			linear-gradient(var(--glass-panel, var(--glass)), var(--glass-panel, var(--glass))) padding-box,
 			var(--glass-shine) border-box;
 		backdrop-filter: blur(var(--glass-blur));
 		-webkit-backdrop-filter: blur(var(--glass-blur));
-		color: var(--fg-66);
-		font-size: 0.75rem;
-		font-weight: 600;
-		white-space: nowrap;
-		pointer-events: none;
 		box-shadow: 0 8px 24px color-mix(in srgb, var(--fg) 8%, transparent);
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.incoming-text {
+		margin: 0;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--fg-66);
+	}
+
+	.incoming-actions {
+		display: flex;
+		gap: 8px;
+	}
+
+	.incoming-join,
+	.incoming-decline {
+		flex: 1;
+		height: 34px;
+		border: none;
+		border-radius: 9999px;
+		font-size: 13px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.incoming-join {
+		background: var(--button-primary-bg, var(--fg));
+		color: var(--button-primary-fg, var(--bg));
+	}
+
+	.incoming-decline {
+		background: var(--fg-8);
+		color: var(--fg-66);
 	}
 
 	@media (max-width: 767px) {
 		.chrome-btn {
-			height: 44px;
+			width: 44px;
 			min-width: 44px;
-			padding: 0 12px;
-			gap: 4px;
+			height: 44px;
 			border-radius: 9999px;
 		}
 
 		.chrome-btn:hover,
-		.chrome-btn[aria-expanded='true'] {
+		.chrome-btn.on {
 			transform: scale(1.04);
 		}
 
 		.call-ico :global(.icon) {
 			width: 18px !important;
 			height: 18px !important;
-		}
-
-		.chevron {
-			width: 16px;
-			height: 16px;
 		}
 	}
 </style>

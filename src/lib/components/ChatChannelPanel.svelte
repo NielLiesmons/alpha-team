@@ -2,6 +2,7 @@
 	import { onMount, tick, untrack } from 'svelte';
 	import ArrowDown from '$lib/components/icons/ArrowDown.svelte';
 	import Voice from '$lib/components/icons/Voice.svelte';
+	import ChatCallView from '$lib/components/ChatCallView.svelte';
 	import ChatComposerBar from '$lib/components/ChatComposerBar.svelte';
 	import ChatFeedCard from '$lib/components/ChatFeedCard.svelte';
 	import ChatStatusLine from '$lib/components/ChatStatusLine.svelte';
@@ -16,6 +17,7 @@
 	import Pause from '@alpha/ui/icons/Pause.svelte';
 	import { activePerson, asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+	import { callViewOpenFor } from '$lib/calls.svelte.js';
 	import {
 		chatEphemeral,
 		chatFeed,
@@ -684,11 +686,16 @@
 		if (e.state === 'tool') return t('chat.working', { name });
 		return t('chat.typing', { name });
 	}
+
+	const callOpen = $derived(callViewOpenFor(channelId));
 </script>
 
 <svelte:window onkeydown={onKey} />
 
 <div class="chat" class:compact class:was-compact={wasCompact} bind:this={chatRootEl}>
+	{#if callOpen}
+		<ChatCallView />
+	{:else}
 	<!-- class "feed" required for list-top chrome scroll fade; app.css excludes .messages from feed-pad -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
@@ -975,6 +982,7 @@
 			/>
 		</div>
 	</div>
+	{/if}
 </div>
 
 <style>

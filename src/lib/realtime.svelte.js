@@ -278,7 +278,15 @@ function onMessage(ev) {
 		applyEphemeral(data.ephemeral);
 		return;
 	}
-	/* call signaling — UI later */
+	if (type === 'call' && data.call) {
+		try {
+			void import('./calls.svelte.js').then(({ onCallBusMessage }) => {
+				onCallBusMessage(data.call);
+			});
+		} catch (e) {
+			console.warn('call signaling', e);
+		}
+	}
 }
 
 function scheduleReconnect() {
