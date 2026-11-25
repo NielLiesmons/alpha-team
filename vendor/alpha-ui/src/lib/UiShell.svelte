@@ -546,6 +546,26 @@
 	);
 
 	/*
+	 * Mobile nav open: paint html/body + theme-color with the drawer surface (--bg)
+	 * so status-bar / home-indicator safe areas match the lighter nav panel.
+	 * Closed → restore page surface (--shell).
+	 */
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		const on = isMobileViewport && menuProgress > 0.02;
+		const root = document.documentElement;
+		root.classList.toggle('nav-menu-open', on);
+		const meta = document.querySelector('meta[name="theme-color"]');
+		if (!meta) return;
+		const probe = document.createElement('div');
+		probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;background:var(${on ? '--bg' : '--shell'})`;
+		root.appendChild(probe);
+		const color = getComputedStyle(probe).backgroundColor;
+		probe.remove();
+		if (color) meta.setAttribute('content', color);
+	});
+
+	/*
 	 * Touch swipe on the slid page:
 	 * - Level-one lists → open/close the nav menu
 	 * - Deeper pages (detail covering / alphaLayer / nested title) → history.back
