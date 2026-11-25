@@ -54,10 +54,6 @@
 	 *   mobileSections?: (ShellSection | ShellNavGroup)[] | null,
 	 *   activeHref?: string,
 	 *   title?: string,
-	 *   /**
-	 *    * Mobile title-pill section icon. `false` = text (+ chevron) only;
-	 *    * string = force that nav key; omit = matched active section PNG.
-	 *    */
 	 *   titleIcon?: string | false,
 	 *   counts?: Record<string, number>,
 	 *   unreadCounts?: Record<string, number>,
@@ -100,7 +96,7 @@
 		mobileSections: _mobileSections = null,
 		activeHref = '',
 		title = '',
-		/** @type {string | false | undefined} */
+		/** Mobile title-pill icon: false = text-only; string = force nav key; omit = matched PNG/favicon. @type {string | false | undefined} */
 		titleIcon = undefined,
 		counts = {},
 		/** Targeted-at-you unread (accent UnreadMark). `counts` = muted “new” totals. */
