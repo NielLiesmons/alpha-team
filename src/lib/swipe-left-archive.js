@@ -5,7 +5,7 @@
  *
  * Reveals a rounded Archive strip that expands with swipe progress —
  * width equals the opened gap only (never sits behind the card).
- * Icon-only; opacity fades in over the first ~20px of drag.
+ * Icon-only; opacity fades in over the first ~24px of drag.
  *
  * @param {HTMLElement} node
  * @param {{
@@ -18,7 +18,7 @@
  */
 import { ARCHIVE_PATH } from '@alpha/ui/archive-path.js';
 
-const FADE_PX = 20;
+const FADE_PX = 24;
 
 export function swipeLeftArchive(node, params = {}) {
 	let onArchive = params.onArchive;
@@ -49,7 +49,7 @@ export function swipeLeftArchive(node, params = {}) {
 		const el = document.createElement('div');
 		el.className = 'swipe-archive-reveal';
 		el.setAttribute('aria-hidden', 'true');
-		el.innerHTML = `<span class="swipe-archive-panel"><span class="swipe-archive-chip"><svg viewBox="0 0 12 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="${ARCHIVE_PATH}" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/></svg></span></span>`;
+		el.innerHTML = `<span class="swipe-archive-panel"><span class="swipe-archive-chip"><svg viewBox="0 0 12 11" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="${ARCHIVE_PATH}" fill="currentColor"/></svg></span></span>`;
 		parent.insertBefore(el, node);
 		if (getComputedStyle(parent).position === 'static') {
 			parent.dataset.swipeArchiveParent = '1';

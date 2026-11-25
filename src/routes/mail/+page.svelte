@@ -567,6 +567,10 @@
 		line-height: 1.25;
 		position: relative;
 		z-index: 1;
+		/* Long-press opens actions; block native text selection fighting the menu. */
+		-webkit-user-select: none;
+		user-select: none;
+		-webkit-touch-callout: none;
 	}
 
 	.row:hover {
