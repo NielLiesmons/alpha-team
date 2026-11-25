@@ -95,11 +95,15 @@
 	.composer-pill {
 		/* Fixed equal radii — never a full pill (multi-line drafts look broken with 9999). */
 		--composer-radius: 23.5px;
+		/* Match Admin ChatComposerBar control box (pad + 1.25rem lh); inherits if set. */
+		--composer-control-h: calc(6px + 1.25rem + 7px);
+		--composer-row-pad-y: 7px;
+		--composer-row-h: calc(var(--composer-control-h) + 2 * var(--composer-row-pad-y));
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
 		gap: 0;
-		min-height: 47px;
+		min-height: var(--composer-row-h);
 		padding: 0;
 		border-radius: var(--composer-radius);
 		box-sizing: border-box;
@@ -149,8 +153,8 @@
 		display: flex;
 		align-items: flex-end;
 		gap: 7px;
-		min-height: calc(47px - 14px);
-		padding: 7px;
+		min-height: var(--composer-row-h);
+		padding: var(--composer-row-pad-y);
 		box-sizing: border-box;
 		position: relative;
 		z-index: 2;
@@ -161,14 +165,15 @@
 	}
 
 	.side-btn {
-		width: 33px;
-		height: 33px;
+		width: var(--composer-control-h);
+		height: var(--composer-control-h);
 		flex-shrink: 0;
 		display: grid;
 		place-items: center;
 		padding: 0;
 		border: 0;
 		border-radius: 9999px;
+		box-sizing: border-box;
 	}
 
 	.side-btn.plus {

@@ -3,7 +3,7 @@
 	 * Shared chat/comment composer: plus menu, attachments, voice, quote, send.
 	 * Used by ChatChannelPanel and CommentThread — one UX, wired send paths.
 	 */
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import AlphaLogo from '$lib/components/icons/AlphaLogo.svelte';
 	import Voice from '$lib/components/icons/Voice.svelte';
 	import ChatAttachPanel from '$lib/components/ChatAttachPanel.svelte';
@@ -11,10 +11,22 @@
 	import { asPerson, displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { chatPublicationRefKey, chatUi, postChatMessage } from '$lib/chat.svelte.js';
 	import { profileAccentCss, profileNameCss } from '$lib/color.js';
+	import {
+		composerPeopleFromMembers,
+		getComposerWireValue,
+		installComposerTextareaShim,
+		isComposerWireEmpty,
+		normalizeComposerEmpty,
+		promoteComposerTokens,
+		renderComposerWire,
+		serializeComposer,
+		setComposerCursor
+	} from '$lib/composer-wysiwyg.js';
 	import { uploadChatAttachment } from '$lib/drive/entities.js';
 	import { inferMediaKind, mimeFromNameAndType } from '$lib/drive/media-kind.js';
 	import { activeSession } from '$lib/drive/session.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import { members } from '$lib/members.svelte.js';
 	import { signalRecording, signalTyping } from '$lib/realtime.svelte.js';
 	import { themeChoice } from '$lib/theme.svelte.js';
 	import { createVoiceRecorder } from '$lib/voice-recorder.js';
@@ -38,7 +50,7 @@
 	 *   },
 	 *   replyTo?: any | null,
 	 *   draft?: string,
-	 *   inputEl?: HTMLTextAreaElement | undefined,
+	 *   inputEl?: HTMLElement | undefined,
 	 *   signalPresence?: boolean,
 	 *   onSent?: () => void,
 	 *   cancelReplyLabel?: string,
@@ -129,10 +141,107 @@
 	let holdOriginY = 0;
 	/** False if the press ended before getUserMedia resolved. */
 	let holdPointerAlive = false;
+	/**
+	 * Release that landed while getUserMedia was still pending.
+	 * Applied as soon as recording actually starts so quick hold→send isn’t dropped.
+	 * @type {null | 'send' | 'cancel' | 'lock'}
+	 */
+	let holdReleaseIntent = null;
+	/** True from mic pointerdown until start() resolves or the gesture aborts. */
+	let voiceStarting = false;
+	/**
+	 * pointercancel from keyboard/viewport animation — keep recording; wait for a
+	 * real touchend/pointerup (any id) instead of aborting as a user cancel.
+	 */
+	let holdCaptureLost = false;
+	/**
+	 * True only when the soft keyboard was already up at mic-down (CE focused +
+	 * visualViewport shrunk). Preserve that state — never force-open a closed kb.
+	 */
+	let holdKeepKeyboard = false;
+	/**
+	 * Full-viewport capture layer while the hold gesture is live.
+	 * Portaled to document.body so z-index beats feed + ChatBubbleOverlay
+	 * (composer dock stacking context would trap an in-tree fixed scrim).
+	 * Never focusable — must not steal focus from the CE (keyboard keep-open).
+	 */
+	let voiceGestureActive = $state(false);
+	/** @type {HTMLElement | null} */
+	let voiceCaptureEl = null;
 	/** @type {HTMLAudioElement | null} */
 	let voicePreviewAudio = null;
 	/** @type {string | null} */
 	let voicePreviewUrl = null;
+
+	onMount(() => {
+		if (typeof document === 'undefined') return;
+		const el = document.createElement('div');
+		el.setAttribute('aria-hidden', 'true');
+		el.tabIndex = -1;
+		el.dataset.voiceCapture = '1';
+		Object.assign(el.style, {
+			position: 'fixed',
+			inset: '0',
+			zIndex: '10050',
+			touchAction: 'none',
+			pointerEvents: 'none',
+			background: 'transparent',
+			userSelect: 'none',
+			webkitUserSelect: 'none',
+			outline: 'none'
+		});
+		document.body.appendChild(el);
+		voiceCaptureEl = el;
+		return () => {
+			el.remove();
+			if (voiceCaptureEl === el) voiceCaptureEl = null;
+		};
+	});
+
+	$effect(() => {
+		const el = voiceCaptureEl;
+		if (!el) return;
+		el.style.pointerEvents = voiceGestureActive ? 'auto' : 'none';
+	});
+
+	/** CE (or a descendant) is the document activeElement. */
+	function isComposerActive() {
+		const el = inputEl;
+		if (!el || typeof document === 'undefined') return false;
+		const ae = document.activeElement;
+		return ae === el || (ae instanceof Node && el.contains(ae));
+	}
+
+	/**
+	 * Soft keyboard visibly open (iOS often keeps CE focused after dismiss).
+	 * Without this, re-focus would slide the keyboard back out when it was closed.
+	 */
+	function isSoftKeyboardOpen() {
+		if (typeof window === 'undefined') return false;
+		const vv = window.visualViewport;
+		if (!vv) return isComposerActive();
+		return window.innerHeight - vv.height > 120;
+	}
+
+	/**
+	 * Blur-recovery only when the keyboard was already open at mic-down.
+	 * Never call from mic-down itself — preventDefault keeps focus; calling
+	 * focus() with a closed keyboard opens it (forbidden).
+	 */
+	function restoreComposerKeyboardIfKept() {
+		if (!holdKeepKeyboard) return;
+		const el = inputEl;
+		if (!el || isComposerActive()) return;
+		try {
+			el.focus({ preventScroll: true });
+		} catch {
+			try {
+				el.focus();
+			} catch {
+				/* ignore */
+			}
+		}
+	}
 
 	$effect(() => {
 		voiceActive = voiceRecording;
@@ -146,7 +255,19 @@
 	let fieldTall = $state(false);
 	const COMPOSER_FADE_THRESHOLD = 4;
 	const COMPOSER_MAX_H = 140;
-	const COMPOSER_TALL_PX = 28;
+	/** Slop above one line (pad + line-height) before we treat the field as multi-line. */
+	const COMPOSER_TALL_SLOP_PX = 2;
+	/** Skip CE → draft echo when we just painted from `draft`. */
+	let wysiwygApplying = false;
+	/** Last wire string painted into the CE (avoid rebuild loops). */
+	let wysiwygPainted = '';
+	/** IME composition — don't re-chip mid-key. */
+	let wysiwygComposing = false;
+
+	const composerPeople = $derived.by(() => {
+		members.length;
+		return composerPeopleFromMembers(members);
+	});
 
 	const pendingMedia = $derived(
 		pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video')
@@ -217,11 +338,7 @@
 		mediaFocus = next;
 		draft = pendingMedia[next]?.caption || '';
 		tick().then(() => {
-			if (inputEl) {
-				inputEl.style.height = 'auto';
-				inputEl.style.height = `${Math.min(inputEl.scrollHeight, 120)}px`;
-				updateInputFade();
-			}
+			onInput();
 		});
 	}
 
@@ -431,10 +548,14 @@
 		pendingFiles = [];
 		mediaFocus = 0;
 		draft = '';
+		wysiwygPainted = '';
 		fieldTall = false;
 		fadeTop = false;
 		fadeBottom = false;
-		if (inputEl) inputEl.style.height = 'auto';
+		if (inputEl) {
+			inputEl.style.height = 'auto';
+			if (inputEl.isContentEditable) inputEl.replaceChildren();
+		}
 		const parent = replyTo;
 		replyTo = null;
 		const pubRef = resolvePubRef(parent);
@@ -459,6 +580,9 @@
 				await sendOne({ body: textOnly, files: [], parent, pubRef });
 			}
 			inputEl?.focus();
+			/* Focus can inject a caret <br> — strip so empty chrome stays single-line. */
+			normalizeComposerEmpty(inputEl);
+			resizeComposerField();
 			onSent();
 		} catch (e) {
 			pendingFiles = filesSnapshot;
@@ -506,9 +630,62 @@
 
 	function clearHoldListeners() {
 		if (typeof window === 'undefined') return;
-		window.removeEventListener('pointermove', onHoldPointerMove);
-		window.removeEventListener('pointerup', onHoldPointerUp);
-		window.removeEventListener('pointercancel', onHoldPointerCancel);
+		window.removeEventListener('pointermove', onHoldPointerMove, true);
+		window.removeEventListener('pointerup', onHoldPointerUp, true);
+		window.removeEventListener('pointercancel', onHoldPointerCancel, true);
+		window.removeEventListener('touchmove', onHoldTouchMove, true);
+		window.removeEventListener('pointerup', onDetachedHoldPointerUp, true);
+		window.removeEventListener('touchend', onDetachedHoldTouchEnd, true);
+	}
+
+	/** @param {number | null} pointerId */
+	function releaseHoldCapture(pointerId) {
+		const el = voiceCaptureEl;
+		if (!el || pointerId == null) return;
+		try {
+			if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId);
+		} catch {
+			/* ignore */
+		}
+	}
+
+	function endVoiceGesture() {
+		releaseHoldCapture(holdPointerId);
+		clearHoldListeners();
+		holdPointerId = null;
+		holdPointerAlive = false;
+		holdCaptureLost = false;
+		voiceGestureActive = false;
+		if (voiceCaptureEl) voiceCaptureEl.style.pointerEvents = 'none';
+	}
+
+	/** After pointercancel, listen for any finger-up as the real release. */
+	function armDetachedHoldRelease() {
+		if (typeof window === 'undefined') return;
+		window.addEventListener('pointerup', onDetachedHoldPointerUp, true);
+		window.addEventListener('touchend', onDetachedHoldTouchEnd, true);
+	}
+
+	/** @param {PointerEvent} e */
+	function onDetachedHoldPointerUp(e) {
+		if (!holdCaptureLost) return;
+		if (e.pointerType === 'mouse' && e.button !== 0) return;
+		finishHoldRelease(e.clientX, e.clientY);
+	}
+
+	/** @param {TouchEvent} e */
+	function onDetachedHoldTouchEnd(e) {
+		if (!holdCaptureLost) return;
+		const t = e.changedTouches?.[0];
+		if (!t) return;
+		finishHoldRelease(t.clientX, t.clientY);
+	}
+
+	/** Block scroll / feed pan while the hold gesture owns the pointer. */
+	/** @param {TouchEvent} e */
+	function onHoldTouchMove(e) {
+		if (!holdPointerAlive && !holdCaptureLost) return;
+		e.preventDefault();
 	}
 
 	function stopVoicePreview() {
@@ -528,10 +705,10 @@
 	}
 
 	function resetVoiceUi() {
-		clearHoldListeners();
+		endVoiceGesture();
+		holdReleaseIntent = null;
+		voiceStarting = false;
 		stopVoicePreview();
-		holdPointerId = null;
-		holdPointerAlive = false;
 		voiceMode = 'idle';
 		voiceMs = 0;
 		voicePaused = false;
@@ -543,6 +720,9 @@
 		stopVoiceTick();
 		stopVoiceMeter();
 		if (signalPresence) signalRecording(channelId, false);
+		/* Only restore if we were keeping an already-open keyboard. */
+		restoreComposerKeyboardIfKept();
+		holdKeepKeyboard = false;
 	}
 
 	function updateHoldGesture(/** @type {number} */ clientX, /** @type {number} */ clientY) {
@@ -560,9 +740,18 @@
 
 	async function beginHoldRecording() {
 		if (canSend) return;
+		voiceStarting = true;
 		try {
 			await voiceRecorder.start();
-			if (!holdPointerAlive) {
+			const intent = holdReleaseIntent;
+			holdReleaseIntent = null;
+			voiceStarting = false;
+			/*
+			 * Quick release while getUserMedia was pending: honor send/cancel/lock
+			 * instead of dropping the take. Only abort if the press vanished with
+			 * no release intent and no soft-cancel (viewport) recovery path.
+			 */
+			if (!holdPointerAlive && !holdCaptureLost && !intent) {
 				voiceRecorder.cancel();
 				resetVoiceUi();
 				return;
@@ -576,12 +765,60 @@
 			if (signalPresence) signalRecording(channelId, true);
 			startVoiceTick();
 			startVoiceMeter();
+			restoreComposerKeyboardIfKept();
+			if (intent === 'cancel') {
+				cancelVoiceRecording();
+				return;
+			}
+			if (intent === 'lock') {
+				lockVoiceRecording();
+				return;
+			}
+			if (intent === 'send') {
+				void finishVoiceRecording(true);
+				return;
+			}
 		} catch (e) {
+			voiceStarting = false;
 			resetVoiceUi();
 			voiceRecorder.cancel();
 			const msg = e instanceof Error ? e.message : String(e);
 			chatUi.error =
 				msg === 'voice.unsupported' ? t('chat.voiceUnsupported') : t('chat.voiceMicDenied');
+		}
+	}
+
+	/**
+	 * Shared release path for pointerup and detached (post-cancel) finger-up.
+	 * @param {number} clientX
+	 * @param {number} clientY
+	 */
+	function finishHoldRelease(clientX, clientY) {
+		const wasHolding = voiceMode === 'holding';
+		const wasStarting = voiceStarting;
+		updateHoldGesture(clientX, clientY);
+		const cancel = voiceCancelArmed;
+		const lock = voiceLockArmed;
+		const intent = /** @type {'send' | 'cancel' | 'lock'} */ (
+			cancel ? 'cancel' : lock ? 'lock' : 'send'
+		);
+		endVoiceGesture();
+		if (wasHolding) {
+			if (intent === 'cancel') {
+				cancelVoiceRecording();
+				return;
+			}
+			if (intent === 'lock') {
+				lockVoiceRecording();
+				return;
+			}
+			void finishVoiceRecording(true);
+			return;
+		}
+		/* Still awaiting getUserMedia — stash intent for beginHoldRecording. */
+		if (wasStarting) {
+			holdReleaseIntent = intent;
+			holdPointerAlive = false;
 		}
 	}
 
@@ -592,9 +829,7 @@
 
 	function lockVoiceRecording() {
 		if (voiceMode !== 'holding') return;
-		clearHoldListeners();
-		holdPointerId = null;
-		holdPointerAlive = false;
+		endVoiceGesture();
 		voiceMode = 'locked';
 		voiceCancelArmed = false;
 		voiceLockArmed = false;
@@ -695,13 +930,33 @@
 		}
 	}
 
-	/** @param {PointerEvent} e */
+	/**
+	 * Start hold-to-record without fighting the composer for focus.
+	 * - Keyboard closed: stay closed (never focus() the CE from this path).
+	 * - Keyboard open: stay open via preventDefault (mic never becomes
+	 *   activeElement); blur recovery only if we already had kb+CE focus.
+	 * Capture lives on a fixed non-focusable scrim so the idle→holding chrome
+	 * swap can’t drop the gesture.
+	 * @param {PointerEvent} e
+	 */
 	function onMicPointerDown(e) {
-		if (canSend || voiceMode !== 'idle') return;
+		if (canSend || voiceMode !== 'idle' || voiceStarting) return;
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
+		/* Stop focus steal → keyboard close. Must run before any await. */
 		e.preventDefault();
+		e.stopPropagation();
+		/*
+		 * Snapshot before capture/chrome work. CE focused alone is not enough
+		 * (iOS can leave focus after kb dismiss) — require a shrunk viewport.
+		 * Never focus() here; that opens a closed keyboard.
+		 */
+		holdKeepKeyboard = isComposerActive() && isSoftKeyboardOpen();
 		holdPointerId = e.pointerId;
 		holdPointerAlive = true;
+		holdCaptureLost = false;
+		holdReleaseIntent = null;
+		voiceGestureActive = true;
+		if (voiceCaptureEl) voiceCaptureEl.style.pointerEvents = 'auto';
 		holdOriginX = e.clientX;
 		holdOriginY = e.clientY;
 		voiceDragX = 0;
@@ -709,47 +964,77 @@
 		voiceCancelArmed = false;
 		voiceLockArmed = false;
 		clearHoldListeners();
-		window.addEventListener('pointermove', onHoldPointerMove);
-		window.addEventListener('pointerup', onHoldPointerUp);
-		window.addEventListener('pointercancel', onHoldPointerCancel);
+		window.addEventListener('pointermove', onHoldPointerMove, true);
+		window.addEventListener('pointerup', onHoldPointerUp, true);
+		window.addEventListener('pointercancel', onHoldPointerCancel, true);
+		window.addEventListener('touchmove', onHoldTouchMove, { capture: true, passive: false });
+		/*
+		 * Capture on the body-level scrim so chrome swaps can’t drop the
+		 * gesture; feed stays hit-inert under it. Scrim is tabindex=-1 /
+		 * aria-hidden so it never steals CE focus.
+		 */
+		const target = voiceCaptureEl || /** @type {HTMLElement | null} */ (e.currentTarget);
+		if (target) {
+			try {
+				target.setPointerCapture(e.pointerId);
+			} catch {
+				/* window capture-phase listeners still track the gesture */
+			}
+		}
+		/* Blur recovery only — no unconditional focus after capture. */
+		restoreComposerKeyboardIfKept();
 		void beginHoldRecording();
 	}
 
 	/** @param {PointerEvent} e */
 	function onHoldPointerMove(e) {
-		if (!holdPointerAlive || e.pointerId !== holdPointerId) return;
-		if (voiceMode !== 'holding' && voiceMode !== 'idle') return;
+		if ((!holdPointerAlive && !holdCaptureLost) || e.pointerId !== holdPointerId) return;
+		if (voiceMode !== 'holding' && voiceMode !== 'idle' && !voiceStarting) return;
+		e.preventDefault();
+		e.stopPropagation();
 		updateHoldGesture(e.clientX, e.clientY);
 	}
 
 	/** @param {PointerEvent} e */
 	function onHoldPointerUp(e) {
 		if (e.pointerId !== holdPointerId) return;
-		holdPointerAlive = false;
-		clearHoldListeners();
-		holdPointerId = null;
-		if (voiceMode !== 'holding') return;
-		updateHoldGesture(e.clientX, e.clientY);
-		if (voiceCancelArmed) {
-			cancelVoiceRecording();
-			return;
-		}
-		if (voiceLockArmed) {
-			lockVoiceRecording();
-			return;
-		}
-		void finishVoiceRecording(true);
+		e.preventDefault();
+		e.stopPropagation();
+		finishHoldRelease(e.clientX, e.clientY);
+		restoreComposerKeyboardIfKept();
 	}
 
-	/** @param {PointerEvent} e */
+	/**
+	 * Keyboard / visualViewport resize often cancels the pointer mid-hold.
+	 * Don’t treat that as user-abort — keep recording and wait for a real
+	 * finger-up (detached listeners). If none arrives, promote to locked so
+	 * the take isn’t stranded without chrome controls.
+	 * @param {PointerEvent} e
+	 */
 	function onHoldPointerCancel(e) {
 		if (e.pointerId !== holdPointerId) return;
+		e.preventDefault();
+		e.stopPropagation();
+		holdCaptureLost = true;
 		holdPointerAlive = false;
-		clearHoldListeners();
-		holdPointerId = null;
-		if (voiceMode === 'holding' || voiceMode === 'idle') {
-			cancelVoiceRecording();
-		}
+		releaseHoldCapture(holdPointerId);
+		window.removeEventListener('pointermove', onHoldPointerMove, true);
+		window.removeEventListener('pointerup', onHoldPointerUp, true);
+		window.removeEventListener('pointercancel', onHoldPointerCancel, true);
+		armDetachedHoldRelease();
+		restoreComposerKeyboardIfKept();
+		const cancelGen = holdPointerId;
+		window.setTimeout(() => {
+			if (!holdCaptureLost || holdPointerId !== cancelGen) return;
+			if (voiceMode === 'holding') {
+				holdCaptureLost = false;
+				clearHoldListeners();
+				voiceGestureActive = false;
+				if (voiceCaptureEl) voiceCaptureEl.style.pointerEvents = 'none';
+				holdPointerId = null;
+				lockVoiceRecording();
+			}
+		}, 320);
 	}
 
 	function updateInputFade() {
@@ -765,15 +1050,90 @@
 			el.scrollHeight - el.scrollTop - el.clientHeight > COMPOSER_FADE_THRESHOLD;
 	}
 
+	/**
+	 * One-line outer height from computed pad + line-height (tracks rem / --ui-scale).
+	 * Used so empty and single-char drafts share the same footprint — a fixed px
+	 * threshold (e.g. 28) falsely marked one line as “tall” and flipped chrome.
+	 * @param {HTMLElement} el
+	 */
+	function singleLineInputHeight(el) {
+		const styles = getComputedStyle(el);
+		const lh = parseFloat(styles.lineHeight);
+		const pt = parseFloat(styles.paddingTop) || 0;
+		const pb = parseFloat(styles.paddingBottom) || 0;
+		return pt + (Number.isFinite(lh) ? lh : 20) + pb;
+	}
+
+	function wysiwygOpts() {
+		return { people: composerPeople, isDark };
+	}
+
+	function syncDraftFromWysiwyg() {
+		const el = inputEl;
+		if (!el || !el.isContentEditable || wysiwygApplying || wysiwygComposing) return;
+		promoteComposerTokens(el, wysiwygOpts());
+		/* Drop leftover <br>/ZWSP so empty CE matches first-open height metrics. */
+		normalizeComposerEmpty(el);
+		let wire = serializeComposer(el);
+		if (isComposerWireEmpty(wire)) wire = '';
+		wysiwygPainted = wire;
+		if (wire !== draft) draft = wire;
+	}
+
+	function resizeComposerField() {
+		const el = inputEl;
+		if (!el) return;
+		/* Measure with height:auto so scrollHeight reflects content, not a stale inline size. */
+		el.style.height = 'auto';
+		const next = Math.min(el.scrollHeight, COMPOSER_MAX_H);
+		const single = singleLineInputHeight(el);
+		const empty = isComposerWireEmpty(draft);
+		/* Empty CE must never count as tall (lone <br> serializes to "\n"). */
+		const tall =
+			!empty && (next > single + COMPOSER_TALL_SLOP_PX || draft.includes('\n'));
+		fieldTall = tall;
+		/*
+		 * Empty + single line: clear inline height so CSS (min-height + field-sizing)
+		 * matches fresh open — setting scrollHeight as px was what jumped the row.
+		 * Multi-line: pin height so the field grows and plus/send stay flex-end.
+		 */
+		el.style.height = tall ? `${next}px` : '';
+		updateInputFade();
+	}
+
 	function onInput() {
 		const el = inputEl;
 		if (!el) return;
-		el.style.height = 'auto';
-		const next = Math.min(el.scrollHeight, COMPOSER_MAX_H);
-		el.style.height = `${next}px`;
-		fieldTall = next > COMPOSER_TALL_PX || draft.includes('\n');
-		updateInputFade();
+		if (el.isContentEditable && !wysiwygApplying) syncDraftFromWysiwyg();
+		resizeComposerField();
 		if (signalPresence && draft.trim()) signalTyping(channelId);
+	}
+
+	/** After blur, browsers often leave a caret `<br>` — strip so empty chrome stays centered. */
+	function onComposerBlur() {
+		/*
+		 * During hold / starting with an already-open keyboard: restore focus
+		 * so iOS doesn’t collapse it. Never restore when kb was closed at mic-down.
+		 */
+		if (holdKeepKeyboard && (voiceRecording || voiceStarting || voiceGestureActive || holdCaptureLost)) {
+			restoreComposerKeyboardIfKept();
+			return;
+		}
+		const el = inputEl;
+		if (!el?.isContentEditable || wysiwygApplying || wysiwygComposing) return;
+		if (!normalizeComposerEmpty(el) && !isComposerWireEmpty(draft)) return;
+		if (draft !== '') draft = '';
+		wysiwygPainted = '';
+		resizeComposerField();
+	}
+
+	function onCompositionStart() {
+		wysiwygComposing = true;
+	}
+
+	function onCompositionEnd() {
+		wysiwygComposing = false;
+		onInput();
 	}
 
 	/** @param {KeyboardEvent} e */
@@ -796,8 +1156,66 @@
 		}
 	}
 
+	/** @param {ClipboardEvent} e */
+	function onPaste(e) {
+		const el = inputEl;
+		if (!el?.isContentEditable) return;
+		e.preventDefault();
+		const text = e.clipboardData?.getData('text/plain') ?? '';
+		document.execCommand('insertText', false, text);
+		onInput();
+	}
+
+	/** Keep CE in sync when parents set `draft` (suggest insert / clear after send). */
+	$effect(() => {
+		const el = inputEl;
+		const raw = String(draft ?? '');
+		const wire = isComposerWireEmpty(raw) ? '' : raw;
+		if (!el?.isContentEditable) return;
+		if (wysiwygApplying) return;
+		if (wire === wysiwygPainted) {
+			/* Parent cleared draft but CE still has empty chrome — strip it. */
+			if (!wire && normalizeComposerEmpty(el)) queueMicrotask(() => resizeComposerField());
+			return;
+		}
+		const cur = getComposerWireValue(el);
+		if (cur === wire || (isComposerWireEmpty(cur) && !wire)) {
+			if (!wire) normalizeComposerEmpty(el);
+			wysiwygPainted = wire;
+			queueMicrotask(() => resizeComposerField());
+			return;
+		}
+		wysiwygApplying = true;
+		renderComposerWire(el, wire, wysiwygOpts());
+		wysiwygPainted = wire;
+		wysiwygApplying = false;
+		queueMicrotask(() => onInput());
+	});
+
+	$effect(() => {
+		const el = inputEl;
+		if (!el?.isContentEditable) return;
+		installComposerTextareaShim(
+			el,
+			() => serializeComposer(el),
+			(wire) => {
+				draft = wire;
+			}
+		);
+	});
+
 	/** Parent can call after suggest-insert to resize the field. */
 	export function afterSuggestInsert() {
+		const el = inputEl;
+		if (el?.isContentEditable) {
+			const cursor =
+				typeof el.selectionStart === 'number' ? el.selectionStart : String(draft ?? '').length;
+			wysiwygApplying = true;
+			renderComposerWire(el, String(draft ?? ''), wysiwygOpts());
+			wysiwygPainted = String(draft ?? '');
+			setComposerCursor(el, cursor);
+			wysiwygApplying = false;
+		}
 		onInput();
 	}
 
@@ -922,6 +1340,12 @@
 				onchange={onFilesPicked}
 			/>
 
+			<!--
+				Voice chrome overlays the composer row; the contenteditable stays
+				mounted + focused so iOS keeps the keyboard open. Unmounting the CE
+				on idle→holding was dismissing the keyboard → visualViewport resize
+				→ pointercancel → flaky release-to-send.
+			-->
 			{#if voiceRecording}
 				<div
 					class="composer-row voice-row"
@@ -1000,65 +1424,93 @@
 						{/if}
 					</div>
 				</div>
-			{:else}
-				<div class="composer-row" class:chrome-expanded={chromeExpanded}>
-					<button
-						type="button"
-						class="side-btn plus"
-						class:open={attachOpen}
-						aria-label={t('chat.attach')}
-						aria-expanded={attachOpen}
-						onclick={toggleAttach}
-					>
-						<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-							<path
-								d="M9 3.5v11M3.5 9h11"
-								stroke="currentColor"
-								stroke-width="1.7"
-								stroke-linecap="round"
-							/>
-						</svg>
-					</button>
-					<div class="composer-field" class:fade-top={fadeTop} class:fade-bottom={fadeBottom}>
-						<textarea
-							bind:this={inputEl}
-							class="composer-input"
-							rows="1"
-							placeholder={pendingMedia.length
+			{/if}
+			<div
+				class="composer-row"
+				class:chrome-expanded={chromeExpanded}
+				class:field-tall={fieldTall}
+				class:voice-kb-park={voiceRecording}
+			>
+				<button
+					type="button"
+					class="side-btn plus"
+					class:open={attachOpen}
+					tabindex={voiceRecording ? -1 : 0}
+					aria-label={t('chat.attach')}
+					aria-expanded={attachOpen}
+					onclick={toggleAttach}
+				>
+					<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+						<path
+							d="M9 3.5v11M3.5 9h11"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
+				<div class="composer-field" class:fade-top={fadeTop} class:fade-bottom={fadeBottom}>
+					<!--
+						Placeholder is a sibling behind the CE (z-index) so the caret paints
+						above it — ::before on the CE covered the caret when empty+focused.
+					-->
+					{#if !draft.trim()}
+						<span class="composer-placeholder" aria-hidden="true">
+							{pendingMedia.length
 								? t('chat.addCaption')
 								: replyTo
 									? t('chat.reply')
 									: t('chat.message')}
-							bind:value={draft}
-							onkeydown={onKey}
-							oninput={onInput}
-							onscroll={updateInputFade}
-							aria-label={pendingMedia.length ? t('chat.addCaption') : t('chat.message')}
-						></textarea>
-					</div>
-					{#if canSend}
-						<button
-							type="button"
-							class="side-btn send"
-							aria-label={t('chat.send')}
-							onclick={() => void send()}
-						>
-							<span class="send-ico"><AlphaLogo size={18} /></span>
-						</button>
-					{:else}
-						<button
-							type="button"
-							class="side-btn mic"
-							aria-label={t('chat.voiceMessage')}
-							title={t('chat.voiceMessage')}
-							onpointerdown={onMicPointerDown}
-							oncontextmenu={(e) => e.preventDefault()}
-						>
-							<Voice size={22} />
-						</button>
+						</span>
 					{/if}
+					<!--
+						Contenteditable WYSIWYG: custom emoji + @mentions paint as chips while
+						`draft` stays wire-format (:shortcode: / @CompactName). Textarea-like
+						shim keeps ComposerSuggest / voice focus() paths working.
+					-->
+					<div
+						bind:this={inputEl}
+						class="composer-input"
+						class:is-empty={!draft.trim()}
+						contenteditable="true"
+						role="textbox"
+						aria-multiline="true"
+						onkeydown={onKey}
+						oninput={onInput}
+						onpaste={onPaste}
+						onblur={onComposerBlur}
+						oncompositionstart={onCompositionStart}
+						oncompositionend={onCompositionEnd}
+						onscroll={updateInputFade}
+						aria-label={pendingMedia.length ? t('chat.addCaption') : t('chat.message')}
+					></div>
 				</div>
-			{/if}
+				{#if canSend}
+					<button
+						type="button"
+						class="side-btn send"
+						tabindex={voiceRecording ? -1 : 0}
+						aria-label={t('chat.send')}
+						onclick={() => void send()}
+					>
+						<span class="send-ico"><AlphaLogo size={18} /></span>
+					</button>
+				{:else}
+					<button
+						type="button"
+						class="side-btn mic"
+						tabindex="-1"
+						aria-label={t('chat.voiceMessage')}
+						title={t('chat.voiceMessage')}
+						onpointerdown={onMicPointerDown}
+						onmousedown={(e) => e.preventDefault()}
+						ontouchstart={(e) => e.preventDefault()}
+						oncontextmenu={(e) => e.preventDefault()}
+					>
+						<Voice size={22} />
+					</button>
+				{/if}
+			</div>
 		</div>
 	</ChatComposer>
 	{#if !externalVoiceFab && voiceRecording}
@@ -1085,6 +1537,15 @@
 
 <style>
 	.composer-stack {
+		/*
+		 * Single-line control height = composer-input pad + line-height.
+		 * Must track rem/--ui-scale so plus, send/mic, wave pill, and delete
+		 * share one padding box — fixed 33px left the rem-scaled field taller
+		 * and idle→holding shrank the row (hold gesture slips off the mic).
+		 */
+		--composer-control-h: calc(6px + 1.25rem + 7px);
+		--composer-row-pad-y: 7px;
+		--composer-row-h: calc(var(--composer-control-h) + 2 * var(--composer-row-pad-y));
 		pointer-events: auto;
 		position: relative;
 		width: 100%;
@@ -1189,22 +1650,44 @@
 
 	.composer-row {
 		display: flex;
-		align-items: flex-end;
+		/* Empty + single line: center plus / field / send together (same as fresh open). */
+		align-items: center;
 		gap: 7px;
-		min-height: calc(47px - 14px);
-		padding: 7px;
+		/* border-box: min-height includes pad — same chrome idle ↔ voice. */
+		min-height: var(--composer-row-h);
+		padding: var(--composer-row-pad-y);
 		box-sizing: border-box;
 		position: relative;
 		z-index: 2;
+	}
+
+	/* Multi-line: field grows up; plus + send stay on the single-line baseline. */
+	.composer-row.field-tall {
+		align-items: flex-end;
 	}
 
 	.composer-row.chrome-expanded {
 		padding-top: 4px;
 	}
 
+	/*
+	 * Park the CE under voice chrome without unmounting it. Must keep a real
+	 * box (not display:none / 0×0) so iOS leaves the keyboard up. No aria-hidden
+	 * — focusing inside aria-hidden can force blur on WebKit.
+	 */
+	.composer-row.voice-kb-park {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		opacity: 0;
+		pointer-events: none;
+		z-index: 0;
+	}
+
 	.side-btn {
-		width: 33px;
-		height: 33px;
+		width: var(--composer-control-h);
+		height: var(--composer-control-h);
 		flex-shrink: 0;
 		display: grid;
 		place-items: center;
@@ -1213,6 +1696,7 @@
 		border-radius: 9999px;
 		cursor: pointer;
 		-webkit-tap-highlight-color: transparent;
+		box-sizing: border-box;
 	}
 
 	.side-btn.plus {
@@ -1232,6 +1716,8 @@
 		-webkit-tap-highlight-color: transparent;
 		touch-action: none;
 		user-select: none;
+		/* Never take focus — CE must stay focused so the keyboard stays up. */
+		-webkit-user-select: none;
 	}
 
 	.side-btn.send {
@@ -1252,8 +1738,25 @@
 		max-height: 140px;
 		display: flex;
 		align-items: flex-end;
+		position: relative;
 		-webkit-mask-image: linear-gradient(#000, #000);
 		mask-image: linear-gradient(#000, #000);
+	}
+
+	/* Sibling under the CE so caret paints above (never hidden behind placeholder). */
+	.composer-placeholder {
+		position: absolute;
+		left: 4px;
+		right: 4px;
+		top: 6px;
+		z-index: 0;
+		color: var(--fg-33);
+		font-size: 0.9375rem;
+		line-height: 1.25rem;
+		pointer-events: none;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.composer-field.fade-top {
@@ -1284,6 +1787,8 @@
 	}
 
 	.composer-input {
+		position: relative;
+		z-index: 1;
 		flex: 1;
 		min-width: 0;
 		width: 100%;
@@ -1295,16 +1800,43 @@
 		outline: none;
 		resize: none;
 		overflow-y: auto;
+		overflow-x: hidden;
 		background: transparent;
 		color: var(--fg);
 		font: inherit;
+		/* rem tracks mobile --ui-scale root (no CSS zoom). */
 		font-size: 0.9375rem;
-		line-height: 20px;
+		line-height: 1.25rem;
+		white-space: pre-wrap;
+		word-break: break-word;
+		caret-color: var(--fg);
+		/* Contenteditable: match former textarea field-sizing feel. */
 		field-sizing: content;
 	}
 
-	.composer-input::placeholder {
-		color: var(--fg-33);
+	/* Empty: lock single-line footprint even if the engine briefly injects a caret <br>. */
+	.composer-input.is-empty {
+		min-height: 20px;
+		height: auto;
+	}
+
+	.composer-input :global(.ce-emoji) {
+		display: inline-block;
+		width: 20px;
+		height: 20px;
+		object-fit: contain;
+		vertical-align: -0.25em;
+		margin: 0 1px;
+	}
+
+	.composer-input :global(.ce-emoji-skel) {
+		border-radius: 50%;
+		background: var(--fg-8);
+	}
+
+	.composer-input :global(.ce-mention) {
+		font-weight: 600;
+		-webkit-text-fill-color: currentColor;
 	}
 
 	.file-input {
@@ -1359,7 +1891,8 @@
 	.voice-pill {
 		flex: 1 1 auto;
 		min-width: 0;
-		height: 33px;
+		/* Same padding box as .side-btn.plus — no idle→holding vertical reflow. */
+		height: var(--composer-control-h);
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -1374,8 +1907,12 @@
 		width: var(--voice-dot);
 		height: var(--voice-dot);
 		border-radius: 50%;
-		background: var(--gradient-accent-3);
-		box-shadow: 0 0 8px 2px color-mix(in srgb, var(--accent-3, #c44) 40%, transparent);
+		/* Live mark = main accent (same family as unread dots), not rouge. */
+		background: var(
+			--gradient-accent-1,
+			radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%)
+		);
+		box-shadow: 0 0 8px 2px color-mix(in srgb, var(--accent-1, #5c5fff) 40%, transparent);
 		animation: voice-glow 1.05s ease-in-out infinite alternate;
 		box-sizing: border-box;
 	}
@@ -1407,11 +1944,11 @@
 	@keyframes voice-glow {
 		from {
 			transform: scale(0.88);
-			box-shadow: 0 0 5px 1px color-mix(in srgb, var(--accent-3, #c44) 28%, transparent);
+			box-shadow: 0 0 5px 1px color-mix(in srgb, var(--accent-1, #5c5fff) 28%, transparent);
 		}
 		to {
 			transform: scale(1.1);
-			box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent-3, #c44) 48%, transparent);
+			box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent-1, #5c5fff) 48%, transparent);
 		}
 	}
 
@@ -1481,11 +2018,11 @@
 		color: var(--accent-3, var(--destructive, #c44));
 	}
 
-	/* Layout slot stays 33×33 so the bar height never grows; glow overflows. */
+	/* Layout slot = plus hit size; glow overflows without growing the row. */
 	.mic-slot {
 		position: relative;
-		width: 33px;
-		height: 33px;
+		width: var(--composer-control-h);
+		height: var(--composer-control-h);
 		flex-shrink: 0;
 		align-self: center;
 		z-index: 6;
@@ -1540,15 +2077,15 @@
 	.hold-delete-pill {
 		flex: 0 0 auto;
 		align-self: center;
-		height: 33px;
+		height: var(--composer-control-h);
 		min-width: 0;
 		display: flex;
 		align-items: center;
 		justify-content: flex-start;
 		gap: 7px;
-		/* Right pad clears the 64px hold circle; -33px fills the mic-slot under it. */
+		/* Right pad clears the 64px hold circle; negative margin fills mic-slot under it. */
 		padding: 0 50px 0 14px;
-		margin-right: -33px;
+		margin-right: calc(-1 * var(--composer-control-h));
 		border: 0;
 		border-radius: 999px;
 		background: var(--fg-8);
