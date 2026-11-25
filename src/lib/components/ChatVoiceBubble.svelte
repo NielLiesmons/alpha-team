@@ -1,7 +1,7 @@
 <script>
 	/**
 	 * Telegram/WhatsApp-style voice row — play + waveform + speed/time.
-	 * Waveform seeks only while this clip is already playing; play starts via the play button.
+	 * Play/pause via the play control; waveform tap/drag seeks (loads clip if needed).
 	 * Controls use data-voice-control so ChatFeedCard can still long-press → message actions.
 	 */
 	import Play from '@alpha/ui/icons/Play.svelte';
@@ -11,6 +11,7 @@
 		cycleVoiceSpeed,
 		isVoiceClipActive,
 		playVoiceClip,
+		prepareVoiceClip,
 		seekVoiceClip
 	} from '$lib/chat-voice-player.svelte.js';
 	import {
@@ -65,30 +66,35 @@
 	/** Ignore click after a long-press (ChatFeedCard opens the actions overlay). */
 	const LONG_PRESS_MS = 400;
 	let ptrDownAt = 0;
+	/** Waveform scrubbing */
+	let waveDragging = false;
+	/** @type {number | null} */
+	let wavePointerId = null;
 
 	/** @param {PointerEvent} e */
 	function onCtrlPointerDown(e) {
 		ptrDownAt = Date.now();
 		/* Do not stopPropagation — bubble long-press arms on the card. */
-		if (e.pointerType === 'touch') {
-			/* Avoid scrolling while deciding tap vs hold on the wave. */
-		}
 	}
 
 	function wasLongPress() {
 		return Date.now() - ptrDownAt >= LONG_PRESS_MS;
 	}
 
-	function onPlayPause() {
-		if (!src) return;
-		void playVoiceClip({
+	function clipOpts() {
+		return {
 			msgId,
 			url: src,
 			title: playTitle,
 			author,
 			speakerName,
 			durationMs: dur
-		});
+		};
+	}
+
+	function onPlayPause() {
+		if (!src) return;
+		void playVoiceClip(clipOpts());
 	}
 
 	/** @param {MouseEvent} e */
@@ -102,21 +108,79 @@
 	}
 
 	/**
-	 * Seek only while this clip is actively playing — never start playback from the wave.
-	 * @param {MouseEvent} e
+	 * @param {HTMLElement} el
+	 * @param {number} clientX
 	 */
-	function onWaveClick(e) {
-		if (wasLongPress()) {
-			e.preventDefault();
-			return;
-		}
-		if (!src || !dur || !playing) return;
-		e.stopPropagation();
-		const el = e.currentTarget;
-		if (!(el instanceof HTMLElement)) return;
+	function fractionFromX(el, clientX) {
 		const rect = el.getBoundingClientRect();
-		const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-		seekVoiceClip(dur * fraction);
+		if (!rect.width) return 0;
+		return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+	}
+
+	/**
+	 * Seek to a fraction of the clip. Loads the clip (paused) when idle so seek
+	 * works before the first play tap.
+	 * @param {number} fraction
+	 */
+	async function seekToFraction(fraction) {
+		if (!src) return;
+		const f = Math.max(0, Math.min(1, fraction));
+		if (!active) {
+			await prepareVoiceClip(clipOpts());
+		}
+		const total =
+			(active && chatVoicePlayer.durationMs > 0 ? chatVoicePlayer.durationMs : 0) ||
+			durationMs ||
+			chatVoicePlayer.durationMs ||
+			0;
+		if (!total) return;
+		seekVoiceClip(total * f);
+	}
+
+	/** @param {PointerEvent} e */
+	function onWavePointerDown(e) {
+		onCtrlPointerDown(e);
+		if (!src || e.button != null && e.button !== 0) return;
+		/* Capture on the wave itself so drag keeps seeking; card must not steal. */
+		waveDragging = true;
+		wavePointerId = e.pointerId;
+		try {
+			e.currentTarget?.setPointerCapture?.(e.pointerId);
+		} catch {
+			/* ignore */
+		}
+		const el = e.currentTarget;
+		if (el instanceof HTMLElement) {
+			void seekToFraction(fractionFromX(el, e.clientX));
+		}
+	}
+
+	/** @param {PointerEvent} e */
+	function onWavePointerMove(e) {
+		if (!waveDragging || wavePointerId !== e.pointerId) return;
+		const el = e.currentTarget;
+		if (el instanceof HTMLElement) {
+			void seekToFraction(fractionFromX(el, e.clientX));
+		}
+	}
+
+	/** @param {PointerEvent} e */
+	function onWavePointerUp(e) {
+		if (wavePointerId != null && e.pointerId !== wavePointerId) return;
+		waveDragging = false;
+		wavePointerId = null;
+		try {
+			e.currentTarget?.releasePointerCapture?.(e.pointerId);
+		} catch {
+			/* ignore */
+		}
+	}
+
+	/** @param {MouseEvent} e */
+	function onWaveClick(e) {
+		/* Seek already handled on pointerdown/drag; suppress residual click. */
+		e.preventDefault();
+		e.stopPropagation();
 	}
 
 	/** @param {MouseEvent} e */
@@ -126,7 +190,6 @@
 			return;
 		}
 		e.stopPropagation();
-		/* Speed cycles globally; only the play button starts playback. */
 		cycleVoiceSpeed();
 	}
 </script>
@@ -154,8 +217,11 @@
 			class="wave"
 			data-voice-control
 			aria-label={t('chat.seekVoice')}
-			disabled={!src || !dur}
-			onpointerdown={onCtrlPointerDown}
+			disabled={!src}
+			onpointerdown={onWavePointerDown}
+			onpointermove={onWavePointerMove}
+			onpointerup={onWavePointerUp}
+			onpointercancel={onWavePointerUp}
 			onclick={onWaveClick}
 		>
 			{#each bars as h, i (i)}
@@ -206,6 +272,10 @@
 		background: color-mix(in srgb, var(--fg) 20%, transparent);
 		color: #fff;
 		cursor: pointer;
+		position: relative;
+		z-index: 1;
+		-webkit-tap-highlight-color: transparent;
+		touch-action: manipulation;
 	}
 	.voice.mine .play {
 		background: rgba(255, 255, 255, 0.22);
@@ -235,6 +305,10 @@
 		cursor: pointer;
 		min-width: 0;
 		width: 100%;
+		touch-action: none;
+		-webkit-tap-highlight-color: transparent;
+		position: relative;
+		z-index: 1;
 	}
 	.wave:disabled {
 		cursor: default;
@@ -249,6 +323,7 @@
 		align-items: stretch;
 		justify-content: center;
 		gap: 0;
+		pointer-events: none;
 	}
 	.bar {
 		display: block;
@@ -304,6 +379,9 @@
 		font-weight: 700;
 		cursor: pointer;
 		font-family: inherit;
+		position: relative;
+		z-index: 1;
+		-webkit-tap-highlight-color: transparent;
 	}
 	.voice.mine .speed {
 		background: rgba(255, 255, 255, 0.16);

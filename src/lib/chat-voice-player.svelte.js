@@ -94,6 +94,67 @@ function stopRaf() {
  *   queueIndex?: number
  * }} opts
  */
+/**
+ * Bind a clip into the shared player without starting playback (for seek-before-play).
+ * @param {{
+ *   msgId: string,
+ *   url: string,
+ *   title?: string,
+ *   author?: string,
+ *   speakerName?: string,
+ *   durationMs?: number,
+ *   queueCount?: number,
+ *   queueIndex?: number
+ * }} opts
+ */
+export async function prepareVoiceClip(opts) {
+	const el = ensureAudio();
+	if (!el || !opts?.url || !opts?.msgId) return;
+
+	const same = chatVoicePlayer.msgId === opts.msgId && chatVoicePlayer.url === opts.url;
+	if (same) {
+		if (opts.durationMs && !chatVoicePlayer.durationMs) {
+			chatVoicePlayer.durationMs = opts.durationMs;
+		}
+		return;
+	}
+
+	chatVoicePlayer.msgId = opts.msgId;
+	chatVoicePlayer.url = opts.url;
+	chatVoicePlayer.speakerName = opts.speakerName || '';
+	chatVoicePlayer.title = opts.title || opts.speakerName || 'Voice message';
+	chatVoicePlayer.author = opts.author || '';
+	chatVoicePlayer.durationMs = opts.durationMs || 0;
+	chatVoicePlayer.positionMs = 0;
+	chatVoicePlayer.queueCount = Math.max(1, opts.queueCount || 1);
+	chatVoicePlayer.queueIndex = Math.max(0, opts.queueIndex || 0);
+	chatVoicePlayer.status = 'paused';
+
+	el.src = opts.url;
+	el.playbackRate = chatVoicePlayer.speed;
+	el.currentTime = 0;
+	try {
+		el.load();
+	} catch {
+		/* ignore */
+	}
+	await new Promise((resolve) => {
+		const done = () => {
+			el.removeEventListener('loadedmetadata', done);
+			el.removeEventListener('error', done);
+			syncFromAudio();
+			resolve(undefined);
+		};
+		if (Number.isFinite(el.duration) && el.duration > 0) {
+			syncFromAudio();
+			resolve(undefined);
+			return;
+		}
+		el.addEventListener('loadedmetadata', done, { once: true });
+		el.addEventListener('error', done, { once: true });
+	});
+}
+
 export async function playVoiceClip(opts) {
 	const el = ensureAudio();
 	if (!el || !opts?.url || !opts?.msgId) return;

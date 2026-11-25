@@ -248,6 +248,14 @@
 		);
 	}
 
+	/** Soft keyboard + composer CE focused — keep open when arming message actions. */
+	function isComposerFocused() {
+		if (typeof document === 'undefined') return false;
+		const ae = document.activeElement;
+		if (!(ae instanceof HTMLElement)) return false;
+		return Boolean(ae.isContentEditable || ae.closest?.('.composer-input, .composer-stack'));
+	}
+
 	function clearHold() {
 		if (holdTimer != null) {
 			clearTimeout(holdTimer);
@@ -269,14 +277,28 @@
 		if (isBubbleInteractiveTarget(e.target)) return;
 		if (e.pointerType === 'mouse') return;
 		if (textSelectable) return;
+		/*
+		 * Keep the slid-out keyboard: touching the bubble would otherwise blur
+		 * the composer CE. preventDefault stops that focus steal (same as mic).
+		 */
+		if (e.cancelable && isComposerFocused()) {
+			e.preventDefault();
+		}
 		holdArmed = false;
 		moved = false;
 		holdOrigin = { x: e.clientX, y: e.clientY };
 		activePointerId = e.pointerId;
-		try {
-			e.currentTarget?.setPointerCapture?.(e.pointerId);
-		} catch {
-			/* ignore */
+		/*
+		 * Never capture on voice controls — setPointerCapture on the card steals
+		 * the play/wave button’s click, so the actions overlay “wins” the tap.
+		 * Wave scrubbing captures on the wave element itself.
+		 */
+		if (!isVoiceControlTarget(e.target)) {
+			try {
+				e.currentTarget?.setPointerCapture?.(e.pointerId);
+			} catch {
+				/* ignore */
+			}
 		}
 		clearHold();
 		const sx = e.clientX;
@@ -438,21 +460,31 @@
 	$effect(() => {
 		const atts = Array.isArray(msg.attachments) ? msg.attachments : [];
 		const session = activeSession();
+		/*
+		 * Tip lag / peer replication can fail the first few fetches. Voice must
+		 * never stick on a filename chip — keep retrying past ATT_FAIL_MAX with
+		 * a capped backoff. Image/video still soft-cap so broken media falls back.
+		 */
 		const need = atts.filter((a) => {
 			const path = String(a?.path || '');
 			if (!path || path.startsWith('local:')) return false;
 			if (attUrls[path]) return false;
-			if ((attFailCount[path] || 0) >= ATT_FAIL_MAX) return false;
+			const kind = inferMediaKind(a);
+			if (kind === 'file') return false;
+			if (kind !== 'voice' && (attFailCount[path] || 0) >= ATT_FAIL_MAX) return false;
 			/* Non-blob remote URL already displayable — skip fetch. blob: still needs Drive resolve. */
 			if (a.url && !isBlobPreview(a.url)) return false;
-			return inferMediaKind(a) !== 'file';
+			return true;
 		});
 		if (!session || !need.length) return;
 		const ac = new AbortController();
 		for (const a of need) {
 			const path = String(a.path);
+			const kind = inferMediaKind(a);
 			const run = async () => {
-				for (let attempt = attFailCount[path] || 0; attempt < ATT_FAIL_MAX; attempt++) {
+				let attempt = attFailCount[path] || 0;
+				const maxAttempts = kind === 'voice' ? 40 : ATT_FAIL_MAX;
+				while (attempt < maxAttempts) {
 					if (ac.signal.aborted || attUrls[path]) return;
 					const res = await getAttachmentObjectUrl(session, a, { signal: ac.signal });
 					if (ac.signal.aborted) return;
@@ -465,8 +497,9 @@
 						}
 						return;
 					}
-					attFailCount = { ...attFailCount, [path]: attempt + 1 };
-					const wait = Math.min(10_000, 400 * 2 ** attempt);
+					attempt += 1;
+					attFailCount = { ...attFailCount, [path]: attempt };
+					const wait = Math.min(kind === 'voice' ? 12_000 : 10_000, 400 * 2 ** Math.min(attempt, 5));
 					await new Promise((r) => setTimeout(r, wait));
 				}
 			};
@@ -586,6 +619,7 @@
 						{@const src =
 							(att.path && attUrls[att.path]) || att.previewUrl || att.url || ''}
 						{@const exhausted =
+							mediaKind !== 'voice' &&
 							Boolean(att.path) &&
 							(attFailCount[att.path] || 0) >= ATT_FAIL_MAX &&
 							!attUrls[att.path] &&
@@ -638,8 +672,12 @@
 									speakerName={name}
 									name={att.name || t('chat.voiceMessage')}
 								/>
-							{:else if mediaKind === 'voice' && !exhausted}
-								<div class="att-media-loading voice" aria-busy="true" aria-label={t('chat.loadingMedia')}
+							{:else if mediaKind === 'voice'}
+								<!-- Never fall through to a filename chip — keep a voice-shaped loader. -->
+								<div
+									class="att-media-loading voice"
+									aria-busy="true"
+									aria-label={t('chat.loadingMedia')}
 								></div>
 							{:else if mediaKind !== 'file' && !exhausted}
 								<div
@@ -1162,6 +1200,15 @@
 
 	.att-media-loading.video {
 		height: 140px;
+	}
+
+	/* Voice: row-shaped pulse — never the 180×120 image skeleton. */
+	.att-media-loading.voice {
+		width: min(400px, 80%);
+		max-width: 100%;
+		height: 56px;
+		margin: 0 8px;
+		border-radius: 14px;
 	}
 
 	.bubble.mine .att-media-loading {
