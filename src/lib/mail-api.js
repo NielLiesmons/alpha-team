@@ -22,30 +22,61 @@ export function apiBase() {
 }
 
 export function getAdminToken() {
-	if (typeof localStorage === 'undefined') return '';
+	if (typeof localStorage === 'undefined') {
+		return (
+			(typeof import.meta !== 'undefined' && import.meta.env?.PUBLIC_ALPHA_API_TOKEN
+				? String(import.meta.env.PUBLIC_ALPHA_API_TOKEN).trim()
+				: '') || ''
+		);
+	}
 	return (
 		localStorage.getItem('alpha-admin-api-token') ||
+		localStorage.getItem('alpha-admin-api-token.v1') ||
 		(typeof import.meta !== 'undefined' && import.meta.env?.PUBLIC_ALPHA_API_TOKEN
-			? String(import.meta.env.PUBLIC_ALPHA_API_TOKEN)
+			? String(import.meta.env.PUBLIC_ALPHA_API_TOKEN).trim()
 			: '') ||
 		''
 	);
 }
 
 export function setAdminToken(token) {
-	localStorage.setItem('alpha-admin-api-token', token.trim());
+	const tok = String(token || '').trim();
+	localStorage.setItem('alpha-admin-api-token', tok);
+	/* Keep legacy key in sync for older cache sweeps / Settings drafts. */
+	if (tok) localStorage.setItem('alpha-admin-api-token.v1', tok);
+	else localStorage.removeItem('alpha-admin-api-token.v1');
+}
+
+/**
+ * Resolve admin bearer: localStorage / PUBLIC_* bake-in, then Drive space-secrets.
+ * Used by mail/pubs and chat calls so Launch never 401s after a clean device hydrate.
+ * @returns {Promise<string>}
+ */
+export async function resolveAdminToken() {
+	let tok = getAdminToken();
+	if (tok) return tok;
+	try {
+		const { loadSpaceSecrets } = await import('./drive/space-secrets.js');
+		const { activeSession } = await import('./drive/session.svelte.js');
+		const doc = await loadSpaceSecrets(activeSession());
+		tok = String(doc.adminToken || '').trim();
+		if (tok) setAdminToken(tok);
+	} catch {
+		/* Drive offline / secrets missing */
+	}
+	return tok || getAdminToken();
 }
 
 /**
  * @param {string} path
  * @param {RequestInit} [init]
  */
-async function api(path, init = {}) {
+export async function adminApi(path, init = {}) {
 	const headers = new Headers(init.headers || {});
 	if (!headers.has('content-type') && init.body) {
 		headers.set('content-type', 'application/json');
 	}
-	const token = getAdminToken();
+	const token = await resolveAdminToken();
 	if (token) headers.set('authorization', `Bearer ${token}`);
 	const base = apiBase();
 	if (!base) throw new Error('API base URL is not configured');
@@ -62,6 +93,14 @@ async function api(path, init = {}) {
 		throw new Error(msg);
 	}
 	return data;
+}
+
+/**
+ * @param {string} path
+ * @param {RequestInit} [init]
+ */
+async function api(path, init = {}) {
+	return adminApi(path, init);
 }
 
 export function fetchMailSettings() {

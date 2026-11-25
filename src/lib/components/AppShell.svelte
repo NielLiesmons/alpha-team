@@ -65,6 +65,7 @@
 	import ListTitleChrome from '@alpha/ui/ListTitleChrome.svelte';
 	import ChatVoiceNowPlaying from '$lib/components/ChatVoiceNowPlaying.svelte';
 	import ChatCallActions from '$lib/components/ChatCallActions.svelte';
+	import { callUi } from '$lib/calls.svelte.js';
 	import { voicePlayerVisible } from '$lib/chat-voice-player.svelte.js';
 	import UiShell from '@alpha/ui/UiShell.svelte';
 	import CostCreate from './CostCreate.svelte';
@@ -97,6 +98,10 @@
 	const chatList = $derived(path.startsWith('/chat'));
 	const mailList = $derived(path.startsWith('/mail'));
 	const commsFeed = $derived(chatList || mailList);
+	/** Call setup / in-call owns SheetTopbar — hide floating list-top chrome. */
+	const callChromeOpen = $derived(
+		callUi.phase === 'setup' || callUi.phase === 'connecting' || callUi.phase === 'in_call'
+	);
 	/** Entity detail from chat tips — not the notifications synopsis. */
 	const chatCompact = $derived.by(() => {
 		if (!chatList || !ui.selection) return false;
@@ -601,6 +606,7 @@
 	}}
 	onRefresh={() => refreshAllDrive()}
 	feedPadClass={chatList ? '' : 'feed-pad'}
+	listTopHidden={callChromeOpen}
 	accountLabel={displayNameFromEmail()}
 >
 	{#snippet banners()}

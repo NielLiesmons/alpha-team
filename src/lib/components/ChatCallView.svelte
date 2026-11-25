@@ -1,11 +1,12 @@
 <script>
 	/**
 	 * Full-page call setup + in-call UI — replaces chat feed in the same panel slot.
+	 * Owns SheetTopbar (list-top is hidden while open) so X is never under shell chrome.
 	 */
 	import Camera from '$lib/components/icons/Camera.svelte';
 	import ChatCallPeerTile from '$lib/components/ChatCallPeerTile.svelte';
-	import Close from '@alpha/ui/icons/Close.svelte';
 	import Phone from '@alpha/ui/icons/Phone.svelte';
+	import SheetTopbar from '@alpha/ui/SheetTopbar.svelte';
 	import Voice from '$lib/components/icons/Voice.svelte';
 	import {
 		bindLocalPreview,
@@ -42,25 +43,21 @@
 	async function onHangup() {
 		await leaveCall();
 	}
+
+	function onClose() {
+		if (callUi.phase === 'connecting') return;
+		if (callUi.phase === 'in_call') void onHangup();
+		else closeCallSetup();
+	}
 </script>
 
 <div class="call-view" class:in-call={callUi.phase === 'in_call' || callUi.phase === 'connecting'}>
-	<header class="call-top">
-		<button
-			type="button"
-			class="chrome-btn"
-			aria-label={t('common.back')}
-			disabled={callUi.phase === 'connecting'}
-			onclick={() => {
-				if (callUi.phase === 'in_call') void onHangup();
-				else closeCallSetup();
-			}}
-		>
-			<Close size={16} />
-		</button>
-		<h1 class="call-title">{title}</h1>
-		<span class="call-top-trail" aria-hidden="true"></span>
-	</header>
+	<SheetTopbar
+		{title}
+		trailing="none"
+		closeLabel={t('common.close')}
+		onclose={onClose}
+	/>
 
 	{#if callUi.error}
 		<p class="call-err" role="alert">{callUi.error}</p>
@@ -160,32 +157,16 @@
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		padding: 12px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+		padding: 0 16px calc(20px + env(safe-area-inset-bottom, 0px));
 		box-sizing: border-box;
 		background: var(--bg);
+		/* Above any residual list fade; list-top is hidden while open. */
+		position: relative;
+		z-index: 8;
 	}
 
-	.call-top {
-		display: grid;
-		grid-template-columns: 28px 1fr 28px;
-		align-items: center;
-		gap: 8px;
-		margin-bottom: 12px;
-		flex-shrink: 0;
-	}
-
-	.call-title {
-		margin: 0;
-		text-align: center;
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--fg);
-		letter-spacing: -0.01em;
-	}
-
-	.call-top-trail {
-		width: 28px;
-		height: 28px;
+	.call-view :global(.sheet-top) {
+		margin: 0 -6px 8px;
 	}
 
 	.chrome-btn {
@@ -373,25 +354,5 @@
 
 	.hangup:hover {
 		transform: rotate(135deg) scale(1.06);
-	}
-
-	@media (max-width: 767px) {
-		.call-top {
-			grid-template-columns: 44px 1fr 44px;
-		}
-
-		.call-title {
-			font-size: 17px;
-		}
-
-		.chrome-btn:not(.toggle) {
-			width: 44px;
-			height: 44px;
-		}
-
-		.call-top-trail {
-			width: 44px;
-			height: 44px;
-		}
 	}
 </style>

@@ -5,7 +5,7 @@
 import { Room, RoomEvent, Track } from 'livekit-client';
 import { actor, displayNameFromEmail } from './actor.svelte.js';
 import { chatUi } from './chat.svelte.js';
-import { apiBase, getAdminToken } from './mail-api.js';
+import { adminApi, resolveAdminToken } from './mail-api.js';
 import { publishRealtime } from './realtime.svelte.js';
 import { projectSlug } from './space-host.js';
 
@@ -52,31 +52,16 @@ function spaceId() {
 }
 
 /**
+ * Same admin bearer path as mail/pubs (`adminApi` + Drive space-secrets hydrate).
  * @param {string} path
  * @param {RequestInit} [init]
  */
 async function callsApi(path, init = {}) {
-	const headers = new Headers(init.headers || {});
-	if (!headers.has('content-type') && init.body) {
-		headers.set('content-type', 'application/json');
+	const token = await resolveAdminToken();
+	if (!token) {
+		throw new Error('Admin API token required — open Settings → Publications and paste the token once');
 	}
-	const token = getAdminToken();
-	if (token) headers.set('authorization', `Bearer ${token}`);
-	const base = apiBase();
-	if (!base) throw new Error('API base URL is not configured');
-	const res = await fetch(`${base}${path}`, { ...init, headers });
-	const text = await res.text();
-	let data = null;
-	try {
-		data = text ? JSON.parse(text) : null;
-	} catch {
-		data = { error: text || res.statusText };
-	}
-	if (!res.ok) {
-		const msg = data?.message || data?.error || res.statusText || `HTTP ${res.status}`;
-		throw new Error(msg);
-	}
-	return data;
+	return adminApi(path, init);
 }
 
 export function openCallSetup(/** @type {CallKind} */ kind = 'audio') {

@@ -85,7 +85,8 @@
 	 *   sheets?: import('svelte').Snippet,
 	 *   banners?: import('svelte').Snippet,
 	 *   children?: import('svelte').Snippet,
-	 *   listBlank?: boolean
+	 *   listBlank?: boolean,
+	 *   listTopHidden?: boolean
 	 * }}
 	 */
 	let {
@@ -118,6 +119,8 @@
 		 * AppShell sets true before goto and clears afterNavigate.
 		 */
 		listBlank = false,
+		/** Hide floating list-top (e.g. full-page call setup owns SheetTopbar). */
+		listTopHidden = false,
 		onNavigate = () => {},
 		onNavChild = () => {},
 		onCreate = () => {},
@@ -981,12 +984,15 @@
 				class="list-col"
 				class:wide={wideList}
 				class:chat={listSize === 'chat'}
+				class:list-top-hidden={listTopHidden}
 				aria-label={resolvedTitle}
 				bind:this={listColEl}
 			>
 				<header
 					class="list-top"
+					class:hidden={listTopHidden}
 					style="--chrome-scroll-fade: {listFade}"
+					aria-hidden={listTopHidden || undefined}
 				>
 					{#if isMobileViewport}
 						{@const pillPng = navPngUrl(activeItem.icon)}
@@ -2108,6 +2114,10 @@
 		box-sizing: border-box;
 		pointer-events: none;
 		background: transparent;
+	}
+
+	.list-top.hidden {
+		display: none;
 	}
 
 	/* Three-stop fade: solid near bar → ~80% mid → clear (no solid ::before cliff) */
