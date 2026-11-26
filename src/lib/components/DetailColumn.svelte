@@ -27,6 +27,7 @@
 		publicPosts
 	} from '$lib/publications.svelte.js';
 	import {
+		ensureSharedMailThread,
 		findMailOrTip,
 		mailAuthorLabel,
 		mailCategoryFor,
@@ -57,7 +58,7 @@
 	import AudiencesPanel from './AudiencesPanel.svelte';
 	import PublicationsFeed from './PublicationsFeed.svelte';
 	import SettingsSectionDetail from './SettingsSectionDetail.svelte';
-	import { channelById, loadComments } from '$lib/chat.svelte.js';
+	import { channelById, entityHasComments, loadComments } from '$lib/chat.svelte.js';
 	import {
 		fileDisplayTitle,
 		fileTypeColors,
@@ -297,6 +298,13 @@
 		rememberMailTip(mailMsg);
 		/* Mark-read runs in MailThreadFeed after capturing the unread boundary for scroll/chip. */
 		void loadComments('mail', id).catch(() => {});
+		/*
+		 * Re-mirror shared threads when the author re-opens them so peers get
+		 * new JMAP replies after the first share-on-comment.
+		 */
+		if (entityHasComments('mail', id) && !mailMsg.shared) {
+			void ensureSharedMailThread(mailMsg).catch(() => {});
+		}
 	});
 
 	/** @param {number} cents */

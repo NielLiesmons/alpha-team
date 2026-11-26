@@ -5,8 +5,10 @@
 import { activePerson, actor } from './actor.svelte.js';
 import {
 	createMailMessage,
+	getMailMessage,
 	listMailMessages,
-	putMailMessage
+	putMailMessage,
+	putSharedMailThread
 } from './drive/entities.js';
 import { activeSession } from './drive/session.svelte.js';
 import {
@@ -789,18 +791,214 @@ export function mailTipFor(id) {
 	return mailTipCache[key] || null;
 }
 
+/**
+ * Snapshot subject/from from a chat mail ref (peers lack personal tip cache).
+ * @param {{ id?: string, title?: string, subject?: string, from?: string, from_name?: string } | null | undefined} ref
+ */
+export function rememberMailTipFromRef(ref) {
+	const id = String(ref?.id || '').trim();
+	if (!id) return;
+	const subject = String(ref?.subject || ref?.title || '').trim();
+	const from = normEmail(ref?.from);
+	const from_name = String(ref?.from_name || '').trim();
+	if (!subject && !from) return;
+	rememberMailTip({
+		id,
+		subject: subject || '(no subject)',
+		from,
+		from_name: from_name || (from ? displayNameFromEmail(from) : '')
+	});
+}
+
+/**
+ * Strip personal JMAP raw for a Space-shared leaf (peers open this from Chat).
+ * @param {any} msg
+ */
+function serializeSharedMailMessage(msg) {
+	if (!msg || typeof msg !== 'object') return null;
+	const id = String(msg.id || '').trim();
+	if (!id) return null;
+	const attachments = Array.isArray(msg.attachments)
+		? msg.attachments.map((a) => ({
+				name: String(a?.name || 'attachment'),
+				type: String(a?.type || a?.content_type || ''),
+				size: Number(a?.size) || 0,
+				...(a?.blobId ? { blobId: String(a.blobId) } : {})
+			}))
+		: undefined;
+	return {
+		schema: 'alpha.mail_message/1',
+		id,
+		threadId: String(msg.threadId || id),
+		from: normEmail(msg.from),
+		from_name: String(msg.from_name || '').trim(),
+		to: Array.isArray(msg.to) ? msg.to.map(normEmail).filter(Boolean) : [],
+		...(Array.isArray(msg.to_people) ? { to_people: msg.to_people } : {}),
+		...(Array.isArray(msg.cc) ? { cc: msg.cc.map(normEmail).filter(Boolean) } : {}),
+		...(Array.isArray(msg.cc_people) ? { cc_people: msg.cc_people } : {}),
+		...(Array.isArray(msg.bcc) ? { bcc: msg.bcc.map(normEmail).filter(Boolean) } : {}),
+		subject: String(msg.subject || '').trim() || '(no subject)',
+		body: String(msg.body || ''),
+		created_at: String(msg.created_at || ''),
+		...(msg.messageId ? { messageId: String(msg.messageId) } : {}),
+		...(attachments?.length ? { attachments, hasAttachment: true } : {}),
+		...(Array.isArray(msg.read_by) ? { read_by: msg.read_by } : {})
+	};
+}
+
+/**
+ * Build a Drive-mirrored thread doc for Space members who see the Chat tip.
+ * @param {any} thread
+ * @param {string} [sharedBy]
+ */
+export function serializeSharedMailThread(thread, sharedBy = '') {
+	const threadId = String(thread?.threadId || thread?.id || '').trim();
+	if (!threadId) return null;
+	const msgs = threadMessages(thread)
+		.map(serializeSharedMailMessage)
+		.filter(Boolean);
+	if (!msgs.length) {
+		const one = serializeSharedMailMessage(thread);
+		if (!one) return null;
+		msgs.push(one);
+	}
+	const latest = msgs[msgs.length - 1];
+	const first = msgs[0];
+	const by = normEmail(sharedBy) || mailActorEmail();
+	return {
+		...latest,
+		id: threadId,
+		threadId,
+		from: normEmail(thread?.from) || first.from,
+		from_name: String(thread?.from_name || first.from_name || '').trim(),
+		subject: String(thread?.subject || latest.subject || '').trim() || '(no subject)',
+		body: latest.body || '',
+		created_at: latest.created_at || first.created_at || '',
+		messages: msgs,
+		count: msgs.length,
+		transport: 'drive',
+		shared: true,
+		shared_from: thread?.transport === 'jmap' || Array.isArray(thread?.messages) ? 'jmap' : 'drive',
+		...(by ? { shared_by: by } : {}),
+		...(thread?._priority != null ? { _priority: thread._priority } : {}),
+		...(thread?.priority != null ? { priority: thread.priority } : {})
+	};
+}
+
+/** @type {Map<string, string>} */
+const sharedMailFingerprints = new Map();
+
+/**
+ * @param {any} doc
+ */
+function sharedMailFingerprint(doc) {
+	const n = Array.isArray(doc?.messages) ? doc.messages.length : 1;
+	const latest = String(doc?.created_at || '');
+	const subject = String(doc?.subject || '');
+	return `${n}|${latest}|${subject}`;
+}
+
+/**
+ * Mirror a personal (JMAP) thread into Space Drive so Chat tip peers can open it.
+ * Best-effort — never blocks comment send UX. Skips no-op re-puts.
+ * @param {any} thread
+ * @param {{ sharedBy?: string, force?: boolean }} [opts]
+ */
+export async function ensureSharedMailThread(thread, opts = {}) {
+	const session = activeSession();
+	if (!session || !thread) return null;
+	const doc = serializeSharedMailThread(thread, opts.sharedBy || mailActorEmail());
+	if (!doc) return null;
+	const fp = sharedMailFingerprint(doc);
+	if (!opts.force && sharedMailFingerprints.get(doc.id) === fp) return doc;
+	const saved = await putSharedMailThread(session, doc);
+	sharedMailFingerprints.set(doc.id, fp);
+	rememberMailTip(saved);
+	return saved;
+}
+
+/**
+ * Adopt a Drive-shared thread into the live list (or replace a tip stub).
+ * @param {any} thread
+ */
+function adoptSharedMailThread(thread) {
+	if (!thread?.id) return null;
+	const id = String(thread.id);
+	rememberMailTip(thread);
+	const idx = mailMessages.findIndex(
+		(t) => String(t?.id || '') === id || String(t?.threadId || '') === id
+	);
+	if (idx >= 0) {
+		const prev = mailMessages[idx];
+		/* Prefer richer shared body over a stub; don't clobber a fuller JMAP row. */
+		const prevN = Array.isArray(prev.messages) ? prev.messages.length : prev._stub ? 0 : 1;
+		const nextN = Array.isArray(thread.messages) ? thread.messages.length : 1;
+		if (prev._stub || nextN >= prevN || prev.transport === 'drive') {
+			mailMessages[idx] = { ...thread, id, threadId: String(thread.threadId || id) };
+			delete mailTipStubs[id];
+			return mailMessages[idx];
+		}
+		return prev;
+	}
+	mailMessages.unshift({ ...thread, id, threadId: String(thread.threadId || id) });
+	delete mailTipStubs[id];
+	return mailMessages[0];
+}
+
+/** @type {Map<string, Promise<any | null>>} */
+const sharedMailLoads = new Map();
+
+/**
+ * Load a Space-shared mail thread from Drive (peer open path for Chat tips).
+ * @param {string} id
+ * @returns {Promise<any | null>}
+ */
+export async function loadSharedMailThread(id) {
+	const key = String(id || '').trim();
+	if (!key) return null;
+	const live = findMail(key);
+	if (live && !live._stub) return live;
+	const inflight = sharedMailLoads.get(key);
+	if (inflight) return inflight;
+	const session = activeSession();
+	if (!session) return live || null;
+	const p = (async () => {
+		try {
+			const doc = await getMailMessage(session, key);
+			if (!doc?.id) return live || null;
+			return adoptSharedMailThread(doc);
+		} catch {
+			return live || null;
+		} finally {
+			sharedMailLoads.delete(key);
+		}
+	})();
+	sharedMailLoads.set(key, p);
+	return p;
+}
+
 /** @type {Set<string>} */
 const stubMailRefreshAttempted = new Set();
 
 /**
  * One-shot background refresh when opening a tip stub (avoids refresh↔stub loops).
+ * Prefer Space-shared Drive leaf (peers), then personal JMAP/Drive list.
  * @param {string} id
  */
 export function refreshMailForStubOnce(id) {
 	const key = String(id || '');
 	if (!key || stubMailRefreshAttempted.has(key)) return;
 	stubMailRefreshAttempted.add(key);
-	void refreshMail().catch(() => {});
+	void (async () => {
+		const shared = await loadSharedMailThread(key);
+		if (shared && !shared._stub) return;
+		await refreshMail().catch(() => {});
+		/* After personal refresh, try Drive again (author may have just shared). */
+		if (!findMail(key) || findMail(key)?._stub) {
+			stubMailRefreshAttempted.delete(key);
+			void loadSharedMailThread(key).catch(() => {});
+		}
+	})();
 }
 
 /**

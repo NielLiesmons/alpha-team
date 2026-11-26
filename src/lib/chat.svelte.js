@@ -21,7 +21,14 @@ import { peekCachedChatTip } from './drive/client.js';
 import { normalizeChatAttachment } from './drive/media-kind.js';
 import { activeSession, driveSession, loadSessionFromStorage } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
-import { mailTipFor } from './mail.svelte.js';
+import {
+	ensureSharedMailThread,
+	findMail,
+	loadSharedMailThread,
+	mailAuthorLabel,
+	mailTipFor,
+	rememberMailTipFromRef
+} from './mail.svelte.js';
 import {
 	enterprises,
 	notes,
@@ -582,6 +589,7 @@ export function hydrateChatFeedFromCache() {
 		if (rows.some((m) => m._failed || (m._pending && m._outbox))) writeChatCache(chatFeed);
 		rebuildHasCommentsIndex(chatFeed);
 		reindexChatReactions();
+		hydrateMailTipsFromFeed(rows);
 		if (rows.some((m) => m._pending && m._outbox && String(m.id || '').startsWith('local-'))) {
 			scheduleChatOutboxResume();
 		}
@@ -589,6 +597,14 @@ export function hydrateChatFeedFromCache() {
 	chatUi.settled = true;
 	chatUi.loading = false;
 	return true;
+}
+
+/** Peers lack personal mail tip cache — seed subjects from chat mail refs. */
+function hydrateMailTipsFromFeed(list) {
+	if (!Array.isArray(list) || !list.length) return;
+	for (const m of list) {
+		if (m?.ref?.type === 'mail') rememberMailTipFromRef(m.ref);
+	}
 }
 
 /** @type {ReturnType<typeof setTimeout> | 0} */
@@ -931,6 +947,7 @@ async function refreshChatFeedOnce(session, opts) {
 		writeChatCache(merged);
 		rebuildHasCommentsIndex(merged);
 		reindexChatReactions();
+		hydrateMailTipsFromFeed(merged);
 	};
 
 	try {
@@ -1335,6 +1352,7 @@ export function applyMessageHint(hint) {
 		...(attachments ? { attachments } : {}),
 		_hint: true
 	});
+	if (hint?.ref?.type === 'mail') rememberMailTipFromRef(hint.ref);
 	writeChatCache(chatFeed);
 }
 
@@ -1742,6 +1760,40 @@ export async function postChatMessage(input) {
 				...refWithSeq,
 				seq: maxSeq >= 0 ? maxSeq + 1 : existing.length
 			};
+		}
+	}
+
+	/*
+	 * Mail tips: snapshot subject/from on every comment + mirror the thread into
+	 * Space Drive so peers can open it (personal JMAP is invisible to them).
+	 */
+	if (refWithSeq?.type === 'mail' && refWithSeq.id && !isReaction) {
+		const live = findMail(refWithSeq.id);
+		if (live && !live._stub) {
+			const subject = String(live.subject || '').trim() || '(no subject)';
+			const from = String(live.from || '')
+				.trim()
+				.toLowerCase();
+			const from_name = String(live.from_name || mailAuthorLabel(live) || '').trim();
+			if (!String(refWithSeq.subject || refWithSeq.title || '').trim()) {
+				refWithSeq = { ...refWithSeq, title: subject, subject };
+			} else if (!refWithSeq.title && refWithSeq.subject) {
+				refWithSeq = { ...refWithSeq, title: String(refWithSeq.subject) };
+			}
+			if (!String(refWithSeq.from || '').trim() && from) {
+				refWithSeq = { ...refWithSeq, from, ...(from_name ? { from_name } : {}) };
+			} else if (!String(refWithSeq.from_name || '').trim() && from_name) {
+				refWithSeq = { ...refWithSeq, from_name };
+			}
+			rememberMailTipFromRef(refWithSeq);
+			/* Share after paint — never stall Send on the Drive mirror write. */
+			queueMicrotask(() => {
+				void ensureSharedMailThread(live, { sharedBy: author }).catch((e) =>
+					console.warn('share mail thread', e)
+				);
+			});
+		} else {
+			rememberMailTipFromRef(refWithSeq);
 		}
 	}
 
@@ -2323,11 +2375,19 @@ export function openChatRef(msg) {
 	else if (ref.type === 'file') kind = 'file';
 	if (!kind) return;
 
+	if (kind === 'mail') rememberMailTipFromRef(ref);
+
 	selectEntity(kind, ref.id);
 	if (kind === 'mail') {
-		/* Hard refresh: tip opens from cache; pull live thread in background. */
-		void import('./mail.svelte.js')
-			.then((m) => m.refreshMail())
+		/*
+		 * Peers: load Space-shared Drive leaf (share-on-comment).
+		 * Author: loadShared falls through to live JMAP; refresh keeps inbox warm.
+		 */
+		void loadSharedMailThread(ref.id)
+			.then((hit) => {
+				if (hit && !hit._stub) return;
+				return import('./mail.svelte.js').then((m) => m.refreshMail());
+			})
 			.catch(() => {});
 	}
 }

@@ -3241,6 +3241,51 @@ export async function putMailMessage(session, msg) {
 	return next;
 }
 
+/**
+ * Upsert a Space-shared mail thread leaf + index entry.
+ * Used when commenting on personal JMAP mail so peers can open the tip from Chat.
+ * @param {import('./client.js').DriveSession} session
+ * @param {any} thread  already-serialized alpha.mail_message/1 (may include messages[])
+ */
+export async function putSharedMailThread(session, thread) {
+	const id = String(thread?.id || thread?.threadId || '').trim();
+	if (!id) throw new Error('Mail thread missing id');
+	const created = nowRfc3339();
+	const next = {
+		...thread,
+		schema: 'alpha.mail_message/1',
+		id,
+		threadId: String(thread?.threadId || id),
+		transport: 'drive',
+		shared: true,
+		shared_at: String(thread?.shared_at || created)
+	};
+	let ids = [];
+	try {
+		ids = await listMailIds(session);
+	} catch {
+		ids = [];
+	}
+	ids = [id, ...ids.filter((x) => x !== id)].slice(0, MAIL_INDEX_MAX);
+	await putPaths(session, [
+		{
+			path: `mail/messages/${id}.json`,
+			kind: 'mail_message',
+			plaintext: JSON.stringify(next, null, 2)
+		},
+		{
+			path: 'mail/index.json',
+			kind: 'mail_index',
+			plaintext: JSON.stringify(
+				{ schema: 'alpha.mail_index/1', ids, updated_at: created },
+				null,
+				2
+			)
+		}
+	]);
+	return next;
+}
+
 /* ── Web Push subscriptions (per device; fan-out from chat senders) ── */
 
 /**

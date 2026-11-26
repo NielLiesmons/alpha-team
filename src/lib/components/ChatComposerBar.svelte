@@ -545,7 +545,15 @@
 			return { ...commentRef };
 		}
 		if (parent && chatPublicationRefKey(parent) && parent.ref?.type && parent.ref?.id) {
-			return { type: String(parent.ref.type), id: String(parent.ref.id) };
+			const r = parent.ref;
+			return {
+				type: String(r.type),
+				id: String(r.id),
+				...(r.title ? { title: String(r.title) } : {}),
+				...(r.subject ? { subject: String(r.subject) } : {}),
+				...(r.from ? { from: String(r.from) } : {}),
+				...(r.from_name ? { from_name: String(r.from_name) } : {})
+			};
 		}
 		return null;
 	}
