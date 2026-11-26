@@ -424,9 +424,9 @@
 		isolation: isolate;
 		width: 100%;
 		border-radius: var(--radius-16, 1rem);
-		/* Popover glass: --composer-bg fill + blur + specular; thin stroke restored */
+		/* Popover glass fill + blur; no stroke (Add card keeps the quiet edge) */
 		background: var(--composer-bg, var(--modal-bg, var(--glass-panel, transparent)));
-		border: 1px solid var(--glass-border, color-mix(in srgb, var(--fg) 12%, transparent));
+		border: 0;
 		backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.2);
 		-webkit-backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.2);
 		overflow: hidden;
@@ -440,39 +440,14 @@
 			box-shadow 0.22s ease;
 	}
 
-	/* Specular hairline — same as `.alpha-popover::after` */
-	.deck-card::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		padding: 1px;
-		pointer-events: none;
-		z-index: 1;
-		background: linear-gradient(
-			135deg,
-			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
-			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
-			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
-			color-mix(in srgb, var(--fg) 9%, transparent) 100%
-		);
-		-webkit-mask:
-			linear-gradient(#fff 0 0) content-box,
-			linear-gradient(#fff 0 0);
-		mask:
-			linear-gradient(#fff 0 0) content-box,
-			linear-gradient(#fff 0 0);
-		-webkit-mask-composite: xor;
-		mask-composite: exclude;
-	}
-
-	/* Add a Profile stays quieter — stroke + 50% popover fill */
+	/* Add a Profile — quieter fill + the only deck stroke (single edge, no specular) */
 	.deck-card.add {
 		background: color-mix(
 			in srgb,
 			var(--composer-bg, var(--modal-bg, var(--glass-panel))) 50%,
 			transparent
 		);
+		border: 1px solid var(--glass-border, color-mix(in srgb, var(--fg) 12%, transparent));
 	}
 
 	/* Selected slightly larger — grow inward so stack L/R pad stays */
@@ -786,23 +761,24 @@
 	}
 
 	/*
-	 * Notifications glyph = small rounded square + badge.
+	 * Notifications glyph = small rounded square + centered badge.
 	 * Outer `.section-ico` keeps the same glass tile as Profile / Appearance;
-	 * inner square is the solid muted glyph fill (--fg-66 via currentColor) — not glass.
+	 * inner square is a faded muted glyph fill (--fg-66 @ 33%) — not glass.
 	 */
 	.notif-inner {
 		position: relative;
 		width: var(--chrome-icon, 1.375rem);
 		height: var(--chrome-icon, 1.375rem);
 		border-radius: 0.4375rem;
-		background: currentColor;
+		background: color-mix(in srgb, currentColor 33%, transparent);
 		box-sizing: border-box;
 	}
 
 	.notif-dot {
 		position: absolute;
-		top: -0.1875rem;
-		right: -0.1875rem;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
 		width: 0.5625rem;
 		height: 0.5625rem;
 		border-radius: 999px;
@@ -810,7 +786,6 @@
 			--gradient-accent-1,
 			radial-gradient(circle at top left, #5c5fff 0%, #4542ff 100%)
 		);
-		box-shadow: 0 0 0 0.09375rem color-mix(in srgb, var(--bg, #000) 55%, transparent);
 	}
 
 	.section-text {
