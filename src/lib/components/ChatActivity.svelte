@@ -6,6 +6,7 @@
 	 */
 	import At from './icons/At.svelte';
 	import Reply from './icons/Reply.svelte';
+	import ChatEmoji from './ChatEmoji.svelte';
 	import FeedEmpty from './FeedEmpty.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import TaskBox from './TaskBox.svelte';
@@ -159,7 +160,9 @@
 								<span class="badge" class:emoji-badge={item.kind === 'reaction'}>
 									<span class="badge-glyph">
 										{#if item.kind === 'reaction'}
-											<span class="emoji">{item.emoji || '❤️'}</span>
+											<span class="emoji">
+												<ChatEmoji token={item.emoji || '❤️'} size={16} />
+											</span>
 										{:else if item.kind === 'mention'}
 											<At size={16} />
 										{:else}
