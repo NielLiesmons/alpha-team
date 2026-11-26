@@ -115,8 +115,6 @@
 
 	const activeProfile = $derived(roster.find((p) => p.email === activeEmail) || roster[0]);
 	const otherProfiles = $derived(roster.filter((p) => p.email !== activeEmail));
-	/** Collapsed deck shows at most two real cards under the selected top card. */
-	const stackDepth = $derived(Math.min(2, otherProfiles.length));
 
 	/** Admin (ops) → Notifications → Profile → Appearance → Other Devices → Storage.
 	 *  Non-admin: Notifications first. */
@@ -211,12 +209,7 @@
 </script>
 
 <div class="hub" class:expanded={profilesOpen}>
-	<div
-		class="stack"
-		class:open={profilesOpen}
-		class:has-peek={!profilesOpen && stackDepth > 0}
-		style="--depth: {stackDepth}"
-	>
+	<div class="stack" class:open={profilesOpen}>
 		{#if activeProfile}
 			{@const admin = isAdminRole(activeProfile.role)}
 			<article class="deck-card main selected" style="--i: 0">
@@ -299,7 +292,7 @@
 							name={displayNameFromEmail(p.email) || p.name}
 							email={p.email}
 							pictureUrl={pictureUrlFor(p.email)}
-							size={profilesOpen ? 52 : 48}
+							size={52}
 						/>
 						<span class="meta">
 							<span class="name-row">
@@ -331,11 +324,8 @@
 			aria-hidden={profilesOpen ? undefined : 'true'}
 		>
 			<button type="button" class="add-face" onclick={() => (addProfileOpen = true)}>
-				<span class="meta add-meta">
-					<span class="name">{t('settings.addProfile')}</span>
-				</span>
 				<span class="add-plus glass-action" aria-hidden="true">
-					<svg style="width:1.125rem;height:1.125rem" viewBox="0 0 16 16" fill="none">
+					<svg style="width:1.25rem;height:1.25rem" viewBox="0 0 16 16" fill="none">
 						<path
 							d="M8 3.25v9.5M3.25 8h9.5"
 							stroke="currentColor"
@@ -343,6 +333,9 @@
 							stroke-linecap="round"
 						/>
 					</svg>
+				</span>
+				<span class="meta add-meta">
+					<span class="name">{t('settings.addProfile')}</span>
 				</span>
 			</button>
 		</article>
@@ -408,6 +401,7 @@
 	.stack {
 		position: relative;
 		z-index: 2;
+		isolation: isolate;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -415,33 +409,33 @@
 		padding-inline: 8px;
 		gap: 0;
 		box-sizing: border-box;
-		/* Peek overhang: each under-card shows a band below the top card */
-		padding-bottom: 0;
-		transition: padding-bottom 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-	}
-
-	.stack.has-peek {
-		padding-bottom: calc(var(--depth) * 0.7rem);
+		/* Face min-height — used so under-cards can pull up into a real stack */
+		--card-h: 5.25rem;
+		--peek: 0.7rem;
+		transition: gap 0.38s cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.stack.open {
 		gap: 0.5rem;
-		padding-bottom: 0;
 	}
 
 	.deck-card {
 		position: relative;
 		width: 100%;
 		border-radius: var(--radius-16, 1rem);
-		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
+		/* Same glass as Modal — --modal-bg / glass-panel + blur */
+		background: var(--modal-bg, var(--glass-panel));
+		border: 1px solid var(--glass-border, color-mix(in srgb, var(--fg) 12%, transparent));
+		backdrop-filter: blur(var(--glass-blur, 22px));
+		-webkit-backdrop-filter: blur(var(--glass-blur, 22px));
 		overflow: hidden;
 		box-sizing: border-box;
 		transform-origin: top center;
 		transition:
-			transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-			opacity 0.28s ease,
-			width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-			margin 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+			transform 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+			width 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+			margin 0.38s cubic-bezier(0.22, 1, 0.36, 1),
 			box-shadow 0.22s ease;
 	}
 
@@ -457,66 +451,52 @@
 		width: calc(100% / 1.02);
 	}
 
-	/* Collapsed: real under-cards sit behind the main card */
+	/*
+	 * Collapsed: keep cards in flow and pull under-cards up with negative margin
+	 * so expand can morph margin + scale continuously (no absolute→relative jump,
+	 * no staggered pop-in delays).
+	 */
 	.stack:not(.open) .deck-card.other {
-		position: absolute;
-		left: 8px;
-		right: 8px;
-		top: 0;
 		z-index: calc(4 - var(--i));
 		pointer-events: none;
-		transform: translateY(calc(var(--i) * 0.7rem)) scale(calc(1 - var(--i) * 0.045));
+		margin-top: calc(0px - var(--card-h) + var(--peek));
+		transform: scale(calc(1 - var(--i) * 0.045));
 		opacity: calc(1 - var(--i) * 0.22);
-		width: auto;
 	}
 
 	.stack:not(.open) .deck-card.add {
-		position: absolute;
-		left: 8px;
-		right: 8px;
-		top: 0;
 		z-index: 0;
-		width: auto;
+		pointer-events: none;
 	}
 
 	.stack:not(.open) .deck-card.other.buried,
 	.stack:not(.open) .deck-card.add.buried {
+		/* Fully under the deck — still in the transform tree so expand morphs */
+		margin-top: calc(0px - var(--card-h));
 		opacity: 0;
-		transform: translateY(1.25rem) scale(0.9);
+		transform: scale(0.9);
 		pointer-events: none;
-		visibility: hidden;
 	}
 
 	.stack.open .deck-card.other,
 	.stack.open .deck-card.add {
-		position: relative;
-		left: auto;
-		right: auto;
-		top: auto;
 		z-index: 1;
 		pointer-events: auto;
-		visibility: visible;
+		margin-top: 0;
 		transform: scale(1);
 		opacity: 1;
-		width: 100%;
-		transition-delay: calc(var(--i) * 0.045s);
-	}
-
-	.stack.open .deck-card.add {
-		/* Match unselected / selected grayscale fill — no accent */
-		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
 	}
 
 	.face,
 	.add-face {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.75rem;
 		padding: 1rem 0.625rem 1rem 0.875rem;
 		box-sizing: border-box;
 		margin: 0;
 		background: transparent;
-		min-height: 5.25rem;
+		min-height: var(--card-h);
 	}
 
 	.add-face {
@@ -570,6 +550,18 @@
 	.add-meta {
 		flex: 1;
 		justify-content: center;
+		min-width: 0;
+	}
+
+	.add-meta .name {
+		color: var(--fg-66, var(--white66));
+		font-weight: 600;
+	}
+
+	/* Leading plus — same footprint as ProfilePic (52) */
+	.add-plus.glass-action {
+		width: 52px;
+		height: 52px;
 	}
 
 	.name-row {

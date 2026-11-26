@@ -300,7 +300,7 @@ export default {
 	'settings.shareInvite': 'Share invite',
 	'settings.invite': 'Invite',
 	'settings.switchTo': 'Switch to',
-	'settings.addProfile': 'Add a profile',
+	'settings.addProfile': 'Add a Profile',
 	'settings.otherDevices': 'Other devices',
 	'settings.otherDevicesDesc': 'Access codes for your other phones & computers',
 	'settings.otherDevicesHint':

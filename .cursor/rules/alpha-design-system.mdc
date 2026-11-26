@@ -83,7 +83,8 @@ Canonical surface + rows: `@alpha/ui/popover.css` (`.alpha-popover`, `.alpha-pop
 
 - No duplicate “Profiles” header under the shell Settings title.
 - Admin = **crown** beside name; do not print owner/admin/member labels on cards.
-- Selected card slightly larger; same subtle stroke / `--fg-4` fill as unselected + Add Profile.
+- Cards use **Modal glass** (`--modal-bg` / `--glass-panel` + `--glass-blur` + `--glass-border`) — not `--fg-4` wash. Selected card slightly larger; same quiet stroke as unselected + Add.
 - Collapsed hub: **real** card stack — selected on top, max **two** other profile cards underneath (lower opacity + more scale-down each). Stack display gets **+8px** L/R pad.
-- Expand (chevronDown): fan cards out from under the main card; animate hub sections away so the deck owns the page. Chevron → glass **Select** pill on every profile card; last card = Add a profile with glass `+` (same glass chrome as chevron/Select — not stroked plus). Scale-only hover — no color washes.
+- Expand (chevronDown): cards **morph continuously** from under the stack (margin + scale — no staggered pop-in); animate hub sections away so the deck owns the page. Chevron → glass **Select** pill on every profile card.
+- Last card = **Add a Profile** — leading glass `+` (same size as PFPs), quieter label (`--fg-66`), same glass stroke as other cards. Scale-only hover — no color washes.
 - Detail chrome: round icon pills (Pen, filled Share) — not text CTAs.
