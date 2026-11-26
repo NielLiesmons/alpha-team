@@ -1777,6 +1777,27 @@
 	.side-btn.send {
 		background: var(--gradient-accent-1);
 		color: #fff;
+		/* Match chrome CTAs — scale only, no color wash. */
+		transition: transform 0.15s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+	}
+
+	.side-btn.send:hover {
+		transform: scale(1.06);
+	}
+
+	.side-btn.send:active {
+		transform: scale(0.96);
+	}
+
+	/* Mobile: exaggerate press so Send feedback is obvious under a finger. */
+	@media (max-width: 767px) {
+		.side-btn.send:hover {
+			transform: scale(1.14);
+		}
+
+		.side-btn.send:active {
+			transform: scale(0.86);
+		}
 	}
 
 	.side-btn.send .send-ico,
