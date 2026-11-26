@@ -316,7 +316,7 @@ export default {
 	'settings.deviceQrAlt': 'Profile access QR',
 	'settings.inviteModalTitle': 'Invite {name}',
 	'settings.inviteModalHint':
-		'Encrypt an invite QR. The passphrase becomes their mailbox password (Stalwart + redeem). Whisper it separately.',
+		'No mailbox passphrase on Drive yet — set one here. It becomes their mailbox password (Stalwart + redeem). Whisper it separately.',
 	'settings.inviteCodeReady': 'Invite ready for {email}. Share QR + passphrase (also their mail password).',
 	'settings.inviteMissingMailbox':
 		'No mailbox passphrase on Drive for this profile yet. Open their profile in Settings Admin and set one, or create a fresh invite.',
@@ -911,6 +911,10 @@ export default {
 	'invite.encrypting': 'Encrypting…',
 	'invite.makeShareCode': 'Make share code',
 	'invite.copyLink': 'Copy link',
+	'invite.copied': 'Copied',
+	'invite.copyFailed': 'Could not copy — select the link text manually.',
+	'invite.reusePassphrase':
+		'This mailbox already has a passphrase — invite will use it (no need to type it again).',
 	'invite.inviteSomeone': 'Invite someone new',
 	'invite.memberRoleBlurb': 'Can use the Space.',
 	'invite.adminRoleBlurb': 'Can manage members and settings.',

@@ -317,7 +317,7 @@ export default {
 	'settings.deviceQrAlt': 'QR de acceso al perfil',
 	'settings.inviteModalTitle': 'Invitar a {name}',
 	'settings.inviteModalHint':
-		'Cifra un QR de invitación de Drive para esta persona. Comparte la frase por separado.',
+		'Aún no hay frase de buzón en Drive — define una aquí. Será su contraseña de correo. Compártela por separado.',
 	'settings.inviteCodeReady': 'Invitación lista para {email}. Comparte QR + frase.',
 	'settings.inviteMissingMailbox':
 		'Aún no hay contraseña de buzón para este perfil. Guárdala una vez en Ajustes → Correo y vuelve a compartir.',
@@ -912,6 +912,10 @@ export default {
 	'invite.encrypting': 'Cifrando…',
 	'invite.makeShareCode': 'Crear código para compartir',
 	'invite.copyLink': 'Copiar enlace',
+	'invite.copied': 'Copiado',
+	'invite.copyFailed': 'No se pudo copiar — selecciona el enlace manualmente.',
+	'invite.reusePassphrase':
+		'Este buzón ya tiene una frase — la invitación la usará (no hace falta escribirla otra vez).',
 	'invite.inviteSomeone': 'Invitar a alguien nuevo',
 	'invite.memberRoleBlurb': 'Puede usar el Space.',
 	'invite.adminRoleBlurb': 'Puede gestionar miembros y ajustes.',

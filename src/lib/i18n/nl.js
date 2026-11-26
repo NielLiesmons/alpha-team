@@ -317,7 +317,7 @@ export default {
 	'settings.deviceQrAlt': 'Profieltoegang QR',
 	'settings.inviteModalTitle': '{name} uitnodigen',
 	'settings.inviteModalHint':
-		'Versleutel een Drive-uitnodigings-QR voor deze persoon. Fluister de wachtzin apart.',
+		'Nog geen mailbox-wachtzin op Drive — stel er hier een in. Die wordt hun mailboxwachtwoord. Fluister apart.',
 	'settings.inviteCodeReady': 'Uitnodiging klaar voor {email}. Deel QR + wachtzin.',
 	'settings.inviteMissingMailbox':
 		'Nog geen mailboxwachtwoord voor dit profiel. Bewaar het Mail-wachtwoord één keer in Instellingen, deel daarna opnieuw.',
@@ -912,6 +912,10 @@ export default {
 	'invite.encrypting': 'Versleutelen…',
 	'invite.makeShareCode': 'Deelcode maken',
 	'invite.copyLink': 'Link kopiëren',
+	'invite.copied': 'Gekopieerd',
+	'invite.copyFailed': 'Kopiëren mislukt — selecteer de link handmatig.',
+	'invite.reusePassphrase':
+		'Deze mailbox heeft al een wachtzin — de uitnodiging gebruikt die (niet opnieuw typen).',
 	'invite.inviteSomeone': 'Iemand nieuw uitnodigen',
 	'invite.memberRoleBlurb': 'Kan de Space gebruiken.',
 	'invite.adminRoleBlurb': 'Kan leden en instellingen beheren.',

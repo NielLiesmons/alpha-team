@@ -318,7 +318,7 @@ export default {
 	'settings.deviceQrAlt': 'QR d’accès au profil',
 	'settings.inviteModalTitle': 'Inviter {name}',
 	'settings.inviteModalHint':
-		'Chiffrez un QR d’invitation Drive pour cette personne. Chuchotez la phrase séparément.',
+		'Pas encore de phrase boîte sur Drive — définissez-en une ici. Elle devient leur mot de passe boîte. Chuchotez-la séparément.',
 	'settings.inviteCodeReady': 'Invitation prête pour {email}. Partagez QR + phrase.',
 	'settings.inviteMissingMailbox':
 		'Aucun mot de passe boîte pour ce profil. Enregistrez-le une fois dans Réglages → Mail, puis partagez à nouveau.',
@@ -914,6 +914,10 @@ export default {
 	'invite.encrypting': 'Chiffrement…',
 	'invite.makeShareCode': 'Générer un code de partage',
 	'invite.copyLink': 'Copier le lien',
+	'invite.copied': 'Copié',
+	'invite.copyFailed': 'Impossible de copier — sélectionnez le lien manuellement.',
+	'invite.reusePassphrase':
+		'Cette boîte a déjà une phrase — l’invitation la réutilise (pas besoin de la retaper).',
 	'invite.inviteSomeone': 'Inviter une nouvelle personne',
 	'invite.memberRoleBlurb': 'Peut utiliser le Space.',
 	'invite.adminRoleBlurb': 'Peut gérer les membres et les réglages.',

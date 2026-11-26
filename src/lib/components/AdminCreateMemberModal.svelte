@@ -9,12 +9,17 @@
 	import Modal from './Modal.svelte';
 	import { actor } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
-	import { buildInviteSession, syncMailboxPassphrase } from '$lib/invite-bootstrap.js';
+	import {
+		buildInviteSession,
+		readMailboxPassphrase,
+		syncMailboxPassphrase
+	} from '$lib/invite-bootstrap.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { canInvite, upsertMember } from '$lib/members.svelte.js';
 	import { mailDomain as spaceMailDomain } from '$lib/space-host.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import PasswordRevealField from './PasswordRevealField.svelte';
+	import Copy from './icons/Copy.svelte';
 
 	/** @type {{ open: boolean, onclose?: () => void }} */
 	let { open = $bindable(false), onclose = () => {} } = $props();
@@ -33,6 +38,11 @@
 	let error = $state('');
 	let qr = $state('');
 	let inviteLink = $state('');
+	/** Existing mailbox passphrase for this local-part (space-secrets) — skip re-entry. */
+	let existingPass = $state('');
+	let copied = $state(false);
+	/** @type {ReturnType<typeof setTimeout> | undefined} */
+	let copiedTimer;
 
 	/** @type {HTMLInputElement | undefined} */
 	let focusEl = $state();
@@ -42,6 +52,7 @@
 			? `${createLocal.trim().toLowerCase().replace(/@.*$/, '')}@${mailDomain}`
 			: ''
 	);
+	const hasExistingPass = $derived(existingPass.trim().length >= 6);
 
 	$effect(() => {
 		if (!open) return;
@@ -54,7 +65,27 @@
 		error = '';
 		qr = '';
 		inviteLink = '';
+		existingPass = '';
+		copied = false;
 		void tick().then(() => focusEl?.focus());
+	});
+
+	$effect(() => {
+		if (!open) return;
+		const email = createEmail;
+		if (!email.includes('@') || !driveSession.connected) {
+			existingPass = '';
+			return;
+		}
+		let cancelled = false;
+		void readMailboxPassphrase(email).then((pw) => {
+			if (cancelled) return;
+			existingPass = pw.trim().length >= 6 ? pw.trim() : '';
+			if (existingPass) createPass = '';
+		});
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	function close() {
@@ -67,6 +98,7 @@
 		error = '';
 		qr = '';
 		inviteLink = '';
+		copied = false;
 		if (!inviter) {
 			error = t('invite.onlyAdmins');
 			return;
@@ -83,7 +115,8 @@
 			error = t('invite.enterMailbox');
 			return;
 		}
-		const secret = createPass.trim();
+		const reuse = hasExistingPass;
+		const secret = reuse ? existingPass.trim() : createPass.trim();
 		if (secret.length < 6) {
 			error = t('invite.passphraseMin');
 			return;
@@ -99,7 +132,11 @@
 				status: 'invited',
 				invited_at: now
 			});
-			const synced = await syncMailboxPassphrase(createEmail, secret, createName.trim());
+			/** @type {{ deferred?: boolean }} */
+			let synced = {};
+			if (!reuse) {
+				synced = await syncMailboxPassphrase(createEmail, secret, createName.trim());
+			}
 			const inviteSession = await buildInviteSession({
 				email: createEmail,
 				displayName: createName.trim(),
@@ -120,6 +157,20 @@
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			busy = false;
+		}
+	}
+
+	async function copyInviteLink() {
+		if (!inviteLink) return;
+		try {
+			await navigator.clipboard.writeText(inviteLink);
+			copied = true;
+			clearTimeout(copiedTimer);
+			copiedTimer = setTimeout(() => {
+				copied = false;
+			}, 1600);
+		} catch {
+			error = t('invite.copyFailed');
 		}
 	}
 </script>
@@ -173,23 +224,35 @@
 						}}
 					/>
 				</div>
-				<div class="field-shell">
-					<PasswordRevealField
-						variant="bare"
-						bind:value={createPass}
-						autocomplete="new-password"
-						placeholder={t('invite.passphrase')}
-						onkeydown={(e) => e.key === 'Enter' && createProfile()}
-					/>
+				{#if hasExistingPass}
+					<p class="hint">{t('invite.reusePassphrase')}</p>
 					<button
 						type="button"
-						class="cta"
-						disabled={busy || createPass.trim().length < 6}
+						class="cta-block"
+						disabled={busy || !createName.trim() || !createEmail.includes('@')}
 						onclick={() => void createProfile()}
 					>
 						{busy ? '…' : t('invite.create')}
 					</button>
-				</div>
+				{:else}
+					<div class="field-shell">
+						<PasswordRevealField
+							variant="bare"
+							bind:value={createPass}
+							autocomplete="new-password"
+							placeholder={t('invite.passphrase')}
+							onkeydown={(e) => e.key === 'Enter' && createProfile()}
+						/>
+						<button
+							type="button"
+							class="cta"
+							disabled={busy || createPass.trim().length < 6}
+							onclick={() => void createProfile()}
+						>
+							{busy ? '…' : t('invite.create')}
+						</button>
+					</div>
+				{/if}
 				{#if error}
 					<p class="err" role="alert">{error}</p>
 				{/if}
@@ -202,6 +265,10 @@
 				{/if}
 				{#if inviteLink}
 					<p class="meta">{inviteLink}</p>
+					<button type="button" class="copy-pill" onclick={() => void copyInviteLink()}>
+						<Copy size={14} />
+						<span>{copied ? t('invite.copied') : t('invite.copyLink')}</span>
+					</button>
 				{/if}
 				<button
 					type="button"
@@ -211,6 +278,7 @@
 						error = '';
 						qr = '';
 						inviteLink = '';
+						copied = false;
 					}}>{t('invite.createAnother')}</button
 				>
 			{/if}
@@ -343,6 +411,47 @@
 	.cta:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+
+	.cta-block {
+		height: 48px;
+		padding: 0 16px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--button-primary-bg, var(--fg));
+		color: var(--button-primary-fg, var(--bg));
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 650;
+		cursor: pointer;
+	}
+
+	.cta-block:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.copy-pill {
+		align-self: center;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		height: 36px;
+		padding: 0 14px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8, color-mix(in srgb, var(--fg) 8%, transparent));
+		color: var(--fg-66, var(--white66));
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: transform 0.12s ease;
+	}
+
+	.copy-pill:hover {
+		transform: scale(1.04);
 	}
 
 	.ghost {

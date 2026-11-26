@@ -4,7 +4,11 @@
 	import { actor } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { buildInviteSession, syncMailboxPassphrase } from '$lib/invite-bootstrap.js';
+	import {
+		buildInviteSession,
+		readMailboxPassphrase,
+		syncMailboxPassphrase
+	} from '$lib/invite-bootstrap.js';
 	import {
 		canInvite,
 		canManageMembers,
@@ -192,6 +196,9 @@
 		}
 	}
 
+	/** True when reshare can reuse the stored mailbox passphrase (no form). */
+	let reshareReuse = $state(false);
+
 	/** @param {{ email: string, name: string }} m */
 	function startReshare(m) {
 		reshareEmail = m.email;
@@ -200,8 +207,34 @@
 		reshareMsg = '';
 		reshareLink = '';
 		reshareQr = '';
+		reshareReuse = false;
 		editingEmail = null;
 		clearNewInviteOutput();
+		void tryReshareExisting(m);
+	}
+
+	/**
+	 * If this member already has a mailbox passphrase, mint immediately.
+	 * @param {{ email: string, name: string }} m
+	 */
+	async function tryReshareExisting(m) {
+		if (!driveSession.connected) return;
+		reshareBusy = true;
+		reshareMsg = '';
+		try {
+			const existing = await readMailboxPassphrase(m.email);
+			if (existing.trim().length < 6) {
+				reshareReuse = false;
+				return;
+			}
+			reshareReuse = true;
+			await mintReshare(m, existing.trim(), true);
+		} catch (e) {
+			reshareReuse = false;
+			reshareMsg = e instanceof Error ? e.message : String(e);
+		} finally {
+			reshareBusy = false;
+		}
 	}
 
 	function closeReshare() {
@@ -211,6 +244,36 @@
 		reshareMsg = '';
 		reshareLink = '';
 		reshareQr = '';
+		reshareReuse = false;
+	}
+
+	/**
+	 * @param {{ email: string, name: string, role: 'owner'|'admin'|'member' }} m
+	 * @param {string} secret
+	 * @param {boolean} reuse
+	 */
+	async function mintReshare(m, secret, reuse) {
+		if (!reuse) {
+			/* New / rotated passphrase — align Stalwart + space-secrets. */
+			await syncMailboxPassphrase(m.email, secret, m.name);
+		}
+		const session = await buildInviteSession({
+			email: m.email,
+			displayName: m.name,
+			role: m.role === 'owner' ? 'admin' : m.role,
+			mailboxPassword: secret
+		});
+		const payload = await encodeInvite(session, secret);
+		reshareLink = inviteShareUrl(payload);
+		reshareQr = await QRCode.toDataURL(reshareLink, {
+			errorCorrectionLevel: 'L',
+			margin: 1,
+			width: 280,
+			color: { dark: '#111111', light: '#ffffff' }
+		});
+		reshareMsg = reuse
+			? `Code ready for ${m.email}. Using their existing passphrase — whisper it if they need it again.`
+			: `Code ready for ${m.email}. Whisper the passphrase (also their mailbox password).`;
 	}
 
 	async function makeReshareInvite() {
@@ -237,24 +300,7 @@
 		}
 		reshareBusy = true;
 		try {
-			/* Re-share: passphrase rotates/aligns mailbox password so redeem stays OOTB. */
-			const secret = resharePass.trim();
-			await syncMailboxPassphrase(m.email, secret, m.name);
-			const session = await buildInviteSession({
-				email: m.email,
-				displayName: m.name,
-				role: m.role === 'owner' ? 'admin' : m.role,
-				mailboxPassword: secret
-			});
-			const payload = await encodeInvite(session, secret);
-			reshareLink = inviteShareUrl(payload);
-			reshareQr = await QRCode.toDataURL(reshareLink, {
-				errorCorrectionLevel: 'L',
-				margin: 1,
-				width: 280,
-				color: { dark: '#111111', light: '#ffffff' }
-			});
-			reshareMsg = `Code ready for ${m.email}. Whisper the passphrase (also their mailbox password).`;
+			await mintReshare(m, resharePass.trim(), false);
 		} catch (e) {
 			reshareMsg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -337,35 +383,50 @@
 
 					{#if reshareEmail === m.email}
 						<div class="panel">
-							<p class="hint tight">
-								Re-share for <strong>{m.name}</strong> — passphrase rotates their mailbox password
-								too (same secret for redeem + Mail).
-							</p>
-							<label class="row stack">
-								<span>Passphrase</span>
-								<PasswordRevealField
-									variant="pill"
-									bind:value={resharePass}
-									autocomplete="new-password"
-								/>
-							</label>
-							<label class="row stack">
-								<span>Confirm</span>
-								<PasswordRevealField
-									variant="pill"
-									bind:value={resharePass2}
-									autocomplete="new-password"
-								/>
-							</label>
+							{#if reshareBusy && !reshareLink}
+								<p class="hint tight">Encrypting share code for <strong>{m.name}</strong>…</p>
+							{:else if reshareLink}
+								<p class="hint tight">
+									Re-share for <strong>{m.name}</strong>
+									{#if reshareReuse}
+										— using their existing mailbox passphrase.
+									{:else}
+										— whisper the passphrase (also their mailbox password).
+									{/if}
+								</p>
+							{:else}
+								<p class="hint tight">
+									Re-share for <strong>{m.name}</strong> — passphrase becomes their mailbox
+									password (same secret for redeem + Mail).
+								</p>
+								<label class="row stack">
+									<span>Passphrase</span>
+									<PasswordRevealField
+										variant="pill"
+										bind:value={resharePass}
+										autocomplete="new-password"
+									/>
+								</label>
+								<label class="row stack">
+									<span>Confirm</span>
+									<PasswordRevealField
+										variant="pill"
+										bind:value={resharePass2}
+										autocomplete="new-password"
+									/>
+								</label>
+							{/if}
 							<div class="actions">
-								<button
-									type="button"
-									class="btn"
-									disabled={reshareBusy || resharePass.trim().length < 6}
-									onclick={() => void makeReshareInvite()}
-								>
-									{reshareBusy ? 'Encrypting…' : 'Make share code'}
-								</button>
+								{#if !reshareLink && !reshareBusy}
+									<button
+										type="button"
+										class="btn"
+										disabled={resharePass.trim().length < 6}
+										onclick={() => void makeReshareInvite()}
+									>
+										Make share code
+									</button>
+								{/if}
 								{#if reshareLink}
 									<button type="button" class="btn ghost" onclick={() => void copyReshare()}
 										>Copy link</button
