@@ -103,9 +103,14 @@ export async function pullChatIfNeeded(force = false) {
 			 */
 			const settled = Boolean(chatUi.settled);
 			await refreshChatFeed({ quiet: settled, catchUp: !settled });
-			/* Stamp after refresh so a failed/empty apply cannot skip later wakes. */
-			if (tip) lastTip = tip;
-			else lastTip = peekCachedChatTip(session) || lastTip;
+			/*
+			 * Only advance lastTip when the mailbox walk remembered this tip.
+			 * Stamping bare getNamedTip after a timeout left tipChanged=false forever
+			 * while chatFeed still missed cross-device self rows.
+			 */
+			const cached = peekCachedChatTip(session) || '';
+			if (tip && cached === tip) lastTip = tip;
+			else if (cached) lastTip = cached;
 			lastChatPull = Date.now();
 			/* Receipt tip writes compete with message tip CAS — defer. */
 			scheduleReadReceipts();
@@ -382,7 +387,15 @@ function armChatTipPoll() {
 /** Call when ChatChannelPanel mounts / chat route focused. */
 export function startChatTipPoll() {
 	watching = true;
-	if (pollTimer != null) return;
+	/*
+	 * Always force-pull on Chat focus — poll may already be armed from the
+	 * shell visibility listener, and a prior timeout can leave lastTip ahead
+	 * of chatFeed (own messages from another device missing until force).
+	 */
+	if (pollTimer != null) {
+		void pullChatIfNeeded(true);
+		return;
+	}
 	void pullChatIfNeeded(true).finally(() => armChatTipPoll());
 }
 

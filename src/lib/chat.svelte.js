@@ -1206,8 +1206,11 @@ export function announceMemberStatus(email, action = 'added', name = '') {
 }
 
 /**
- * Apply a peer chat message hint from the realtime bus (paint before mailbox pull).
+ * Apply a chat message hint from the realtime bus (paint before mailbox pull).
  * Durable tip-wake replaces `_hint` rows with the same mailbox id.
+ * Same-author hints are skipped only when this device already has the row
+ * (sender optimistic/settle). Other devices of the same actor must paint —
+ * otherwise cross-device self messages stay invisible until a tip walk lands.
  * @param {any} hint
  */
 export function applyMessageHint(hint) {
@@ -1217,8 +1220,13 @@ export function applyMessageHint(hint) {
 	if (!id || !author) return;
 	const kind = String(hint.kind || 'chat');
 	if (kind === 'reaction') return;
+
+	const existingIdx = chatFeed.findIndex((m) => String(m?.id || '') === id);
 	const me = (activePerson().email || '').trim().toLowerCase();
-	if (me && author.toLowerCase() === me) return;
+	if (me && author.toLowerCase() === me && existingIdx >= 0) {
+		/* Sending device already has optimistic / settled row — don't re-hint. */
+		return;
+	}
 
 	const channelId = String(hint.channel_id || 'general');
 	const createdAt =
@@ -1231,7 +1239,6 @@ export function applyMessageHint(hint) {
 		? hint.attachments.map((a) => normalizeChatAttachment(a))
 		: undefined;
 
-	const existingIdx = chatFeed.findIndex((m) => String(m?.id || '') === id);
 	if (existingIdx >= 0) {
 		const prev = chatFeed[existingIdx];
 		/* Never resurrect a locally soft-deleted row from a stale bus hint. */

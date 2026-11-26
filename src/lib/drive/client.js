@@ -662,9 +662,12 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 				}
 				prev = current || prev;
 				bump();
-				/* Brief backoff so peer receipt storms don't burn all attempts instantly. */
-				if (isMessage && attempt >= 2) {
-					const ms = Math.min(40 * (attempt - 1), 250);
+				/*
+				 * Soft backoff only after several 409s — early retries should stay
+				 * tight so ✓ latency matches last week under light contention.
+				 */
+				if (isMessage && attempt >= 5) {
+					const ms = Math.min(20 * (attempt - 4), 120);
 					await new Promise((r) => setTimeout(r, ms));
 				}
 				continue;
@@ -795,7 +798,11 @@ export async function loadMailboxMessages(session, opts = {}) {
 			? mailboxFeedCache.messages
 			: null;
 
-	rememberMailboxTip(session, tip);
+	/*
+	 * Do not rememberMailboxTip until a warm hit or successful walk — advancing
+	 * tip cache on entry made failed/timeout pulls stamp lastTip without leaves
+	 * and skip later tipChanged polls (cross-device self messages vanished).
+	 */
 	if (!tip) {
 		rememberMailboxFeed(session, '', [], { complete: true, tailHash: '' });
 		return { tip: '', messages: [], complete: true };
@@ -813,6 +820,7 @@ export async function loadMailboxMessages(session, opts = {}) {
 		Array.isArray(mailboxFeedCache.messages) &&
 		mailboxFeedCache.messages.length > 0
 	) {
+		rememberMailboxTip(session, tip);
 		return {
 			tip,
 			messages: mailboxFeedCache.messages.map((m) => structuredClone(m)),
