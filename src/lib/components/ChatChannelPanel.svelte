@@ -1131,12 +1131,14 @@
 	.feed-body {
 		display: flex;
 		flex-direction: column;
-		justify-content: flex-end;
 		width: 100%;
-		/* At least one viewport of the scroller’s content box — short threads
-		 * sit on the visual bottom without margin-top:auto inflating overscroll. */
-		min-height: 100%;
-		box-sizing: border-box;
+		/*
+		 * Size to content (min-content), not the scrollport.
+		 * min-height:100% + justify flex-end inside a flex overflow:auto
+		 * scroller collapses scrollHeight≈clientHeight on mobile — feed
+		 * cannot scroll and chrome-scroll-fade never leaves 0 (a3f2896).
+		 */
+		min-height: min-content;
 	}
 
 	.banner {
@@ -1183,8 +1185,8 @@
 		/* Tight like alpha-chat — stack groups use card margins, not a fat gap. */
 		gap: 0;
 		padding: 8px 0 12px;
-		flex: 0 0 auto;
-		width: 100%;
+		/* Short threads: sit on the visual bottom without filling the scrollport. */
+		margin-top: auto;
 	}
 
 	.stack > .pub-panel {
