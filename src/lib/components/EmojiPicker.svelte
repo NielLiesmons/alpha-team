@@ -2,12 +2,15 @@
 	/**
 	 * Emoji browser — pill search + one scroll of Recent / Custom / categories.
 	 * Reused by chat reactions expand + enterprise icon picker.
+	 * Custom “+ Upload” opens a Space emoji manage view (name before save).
 	 */
 	import ChatEmoji from './ChatEmoji.svelte';
 	import Search from './icons/Search.svelte';
+	import Trash from './icons/Trash.svelte';
 	import {
 		customEmojis,
 		refreshCustomEmojis,
+		removeCustomEmoji,
 		uploadCustomEmoji
 	} from '$lib/custom-emoji.svelte.js';
 	import { customEmojiShortcode, isCustomEmojiToken } from '$lib/message-emoji.js';
@@ -35,10 +38,20 @@
 	let query = $state('');
 	let uploadError = $state(/** @type {string | null} */ (null));
 	let uploading = $state(false);
+	let manageOpen = $state(false);
+	let uploadName = $state('');
+	/** @type {File | null} */
+	let pendingFile = $state(null);
+	/** @type {string | null} */
+	let pendingPreview = $state(null);
+	/** @type {string | null} */
+	let deletingId = $state(null);
 	/** @type {HTMLInputElement | undefined} */
 	let fileInput = $state();
 	/** @type {HTMLInputElement | undefined} */
 	let searchInput = $state();
+	/** @type {HTMLInputElement | undefined} */
+	let nameInput = $state();
 
 	const searching = $derived(query.trim().length > 0);
 	const stockHits = $derived(searching ? searchEmojis(query, 120) : []);
@@ -46,9 +59,12 @@
 		customEmojis.length;
 		const q = query.trim().toLowerCase().replace(/^:/, '').replace(/:$/, '');
 		const list = [...customEmojis];
-		if (!q) return list;
+		if (!q || manageOpen) return list;
 		return list.filter((e) => e.name.includes(q) || `:${e.name}:`.includes(q));
 	});
+
+	const nameOk = $derived(/^[a-z0-9_]{2,32}$/i.test(uploadName.trim().replace(/\s+/g, '_')));
+	const canSave = $derived(Boolean(pendingFile) && nameOk && !uploading);
 
 	/** Recent glyphs/shortcodes — max ~3 rows at 8 cols. */
 	const recent = $derived.by(() => {
@@ -73,8 +89,14 @@
 	});
 
 	$effect(() => {
-		if (!autofocus) return;
+		if (!autofocus || manageOpen) return;
 		queueMicrotask(() => searchInput?.focus());
+	});
+
+	$effect(() => {
+		return () => {
+			if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+		};
 	});
 
 	/** @param {string} glyph */
@@ -91,48 +113,86 @@
 		onselect(code);
 	}
 
-	function openUpload() {
+	function clearPending() {
+		if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+		pendingPreview = null;
+		pendingFile = null;
+		uploadName = '';
+	}
+
+	function openManage() {
+		uploadError = null;
+		manageOpen = true;
+		queueMicrotask(() => nameInput?.focus());
+	}
+
+	function closeManage() {
+		manageOpen = false;
+		uploadError = null;
+		clearPending();
+	}
+
+	function openFilePicker() {
 		uploadError = null;
 		fileInput?.click();
 	}
 
 	/** @param {Event} e */
-	async function onFile(e) {
+	function onFile(e) {
 		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
 		const file = input.files?.[0];
 		input.value = '';
 		if (!file) return;
-		const base = file.name.replace(/\.[^.]+$/, '');
+		if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+		pendingFile = file;
+		pendingPreview = URL.createObjectURL(file);
+		/* Suggest from filename — user must still edit/confirm via Save. */
+		if (!uploadName.trim()) {
+			uploadName = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]+/g, '_').slice(0, 32);
+		}
+		uploadError = null;
+		manageOpen = true;
+		queueMicrotask(() => {
+			nameInput?.focus();
+			nameInput?.select();
+		});
+	}
+
+	async function saveUpload() {
+		if (!pendingFile || !canSave) return;
 		uploading = true;
 		uploadError = null;
 		try {
-			const row = await uploadCustomEmoji(file, base);
-			pickCustom(row.name);
+			await uploadCustomEmoji(pendingFile, uploadName);
+			clearPending();
+			/* Stay in manage so more can be added; reaction pick stays on the browser grid. */
 		} catch (err) {
 			uploadError = err instanceof Error ? err.message : String(err);
 		} finally {
 			uploading = false;
 		}
 	}
+
+	/**
+	 * @param {string} id
+	 * @param {string} name
+	 */
+	async function onDelete(id, name) {
+		const label = `:${name}:`;
+		if (!confirm(t('common.deleteConfirm', { label }))) return;
+		deletingId = id;
+		uploadError = null;
+		try {
+			await removeCustomEmoji(id);
+		} catch (err) {
+			uploadError = err instanceof Error ? err.message : String(err);
+		} finally {
+			deletingId = null;
+		}
+	}
 </script>
 
 <div class="picker">
-	<div class="search-pill">
-		<span class="search-ico" aria-hidden="true"><Search size={15} /></span>
-		<input
-			bind:this={searchInput}
-			class="search"
-			type="search"
-			placeholder={t('chat.searchEmoji')}
-			bind:value={query}
-			aria-label={t('chat.searchEmoji')}
-			autocomplete="off"
-		/>
-		{#if value && onclear}
-			<button type="button" class="clear" onclick={onclear}>{t('chat.remove')}</button>
-		{/if}
-	</div>
-
 	<input
 		bind:this={fileInput}
 		type="file"
@@ -141,95 +201,125 @@
 		onchange={onFile}
 	/>
 
-	{#if uploadError}
-		<p class="err">{uploadError}</p>
-	{/if}
-
-	<div class="scroll">
-		{#if searching}
-			<p class="eyebrow">
-				{t(stockHits.length + customs.length === 1 ? 'chat.emojiResult' : 'chat.emojiResults', {
-					n: stockHits.length + customs.length
-				})}
-			</p>
-			<div class="grid" role="listbox" aria-label={t('chat.searchEmoji')}>
-				{#if allowCustom}
-					{#each customs as em (em.id)}
-						<button
-							type="button"
-							class="cell custom"
-							class:on={value === `:${em.name}:`}
-							role="option"
-							aria-selected={value === `:${em.name}:`}
-							title={`:${em.name}:`}
-							onclick={() => pickCustom(em.name)}
-						>
-							<ChatEmoji token={`:${em.name}:`} size={28} />
-						</button>
-					{/each}
-				{/if}
-				{#each stockHits as item (item.g + (item.n ?? ''))}
-					<button
-						type="button"
-						class="cell"
-						class:on={value === item.g}
-						role="option"
-						aria-selected={value === item.g}
-						title={item.n}
-						onclick={() => pick(item.g)}
-					>
-						{item.g}
-					</button>
-				{/each}
-				{#if stockHits.length === 0 && customs.length === 0}
-					<p class="empty">{t('chat.noMatches')}</p>
-				{/if}
+	{#if manageOpen && allowCustom && activeSession()}
+		<div class="manage">
+			<div class="manage-top">
+				<button type="button" class="back-pill" onclick={closeManage}>
+					{t('common.back')}
+				</button>
+				<p class="manage-title">{t('chat.customEmoji')}</p>
+				<span class="manage-top-spacer" aria-hidden="true"></span>
 			</div>
-		{:else}
-			{#if recent.length}
-				<p class="eyebrow">{t('chat.recentlyUsed')}</p>
-				<div class="grid" role="listbox" aria-label={t('chat.recentlyUsed')}>
-					{#each recent as token (token)}
-						<button
-							type="button"
-							class="cell"
-							class:on={value === token}
-							role="option"
-							aria-selected={value === token}
-							onclick={() => pick(token)}
-						>
-							{#if isCustomEmojiToken(token)}
-								<ChatEmoji {token} size={28} />
-							{:else}
-								{token}
-							{/if}
-						</button>
-					{/each}
-				</div>
+
+			{#if uploadError}
+				<p class="err">{uploadError}</p>
 			{/if}
 
-			{#if allowCustom && activeSession()}
-				<div class="eyebrow-row">
-					<p class="eyebrow">{t('chat.customEmoji')}</p>
+			<div class="manage-scroll">
+				{#if customs.length}
+					<ul class="manage-list" aria-label={t('chat.customEmoji')}>
+						{#each customs as em (em.id)}
+							<li class="manage-row">
+								<button
+									type="button"
+									class="manage-pick"
+									title={`:${em.name}:`}
+									onclick={() => pickCustom(em.name)}
+								>
+									<span class="manage-thumb">
+										<ChatEmoji token={`:${em.name}:`} size={28} />
+									</span>
+									<span class="manage-name">:{em.name}:</span>
+								</button>
+								<button
+									type="button"
+									class="manage-del"
+									aria-label={t('common.delete')}
+									disabled={deletingId === em.id}
+									onclick={() => onDelete(em.id, em.name)}
+								>
+									<Trash size={14} />
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="manage-empty">{t('chat.noCustomEmoji')}</p>
+				{/if}
+			</div>
+
+			<div class="compose">
+				{#if pendingFile && pendingPreview}
+					<div class="compose-preview">
+						<img src={pendingPreview} alt="" width="44" height="44" draggable="false" />
+					</div>
+					<input
+						bind:this={nameInput}
+						class="name"
+						type="text"
+						placeholder={t('chat.emojiNameHint')}
+						bind:value={uploadName}
+						aria-label={t('chat.customEmoji')}
+						maxlength="32"
+						autocomplete="off"
+						autocapitalize="off"
+						spellcheck="false"
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								void saveUpload();
+							}
+						}}
+					/>
+					<button type="button" class="save" disabled={!canSave} onclick={() => void saveUpload()}>
+						{uploading ? t('common.uploading') : t('common.save')}
+					</button>
 					<button
 						type="button"
-						class="eyebrow-plus"
-						aria-label={t('chat.uploadCustomEmoji')}
+						class="compose-cancel"
 						disabled={uploading}
-						onclick={openUpload}
+						onclick={clearPending}
+						aria-label={t('common.cancel')}
 					>
-						<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path
-								d="M8 3.25v9.5M3.25 8h9.5"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-							/>
-						</svg>
+						{t('common.cancel')}
 					</button>
-				</div>
-				{#if customs.length}
-					<div class="grid" role="listbox" aria-label={t('chat.customEmoji')}>
+				{:else}
+					<button type="button" class="choose" disabled={uploading} onclick={openFilePicker}>
+						+ {t('common.upload')}
+					</button>
+				{/if}
+			</div>
+		</div>
+	{:else}
+		<div class="search-pill">
+			<span class="search-ico" aria-hidden="true"><Search size={15} /></span>
+			<input
+				bind:this={searchInput}
+				class="search"
+				type="search"
+				placeholder={t('chat.searchEmoji')}
+				bind:value={query}
+				aria-label={t('chat.searchEmoji')}
+				autocomplete="off"
+			/>
+			{#if value && onclear}
+				<button type="button" class="clear" onclick={onclear}>{t('chat.remove')}</button>
+			{/if}
+		</div>
+
+		{#if uploadError}
+			<p class="err">{uploadError}</p>
+		{/if}
+
+		<div class="scroll">
+			{#if searching}
+				<p class="eyebrow">
+					{t(stockHits.length + customs.length === 1 ? 'chat.emojiResult' : 'chat.emojiResults', {
+						n: stockHits.length + customs.length
+					})}
+				</p>
+				<div class="grid" role="listbox" aria-label={t('chat.searchEmoji')}>
+					{#if allowCustom}
 						{#each customs as em (em.id)}
 							<button
 								type="button"
@@ -243,22 +333,8 @@
 								<ChatEmoji token={`:${em.name}:`} size={28} />
 							</button>
 						{/each}
-					</div>
-				{:else}
-					<div class="custom-empty">
-						<p class="custom-empty-copy">{t('chat.noCustomEmoji')}</p>
-						<button type="button" class="cta" disabled={uploading} onclick={openUpload}>
-							{uploading ? t('common.uploading') : t('chat.uploadCustomEmoji')}
-						</button>
-					</div>
-				{/if}
-			{/if}
-
-			{#each EMOJI_CATEGORIES as cat (cat.id)}
-				{@const catKey = categoryLabel[cat.id]}
-				<p class="eyebrow">{catKey ? t(catKey) : cat.label}</p>
-				<div class="grid" role="listbox" aria-label={catKey ? t(catKey) : cat.label}>
-					{#each cat.items as item (item.g + (item.n ?? ''))}
+					{/if}
+					{#each stockHits as item (item.g + (item.n ?? ''))}
 						<button
 							type="button"
 							class="cell"
@@ -271,10 +347,93 @@
 							{item.g}
 						</button>
 					{/each}
+					{#if stockHits.length === 0 && customs.length === 0}
+						<p class="empty">{t('chat.noMatches')}</p>
+					{/if}
 				</div>
-			{/each}
-		{/if}
-	</div>
+			{:else}
+				{#if recent.length}
+					<p class="eyebrow">{t('chat.recentlyUsed')}</p>
+					<div class="grid" role="listbox" aria-label={t('chat.recentlyUsed')}>
+						{#each recent as token (token)}
+							<button
+								type="button"
+								class="cell"
+								class:on={value === token}
+								role="option"
+								aria-selected={value === token}
+								onclick={() => pick(token)}
+							>
+								{#if isCustomEmojiToken(token)}
+									<ChatEmoji {token} size={28} />
+								{:else}
+									{token}
+								{/if}
+							</button>
+						{/each}
+					</div>
+				{/if}
+
+				{#if allowCustom && activeSession()}
+					<div class="eyebrow-row">
+						<p class="eyebrow">{t('chat.customEmoji')}</p>
+						<button
+							type="button"
+							class="upload-pill"
+							aria-label={t('chat.uploadCustomEmoji')}
+							onclick={openManage}
+						>
+							+ {t('common.upload')}
+						</button>
+					</div>
+					{#if customs.length}
+						<div class="grid" role="listbox" aria-label={t('chat.customEmoji')}>
+							{#each customs as em (em.id)}
+								<button
+									type="button"
+									class="cell custom"
+									class:on={value === `:${em.name}:`}
+									role="option"
+									aria-selected={value === `:${em.name}:`}
+									title={`:${em.name}:`}
+									onclick={() => pickCustom(em.name)}
+								>
+									<ChatEmoji token={`:${em.name}:`} size={28} />
+								</button>
+							{/each}
+						</div>
+					{:else}
+						<div class="custom-empty">
+							<p class="custom-empty-copy">{t('chat.noCustomEmoji')}</p>
+							<button type="button" class="cta" onclick={openManage}>
+								+ {t('common.upload')}
+							</button>
+						</div>
+					{/if}
+				{/if}
+
+				{#each EMOJI_CATEGORIES as cat (cat.id)}
+					{@const catKey = categoryLabel[cat.id]}
+					<p class="eyebrow">{catKey ? t(catKey) : cat.label}</p>
+					<div class="grid" role="listbox" aria-label={catKey ? t(catKey) : cat.label}>
+						{#each cat.items as item (item.g + (item.n ?? ''))}
+							<button
+								type="button"
+								class="cell"
+								class:on={value === item.g}
+								role="option"
+								aria-selected={value === item.g}
+								title={item.n}
+								onclick={() => pick(item.g)}
+							>
+								{item.g}
+							</button>
+						{/each}
+					</div>
+				{/each}
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -393,28 +552,28 @@
 		flex-shrink: 0;
 	}
 
-	.eyebrow-plus {
+	.upload-pill {
 		flex-shrink: 0;
-		width: 28px;
 		height: 28px;
 		margin: 0;
-		padding: 0;
+		padding: 0 12px;
 		border: 0;
-		border-radius: 50%;
+		border-radius: 999px;
 		background: var(--fg-8);
 		color: var(--fg-66);
-		display: grid;
-		place-items: center;
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 600;
 		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		transition: transform 0.12s ease;
 	}
 
-	.eyebrow-plus:hover {
+	.upload-pill:hover {
 		color: var(--fg);
-	}
-
-	.eyebrow-plus:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
+		transform: scale(1.04);
 	}
 
 	.grid {
@@ -489,5 +648,261 @@
 		text-align: center;
 		font-size: 0.8125rem;
 		color: var(--fg-33);
+	}
+
+	/* —— Manage Space custom emoji —— */
+	.manage {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		min-height: 0;
+		flex: 1;
+		height: 100%;
+	}
+
+	.manage-top {
+		flex-shrink: 0;
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		align-items: center;
+		gap: 8px;
+		min-height: 32px;
+	}
+
+	.back-pill {
+		height: 28px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: transform 0.12s ease;
+	}
+
+	.back-pill:hover {
+		color: var(--fg);
+		transform: scale(1.04);
+	}
+
+	.manage-title {
+		margin: 0;
+		text-align: center;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--fg);
+		line-height: 1.2;
+	}
+
+	.manage-top-spacer {
+		width: 56px;
+	}
+
+	.manage-scroll {
+		flex: 1;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.manage-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.manage-row {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		min-height: 44px;
+		padding: 0 2px 0 4px;
+		border-radius: 12px;
+		box-sizing: border-box;
+	}
+
+	.manage-row:hover {
+		background: var(--fg-4);
+	}
+
+	.manage-pick {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 0;
+		padding: 6px 4px;
+		border: 0;
+		border-radius: 10px;
+		background: transparent;
+		color: var(--fg);
+		font: inherit;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.manage-thumb {
+		flex-shrink: 0;
+		width: 32px;
+		height: 32px;
+		display: grid;
+		place-items: center;
+	}
+
+	.manage-name {
+		flex: 1;
+		min-width: 0;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--fg-66);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.manage-del {
+		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 50%;
+		background: transparent;
+		color: var(--accent-3, var(--destructive));
+		display: grid;
+		place-items: center;
+		cursor: pointer;
+	}
+
+	.manage-del:hover {
+		background: var(--fg-8);
+	}
+
+	.manage-del:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
+	.manage-empty {
+		margin: 28px 12px;
+		text-align: center;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--fg-33);
+	}
+
+	.compose {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding-top: 4px;
+		box-sizing: border-box;
+	}
+
+	.compose-preview {
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		border-radius: 10px;
+		overflow: hidden;
+		background: var(--fg-8);
+		display: grid;
+		place-items: center;
+	}
+
+	.compose-preview img {
+		width: 44px;
+		height: 44px;
+		object-fit: cover;
+		display: block;
+	}
+
+	.name {
+		flex: 1;
+		min-width: 0;
+		height: 36px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8);
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--fg);
+		outline: none;
+		box-sizing: border-box;
+	}
+
+	.name::placeholder {
+		color: var(--fg-33);
+	}
+
+	.save {
+		flex-shrink: 0;
+		height: 36px;
+		padding: 0 14px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--button-primary-bg, var(--fg));
+		color: var(--button-primary-fg, var(--bg));
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 650;
+		cursor: pointer;
+	}
+
+	.save:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
+	.compose-cancel {
+		flex-shrink: 0;
+		height: 36px;
+		padding: 0 10px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.choose {
+		flex: 1;
+		height: 36px;
+		padding: 0 14px;
+		border: 0;
+		border-radius: 999px;
+		background: var(--fg-8);
+		color: var(--fg-66);
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: transform 0.12s ease;
+	}
+
+	.choose:hover {
+		color: var(--fg);
+		transform: scale(1.02);
+	}
+
+	.choose:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+		transform: none;
 	}
 </style>
