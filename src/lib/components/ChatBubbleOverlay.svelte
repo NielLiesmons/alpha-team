@@ -332,7 +332,7 @@
 					</div>
 				{:else}
 					<div class="collapsed-strip">
-						<div class="emoji-scroll">
+						<div class="emoji-scroll" data-h-scroll>
 							{#each quick as emoji (emoji)}
 								<button
 									type="button"

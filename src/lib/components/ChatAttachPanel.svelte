@@ -190,7 +190,7 @@
 
 		<div class="pill-shell">
 			<!-- Outer recessed track — same family as Mail inbox SegmentedControl -->
-			<div class="pill-track" role="tablist" aria-label={t('chat.attach')}>
+			<div class="pill-track" role="tablist" aria-label={t('chat.attach')} data-h-scroll>
 				{#each items as item (item.kind)}
 					{@const on = tab === item.kind}
 					{@const png = on ? navPngUrl(item.icon) : null}

@@ -55,6 +55,12 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 - Opt in with `.show-scrollbar` only when scroll affordance is otherwise unclear.
 - Do **not** opt in for horizontal emoji rows, pill tracks, or segmented controls (stay hidden).
 
+## Horizontal scroll vs page swipe
+
+- Any overflow-x row (reactions emoji strip, attach pill track, SegmentedControl, …) must mark **`data-h-scroll`**.
+- That attribute: `touch-action: pan-x` + `overscroll-behavior-x: contain` (via `scrollbars.css`), and UiShell / DetailColumn **exclude** it from nav-open / swipe-back so row scroll wins over page gestures.
+- Prefer this shared marker over one-off `stopPropagation` / per-surface gesture forks.
+
 ## Popovers
 
 Canonical surface + rows: `@alpha/ui/popover.css` (`.alpha-popover`, `.alpha-popover-list`, `.alpha-popover-item`, `.alpha-popover-ico`). FloatPanel / DropdownMenu / chat actions / in-flow menus share this chrome.
