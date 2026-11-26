@@ -236,7 +236,12 @@
 		return false;
 	}
 
-	/* Self-bind so parents don't need component method exports. */
+	/*
+	 * Self-bind so parents don't need component method exports.
+	 * Do NOT depend on `value` — rebinding listeners + microtask sync on every
+	 * keystroke was a main-thread tax (typing lag even with nobody else online).
+	 * Input/click/keyup already drive syncFromInput; `value` is choose() fallback.
+	 */
 	$effect(() => {
 		const el = inputEl;
 		if (!el) return;
@@ -249,7 +254,6 @@
 		el.addEventListener('click', onInput);
 		el.addEventListener('keyup', onInput);
 		el.addEventListener('keydown', onKey, true);
-		value;
 		queueMicrotask(onInput);
 		return () => {
 			el.removeEventListener('input', onInput);
