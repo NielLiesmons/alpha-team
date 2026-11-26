@@ -1070,7 +1070,7 @@
 			</div>
 		</header>
 		{@const taskMailId = String(task.mail_thread_id || task._drive?.mail_thread_id || '').trim()}
-		<div class="body">
+		<div class="body note-body-wrap">
 			<DetailTitleRow>
 				{#snippet leading()}
 					<TaskFieldPicker taskId={task.id} field="status" value={task.status} size={24} />
@@ -1111,16 +1111,17 @@
 				>
 					{t('mail.thread')}
 				</button>
-			{:else}
-				<textarea
-					class="body-input"
-					bind:value={draftBody}
-					aria-label={t('detail.ariaTaskDesc')}
-					placeholder={t('tasks.addDescription')}
-					rows="3"
-					oninput={scheduleDraftSave}
-				></textarea>
 			{/if}
+			{#key task.id}
+				<div class="note-editor-pad">
+					<NoteEditor
+						value={draftBody}
+						editable={true}
+						placeholder={t('tasks.addDescription')}
+						onChange={onNoteBodyChange}
+					/>
+				</div>
+			{/key}
 		</div>
 		<CommentThread
 			type="task"
