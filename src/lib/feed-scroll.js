@@ -116,6 +116,80 @@ export async function snapFeedToBottomSoon(getEl, opts = {}) {
 }
 
 /**
+ * Hard-clamp scroll so iOS cannot rubber-band past the newest-message end.
+ * CSS `overscroll-behavior-y: none` is not enough on WebKit overflow:auto.
+ * Touchmove must be non-passive to preventDefault at the tip.
+ * @param {HTMLElement} scroller
+ * @param {{
+ *   isTouching?: () => boolean,
+ *   onTouchStart?: (e: TouchEvent) => void,
+ *   onTouchMove?: (e: TouchEvent) => void,
+ *   onTouchEnd?: (e: TouchEvent) => void
+ * }} [opts]
+ */
+export function attachFeedBottomClamp(scroller, opts = {}) {
+	const clamp = () => {
+		const max = feedMaxScrollTop(scroller);
+		if (scroller.scrollTop > max) scroller.scrollTop = max;
+		if (scroller.scrollTop < 0) scroller.scrollTop = 0;
+	};
+
+	const onScroll = () => {
+		clamp();
+	};
+
+	/** @type {number | null} */
+	let touchY0 = null;
+
+	/** @param {TouchEvent} e */
+	const onTouchStart = (e) => {
+		touchY0 = e.touches[0]?.clientY ?? null;
+		opts.onTouchStart?.(e);
+	};
+
+	/** @param {TouchEvent} e */
+	const onTouchMove = (e) => {
+		opts.onTouchMove?.(e);
+		const y = e.touches[0]?.clientY;
+		if (touchY0 == null || y == null) return;
+		const max = feedMaxScrollTop(scroller);
+		/*
+		 * Finger moves up (y decreases) → content scrolls toward/past tip (max).
+		 * At or past the tip, block the gesture so WebKit cannot overscroll.
+		 */
+		const pullingPastTip = y < touchY0 - 2 && scroller.scrollTop >= max - 1;
+		if (pullingPastTip && e.cancelable) {
+			e.preventDefault();
+			scroller.scrollTop = max;
+		} else {
+			clamp();
+		}
+	};
+
+	/** @param {TouchEvent} e */
+	const onTouchEnd = (e) => {
+		touchY0 = null;
+		clamp();
+		opts.onTouchEnd?.(e);
+	};
+
+	scroller.addEventListener('scroll', onScroll, { passive: true });
+	scroller.addEventListener('touchstart', onTouchStart, { passive: true });
+	/* passive:false — required for preventDefault at the tip on iOS. */
+	scroller.addEventListener('touchmove', onTouchMove, { passive: false });
+	scroller.addEventListener('touchend', onTouchEnd, { passive: true });
+	scroller.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+	return () => {
+		scroller.removeEventListener('scroll', onScroll);
+		scroller.removeEventListener('touchstart', onTouchStart);
+		scroller.removeEventListener('touchmove', onTouchMove);
+		scroller.removeEventListener('touchend', onTouchEnd);
+		scroller.removeEventListener('touchcancel', onTouchEnd);
+	};
+}
+
+/**
  * While pinned, keep the scroller at true bottom whenever the body box resizes
  * or its child list mutates (tip-wake / keyed each remounts that briefly collapse height).
  * Skips while `isLocked` (smooth jump in flight) or while the user is touching

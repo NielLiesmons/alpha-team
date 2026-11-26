@@ -51,6 +51,7 @@
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
 		attachComposerClearPad,
+		attachFeedBottomClamp,
 		attachFeedPinResize,
 		isFeedNearBottom,
 		snapFeedToBottomSoon
@@ -363,6 +364,36 @@
 		);
 	});
 
+	/*
+	 * iOS WebKit ignores overscroll-behavior on overflow:auto — rubber-band past
+	 * the tip + pin-snap fight ≈ 2s hang. Non-passive touchmove clamps at max.
+	 */
+	$effect(() => {
+		const scroller = messagesEl;
+		if (!scroller) return;
+		return attachFeedBottomClamp(scroller, {
+			onTouchStart: (e) => {
+				feedTouching = true;
+				touchY0 = e.touches[0]?.clientY ?? null;
+			},
+			onTouchMove: (e) => {
+				const y = e.touches[0]?.clientY;
+				if (touchY0 == null || y == null) return;
+				/* Finger down → content scrolls up (away from tip). */
+				if (y - touchY0 > 10) leaveBottomIntent = true;
+			},
+			onTouchEnd: () => {
+				touchY0 = null;
+				feedTouching = false;
+				/*
+				 * Wait out iOS rubber-band settle before remeasure — immediate
+				 * measure + pin-snap was the ~2s stale hang past the tip.
+				 */
+				setTimeout(() => measureScroll(), 120);
+			}
+		});
+	});
+
 	/* Grow feed bottom pad with composer height (quote / attach / tall draft). */
 	$effect(() => {
 		const root = chatRootEl;
@@ -461,27 +492,15 @@
 	/** @param {WheelEvent} e */
 	function onFeedWheel(e) {
 		if (e.deltaY < 0) leaveBottomIntent = true;
-	}
-
-	/** @param {TouchEvent} e */
-	function onFeedTouchStart(e) {
-		feedTouching = true;
-		touchY0 = e.touches[0]?.clientY ?? null;
-	}
-
-	/** @param {TouchEvent} e */
-	function onFeedTouchMove(e) {
-		const y = e.touches[0]?.clientY;
-		if (touchY0 == null || y == null) return;
-		/* Finger down → content scrolls up (away from bottom). */
-		if (y - touchY0 > 10) leaveBottomIntent = true;
-	}
-
-	function onFeedTouchEnd() {
-		touchY0 = null;
-		feedTouching = false;
-		/* After rubber-band settles, one quiet remeasure — no snap storm. */
-		queueMicrotask(() => measureScroll());
+		const el = messagesEl;
+		if (!el) return;
+		/* Desktop wheel past tip — clamp (touch path uses attachFeedBottomClamp). */
+		if (e.deltaY > 0) {
+			const max = Math.max(0, el.scrollHeight - el.clientHeight);
+			if (el.scrollTop >= max - 1) {
+				el.scrollTop = max;
+			}
+		}
 	}
 
 	function measureScroll() {
@@ -811,10 +830,6 @@
 		bind:this={messagesEl}
 		onscroll={measureScroll}
 		onwheel={onFeedWheel}
-		ontouchstart={onFeedTouchStart}
-		ontouchmove={onFeedTouchMove}
-		ontouchend={onFeedTouchEnd}
-		ontouchcancel={onFeedTouchEnd}
 	>
 		<div class="feed-body" bind:this={feedBodyEl}>
 			{#if driveSession.error}
@@ -1111,10 +1126,11 @@
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
 		/*
-		 * none (not contain): iOS still rubber-bands past the last bubble with
-		 * contain, which feels like “scroll beyond feed bottom”.
+		 * none alone is insufficient on iOS WebKit — attachFeedBottomClamp
+		 * preventDefaults past the tip. Keep none as a desktop/Chrome assist.
 		 */
 		overscroll-behavior-y: none;
+		overscroll-behavior-x: none;
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
