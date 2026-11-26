@@ -1013,7 +1013,7 @@ export default {
 	'tasks.linkedMoments': "{n} momento(s) vinculado(s) (series recurrentes incl.).",
 	'pwa.iosHint': "En iPhone: Safari → Compartir → Añadir a inicio, luego abre Alpha.",
 	'pwa.browserHint': "Instala Alpha para arranques más rápidos y notificaciones.",
-	'pwa.addToHome': 'Añade esta app a tu pantalla de inicio',
+	'pwa.addToHome': 'Añade la app a la pantalla de inicio',
 	'invite.loadingSpace': 'Cargando tu espacio de equipo',
 	'invite.spaceFallback': 'Espacio',
 	'invite.onlyAdmins': "Solo los admins pueden crear perfiles.",

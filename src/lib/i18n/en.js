@@ -1011,7 +1011,7 @@ export default {
 	'tasks.linkedMoments': "{n} linked moment(s) (incl. recurring series).",
 	'pwa.iosHint': "On iPhone: Safari → Share → Add to Home Screen, then open Alpha from the icon.",
 	'pwa.browserHint': "Install Alpha for faster launches and notifications.",
-	'pwa.addToHome': 'Add this app to your homescreen',
+	'pwa.addToHome': 'Add the app to home screen',
 	'invite.loadingSpace': 'Loading your team space',
 	'invite.spaceFallback': 'Space',
 	'invite.onlyAdmins': "Only admins can create profiles.",

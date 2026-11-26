@@ -606,10 +606,6 @@
 	listTopHidden={callChromeOpen}
 	accountLabel={displayNameFromEmail()}
 >
-	{#snippet banners()}
-		<PwaInstallBanner />
-	{/snippet}
-
 	{#snippet sidebarLead()}
 		<!-- 34px: 10px smaller than the 44px round chrome; pad lives on .account-pill -->
 		<ProfilePic
@@ -624,6 +620,8 @@
 		{#if voicePlayerVisible()}
 			<ChatVoiceNowPlaying />
 		{/if}
+		<!-- Quiet install CTA lives with voice/player — not a page-bottom dock. -->
+		<PwaInstallBanner />
 	{/snippet}
 
 	{#snippet listTitleSlot()}
