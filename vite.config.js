@@ -48,7 +48,7 @@ export default defineConfig({
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
 				/* Query busts stale importScripts after push-open / tip-mid + local-first boot. */
-				importScripts: ['/push-sw.js?v=7'],
+				importScripts: ['/push-sw.js?v=8'],
 				/*
 				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
 				 * After rsync deploys, that served stale HTML pointing at deleted hashed
@@ -67,7 +67,7 @@ export default defineConfig({
 				/*
 				 * Never precache HTML shells. Precache matches before runtime routes, so
 				 * caching `/` / `chat` / … reintroduced cache-only navigations and blanked
-				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v6) instead.
+				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v7) instead.
 				 */
 				globPatterns: ['**/*.{js,css,ico,png,svg,webp,woff,woff2,webmanifest}'],
 				/* Kit appends prerendered HTML globs — ignore so SPA shells stay out of precache. */
@@ -81,7 +81,7 @@ export default defineConfig({
 							!url.pathname.endsWith('/sw.js'),
 						handler: 'NetworkFirst',
 						options: {
-							cacheName: 'alpha-pages-v6',
+							cacheName: 'alpha-pages-v7',
 							/* 1s — warm cache paints ASAP; was 3s and felt like a stuck wave offline. */
 							networkTimeoutSeconds: 1,
 							expiration: {

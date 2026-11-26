@@ -380,9 +380,23 @@ export function initChatWakeListeners() {
 		consumePushOpenQuery();
 		void pullChatIfNeeded(true);
 	};
+	const onOnline = () => {
+		/* Drop a hung catch-up wave, then force tip pull after airplane mode. */
+		chatUi.syncing = false;
+		chatUi.loading = false;
+		chatUi.settled = true;
+		void pullChatIfNeeded(true);
+	};
+	const onOffline = () => {
+		chatUi.syncing = false;
+		chatUi.loading = false;
+		chatUi.settled = true;
+	};
 	document.addEventListener('visibilitychange', onVisibility);
 	window.addEventListener('focus', onFocus);
 	window.addEventListener('pageshow', onPageShow);
+	window.addEventListener('online', onOnline);
+	window.addEventListener('offline', onOffline);
 	navigator.serviceWorker?.addEventListener?.('message', onSwMessage);
 	/*
 	 * Always poll while visible — reactions do not get push wakes, and chat
@@ -396,6 +410,8 @@ export function initChatWakeListeners() {
 		document.removeEventListener('visibilitychange', onVisibility);
 		window.removeEventListener('focus', onFocus);
 		window.removeEventListener('pageshow', onPageShow);
+		window.removeEventListener('online', onOnline);
+		window.removeEventListener('offline', onOffline);
 		navigator.serviceWorker?.removeEventListener?.('message', onSwMessage);
 		stopChatTipPoll();
 	};

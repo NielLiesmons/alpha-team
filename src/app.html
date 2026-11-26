@@ -356,25 +356,44 @@
 				var paintTrouble = function (auto) {
 					var shell = document.getElementById('alpha-boot-shell');
 					if (!shell) return;
+					var offlineNow = false;
+					try {
+						offlineNow = typeof navigator !== 'undefined' && navigator.onLine === false;
+					} catch (e) {}
 					shell.hidden = false;
 					shell.setAttribute('role', 'alert');
 					shell.innerHTML =
 						'<div class="boot-copy">' +
 						'<p class="boot-title">Couldn’t start</p>' +
 						'<p class="boot-body">' +
-						(auto
-							? 'Clearing the cached shell automatically…'
-							: 'Cached shell looks stuck. Clear it and reload.') +
+						(offlineNow
+							? 'You’re offline. Reload to use the last cached shell — recover needs a network.'
+							: auto
+								? 'Clearing the cached shell automatically…'
+								: 'Cached shell looks stuck. Clear it and reload.') +
 						'</p>' +
 						'<div class="boot-actions">' +
-						'<button type="button" id="alpha-boot-reload">Reload app</button>' +
-						'<p class="boot-link">Or open <a href="/api/recover">team.bley.farm/api/recover</a></p>' +
+						'<button type="button" id="alpha-boot-reload">' +
+						(offlineNow ? 'Reload cached app' : 'Reload app') +
+						'</button>' +
+						(offlineNow
+							? ''
+							: '<p class="boot-link">Or open <a href="/api/recover">team.bley.farm/api/recover</a></p>') +
 						'</div></div>';
 					var btn = document.getElementById('alpha-boot-reload');
 					if (btn) {
 						btn.onclick = function () {
 							btn.disabled = true;
-							btn.textContent = 'Clearing…';
+							btn.textContent = offlineNow ? 'Reloading…' : 'Clearing…';
+							/* Airplane mode: /api/recover cannot run — soft reload only. */
+							if (offlineNow) {
+								try {
+									location.reload();
+								} catch (e) {
+									location.href = location.pathname + location.search;
+								}
+								return;
+							}
 							goRecover();
 						};
 					}

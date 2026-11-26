@@ -223,13 +223,14 @@ export async function bootApp() {
 		}
 
 		try {
-			await hydrateWorkspaceFromCache();
+			/* IDB can hang on some iOS PWA resumes — never block listsReady. */
+			await withTimeout(hydrateWorkspaceFromCache(), 3_000);
 		} catch {
 			/* ignore */
 		}
 		/* Warm PFPs from IndexedDB before unlocking lists — small team, few blobs. */
 		try {
-			await warmAvatarUrlsFromCache();
+			await withTimeout(warmAvatarUrlsFromCache(), 2_000);
 		} catch {
 			/* ignore */
 		}
