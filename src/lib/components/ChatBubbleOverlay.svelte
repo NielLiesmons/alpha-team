@@ -513,11 +513,20 @@
 		/* No visible modal wash — dismiss hit-target only */
 		background: transparent;
 		cursor: default;
-		pointer-events: auto;
+		/*
+		 * Hit-test only once armed. The brief open inert window used to keep a
+		 * full-viewport catcher alive — that blocked nav / composer / scroll if
+		 * arming raced a remount or tip-wake refresh.
+		 */
+		pointer-events: none;
 		/* Never take focus — opening actions must not close the keyboard. */
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
 		touch-action: manipulation;
+	}
+
+	.overlay-root.armed .scrim {
+		pointer-events: auto;
 	}
 
 	/*

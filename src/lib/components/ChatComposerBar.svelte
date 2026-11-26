@@ -202,6 +202,19 @@
 		const el = voiceCaptureEl;
 		if (!el) return;
 		el.style.pointerEvents = voiceGestureActive ? 'auto' : 'none';
+		/*
+		 * Safety: never leave the full-viewport capture layer hit-testing
+		 * after the gesture / recording has ended (cancel races, remounts).
+		 */
+		if (!voiceGestureActive) return;
+		const alive = voiceRecording || voiceStarting || holdPointerAlive || holdCaptureLost;
+		if (alive) return;
+		const t = window.setTimeout(() => {
+			if (voiceGestureActive && !voiceRecording && !voiceStarting && !holdPointerAlive) {
+				endVoiceGesture();
+			}
+		}, 600);
+		return () => window.clearTimeout(t);
 	});
 
 	/** CE (or a descendant) is the document activeElement. */
@@ -681,10 +694,15 @@
 		finishHoldRelease(t.clientX, t.clientY);
 	}
 
-	/** Block scroll / feed pan while the hold gesture owns the pointer. */
+	/**
+	 * Block scroll / feed pan only while the finger is still down.
+	 * After pointercancel, holdCaptureLost stays true for detached release —
+	 * never keep preventDefault then, or the whole shell (nav / composer /
+	 * feed) stays touch-dead until remount.
+	 */
 	/** @param {TouchEvent} e */
 	function onHoldTouchMove(e) {
-		if (!holdPointerAlive && !holdCaptureLost) return;
+		if (!holdPointerAlive) return;
 		e.preventDefault();
 	}
 
@@ -1014,6 +1032,11 @@
 	 * Don’t treat that as user-abort — keep recording and wait for a real
 	 * finger-up (detached listeners). If none arrives, promote to locked so
 	 * the take isn’t stranded without chrome controls.
+	 *
+	 * CRITICAL: drop the body-level capture scrim + touchmove preventDefault
+	 * immediately. A prior path left those armed whenever voiceMode wasn’t
+	 * already `holding` at the 320ms timeout (getUserMedia still pending) —
+	 * that froze nav, composer, and feed scroll until a full remount.
 	 * @param {PointerEvent} e
 	 */
 	function onHoldPointerCancel(e) {
@@ -1023,22 +1046,34 @@
 		holdCaptureLost = true;
 		holdPointerAlive = false;
 		releaseHoldCapture(holdPointerId);
+		/* Unlock chrome now — detached release still tracks finger-up. */
+		voiceGestureActive = false;
+		if (voiceCaptureEl) voiceCaptureEl.style.pointerEvents = 'none';
 		window.removeEventListener('pointermove', onHoldPointerMove, true);
 		window.removeEventListener('pointerup', onHoldPointerUp, true);
 		window.removeEventListener('pointercancel', onHoldPointerCancel, true);
+		window.removeEventListener('touchmove', onHoldTouchMove, true);
 		armDetachedHoldRelease();
 		restoreComposerKeyboardIfKept();
 		const cancelGen = holdPointerId;
 		window.setTimeout(() => {
-			if (!holdCaptureLost || holdPointerId !== cancelGen) return;
+			if (holdPointerId !== cancelGen) return;
+			if (!holdCaptureLost) return;
+			clearHoldListeners();
+			voiceGestureActive = false;
+			if (voiceCaptureEl) voiceCaptureEl.style.pointerEvents = 'none';
 			if (voiceMode === 'holding') {
 				holdCaptureLost = false;
-				clearHoldListeners();
-				voiceGestureActive = false;
-				if (voiceCaptureEl) voiceCaptureEl.style.pointerEvents = 'none';
 				holdPointerId = null;
 				lockVoiceRecording();
+				return;
 			}
+			if (voiceStarting) {
+				/* beginHoldRecording will honor lock once getUserMedia resolves. */
+				holdReleaseIntent = holdReleaseIntent || 'lock';
+				return;
+			}
+			endVoiceGesture();
 		}, 320);
 	}
 
