@@ -47,8 +47,8 @@ export default defineConfig({
 			},
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
-				/* Query busts stale importScripts after pages seed + offline adopt. */
-				importScripts: ['/push-sw.js?v=11'],
+				/* Query busts stale importScripts after pages seed + immutable adopt. */
+				importScripts: ['/push-sw.js?v=12'],
 				/*
 				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
 				 * After rsync deploys, that served stale HTML pointing at deleted hashed
@@ -62,13 +62,18 @@ export default defineConfig({
 				/* null → no cache-only NavigationRoute (see NetworkFirst below). */
 				navigateFallback: null,
 				navigationPreload: false,
-				cleanupOutdatedCaches: true,
+				/*
+				 * Keep the prior workbox precache — push-sw trims to 2 generations.
+				 * Aggressive cleanup deleted modules that cached HTML still referenced,
+				 * which is the warm-offline “Still opening offline” death spiral.
+				 */
+				cleanupOutdatedCaches: false,
 				clientsClaim: true,
 				skipWaiting: true,
 				/*
 				 * Never precache HTML shells. Precache matches before runtime routes, so
 				 * caching `/` / `chat` / … reintroduced cache-only navigations and blanked
-				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v10) instead.
+				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v11) instead.
 				 */
 				globPatterns: ['**/*.{js,css,ico,png,svg,webp,woff,woff2,webmanifest}'],
 				/* Kit appends prerendered HTML globs — ignore so SPA shells stay out of precache. */
@@ -82,7 +87,7 @@ export default defineConfig({
 							!url.pathname.endsWith('/sw.js'),
 						handler: 'NetworkFirst',
 						options: {
-							cacheName: 'alpha-pages-v10',
+							cacheName: 'alpha-pages-v11',
 							/* 0.35s — local-first: prefer cached shell quickly; was 1s. */
 							networkTimeoutSeconds: 0.35,
 							expiration: {
@@ -102,14 +107,14 @@ export default defineConfig({
 											(await cache.match(path, ignore)) ||
 											(await cache.match('/', ignore)) ||
 											(await cache.match('/chat', ignore));
-										const current = await caches.open('alpha-pages-v10');
+										const current = await caches.open('alpha-pages-v11');
 										let match = await fromCache(current);
 										if (!match) {
 											const names = (await caches.keys())
 												.filter(
 													(n) =>
 														n.indexOf('alpha-pages-') === 0 &&
-														n !== 'alpha-pages-v10'
+														n !== 'alpha-pages-v11'
 												)
 												.sort((a, b) =>
 													b.localeCompare(a, undefined, { numeric: true })

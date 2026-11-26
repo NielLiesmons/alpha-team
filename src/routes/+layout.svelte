@@ -86,16 +86,9 @@
 		/** @param {Event} e */
 		function onPreloadError(e) {
 			e.preventDefault?.();
-			/* Airplane mode: /api/recover cannot run — soft reload only. */
+			/* Airplane mode: reload cannot invent modules — leave SW cache-first path alone. */
 			const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-			if (offline) {
-				try {
-					location.reload();
-				} catch {
-					/* ignore */
-				}
-				return;
-			}
+			if (offline) return;
 			if (sessionStorage.getItem('alpha.chunk-reload') === '1') {
 				location.replace('/api/recover');
 				return;

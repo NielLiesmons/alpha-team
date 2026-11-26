@@ -69,14 +69,15 @@
 				align-items: center;
 				gap: 10px;
 			}
+			/* Quiet pill — match product chrome, not a heavy primary CTA. */
 			#alpha-boot-shell button {
 				height: 44px;
 				padding: 0 18px;
 				border: 0;
-				border-radius: 14px;
-				background: #eee;
-				color: #111;
-				font: 650 14px system-ui, -apple-system, sans-serif;
+				border-radius: 9999px;
+				background: rgba(238, 238, 238, 0.08);
+				color: rgba(238, 238, 238, 0.66);
+				font: 600 14px system-ui, -apple-system, sans-serif;
 				cursor: pointer;
 			}
 			#alpha-boot-shell button:disabled {
@@ -411,74 +412,78 @@
 					}
 				};
 
-				var softReload = function () {
-					try {
-						location.reload();
-					} catch (e) {
-						location.href = location.pathname + location.search;
-					}
+				var paintQuietOfflineEmpty = function () {
+					var shell = document.getElementById('alpha-boot-shell');
+					if (!shell) return;
+					shell.hidden = false;
+					shell.setAttribute('role', 'status');
+					shell.removeAttribute('aria-busy');
+					/*
+					 * Cold offline (no prior session): quiet empty — never a Retry
+					 * loop. Warm offline must never reach here (keep the wave).
+					 */
+					shell.innerHTML =
+						'<div class="boot-copy">' +
+						'<p class="boot-title" style="color:rgba(238,238,238,0.33);font-size:1.65rem;font-weight:500">You’re offline</p>' +
+						'<p class="boot-body" style="color:rgba(238,238,238,0.16);font-size:14px">Open once online to cache this space on the device.</p>' +
+						'</div>';
 				};
 
 				var paintTrouble = function (auto) {
 					var shell = document.getElementById('alpha-boot-shell');
 					if (!shell) return;
-					var offlineNow = false;
-					var warm = false;
-					try {
-						offlineNow = typeof navigator !== 'undefined' && navigator.onLine === false;
-						warm = document.documentElement.dataset.warmBoot === '1';
-					} catch (e) {}
 					shell.hidden = false;
 					shell.setAttribute('role', 'alert');
-					/*
-					 * Offline + prior session: never a fatal “couldn’t start” dead-end.
-					 * Soft copy + reload only — /api/recover cannot run without a network.
-					 */
-					if (offlineNow) {
-						shell.innerHTML =
-							'<div class="boot-copy">' +
-							'<p class="boot-title">' +
-							(warm ? 'Still opening offline' : 'You’re offline') +
-							'</p>' +
-							'<p class="boot-body">Using the last cached shell on this device. Tap retry — recover needs a network.</p>' +
-							'<div class="boot-actions">' +
-							'<button type="button" id="alpha-boot-reload">Retry</button>' +
-							'</div></div>';
-					} else {
-						shell.innerHTML =
-							'<div class="boot-copy">' +
-							'<p class="boot-title">Couldn’t start</p>' +
-							'<p class="boot-body">' +
-							(auto
-								? 'Clearing the cached shell automatically…'
-								: 'Cached shell looks stuck. Clear it and reload.') +
-							'</p>' +
-							'<div class="boot-actions">' +
-							'<button type="button" id="alpha-boot-reload">Reload app</button>' +
-							'<p class="boot-link">Or open <a href="/api/recover">team.bley.farm/api/recover</a></p>' +
-							'</div></div>';
-					}
+					shell.innerHTML =
+						'<div class="boot-copy">' +
+						'<p class="boot-title">Couldn’t start</p>' +
+						'<p class="boot-body">' +
+						(auto
+							? 'Clearing the cached shell automatically…'
+							: 'Cached shell looks stuck. Clear it and reload.') +
+						'</p>' +
+						'<div class="boot-actions">' +
+						'<button type="button" id="alpha-boot-reload">Reload app</button>' +
+						'<p class="boot-link">Or open <a href="/api/recover">team.bley.farm/api/recover</a></p>' +
+						'</div></div>';
 					var btn = document.getElementById('alpha-boot-reload');
 					if (btn) {
 						btn.onclick = function () {
 							btn.disabled = true;
-							btn.textContent = offlineNow ? 'Retrying…' : 'Clearing…';
-							if (offlineNow) {
-								softReload();
-								return;
-							}
+							btn.textContent = 'Clearing…';
 							goRecover();
 						};
 					}
+				};
+
+				var keepOfflineWave = function (reason) {
+					var shell = document.getElementById('alpha-boot-shell');
+					if (!shell) return;
+					shell.hidden = false;
+					shell.setAttribute('role', 'status');
+					shell.setAttribute('aria-busy', 'true');
+					/* Restore quiet wave — never “Still opening offline” / Retry. */
+					if (!shell.querySelector('.boot-loader')) {
+						shell.innerHTML =
+							'<div class="boot-loader" aria-hidden="true">' +
+							'<span class="boot-ball"></span>' +
+							'<span class="boot-ball"></span>' +
+							'<span class="boot-ball"></span>' +
+							'</div>';
+					}
+					try {
+						console.warn('alpha boot offline — keep wave', reason || '');
+					} catch (e) {}
 				};
 
 				var autoRecoverOnce = function (reason) {
 					if (started || window.__ALPHA_RECOVERING || escalated) return;
 					escalated = true;
 					/*
-					 * Airplane mode: /api/recover cannot run. Soft-reload once from the
-					 * cached shell (warm session), then show Retry — never navigate into
-					 * a dead recover loop or a fatal “couldn’t start” with no way out.
+					 * Airplane mode: /api/recover and soft-reload cannot fix missing
+					 * modules. Warm prior session → keep the quiet wave forever (SW
+					 * must serve last-good shell + precache). Cold → quiet empty.
+					 * Never “Still opening offline” / Retry loops.
 					 */
 					var offline = false;
 					var warm = false;
@@ -487,25 +492,11 @@
 						warm = document.documentElement.dataset.warmBoot === '1';
 					} catch (e) {}
 					if (offline) {
-						var OFFLINE_RELOAD_KEY = 'alpha.boot.offline-reload.v1';
-						var alreadyOfflineReload = false;
-						try {
-							alreadyOfflineReload = sessionStorage.getItem(OFFLINE_RELOAD_KEY) === '1';
-						} catch (e3) {}
-						if (warm && !alreadyOfflineReload) {
-							try {
-								sessionStorage.setItem(OFFLINE_RELOAD_KEY, '1');
-							} catch (e4) {}
-							try {
-								console.warn('alpha boot offline — soft reload', reason || '');
-							} catch (e5) {}
-							softReload();
-							return;
+						if (warm) {
+							keepOfflineWave(reason);
+						} else {
+							paintQuietOfflineEmpty();
 						}
-						paintTrouble(false);
-						try {
-							console.warn('alpha boot offline — skip auto-recover', reason || '');
-						} catch (e2) {}
 						return;
 					}
 					var already = false;
@@ -580,14 +571,19 @@
 						obs.observe(document.documentElement, { childList: true, subtree: true });
 					} catch (e) {}
 					/* If Svelte never mounts, don’t wait on a blank shell.
-					 * Offline: give precached modules more time; never /api/recover.
-					 * Warm local session: slightly longer — modules may still be installing. */
+					 * Warm offline: never escalate — modules may stream from Cache API;
+					 * a timeout that soft-reloads only recreates the dead-end loop.
+					 * Cold offline / online: escalate after a bounded wait. */
 					var offlineBoot = false;
 					var warmBoot = false;
 					try {
 						offlineBoot = typeof navigator !== 'undefined' && navigator.onLine === false;
 						warmBoot = document.documentElement.dataset.warmBoot === '1';
 					} catch (e) {}
+					if (offlineBoot && warmBoot) {
+						/* Keep observing; never autoRecoverOnce offline+warm. */
+						return;
+					}
 					setTimeout(
 						function () {
 							obs.disconnect();

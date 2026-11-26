@@ -2,14 +2,16 @@
  * Imported by the Workbox-generated service worker (vite-pwa).
  * Handles Web Push + notification taps for Home Screen PWAs (incl. iOS 16.4+).
  *
- * alpha-sw-boot: v11 — seed alpha-pages-v10; offline activate copies prior
- * pages caches so kill-reopen never hits Response.error() after a SW bump.
+ * alpha-sw-boot: v12 — seed alpha-pages-v11; adopt older pages caches; keep the
+ * prior workbox precache so stale HTML still resolves hashed modules offline;
+ * Cache-first immutable fallback across ALL caches (kills empty-pages /
+ * module-mismatch “Still opening offline” loops).
  * Push tip/mid handoff unchanged.
  */
 /* eslint-disable no-undef */
 
 /** Must match vite.config.js workbox runtimeCaching cacheName. */
-var PAGES_CACHE = 'alpha-pages-v10';
+var PAGES_CACHE = 'alpha-pages-v11';
 var SHELL_PATHS = ['/', '/chat'];
 
 /**
@@ -26,7 +28,7 @@ async function adoptFromOlderPagesCaches(dest) {
 			.filter(function (name) {
 				return name.indexOf('alpha-pages-') === 0 && name !== PAGES_CACHE;
 			})
-			/* Higher version suffix first (v9 before v8). */
+			/* Higher version suffix first (v10 before v9). */
 			.sort(function (a, b) {
 				return b.localeCompare(a, undefined, { numeric: true });
 			});
@@ -51,6 +53,34 @@ async function adoptFromOlderPagesCaches(dest) {
 		/* ignore */
 	}
 	return false;
+}
+
+/**
+ * Keep the newest 2 workbox precaches so a pages HTML that still points at the
+ * previous deploy’s hashes can resolve offline after skipWaiting + claim.
+ * (cleanupOutdatedCaches is off in vite.config — we trim here instead.)
+ */
+async function trimOldPrecaches() {
+	try {
+		var names = await caches.keys();
+		var precaches = names
+			.filter(function (name) {
+				return name.indexOf('workbox-precache') === 0;
+			})
+			.sort(function (a, b) {
+				return b.localeCompare(a, undefined, { numeric: true });
+			});
+		/* Keep two generations; drop the rest. */
+		for (var i = 2; i < precaches.length; i++) {
+			try {
+				await caches.delete(precaches[i]);
+			} catch (e) {
+				/* ignore */
+			}
+		}
+	} catch (e) {
+		/* ignore */
+	}
 }
 
 /**
@@ -102,8 +132,50 @@ async function seedPagesCache() {
 				})
 			);
 		}
+		await trimOldPrecaches();
 	} catch (e) {
 		/* never break install */
+	}
+}
+
+/**
+ * Hashed modules: search EVERY Cache API bucket (current + prior workbox
+ * precache, runtime caches). Workbox precacheAndRoute only knows the active
+ * manifest — after a deploy, cached HTML can still reference the previous
+ * generation. Without this, airplane kill-reopen 404s → boot watchdog loop.
+ */
+async function matchImmutable(request) {
+	var url = new URL(request.url);
+	var pathname = url.pathname;
+	var ignore = { ignoreSearch: true };
+	var direct =
+		(await caches.match(request, ignore)) || (await caches.match(pathname, ignore));
+	if (direct) return direct;
+	try {
+		var names = await caches.keys();
+		for (var i = 0; i < names.length; i++) {
+			var cache = await caches.open(names[i]);
+			var hit = (await cache.match(request, ignore)) || (await cache.match(pathname, ignore));
+			if (hit) return hit;
+			var keys = await cache.keys();
+			for (var j = 0; j < keys.length; j++) {
+				try {
+					if (new URL(keys[j].url).pathname === pathname) {
+						var res = await cache.match(keys[j]);
+						if (res) return res;
+					}
+				} catch (e) {
+					/* ignore */
+				}
+			}
+		}
+	} catch (e) {
+		/* ignore */
+	}
+	try {
+		return await fetch(request);
+	} catch (e2) {
+		return Response.error();
 	}
 }
 
@@ -113,6 +185,24 @@ self.addEventListener('install', function (event) {
 
 self.addEventListener('activate', function (event) {
 	event.waitUntil(seedPagesCache());
+});
+
+/*
+ * Register before Workbox’s fetch listener (importScripts runs first). First
+ * respondWith wins — we own /_app/immutable/* so prior precaches stay reachable.
+ */
+self.addEventListener('fetch', function (event) {
+	var req = event.request;
+	if (req.method !== 'GET') return;
+	var url;
+	try {
+		url = new URL(req.url);
+	} catch (e) {
+		return;
+	}
+	if (url.origin !== self.location.origin) return;
+	if (url.pathname.indexOf('/_app/immutable/') !== 0) return;
+	event.respondWith(matchImmutable(req));
 });
 
 self.addEventListener('push', (event) => {
