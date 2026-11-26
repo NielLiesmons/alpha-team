@@ -72,6 +72,36 @@ export const commentsSettledByKey = $state({});
 /** @type {Record<string, Promise<any[]>>} */
 const commentsInflight = {};
 
+/** Hard deadline so title-pill / FAB never spin forever on a hung Drive walk. */
+const CHAT_FEED_SYNC_MS = 12_000;
+const COMMENTS_LOAD_MS = 10_000;
+
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @returns {Promise<T>}
+ */
+function withDeadline(promise, ms) {
+	return new Promise((resolve, reject) => {
+		const t = setTimeout(() => reject(new Error('timeout')), ms);
+		Promise.resolve(promise).then(
+			(v) => {
+				clearTimeout(t);
+				resolve(v);
+			},
+			(e) => {
+				clearTimeout(t);
+				reject(e);
+			}
+		);
+	});
+}
+
+function isNavigatorOffline() {
+	return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 export const chatUi = $state({
 	loading: false,
 	error: /** @type {string | null} */ (null),
@@ -544,9 +574,8 @@ export async function refreshChatFeed(opts = {}) {
 		return;
 	}
 	if (chatFeed.length === 0) hydrateChatFeedFromCache();
-	const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
 	/* Airplane mode: never await Drive — warm or empty, shell must stay usable. */
-	if (offline) {
+	if (isNavigatorOffline()) {
 		chatUi.loading = false;
 		chatUi.syncing = false;
 		chatUi.settled = true;
@@ -560,6 +589,13 @@ export async function refreshChatFeed(opts = {}) {
 	const gen = ++feedFetchGen;
 	const seedRows = chatFeed.slice();
 	const busTip = String(opts.tip || '').trim();
+	/** Drop the wave even if a superseded refresh left syncing=true. */
+	const clearSyncChrome = () => {
+		if (gen !== feedFetchGen) return;
+		chatUi.loading = false;
+		chatUi.syncing = false;
+		chatUi.settled = true;
+	};
 	try {
 		const apply = (/** @type {any[]} */ list) => {
 			if (gen !== feedFetchGen) return;
@@ -603,28 +639,31 @@ export async function refreshChatFeed(opts = {}) {
 			rebuildHasCommentsIndex(merged);
 		};
 
-		const list = await listFeedMessages(session, CHAT_FEED_LIMIT, {
-			/* Reuse warm rows so tip wakes only download new leaves (keeps tip I/O free). */
-			seedRows,
-			...(busTip ? { tip: busTip } : {}),
-			onPartial: (partial) => {
-				/* Leaf-cache hits / early batches — drop skeleton before network misses finish. */
-				if (partial?.length) apply(partial);
-			}
-		});
+		const list = await withDeadline(
+			listFeedMessages(session, CHAT_FEED_LIMIT, {
+				/* Reuse warm rows so tip wakes only download new leaves (keeps tip I/O free). */
+				seedRows,
+				...(busTip ? { tip: busTip } : {}),
+				onPartial: (partial) => {
+					/* Leaf-cache hits / early batches — drop skeleton before network misses finish. */
+					if (partial?.length) apply(partial);
+				}
+			}),
+			CHAT_FEED_SYNC_MS
+		);
 		/* A newer refresh or settle won — do not clobber. */
 		if (gen !== feedFetchGen) return;
 		apply(list);
 	} catch (e) {
 		if (gen === feedFetchGen) {
-			chatUi.error = e instanceof Error ? e.message : String(e);
+			const msg = e instanceof Error ? e.message : String(e);
+			/* Timeout / offline: keep warm cache; don't paint a scary banner. */
+			if (msg !== 'timeout' && msg !== 'offline') {
+				chatUi.error = msg;
+			}
 		}
 	} finally {
-		if (gen === feedFetchGen) {
-			chatUi.loading = false;
-			chatUi.syncing = false;
-			chatUi.settled = true;
-		}
+		clearSyncChrome();
 	}
 }
 
@@ -722,7 +761,7 @@ export async function loadComments(type, entityId) {
 		seedCommentsFromFeed(type, entityId);
 	});
 
-	if (!session) {
+	if (!session || isNavigatorOffline()) {
 		if (commentsByKey[key] == null) commentsByKey[key] = [];
 		commentsSettledByKey[key] = true;
 		return commentsByKey[key] ?? [];
@@ -733,7 +772,10 @@ export async function loadComments(type, entityId) {
 
 	const pending = (async () => {
 		try {
-			const list = await listComments(session, type, entityId);
+			const list = await withDeadline(
+				listComments(session, type, entityId),
+				COMMENTS_LOAD_MS
+			);
 			/** @type {Map<string, any>} */
 			const byId = new Map();
 			for (const m of list) {
@@ -757,9 +799,11 @@ export async function loadComments(type, entityId) {
 			commentsByKey[key] = merged;
 			return merged;
 		} catch (e) {
-			/* Do not wipe a warm seed on fetch failure. */
+			/* Do not wipe a warm seed on fetch failure / timeout / offline. */
 			if (commentsByKey[key] == null) commentsByKey[key] = [];
-			throw e;
+			const msg = e instanceof Error ? e.message : String(e);
+			if (msg !== 'timeout' && msg !== 'offline') throw e;
+			return commentsByKey[key] ?? [];
 		} finally {
 			commentsSettledByKey[key] = true;
 			delete commentsInflight[key];
