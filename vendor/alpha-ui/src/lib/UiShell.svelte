@@ -2098,15 +2098,20 @@
 
 	.row-end {
 		position: absolute;
-		right: 0.375rem;
+		/* ~12px inset from pill edge — count was kissing the right stroke. */
+		right: 0.75rem;
 		top: 50%;
-		min-width: 1.5rem;
 		height: 1.5rem;
 		transform: translateY(-50%);
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		justify-content: flex-end;
 		gap: 0.375rem;
+		/* Hug dot+count / + stack — no fixed min-width shenanigans. */
+		width: max-content;
+		max-width: calc(100% - 2.5rem);
+		padding-left: 0.75rem;
+		box-sizing: border-box;
 		pointer-events: none;
 	}
 
