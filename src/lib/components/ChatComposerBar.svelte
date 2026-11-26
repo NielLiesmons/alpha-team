@@ -362,8 +362,40 @@
 
 	const replyClearLabel = $derived(cancelReplyLabel || t('chat.cancelReply'));
 
+	/** @type {number} */
+	let draftRaf = 0;
+	/** @type {string | null} */
+	let draftPending = null;
+	/** @type {number} */
+	let resizeRaf = 0;
+	/** @type {ReturnType<typeof setTimeout> | 0} */
+	let typingDeferTimer = 0;
+
+	/** Pull CE → `draft` immediately (send / caption / destroy). */
+	function flushDraftNow() {
+		if (draftRaf) {
+			cancelAnimationFrame(draftRaf);
+			draftRaf = 0;
+		}
+		const el = inputEl;
+		if (el?.isContentEditable && !wysiwygApplying && !wysiwygComposing) {
+			let wire = serializeComposer(el);
+			if (isComposerWireEmpty(wire)) wire = '';
+			wysiwygPainted = wire;
+			draftPending = null;
+			if (wire !== draft) draft = wire;
+			return;
+		}
+		if (draftPending != null) {
+			const wire = draftPending;
+			draftPending = null;
+			if (wire !== draft) draft = wire;
+		}
+	}
+
 	function flushActiveCaption() {
 		if (!pendingMedia.length) return;
+		flushDraftNow();
 		const focus = Math.min(Math.max(0, mediaFocus), pendingMedia.length - 1);
 		const target = pendingMedia[focus];
 		if (!target) return;
@@ -583,6 +615,7 @@
 
 	async function send() {
 		flushActiveCaption();
+		flushDraftNow();
 		const media = pendingFiles.filter((f) => f.kind === 'image' || f.kind === 'video');
 		const docs = pendingFiles.filter((f) => f.kind !== 'image' && f.kind !== 'video');
 		const textOnly = draft.trim();
@@ -594,6 +627,11 @@
 		const filesSnapshot = pendingFiles;
 		pendingFiles = [];
 		mediaFocus = 0;
+		draftPending = null;
+		if (draftRaf) {
+			cancelAnimationFrame(draftRaf);
+			draftRaf = 0;
+		}
 		draft = '';
 		wysiwygPainted = '';
 		fieldTall = false;
@@ -608,37 +646,44 @@
 		const pubRef = resolvePubRef(parent);
 
 		/*
-		 * Paint first: cleared composer + pin-to-bottom before any await.
-		 * postChatMessage inserts the optimistic bubble synchronously; network
-		 * stays in the background so Send never waits on Drive for the first frame.
+		 * Optimistic first: postChatMessage unshifts the bubble synchronously
+		 * (network stays in a background IIFE). ec59b0c called onSent/goBottom
+		 * *before* unshift, so the first paint was a cleared composer with no
+		 * bubble — felt like send lag on mobile. Kick every sendOne in this
+		 * turn, await tick so Svelte paints bubble + clear together, then pin.
 		 */
-		onSent();
-		inputEl?.focus();
-		normalizeComposerEmpty(inputEl);
-		resizeComposerField();
-
+		/** @type {Promise<unknown>[]} */
+		const sends = [];
 		try {
 			for (const f of media) {
-				await sendOne({
-					body: (f.caption || '').trim(),
-					files: [f],
-					parent,
-					pubRef
-				});
+				sends.push(
+					sendOne({
+						body: (f.caption || '').trim(),
+						files: [f],
+						parent,
+						pubRef
+					})
+				);
 			}
 			if (docs.length) {
-				await sendOne({
-					body: media.length ? '' : textOnly,
-					files: docs,
-					parent,
-					pubRef
-				});
+				sends.push(
+					sendOne({
+						body: media.length ? '' : textOnly,
+						files: docs,
+						parent,
+						pubRef
+					})
+				);
 			} else if (textOnly && !media.length) {
-				await sendOne({ body: textOnly, files: [], parent, pubRef });
+				sends.push(sendOne({ body: textOnly, files: [], parent, pubRef }));
 			}
+			await tick();
+			onSent();
+			inputEl?.focus();
 			/* Re-assert empty chrome after focus / late CE mutations. */
 			normalizeComposerEmpty(inputEl);
 			resizeComposerField();
+			await Promise.all(sends);
 		} catch (e) {
 			pendingFiles = filesSnapshot;
 			chatUi.error = e instanceof Error ? e.message : String(e);
@@ -1150,16 +1195,50 @@
 		return { people: composerPeople, isDark };
 	}
 
+	function flushDraftPending() {
+		draftRaf = 0;
+		const wire = draftPending;
+		draftPending = null;
+		if (wire == null || wire === draft) return;
+		draft = wire;
+	}
+
+	/**
+	 * CE is source of truth while typing — batch `draft` to rAF so parent
+	 * bind + ComposerSuggest don’t re-render on every keystroke.
+	 * Empty↔nonempty commits sync so Send/Mic swaps without a frame of lag.
+	 * @param {string} wire
+	 */
+	function commitDraft(wire) {
+		const wasEmpty = isComposerWireEmpty(draft);
+		const nowEmpty = isComposerWireEmpty(wire);
+		wysiwygPainted = wire;
+		if (wire === draft) return;
+		if (wasEmpty !== nowEmpty) {
+			draftPending = null;
+			if (draftRaf) {
+				cancelAnimationFrame(draftRaf);
+				draftRaf = 0;
+			}
+			draft = wire;
+			return;
+		}
+		draftPending = wire;
+		if (draftRaf) return;
+		draftRaf = requestAnimationFrame(flushDraftPending);
+	}
+
 	function syncDraftFromWysiwyg() {
 		const el = inputEl;
 		if (!el || !el.isContentEditable || wysiwygApplying || wysiwygComposing) return;
 		promoteComposerTokens(el, wysiwygOpts());
-		/* Drop leftover <br>/ZWSP so empty CE matches first-open height metrics. */
-		normalizeComposerEmpty(el);
 		let wire = serializeComposer(el);
-		if (isComposerWireEmpty(wire)) wire = '';
-		wysiwygPainted = wire;
-		if (wire !== draft) draft = wire;
+		if (isComposerWireEmpty(wire)) {
+			wire = '';
+			/* Empty chrome only — skip serialize-twice normalize on every keystroke. */
+			normalizeComposerEmpty(el);
+		}
+		commitDraft(wire);
 	}
 
 	function resizeComposerField() {
@@ -1169,10 +1248,11 @@
 		el.style.height = 'auto';
 		const next = Math.min(el.scrollHeight, COMPOSER_MAX_H);
 		const single = singleLineInputHeight(el);
-		const empty = isComposerWireEmpty(draft);
+		const wire = draftPending != null ? draftPending : draft;
+		const empty = isComposerWireEmpty(wire);
 		/* Empty CE must never count as tall (lone <br> serializes to "\n"). */
 		const tall =
-			!empty && (next > single + COMPOSER_TALL_SLOP_PX || draft.includes('\n'));
+			!empty && (next > single + COMPOSER_TALL_SLOP_PX || wire.includes('\n'));
 		fieldTall = tall;
 		/*
 		 * Empty + single line: clear inline height so CSS (min-height + field-sizing)
@@ -1183,12 +1263,33 @@
 		updateInputFade();
 	}
 
+	function scheduleResizeComposerField() {
+		if (resizeRaf) return;
+		resizeRaf = requestAnimationFrame(() => {
+			resizeRaf = 0;
+			resizeComposerField();
+		});
+	}
+
+	/** Ephemeral typing off the keystroke path — timer/WS must not block CE. */
+	function scheduleSignalTyping() {
+		if (!signalPresence) return;
+		const wire = draftPending != null ? draftPending : draft;
+		if (isComposerWireEmpty(wire)) return;
+		if (typingDeferTimer) return;
+		typingDeferTimer = setTimeout(() => {
+			typingDeferTimer = 0;
+			const latest = draftPending != null ? draftPending : draft;
+			if (!isComposerWireEmpty(latest)) signalTyping(channelId);
+		}, 0);
+	}
+
 	function onInput() {
 		const el = inputEl;
 		if (!el) return;
 		if (el.isContentEditable && !wysiwygApplying) syncDraftFromWysiwyg();
-		resizeComposerField();
-		if (signalPresence && draft.trim()) signalTyping(channelId);
+		scheduleResizeComposerField();
+		scheduleSignalTyping();
 	}
 
 	/** After blur, browsers often leave a caret `<br>` — strip so empty chrome stays centered. */
@@ -1323,6 +1424,9 @@
 	}
 
 	onDestroy(() => {
+		if (draftRaf) cancelAnimationFrame(draftRaf);
+		if (resizeRaf) cancelAnimationFrame(resizeRaf);
+		if (typingDeferTimer) clearTimeout(typingDeferTimer);
 		resetVoiceUi();
 		voiceRecorder.cancel();
 	});
@@ -1824,6 +1928,7 @@
 	 * Pointer `.pressed` — not :hover/:active alone. iOS often skips :active, and
 	 * draft clear unmounts Send before :active can paint (8c99420 looked live but
 	 * felt like zero scale on mobile).
+	 * Press scales UP (not down) — finger feedback reads as “armed / launching”.
 	 */
 	.side-btn.send:hover:not(.pressed) {
 		transform: scale(1.06);
@@ -1831,18 +1936,18 @@
 
 	.side-btn.send:active,
 	.side-btn.send.pressed {
-		transform: scale(0.96);
+		transform: scale(1.1);
 	}
 
-	/* Mobile: exaggerate press so Send feedback is obvious under a finger. */
+	/* Mobile: exaggerate press-up so Send feedback is obvious under a finger. */
 	@media (max-width: 767px) {
 		.side-btn.send:hover:not(.pressed) {
-			transform: scale(1.14);
+			transform: scale(1.1);
 		}
 
 		.side-btn.send:active,
 		.side-btn.send.pressed {
-			transform: scale(0.86);
+			transform: scale(1.22);
 		}
 	}
 
