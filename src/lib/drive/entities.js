@@ -2331,27 +2331,6 @@ async function orderFeedIdsNewestFirst(session, dir, ids, createdAtById = {}) {
 }
 
 /**
- * Serialize chat mailbox appends at the entities layer (UI may fire concurrent sends).
- * Messages share this chain; receipts/retracts/tombstones go straight to
- * appendMailboxEntry’s priority queue so they cannot FIFO-starve a send.
- * @type {Promise<unknown>}
- */
-let chatTipWriteChain = Promise.resolve();
-
-/**
- * @param {() => Promise<any>} fn
- * @returns {Promise<any>}
- */
-function enqueueChatMessageTipWrite(fn) {
-	const p = chatTipWriteChain.then(fn, fn);
-	chatTipWriteChain = p.then(
-		() => undefined,
-		() => undefined
-	);
-	return p;
-}
-
-/**
  * @param {import('./client.js').DriveSession} session
  * @param {string} id
  * @param {any} [_dir] unused — mailbox cutover
@@ -2894,27 +2873,25 @@ export async function createChatMessage(session, input, opts = {}) {
 			})()
 		: Promise.resolve();
 
-	/* prev tip read inside append at chain turn — keeps 1 RTT when warm. */
-	const runAppend = () =>
-		appendMailboxEntry(
-			session,
-			{ kind: 'message', message: msg },
-			{ onProgress: opts.onAppendProgress }
-		);
-	const [tipAfter] = await Promise.all([
-		enqueueChatMessageTipWrite(runAppend),
-		commentsPrep
-	]);
-
 	/*
-	 * Tip is durable — wake peers + settle ✓ before best-effort comments.json
-	 * (putPaths must not delay checkmark / tip-wake).
+	 * Single priority queue in appendMailboxEntry (messages jump receipts).
+	 * Do NOT double-chain here — that FIFO-starved ✓ behind the entities layer
+	 * while receipts already sat on the client queue.
+	 * Settle ✓ / tip-wake as soon as append lands — never wait on commentsPrep.
 	 */
-	try {
-		if (tipAfter) opts.onTipWritten?.(String(tipAfter));
-	} catch {
-		/* realtime wake must never break send */
-	}
+	const tipPromise = appendMailboxEntry(
+		session,
+		{ kind: 'message', message: msg },
+		{ onProgress: opts.onAppendProgress }
+	).then((tip) => {
+		try {
+			if (tip) opts.onTipWritten?.(String(tip));
+		} catch {
+			/* realtime wake must never break send */
+		}
+		return tip;
+	});
+	const [tipAfter] = await Promise.all([tipPromise, commentsPrep]);
 
 	/* Entity comments index still lives on the Space tip (rare vs chat sends). */
 	if (wantsComments && refType && refId) {
@@ -2996,10 +2973,7 @@ export async function markChatMessagesRead(session, messages, readerEmail) {
 		});
 	}
 	if (!ids.length) return [];
-	/*
-	 * Do not FIFO behind/ ahead of message tip writes on chatTipWriteChain —
-	 * client priority queue already yields receipts to in-flight/queued messages.
-	 */
+	/* Priority queue in appendMailboxEntry yields to in-flight/queued messages. */
 	await appendMailboxEntry(session, {
 		kind: 'receipts',
 		reader,
