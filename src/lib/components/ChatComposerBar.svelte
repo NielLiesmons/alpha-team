@@ -502,8 +502,6 @@
 	 * }} opts
 	 */
 	async function sendOne(opts) {
-		const session = activeSession();
-		if (!session) throw new Error(t('settings.connectDriveFirst'));
 		const files = opts.files;
 		const localAtt = files.map((f) => ({
 			kind: f.kind,
@@ -515,6 +513,7 @@
 			...(f.caption?.trim() ? { caption: f.caption.trim() } : {})
 		}));
 		const isComment = Boolean(opts.pubRef);
+		/* postChatMessage paints the local bubble sync, then returns — don’t gate on session. */
 		await postChatMessage({
 			body: opts.body,
 			kind: isComment ? 'comment' : 'chat',
@@ -524,8 +523,10 @@
 			...(localAtt.length ? { attachments: localAtt } : {}),
 			...(files.length
 				? {
-						resolveAttachments: async () =>
-							Promise.all(
+						resolveAttachments: async () => {
+							const session = activeSession();
+							if (!session) throw new Error(t('settings.connectDriveFirst'));
+							return Promise.all(
 								files.map(async (f) => {
 									if (f.library) {
 										return {
@@ -544,7 +545,8 @@
 										...(f.caption?.trim() ? { caption: f.caption.trim() } : {})
 									};
 								})
-							)
+							);
+						}
 					}
 				: {})
 		});
@@ -573,6 +575,16 @@
 		replyTo = null;
 		const pubRef = resolvePubRef(parent);
 
+		/*
+		 * Paint first: cleared composer + pin-to-bottom before any await.
+		 * postChatMessage inserts the optimistic bubble synchronously; network
+		 * stays in the background so Send never waits on Drive for the first frame.
+		 */
+		onSent();
+		inputEl?.focus();
+		normalizeComposerEmpty(inputEl);
+		resizeComposerField();
+
 		try {
 			for (const f of media) {
 				await sendOne({
@@ -592,11 +604,9 @@
 			} else if (textOnly && !media.length) {
 				await sendOne({ body: textOnly, files: [], parent, pubRef });
 			}
-			inputEl?.focus();
-			/* Focus can inject a caret <br> — strip so empty chrome stays single-line. */
+			/* Re-assert empty chrome after focus / late CE mutations. */
 			normalizeComposerEmpty(inputEl);
 			resizeComposerField();
-			onSent();
 		} catch (e) {
 			pendingFiles = filesSnapshot;
 			chatUi.error = e instanceof Error ? e.message : String(e);

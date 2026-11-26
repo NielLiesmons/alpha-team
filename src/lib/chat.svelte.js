@@ -349,7 +349,13 @@ function stripEphemeralAttachments(list) {
 	});
 }
 
-function writeChatCache(list) {
+/** @type {any[] | null} */
+let cacheWritePending = null;
+/** @type {ReturnType<typeof setTimeout> | 0} */
+let cacheWriteTimer = 0;
+
+/** Sync localStorage write — prefer `writeChatCache` so send paint isn’t blocked. */
+function writeChatCacheNow(list) {
 	if (typeof localStorage === 'undefined') return;
 	try {
 		localStorage.setItem(
@@ -359,6 +365,28 @@ function writeChatCache(list) {
 	} catch {
 		/* quota */
 	}
+}
+
+/**
+ * Coalesce durable cache writes after paint. Optimistic send used to
+ * JSON.stringify the full feed on the same turn as unshift — that stalled
+ * the bubble + cleared composer on mobile.
+ * @param {any[]} list
+ */
+function writeChatCache(list) {
+	cacheWritePending = list;
+	if (typeof window === 'undefined') {
+		writeChatCacheNow(list);
+		cacheWritePending = null;
+		return;
+	}
+	if (cacheWriteTimer) return;
+	cacheWriteTimer = setTimeout(() => {
+		cacheWriteTimer = 0;
+		const next = cacheWritePending;
+		cacheWritePending = null;
+		if (next) writeChatCacheNow(next);
+	}, 0);
 }
 
 /** Stable feed ids excluding optimistic locals — skips a GET on send. */
