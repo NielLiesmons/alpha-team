@@ -561,7 +561,39 @@ function mergeFeedRows(list, prev) {
 }
 
 /**
- * @param {{ tip?: string }} [opts] — bus tip hash skips a raced getNamedTip.
+ * Cheap identity check — skip feed splice when a quiet tip pull found nothing new.
+ * @param {any[]} a
+ * @param {any[]} b
+ */
+function feedRowsEquivalent(a, b) {
+	if (a === b) return true;
+	if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		const x = a[i];
+		const y = b[i];
+		if (x === y) continue;
+		if (!x || !y) return false;
+		if (String(x.id || '') !== String(y.id || '')) return false;
+		if (String(x.kind || '') !== String(y.kind || '')) return false;
+		if (String(x.body || '') !== String(y.body || '')) return false;
+		if (String(x.reaction || '') !== String(y.reaction || '')) return false;
+		if (String(x.deleted_at || '') !== String(y.deleted_at || '')) return false;
+		if (String(x.delivery || '') !== String(y.delivery || '')) return false;
+		const xr = Array.isArray(x.read_by) ? x.read_by.join('\0') : '';
+		const yr = Array.isArray(y.read_by) ? y.read_by.join('\0') : '';
+		if (xr !== yr) return false;
+		if (Boolean(x._pending) !== Boolean(y._pending)) return false;
+		if (Boolean(x._failed) !== Boolean(y._failed)) return false;
+		if (Boolean(x._hint) !== Boolean(y._hint)) return false;
+	}
+	return true;
+}
+
+/**
+ * @param {{ tip?: string, catchUp?: boolean, quiet?: boolean }} [opts]
+ * — bus tip hash skips a raced getNamedTip.
+ * — catchUp: force title-pill wave (cold open / explicit crawl).
+ * — quiet: never flash the wave (tip-poll / receipt echo / background wake).
  */
 export async function refreshChatFeed(opts = {}) {
 	const session = activeSession();
@@ -583,8 +615,13 @@ export async function refreshChatFeed(opts = {}) {
 	}
 	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
-	/* Warm cache paints immediately; title pill waves while remote catch-up runs. */
-	chatUi.syncing = true;
+	/*
+	 * Title-pill wave only for real cold catch-up / first settle — never for the
+	 * ~500ms tip poll or receipt-driven tip echoes (that looped a crushing wave).
+	 */
+	const showSync =
+		opts.quiet !== true && (opts.catchUp === true || !chatUi.settled);
+	if (showSync) chatUi.syncing = true;
 	chatUi.error = null;
 	const gen = ++feedFetchGen;
 	const seedRows = chatFeed.slice();
@@ -627,6 +664,12 @@ export async function refreshChatFeed(opts = {}) {
 			const merged = mergeFeedRows(list, live);
 			if (!merged.length && !chatFeed.length) return;
 			if (!merged.length && chatFeed.length) {
+				chatUi.loading = false;
+				chatUi.settled = true;
+				return;
+			}
+			/* Quiet tip polls with nothing new must not remount the feed / yank the composer. */
+			if (feedRowsEquivalent(merged, live)) {
 				chatUi.loading = false;
 				chatUi.settled = true;
 				return;
@@ -1249,11 +1292,12 @@ export async function toggleReaction(messageId, emoji) {
 /**
  * Mark others' visible messages as read by this account (double-check for them).
  * One tip write for the batch — never N serial tip updates (that made sends feel multi-second).
+ * @returns {Promise<string>} new chat tip when receipts were appended (else '').
  */
 export async function markIncomingMessagesRead() {
 	const session = activeSession();
 	const me = (activePerson().email || '').trim().toLowerCase();
-	if (!session || !me || chatUi.posting) return;
+	if (!session || !me || chatUi.posting) return '';
 	const channel = chatUi.activeChannelId || 'general';
 	const targets = chatFeed.filter((m) => {
 		if (!m?.id || String(m.id).startsWith('local-')) return false;
@@ -1269,7 +1313,7 @@ export async function markIncomingMessagesRead() {
 		return !readBy.includes(me);
 	});
 	const batch = targets.slice(0, 25);
-	if (!batch.length) return;
+	if (!batch.length) return '';
 	try {
 		const updated = await markChatMessagesRead(session, batch, me);
 		for (const next of updated) {
@@ -1277,8 +1321,11 @@ export async function markIncomingMessagesRead() {
 			if (idx >= 0) chatFeed[idx] = { ...chatFeed[idx], ...next };
 		}
 		if (updated.length) writeChatCache(chatFeed);
+		/* Tip advanced locally — stamp so the 500ms poll does not full-refresh+wave. */
+		return peekCachedChatTip(session) || '';
 	} catch {
 		/* ignore — next wake retries */
+		return '';
 	}
 }
 

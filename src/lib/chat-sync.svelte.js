@@ -39,6 +39,16 @@ let pendingRepull = false;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let readReceiptTimer = null;
 
+/**
+ * Stamp the tip we already applied so quiet receipt writes / local appends do
+ * not look like a peer tip-change and stampede refreshChatFeed + title wave.
+ * @param {string} tip
+ */
+export function noteAppliedChatTip(tip) {
+	const t = String(tip || '').trim();
+	if (t) lastTip = t;
+}
+
 function scheduleReadReceipts() {
 	if (readReceiptTimer != null) clearTimeout(readReceiptTimer);
 	readReceiptTimer = setTimeout(() => {
@@ -47,7 +57,9 @@ function scheduleReadReceipts() {
 			scheduleReadReceipts();
 			return;
 		}
-		void markIncomingMessagesRead();
+		void markIncomingMessagesRead().then((tip) => {
+			if (tip) noteAppliedChatTip(tip);
+		});
 	}, READ_RECEIPT_DELAY_MS);
 }
 
@@ -80,7 +92,13 @@ export async function pullChatIfNeeded(force = false) {
 		 * Space tip changes (cursors, tasks) must not stampede chat leaf fetches.
 		 */
 		if (force || tipChanged || lastChatPull === 0) {
-			await refreshChatFeed();
+			/*
+			 * Quiet once settled — tip-poll / focus / receipt echoes must not flash
+			 * the title Metaball or remount the composer every few seconds.
+			 * Cold first pull still waves (!settled → catchUp).
+			 */
+			const settled = Boolean(chatUi.settled);
+			await refreshChatFeed({ quiet: settled, catchUp: !settled });
 			/* Stamp after refresh so a failed/empty apply cannot skip later wakes. */
 			if (tip) lastTip = tip;
 			else lastTip = peekCachedChatTip(session) || lastTip;
@@ -157,7 +175,7 @@ export async function wakeChatFromTip(tip) {
 	inFlight = true;
 	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	try {
-		await refreshChatFeed({ tip: t });
+		await refreshChatFeed({ tip: t, quiet: Boolean(chatUi.settled) });
 		const cached = peekCachedChatTip(session) || '';
 		/*
 		 * Only advance lastTip when the mailbox walk actually landed on this tip.

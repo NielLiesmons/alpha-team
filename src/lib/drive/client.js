@@ -535,8 +535,39 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 							tailHash: mailboxFeedCache.tailHash || ''
 						});
 					}
+				} else if (
+					entry?.kind === 'receipts' &&
+					mailboxFeedCache?.key === sessionCacheKey(session)
+				) {
+					/*
+					 * Keep warm materialization — receipt tip advances used to wipe
+					 * tip:'' and force a fat mailbox rebuild every ~few seconds (title
+					 * wave + composer jank). Apply read_by locally and advance tip.
+					 */
+					const reader = String(entry.reader || '')
+						.trim()
+						.toLowerCase();
+					/** @type {Set<string>} */
+					const ids = new Set(
+						(Array.isArray(entry.message_ids) ? entry.message_ids : []).map((id) =>
+							String(id || '').trim()
+						)
+					);
+					const next = (mailboxFeedCache.messages || []).map((m) => {
+						const id = String(m?.id || '');
+						if (!id || !ids.has(id)) return m;
+						const prev = Array.isArray(m.read_by)
+							? m.read_by.map((e) => String(e).toLowerCase())
+							: [];
+						if (!reader || prev.includes(reader)) return m;
+						return { ...m, read_by: [...prev, reader], delivery: 'read' };
+					});
+					rememberMailboxFeed(session, hash, next, {
+						complete: Boolean(mailboxFeedCache.complete),
+						tailHash: mailboxFeedCache.tailHash || ''
+					});
 				} else if (mailboxFeedCache?.key === sessionCacheKey(session)) {
-					/* Ops invalidate materialization — next pull rebuilds. */
+					/* Retract / tombstone — invalidate; next pull rebuilds. */
 					mailboxFeedCache = { ...mailboxFeedCache, tip: '', complete: false };
 				}
 				if (typeof console !== 'undefined' && console.debug) {

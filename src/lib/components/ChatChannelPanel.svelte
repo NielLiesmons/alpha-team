@@ -285,7 +285,11 @@
 		} else if (chatFeed.length === 0) {
 			chatUi.loading = true;
 		}
-		void refreshChatFeed().then(() => {
+		void refreshChatFeed({
+			/* Warm reopen is quiet; cold empty feed still gets the catch-up wave. */
+			quiet: Boolean(warm),
+			catchUp: !warm
+		}).then(() => {
 			const nextTail = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
 			lastTailId = nextTail;
 			/* Push deep-link still pending — keep trying; don't clobber with unread/bottom. */
@@ -390,15 +394,20 @@
 	});
 
 	/*
-	 * Desktop: autofocus the composer when a channel is open / switched so the
-	 * caret is ready without an extra click. Skip mobile — don’t fight the kb.
+	 * Desktop: autofocus the composer once per channel open/switch so the caret
+	 * is ready without an extra click. Do not re-focus on tip-wake remounts —
+	 * that yanked the cursor mid-type whenever the catch-up wave ran.
+	 * Skip mobile — don’t fight the kb.
 	 */
+	let composerFocusedChannel = '';
 	$effect(() => {
 		const id = channelId;
 		const el = inputEl;
 		void id;
 		if (!el || typeof window === 'undefined' || isMobileViewport()) return;
 		if (callViewOpenFor(id)) return;
+		if (composerFocusedChannel === id) return;
+		composerFocusedChannel = id;
 		queueMicrotask(() => {
 			if (inputEl !== el) return;
 			try {
