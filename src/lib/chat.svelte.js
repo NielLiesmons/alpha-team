@@ -1541,50 +1541,140 @@ export async function toggleReaction(messageId, emoji) {
 	}
 }
 
+/** Locally stamped read ids that still need a durable mailbox receipts tip. */
+const pendingDurableReadIds = new Set();
+/** Coalesce concurrent open/leave flushes onto one tip write. */
+let receiptWriteInFlight = false;
+let receiptWriteQueued = false;
+
+/**
+ * Whether a feed row is eligible for an incoming read receipt (skips hints / pending).
+ * @param {any} m
+ * @param {string} me
+ * @param {string} channel
+ */
+function isReceiptEligible(m, me, channel) {
+	if (!m?.id || String(m.id).startsWith('local-') || String(m.id).startsWith('hint-')) {
+		return false;
+	}
+	/*
+	 * Never receipt hint-only rows — that CAS-fights the sender’s still-in-flight
+	 * message tip append (peer already painted from WS; tip not durable yet).
+	 */
+	if (m._hint || m._pending || m._failed) return false;
+	if (m.kind === 'reaction' || m.kind === 'event') return false;
+	if ((m.channel_id || 'general') !== channel) return false;
+	const author = String(m.author || '')
+		.trim()
+		.toLowerCase();
+	return Boolean(author && author !== me);
+}
+
+/**
+ * Unread + pending-durable targets for the active channel.
+ * @param {string} me
+ * @returns {any[]}
+ */
+function incomingReceiptTargets(me) {
+	const channel = chatUi.activeChannelId || 'general';
+	/** @type {Map<string, any>} */
+	const byId = new Map();
+	for (const m of chatFeed) {
+		if (!isReceiptEligible(m, me, channel)) continue;
+		const id = String(m.id);
+		const readBy = Array.isArray(m.read_by)
+			? m.read_by.map((e) => String(e).toLowerCase())
+			: [];
+		if (!readBy.includes(me) || pendingDurableReadIds.has(id)) {
+			byId.set(id, m);
+		}
+	}
+	/* Drop stale pending ids that left the feed / channel. */
+	for (const id of [...pendingDurableReadIds]) {
+		if (!byId.has(id)) pendingDurableReadIds.delete(id);
+	}
+	return [...byId.values()];
+}
+
+/**
+ * Optimistic local read_by so remount unreadBoundary / FAB do not replay before the tip write.
+ * @param {any[]} batch
+ * @param {string} me
+ */
+function applyLocalIncomingRead(batch, me) {
+	let changed = false;
+	for (const msg of batch) {
+		const id = String(msg?.id || '');
+		if (!id) continue;
+		pendingDurableReadIds.add(id);
+		const idx = chatFeed.findIndex((m) => m?.id === id);
+		if (idx < 0) continue;
+		const cur = chatFeed[idx];
+		const prev = Array.isArray(cur.read_by)
+			? cur.read_by.map((e) => String(e).toLowerCase())
+			: [];
+		if (prev.includes(me)) continue;
+		chatFeed[idx] = { ...cur, read_by: [...prev, me], delivery: 'read' };
+		changed = true;
+	}
+	if (changed) writeChatCache(chatFeed);
+}
+
+/**
+ * Strip local self from read_by so markChatMessagesRead still appends after optimistic stamp.
+ * @param {any[]} batch
+ * @param {string} me
+ */
+function receiptWritePayload(batch, me) {
+	return batch.map((m) => {
+		const prev = Array.isArray(m.read_by)
+			? m.read_by.map((e) => String(e).toLowerCase())
+			: [];
+		return { ...m, read_by: prev.filter((e) => e !== me) };
+	});
+}
+
 /**
  * Mark others' visible messages as read by this account (double-check for them).
  * One tip write for the batch — never N serial tip updates (that made sends feel multi-second).
+ * Applies local read_by first so leave/re-enter before the tip lands does not replay FAB.
  * @returns {Promise<string>} new chat tip when receipts were appended (else '').
  */
 export async function markIncomingMessagesRead() {
 	const session = activeSession();
 	const me = (activePerson().email || '').trim().toLowerCase();
 	if (!session || !me || chatUi.posting) return '';
-	const channel = chatUi.activeChannelId || 'general';
-	const targets = chatFeed.filter((m) => {
-		if (!m?.id || String(m.id).startsWith('local-') || String(m.id).startsWith('hint-')) {
-			return false;
-		}
-		/*
-		 * Never receipt hint-only rows — that CAS-fights the sender’s still-in-flight
-		 * message tip append (peer already painted from WS; tip not durable yet).
-		 */
-		if (m._hint || m._pending || m._failed) return false;
-		if (m.kind === 'reaction' || m.kind === 'event') return false;
-		if ((m.channel_id || 'general') !== channel) return false;
-		const author = String(m.author || '')
-			.trim()
-			.toLowerCase();
-		if (!author || author === me) return false;
-		const readBy = Array.isArray(m.read_by)
-			? m.read_by.map((e) => String(e).toLowerCase())
-			: [];
-		return !readBy.includes(me);
-	});
-	const batch = targets.slice(0, 25);
+	const batch = incomingReceiptTargets(me).slice(0, 25);
 	if (!batch.length) return '';
+	/* Local first — remount hydrate + unreadBoundary must not replay the same FAB. */
+	applyLocalIncomingRead(batch, me);
+	if (receiptWriteInFlight) {
+		receiptWriteQueued = true;
+		return '';
+	}
+	receiptWriteInFlight = true;
 	try {
-		const updated = await markChatMessagesRead(session, batch, me);
+		const updated = await markChatMessagesRead(session, receiptWritePayload(batch, me), me);
 		for (const next of updated) {
+			const id = String(next.id || '');
+			if (id) pendingDurableReadIds.delete(id);
 			const idx = chatFeed.findIndex((m) => m.id === next.id);
 			if (idx >= 0) chatFeed[idx] = { ...chatFeed[idx], ...next };
 		}
+		/* Tip write accepted the batch — clear pending even if Drive merged no-ops. */
+		for (const m of batch) pendingDurableReadIds.delete(String(m.id));
 		if (updated.length) writeChatCache(chatFeed);
 		/* Tip advanced locally — stamp so the 500ms poll does not full-refresh+wave. */
 		return peekCachedChatTip(session) || '';
 	} catch {
-		/* ignore — next wake retries */
+		/* ignore — local already stamped; leave flush / next wake retries durable */
 		return '';
+	} finally {
+		receiptWriteInFlight = false;
+		if (receiptWriteQueued) {
+			receiptWriteQueued = false;
+			void markIncomingMessagesRead();
+		}
 	}
 }
 

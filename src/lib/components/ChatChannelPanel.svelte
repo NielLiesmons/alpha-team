@@ -42,6 +42,7 @@
 	import { mailTipCache } from '$lib/mail.svelte.js';
 	import {
 		clearPushScrollTarget,
+		flushReadReceipts,
 		peekPushScrollTarget,
 		pushOpenUi,
 		startChatTipPoll,
@@ -599,6 +600,11 @@
 			pendingNewCount = count;
 			pinBottom = false;
 			leaveBottomIntent = true;
+			/*
+			 * Acknowledge as soon as we present the unread boundary — optimistic
+			 * local read_by + durable flush so leave/re-enter does not replay FAB.
+			 */
+			void flushReadReceipts();
 			await scrollToMessage(firstId, { smooth: false, block: 'start' });
 			showScrollFab = true;
 			measureScroll();

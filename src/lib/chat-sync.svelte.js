@@ -68,6 +68,26 @@ function scheduleReadReceipts() {
 	}, READ_RECEIPT_DELAY_MS);
 }
 
+/**
+ * Cancel the quiet delay and mark read now (optimistic local + durable tip).
+ * Leave / unread-open must not wait 2.5s or remount replays the same FAB.
+ * @returns {Promise<string>}
+ */
+export function flushReadReceipts() {
+	if (readReceiptTimer != null) {
+		clearTimeout(readReceiptTimer);
+		readReceiptTimer = null;
+	}
+	if (chatUi.posting) {
+		scheduleReadReceipts();
+		return Promise.resolve('');
+	}
+	return markIncomingMessagesRead().then((tip) => {
+		if (tip) noteAppliedChatTip(tip);
+		return tip || '';
+	});
+}
+
 export async function pullChatIfNeeded(force = false) {
 	const session = activeSession();
 	if (!session) return;
@@ -410,6 +430,8 @@ export function stopChatTipPoll() {
 		clearTimeout(pollTimer);
 		pollTimer = null;
 	}
+	/* Flush pending receipts before leave — timer alone left remount replaying FAB. */
+	void flushReadReceipts();
 }
 
 /** Once from root layout — focus/push wake without requiring chat mount. */
