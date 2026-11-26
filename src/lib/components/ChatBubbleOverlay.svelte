@@ -156,9 +156,11 @@
 		 * Flex column + gap owns the distance; we only place the stack as a unit.
 		 */
 		const measuredReactH = reactionsEl?.offsetHeight || reactH;
-		const measuredActionsH = actionsEl?.offsetHeight || actionsHEstimate;
-		/* Both panels stay in-flow — expand grows the pill; CSS gap never collapses. */
-		const stackInnerH = measuredReactH + gap + measuredActionsH;
+		/* Expanded emoji browser hides the actions panel — no gap for a missing sibling. */
+		const measuredActionsH = browserOpen
+			? 0
+			: actionsEl?.offsetHeight || actionsHEstimate;
+		const stackInnerH = measuredReactH + (browserOpen ? 0 : gap + measuredActionsH);
 		const stackW = Math.max(reactW, panelW);
 
 		/* Reactions follow the tap; desired top before safe-area clamp of the stack. */
@@ -349,7 +351,8 @@
 			>
 				{#if browserOpen}
 					<div class="browser-body">
-						<EmojiPicker onselect={pickFromBrowser} allowCustom={true} autofocus={true} />
+						<!-- No autofocus — keep composer caret / avoid keyboard pop on expand. -->
+						<EmojiPicker onselect={pickFromBrowser} allowCustom={true} autofocus={false} />
 					</div>
 				{:else}
 					<div class="collapsed-strip">
@@ -400,41 +403,28 @@
 				{/if}
 			</div>
 
-			<div
-				class="actions-panel alpha-popover"
-				class:has-seen={seenCount > 0}
-				bind:this={actionsEl}
-				role="menu"
-				aria-label={t('chat.messageActions')}
-				aria-disabled={!interactive}
-			>
-				<div class="alpha-popover-list">
-					{#if seenCount > 0}
-						<div
-							class="alpha-popover-item seen-row"
-							role="menuitem"
-							aria-label={`${t('chat.seenBy')}: ${seenCount}`}
-						>
-							<span class="alpha-popover-label seen-label">{t('chat.seenBy')}</span>
-							<span class="seen-people">
-								<ProfilePicStack profiles={seenProfiles} size="xxs" text={String(seenCount)} />
-							</span>
-						</div>
-					{/if}
-					<button
-						type="button"
-						class="alpha-popover-item"
-						role="menuitem"
-						tabindex={interactive ? 0 : -1}
-						onpointerdown={(e) => {
-							if (e.cancelable) e.preventDefault();
-						}}
-						onclick={() => runAction(onreply)}
-					>
-						<span class="alpha-popover-ico"><Reply size={16} /></span>
-						<span class="alpha-popover-label">{t('chat.reply')}</span>
-					</button>
-					{#if oncopy}
+			{#if !browserOpen}
+				<div
+					class="actions-panel alpha-popover"
+					class:has-seen={seenCount > 0}
+					bind:this={actionsEl}
+					role="menu"
+					aria-label={t('chat.messageActions')}
+					aria-disabled={!interactive}
+				>
+					<div class="alpha-popover-list">
+						{#if seenCount > 0}
+							<div
+								class="alpha-popover-item seen-row"
+								role="menuitem"
+								aria-label={`${t('chat.seenBy')}: ${seenCount}`}
+							>
+								<span class="alpha-popover-label seen-label">{t('chat.seenBy')}</span>
+								<span class="seen-people">
+									<ProfilePicStack profiles={seenProfiles} size="xxs" text={String(seenCount)} />
+								</span>
+							</div>
+						{/if}
 						<button
 							type="button"
 							class="alpha-popover-item"
@@ -443,71 +433,86 @@
 							onpointerdown={(e) => {
 								if (e.cancelable) e.preventDefault();
 							}}
-							onclick={() =>
-								runAction(() => {
-									oncopy?.();
-								})}
+							onclick={() => runAction(onreply)}
 						>
-							<span class="alpha-popover-ico"><Copy size={15} /></span>
-							<span class="alpha-popover-label">{t('chat.copy')}</span>
+							<span class="alpha-popover-ico"><Reply size={16} /></span>
+							<span class="alpha-popover-label">{t('chat.reply')}</span>
 						</button>
-					{/if}
-					{#if onselect}
-						<button
-							type="button"
-							class="alpha-popover-item"
-							role="menuitem"
-							tabindex={interactive ? 0 : -1}
-							onpointerdown={(e) => {
-								if (e.cancelable) e.preventDefault();
-							}}
-							onclick={() =>
-								runAction(() => {
-									onselect?.();
-								})}
-						>
-							<span class="alpha-popover-ico"><Text size={15} /></span>
-							<span class="alpha-popover-label">{t('chat.select')}</span>
-						</button>
-					{/if}
-					{#if onforward}
-						<button
-							type="button"
-							class="alpha-popover-item"
-							role="menuitem"
-							tabindex={interactive ? 0 : -1}
-							onpointerdown={(e) => {
-								if (e.cancelable) e.preventDefault();
-							}}
-							onclick={() =>
-								runAction(() => {
-									onforward?.();
-								})}
-						>
-							<span class="alpha-popover-ico"><Forward size={16} /></span>
-							<span class="alpha-popover-label">{t('chat.forward')}</span>
-						</button>
-					{/if}
-					{#if canDelete && ondelete}
-						<button
-							type="button"
-							class="alpha-popover-item danger"
-							role="menuitem"
-							tabindex={interactive ? 0 : -1}
-							onpointerdown={(e) => {
-								if (e.cancelable) e.preventDefault();
-							}}
-							onclick={() =>
-								runAction(() => {
-									ondelete?.();
-								})}
-						>
-							<span class="alpha-popover-ico"><Trash size={15} /></span>
-							<span class="alpha-popover-label">{t('common.delete')}</span>
-						</button>
-					{/if}
+						{#if oncopy}
+							<button
+								type="button"
+								class="alpha-popover-item"
+								role="menuitem"
+								tabindex={interactive ? 0 : -1}
+								onpointerdown={(e) => {
+									if (e.cancelable) e.preventDefault();
+								}}
+								onclick={() =>
+									runAction(() => {
+										oncopy?.();
+									})}
+							>
+								<span class="alpha-popover-ico"><Copy size={15} /></span>
+								<span class="alpha-popover-label">{t('chat.copy')}</span>
+							</button>
+						{/if}
+						{#if onselect}
+							<button
+								type="button"
+								class="alpha-popover-item"
+								role="menuitem"
+								tabindex={interactive ? 0 : -1}
+								onpointerdown={(e) => {
+									if (e.cancelable) e.preventDefault();
+								}}
+								onclick={() =>
+									runAction(() => {
+										onselect?.();
+									})}
+							>
+								<span class="alpha-popover-ico"><Text size={15} /></span>
+								<span class="alpha-popover-label">{t('chat.select')}</span>
+							</button>
+						{/if}
+						{#if onforward}
+							<button
+								type="button"
+								class="alpha-popover-item"
+								role="menuitem"
+								tabindex={interactive ? 0 : -1}
+								onpointerdown={(e) => {
+									if (e.cancelable) e.preventDefault();
+								}}
+								onclick={() =>
+									runAction(() => {
+										onforward?.();
+									})}
+							>
+								<span class="alpha-popover-ico"><Forward size={16} /></span>
+								<span class="alpha-popover-label">{t('chat.forward')}</span>
+							</button>
+						{/if}
+						{#if canDelete && ondelete}
+							<button
+								type="button"
+								class="alpha-popover-item danger"
+								role="menuitem"
+								tabindex={interactive ? 0 : -1}
+								onpointerdown={(e) => {
+									if (e.cancelable) e.preventDefault();
+								}}
+								onclick={() =>
+									runAction(() => {
+										ondelete?.();
+									})}
+							>
+								<span class="alpha-popover-ico"><Trash size={15} /></span>
+								<span class="alpha-popover-label">{t('common.delete')}</span>
+							</button>
+						{/if}
+					</div>
 				</div>
-			</div>
+			{/if}
 		</div>
 	</div>
 {/if}
