@@ -44,6 +44,10 @@
 			#alpha-boot-shell[hidden] {
 				display: none !important;
 			}
+			/* Returning session: theme bg only — no full-screen wave while modules hydrate. */
+			html[data-warm-boot] #alpha-boot-shell:not([role='alert']) {
+				display: none !important;
+			}
 			#alpha-boot-shell .boot-copy {
 				max-width: 320px;
 			}
@@ -144,6 +148,56 @@
 				}
 			}
 		</style>
+		<script>
+			/*
+			 * Warm local session? Hide the pre-module wave before first paint.
+			 * Keys match cross-domain-storage.js (cookie wins, then localStorage).
+			 */
+			(function () {
+				try {
+					var SESSION = 'alpha.drive.session.v1';
+					var ACTOR = 'alpha.actor.v1';
+					var ACTOR_LEGACY = 'alpha-admin-actor.v1';
+					var readCookie = function (name) {
+						var prefix = name + '=';
+						var parts = document.cookie.split(';');
+						for (var i = 0; i < parts.length; i++) {
+							var s = parts[i].trim();
+							if (s.indexOf(prefix) === 0) {
+								try {
+									return decodeURIComponent(s.slice(prefix.length));
+								} catch (e) {
+									return s.slice(prefix.length);
+								}
+							}
+						}
+						return null;
+					};
+					var readShared = function (key, legacyKeys) {
+						var fromCookie = readCookie(key);
+						if (fromCookie) return fromCookie;
+						try {
+							var cur = localStorage.getItem(key);
+							if (cur) return cur;
+							if (legacyKeys) {
+								for (var i = 0; i < legacyKeys.length; i++) {
+									var raw = localStorage.getItem(legacyKeys[i]);
+									if (raw) return raw;
+								}
+							}
+						} catch (e) {}
+						return null;
+					};
+					var sessRaw = readShared(SESSION);
+					var actorRaw = readShared(ACTOR, [ACTOR_LEGACY]);
+					if (!sessRaw || !actorRaw) return;
+					var sess = JSON.parse(sessRaw);
+					var act = JSON.parse(actorRaw);
+					if (!(sess && sess.token && sess.rootKey && act && String(act.email || '').trim())) return;
+					document.documentElement.dataset.warmBoot = '1';
+				} catch (e) {}
+			})();
+		</script>
 		<script>
 			/* Inline recovery — must run before any module load (poisoned SW / missing chunks). */
 			(function () {
@@ -464,8 +518,14 @@
 				);
 
 				var watchHydration = function () {
-					/* Hide the pre-module shell as soon as Svelte paints BootSplash / shell. */
-					if (document.querySelector('.shell, .welcome, .splash')) {
+					/*
+					 * Hide the pre-module shell as soon as Svelte paints AppShell / Welcome /
+					 * BootSplash. Ignore .boot-placeholder (prerender stub — not hydrated yet).
+					 */
+					var hydrated = function () {
+						return Boolean(document.querySelector('.shell, .welcome, .splash'));
+					};
+					if (hydrated()) {
 						markStarted();
 						return;
 					}
@@ -474,7 +534,7 @@
 							obs.disconnect();
 							return;
 						}
-						if (document.querySelector('.shell, .welcome, .splash')) {
+						if (hydrated()) {
 							obs.disconnect();
 							markStarted();
 						}
@@ -483,22 +543,25 @@
 						obs.observe(document.documentElement, { childList: true, subtree: true });
 					} catch (e) {}
 					/* If Svelte never mounts, don’t wait on a blank shell.
-					 * Offline: give precached modules more time; never /api/recover. */
+					 * Offline: give precached modules more time; never /api/recover.
+					 * Warm local session: slightly longer — modules may still be installing. */
 					var offlineBoot = false;
+					var warmBoot = false;
 					try {
 						offlineBoot = typeof navigator !== 'undefined' && navigator.onLine === false;
+						warmBoot = document.documentElement.dataset.warmBoot === '1';
 					} catch (e) {}
 					setTimeout(
 						function () {
 							obs.disconnect();
 							if (started || window.__ALPHA_RECOVERING) return;
-							if (document.querySelector('.shell, .welcome, .splash')) {
+							if (hydrated()) {
 								markStarted();
 								return;
 							}
 							autoRecoverOnce('hydration-timeout');
 						},
-						offlineBoot ? 8000 : 2800
+						offlineBoot ? 8000 : warmBoot ? 4500 : 2800
 					);
 				};
 

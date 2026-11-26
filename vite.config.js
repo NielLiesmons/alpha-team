@@ -48,14 +48,14 @@ export default defineConfig({
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
 				/* Query busts stale importScripts after push-open / tip-mid + local-first boot. */
-				importScripts: ['/push-sw.js?v=8'],
+				importScripts: ['/push-sw.js?v=9'],
 				/*
 				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
 				 * After rsync deploys, that served stale HTML pointing at deleted hashed
 				 * chunks and blanked installed PWAs until a hard refresh.
 				 *
 				 * NetworkFirst with a short timeout: prefer live HTML when online,
-				 * fall back to last cached page within ~1s (and immediately offline)
+				 * fall back to last cached page within ~0.35s (and immediately offline)
 				 * so airplane-mode / flaky mobile doesn’t sit on the boot wave.
 				 */
 				/* null → no cache-only NavigationRoute (see NetworkFirst below). */
@@ -67,7 +67,7 @@ export default defineConfig({
 				/*
 				 * Never precache HTML shells. Precache matches before runtime routes, so
 				 * caching `/` / `chat` / … reintroduced cache-only navigations and blanked
-				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v7) instead.
+				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v8) instead.
 				 */
 				globPatterns: ['**/*.{js,css,ico,png,svg,webp,woff,woff2,webmanifest}'],
 				/* Kit appends prerendered HTML globs — ignore so SPA shells stay out of precache. */
@@ -81,9 +81,9 @@ export default defineConfig({
 							!url.pathname.endsWith('/sw.js'),
 						handler: 'NetworkFirst',
 						options: {
-							cacheName: 'alpha-pages-v7',
-							/* 1s — warm cache paints ASAP; was 3s and felt like a stuck wave offline. */
-							networkTimeoutSeconds: 1,
+							cacheName: 'alpha-pages-v8',
+							/* 0.35s — local-first: prefer cached shell quickly; was 1s. */
+							networkTimeoutSeconds: 0.35,
 							expiration: {
 								maxEntries: 64,
 								maxAgeSeconds: 60 * 60 * 24 * 14

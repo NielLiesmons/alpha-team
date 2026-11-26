@@ -1,5 +1,6 @@
 <script>
 	import '../app.css';
+	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { pwaInfo } from 'virtual:pwa-info';
 	import { actor } from '$lib/actor.svelte.js';
@@ -25,8 +26,10 @@
 	/*
 	 * Returning PWA: unlock AppShell from localStorage BEFORE first paint of BootSplash.
 	 * Airplane mode / warm opens must not wait on Drive or async bootApp.
+	 * Prerender stays wave-free (see markup) — static HTML used to bake BootSplash
+	 * into every page, so kill-reopen PWAs always flashed the Metaball until hydrate.
 	 */
-	if (typeof window !== 'undefined') {
+	if (browser) {
 		try {
 			unlockShellFromLocalSession();
 		} catch {
@@ -145,7 +148,13 @@
 	{/if}
 </svelte:head>
 
-{#if !appBoot.ready || appBoot.stuck}
+{#if !browser}
+	<!--
+		Prerender / SSR: theme background only. Never bake BootSplash Metaball into
+		static HTML — returning PWAs would show it on every fresh open until hydrate.
+	-->
+	<main class="boot-placeholder" aria-busy="true" aria-label="Loading"></main>
+{:else if !appBoot.ready || appBoot.stuck}
 	<BootSplash />
 {:else if !signedIn || inviteWarming}
 	<WelcomeGate />
@@ -156,3 +165,11 @@
 		{@render children()}
 	</AppShell>
 {/if}
+
+<style>
+	.boot-placeholder {
+		min-height: 100dvh;
+		margin: 0;
+		background: var(--shell, #090909);
+	}
+</style>

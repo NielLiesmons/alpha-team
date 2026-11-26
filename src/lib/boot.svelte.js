@@ -3,7 +3,9 @@
  * Signed in = Drive session on this device + mailbox email (“I am”).
  * Local-first: hydrate IDB/LS caches before listsReady; skip network when offline.
  * Returning PWAs unlock the shell synchronously from localStorage so BootSplash
- * never blocks airplane-mode / warm opens.
+ * never blocks airplane-mode / warm opens. Prerender must not bake BootSplash
+ * into static HTML (see +layout.svelte); app.html hides #alpha-boot-shell when
+ * a local Drive session + actor already exist (data-warm-boot).
  */
 
 import { actor, loadActor } from './actor.svelte.js';
