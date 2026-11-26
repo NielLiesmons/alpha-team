@@ -300,7 +300,14 @@
 		Boolean(draft.trim()) || pendingFiles.length > 0 || sendFlash
 	);
 
-	function armSendPress() {
+	/**
+	 * Keep the contenteditable focused so the soft keyboard never slides out.
+	 * Same pattern as mic — preventDefault on pointerdown stops the button from
+	 * stealing focus before click fires.
+	 * @param {PointerEvent} [e]
+	 */
+	function armSendPress(e) {
+		e?.preventDefault?.();
 		sendPressed = true;
 	}
 
@@ -673,10 +680,24 @@
 					sends.push(sendOne({ body: textOnly, files: [], parent, pubRef }));
 				}
 			});
-			/* Pin only — sync scrollTop inside onSent; defer focus/resize past paint. */
+			/* Pin only — sync scrollTop inside onSent. Keep CE focused this frame
+			 * so iOS never dismisses+reopens the keyboard between sends. */
 			onSent();
+			const el = inputEl;
+			if (el) {
+				try {
+					el.focus({ preventScroll: true });
+				} catch {
+					try {
+						el.focus();
+					} catch {
+						/* ignore */
+					}
+				}
+				normalizeComposerEmpty(el);
+			}
 			requestAnimationFrame(() => {
-				inputEl?.focus();
+				inputEl?.focus?.({ preventScroll: true });
 				normalizeComposerEmpty(inputEl);
 				resizeComposerField();
 			});
@@ -1677,9 +1698,11 @@
 						type="button"
 						class="side-btn send"
 						class:pressed={sendPressed}
-						tabindex={voiceRecording ? -1 : 0}
+						tabindex="-1"
 						aria-label={t('chat.send')}
 						onpointerdown={armSendPress}
+						onmousedown={(e) => e.preventDefault()}
+						ontouchstart={(e) => e.preventDefault()}
 						onpointerup={clearSendPress}
 						onpointercancel={clearSendPress}
 						onpointerleave={clearSendPress}
