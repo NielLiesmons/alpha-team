@@ -368,7 +368,7 @@
 						{:else if s.icon === 'appearance'}
 							<Appearance size={20} />
 						{:else if s.icon === 'devices'}
-							<OtherDevices size={20} />
+							<OtherDevices size={24} />
 						{:else if s.icon === 'storage'}
 							<Storage size={20} />
 						{:else}
@@ -423,9 +423,9 @@
 		position: relative;
 		width: 100%;
 		border-radius: var(--radius-16, 1rem);
-		/* Same glass as Modal — --modal-bg / glass-panel + blur */
+		/* Same glass as Modal — --modal-bg / glass-panel + blur; no stroke */
 		background: var(--modal-bg, var(--glass-panel));
-		border: 1px solid var(--glass-border, color-mix(in srgb, var(--fg) 12%, transparent));
+		border: 1px solid transparent;
 		backdrop-filter: blur(var(--glass-blur, 22px));
 		-webkit-backdrop-filter: blur(var(--glass-blur, 22px));
 		overflow: hidden;
@@ -437,6 +437,12 @@
 			width 0.38s cubic-bezier(0.22, 1, 0.36, 1),
 			margin 0.38s cubic-bezier(0.22, 1, 0.36, 1),
 			box-shadow 0.22s ease;
+	}
+
+	/* Only Add a Profile keeps a stroke; same modal glass at 50% opacity */
+	.deck-card.add {
+		border-color: var(--glass-border, color-mix(in srgb, var(--fg) 12%, transparent));
+		background: color-mix(in srgb, var(--modal-bg, var(--glass-panel)) 50%, transparent);
 	}
 
 	/* Selected slightly larger — grow inward so stack L/R pad stays */
@@ -656,7 +662,8 @@
 
 	.sections {
 		list-style: none;
-		margin: 1.125rem 0 0;
+		/* ~24px tighter under the collapsed profile stack */
+		margin: -0.375rem 0 0;
 		padding: 0;
 		display: flex;
 		flex-direction: column;
@@ -684,7 +691,8 @@
 		width: 100%;
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		/* +4px between rounded square icon and two-line text */
+		gap: 1rem;
 		padding: 0.625rem;
 		border: 0;
 		border-radius: 0.875rem;
@@ -747,7 +755,18 @@
 		mask-position: center;
 	}
 
-	/* Nested glass square + accent-1 unread-style dot at top-right */
+	/*
+	 * Notifications glyph = small rounded square + badge. Clear outer fill so
+	 * the inner square can use the identical glass tile recipe as Profile /
+	 * Appearance .section-ico (avoids glass-on-glass reading as a different bg).
+	 */
+	.section-ico.notif {
+		background: transparent;
+		border-color: transparent;
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
 	.notif-inner {
 		position: relative;
 		width: var(--chrome-icon, 1.375rem);
@@ -757,6 +776,8 @@
 		background:
 			linear-gradient(var(--glass), var(--glass)) padding-box,
 			var(--glass-shine) border-box;
+		backdrop-filter: blur(var(--glass-blur));
+		-webkit-backdrop-filter: blur(var(--glass-blur));
 		box-sizing: border-box;
 	}
 
@@ -783,8 +804,8 @@
 	}
 
 	.section-title {
-		font-size: 0.9375rem;
-		font-weight: 650;
+		font-size: 0.875rem;
+		font-weight: 500;
 		color: var(--fg, var(--white));
 	}
 
