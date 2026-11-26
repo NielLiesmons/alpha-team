@@ -421,13 +421,14 @@
 
 	.deck-card {
 		position: relative;
+		isolation: isolate;
 		width: 100%;
 		border-radius: var(--radius-16, 1rem);
-		/* Same glass as Modal — --modal-bg / glass-panel + blur; no stroke */
-		background: var(--modal-bg, var(--glass-panel));
-		border: 1px solid transparent;
-		backdrop-filter: blur(var(--glass-blur, 22px));
-		-webkit-backdrop-filter: blur(var(--glass-blur, 22px));
+		/* Popover glass: --composer-bg fill + blur + specular; thin stroke restored */
+		background: var(--composer-bg, var(--modal-bg, var(--glass-panel, transparent)));
+		border: 1px solid var(--glass-border, color-mix(in srgb, var(--fg) 12%, transparent));
+		backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.2);
+		-webkit-backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.2);
 		overflow: hidden;
 		box-sizing: border-box;
 		transform-origin: top center;
@@ -439,10 +440,39 @@
 			box-shadow 0.22s ease;
 	}
 
-	/* Only Add a Profile keeps a stroke; same modal glass at 50% opacity */
+	/* Specular hairline — same as `.alpha-popover::after` */
+	.deck-card::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		padding: 1px;
+		pointer-events: none;
+		z-index: 1;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--fg) 12%, transparent) 0%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 45%,
+			color-mix(in srgb, var(--fg) 3%, transparent) 55%,
+			color-mix(in srgb, var(--fg) 9%, transparent) 100%
+		);
+		-webkit-mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
+	}
+
+	/* Add a Profile stays quieter — stroke + 50% popover fill */
 	.deck-card.add {
-		border-color: var(--glass-border, color-mix(in srgb, var(--fg) 12%, transparent));
-		background: color-mix(in srgb, var(--modal-bg, var(--glass-panel)) 50%, transparent);
+		background: color-mix(
+			in srgb,
+			var(--composer-bg, var(--modal-bg, var(--glass-panel))) 50%,
+			transparent
+		);
 	}
 
 	/* Selected slightly larger — grow inward so stack L/R pad stays */
@@ -756,28 +786,16 @@
 	}
 
 	/*
-	 * Notifications glyph = small rounded square + badge. Clear outer fill so
-	 * the inner square can use the identical glass tile recipe as Profile /
-	 * Appearance .section-ico (avoids glass-on-glass reading as a different bg).
+	 * Notifications glyph = small rounded square + badge.
+	 * Outer `.section-ico` keeps the same glass tile as Profile / Appearance;
+	 * inner square is the solid muted glyph fill (--fg-66 via currentColor) — not glass.
 	 */
-	.section-ico.notif {
-		background: transparent;
-		border-color: transparent;
-		backdrop-filter: none;
-		-webkit-backdrop-filter: none;
-	}
-
 	.notif-inner {
 		position: relative;
 		width: var(--chrome-icon, 1.375rem);
 		height: var(--chrome-icon, 1.375rem);
 		border-radius: 0.4375rem;
-		border: 1px solid transparent;
-		background:
-			linear-gradient(var(--glass), var(--glass)) padding-box,
-			var(--glass-shine) border-box;
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
+		background: currentColor;
 		box-sizing: border-box;
 	}
 
