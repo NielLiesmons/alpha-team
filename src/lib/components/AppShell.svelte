@@ -422,13 +422,13 @@
 	 * Title-chrome loading: section-scoped only.
 	 * Never spin Chat/Mail titles off global driveSession.syncing — background
 	 * workspace crawl must not wipe a warm local-first feed chrome.
+	 * Chat catch-up: title-pill wave while remote tip walks (cache already painted).
 	 */
 	const titleSyncing = $derived.by(() => {
 		const section = sectionForPath(path);
 		if (isSectionSyncing(section)) return true;
-		/* Chat: only while empty + unresolved — warm cache ⇒ no Metaball. */
 		if (section === 'chat') {
-			return Boolean(chatUi.loading && !chatUi.settled);
+			return Boolean(chatUi.syncing || (chatUi.loading && !chatUi.settled));
 		}
 		if (section === 'mail') {
 			return Boolean(mailUi.loading);

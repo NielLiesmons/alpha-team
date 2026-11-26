@@ -81,6 +81,11 @@ export const chatUi = $state({
 	 * Until then the panel shows skeleton — never a false empty flash.
 	 */
 	settled: false,
+	/**
+	 * Remote tip/feed catch-up while local cache already paints the shell.
+	 * Drives the Chat title-pill Metaball — never a full-screen splash.
+	 */
+	syncing: false,
 	/** Active chat id (list + detail). Default shared feed. */
 	activeChannelId: 'general',
 	/**
@@ -506,18 +511,23 @@ export async function refreshChatFeed(opts = {}) {
 		/* Keep cache / in-memory — never wipe to an empty flash. */
 		if (chatFeed.length === 0) hydrateChatFeedFromCache();
 		chatUi.loading = false;
+		chatUi.syncing = false;
 		if (chatFeed.length > 0) chatUi.settled = true;
 		return;
 	}
 	if (chatFeed.length === 0) hydrateChatFeedFromCache();
 	const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-	if (offline && chatFeed.length > 0) {
+	/* Airplane mode: never await Drive — warm or empty, shell must stay usable. */
+	if (offline) {
 		chatUi.loading = false;
+		chatUi.syncing = false;
 		chatUi.settled = true;
 		return;
 	}
 	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
+	/* Warm cache paints immediately; title pill waves while remote catch-up runs. */
+	chatUi.syncing = true;
 	chatUi.error = null;
 	const gen = ++feedFetchGen;
 	const seedRows = chatFeed.slice();
@@ -584,6 +594,7 @@ export async function refreshChatFeed(opts = {}) {
 	} finally {
 		if (gen === feedFetchGen) {
 			chatUi.loading = false;
+			chatUi.syncing = false;
 			chatUi.settled = true;
 		}
 	}

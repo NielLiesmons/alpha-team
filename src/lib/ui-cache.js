@@ -83,6 +83,7 @@ export async function clearLocalUiCache() {
 	chatFeed.splice(0, chatFeed.length);
 	chatUi.settled = false;
 	chatUi.loading = false;
+	chatUi.syncing = false;
 	chatUi.error = null;
 
 	await clearLeafIdb();
