@@ -968,7 +968,7 @@ export async function refreshMail() {
 				reapplyUnreadOverrides();
 				if (me && !pw) {
 					mailUi.error =
-						'Add your mailbox password in Settings → Mail (Stalwart) to load the real inbox.';
+						'Mailbox passphrase missing on this device — re-open your invite or ask an admin to rotate it in Settings.';
 				}
 				return;
 			}
@@ -988,7 +988,7 @@ export async function refreshMail() {
 			writeMailListCache(me, folder, mailMessages);
 			if (me && !pw) {
 				mailUi.error =
-					'Showing Drive drafts only — add mailbox password in Settings to sync Stalwart.';
+					'Showing Drive drafts only — mailbox passphrase not on this device yet. Re-open your invite, or ask an admin (Settings → member profile).';
 			}
 		} catch (e) {
 			if (!hadLocal) {

@@ -30,6 +30,8 @@ export default {
 	'common.uploading': 'Uploading…',
 	'common.continue': 'Continue',
 	'common.confirm': 'Confirm',
+	'common.showPassword': 'Show password',
+	'common.hidePassword': 'Hide password',
 	'common.search': 'Search',
 	'common.all': 'All',
 	'common.none': 'None',
@@ -197,7 +199,8 @@ export default {
 	'settings.membersHint': 'See every profile, switch into one, edit details, or create an invite code.',
 	'settings.manage': 'Manage',
 	'settings.switchedTo': 'Switched to {name}.',
-	'settings.createMemberHint': 'Create a Space mailbox and invite QR. Whisper the passphrase separately.',
+	'settings.createMemberHint':
+		'Create a Space mailbox and invite QR. The passphrase is also their mailbox password — whisper it separately.',
 	'settings.addProfileHint': 'Paste an invite or profile access code to unlock another profile on this device.',
 	'settings.inviteMember': 'Invite member',
 	'settings.storage': 'Storage',
@@ -264,7 +267,7 @@ export default {
 		'Drops chat feed snapshot + Drive leaf cache. Does not sign you out or remove profiles.',
 	'settings.mailTitle': 'Mail',
 	'settings.mailHint':
-		'Mailbox password for the Space mail host (JMAP). Stored on this device for the active profile.',
+		'Same as the invite passphrase — unlocks Stalwart/JMAP for this profile. Stored on this device; admins can also rotate it on a member’s profile.',
 	'settings.password': 'Password',
 	'settings.saveAndTest': 'Save & test',
 	'settings.checking': 'Checking…',
@@ -313,13 +316,24 @@ export default {
 	'settings.deviceQrAlt': 'Profile access QR',
 	'settings.inviteModalTitle': 'Invite {name}',
 	'settings.inviteModalHint':
-		'Encrypt a Drive invite QR for this person. Whisper the passphrase separately.',
-	'settings.inviteCodeReady': 'Invite ready for {email}. Share QR + passphrase.',
+		'Encrypt an invite QR. The passphrase becomes their mailbox password (Stalwart + redeem). Whisper it separately.',
+	'settings.inviteCodeReady': 'Invite ready for {email}. Share QR + passphrase (also their mail password).',
 	'settings.inviteMissingMailbox':
-		'No mailbox password stored for this profile yet. Save Mail password in Settings once, then share again.',
+		'No mailbox passphrase on Drive for this profile yet. Open their profile in Settings Admin and set one, or create a fresh invite.',
 	'settings.inviteQrAlt': 'Profile invite QR',
 	'settings.passphrase': 'Passphrase',
 	'settings.passphraseTooShort': 'Passphrase must be at least 6 characters.',
+	'settings.memberPassphrase': 'Mailbox passphrase',
+	'settings.memberPassphraseHint':
+		'Invite redeem secret and Stalwart/JMAP password — same value. Reveal, rotate, or reset for this member.',
+	'settings.savePassphrase': 'Save / rotate',
+	'settings.resetPassphrase': 'Reset',
+	'settings.confirmResetPassphrase':
+		'Reset mailbox passphrase for {name}? They will need a new invite or the new passphrase to open Mail.',
+	'settings.memberPassphraseSaved': 'Passphrase saved — Stalwart + Drive updated.',
+	'settings.memberPassphraseReset': 'New passphrase ready — share it with them (also shown above).',
+	'settings.memberPassphraseDeferred':
+		'Saved on Drive. Stalwart provision deferred — set the same passphrase there once.',
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'To',
@@ -1018,10 +1032,10 @@ export default {
 	'invite.enterName': "Enter a display name.",
 	'invite.enterMailbox': "Enter a mailbox name (e.g. alex).",
 	'invite.passphraseMin': "Passphrase must be at least 6 characters.",
-	'invite.readyHint': "Invite ready — share the QR or link.",
+	'invite.readyHint':
+		'Invite ready — share the QR or link and whisper the passphrase (also their mailbox password).',
 	'invite.deferredMailbox':
-		'Invite ready. Set the mailbox password in Stalwart once, then share QR + passphrase.',
-	'invite.mailboxPasswordOnce': "Mailbox password (once):",
+		'Invite ready. Stalwart create deferred — set that same passphrase as the mailbox password there once, then share QR + passphrase.',
 	'mail.settingsPathHint': "Settings → your mailbox email.",
 	'settings.cacheCleared': "Cleared {n} cache keys. Reload to rehydrate.",
 	'settings.loadFailed': "Connected, but load failed: {error}",

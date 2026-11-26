@@ -9,9 +9,10 @@
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { buildInviteSession, ensureInviteMailboxSecret } from '$lib/invite-bootstrap.js';
+	import { buildInviteSession, readMailboxPassphrase, syncMailboxPassphrase } from '$lib/invite-bootstrap.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { memberFor } from '$lib/members.svelte.js';
+	import PasswordRevealField from './PasswordRevealField.svelte';
 
 	/** @type {{ open: boolean, email: string, mode?: 'device' | 'invite', onclose?: () => void }} */
 	let { open = $bindable(false), email = '', mode = 'device', onclose = () => {} } = $props();
@@ -67,8 +68,21 @@
 		busy = true;
 		try {
 			const role = member?.role === 'owner' ? 'admin' : member?.role || 'member';
-			/* Stuck invitees: mint + provision if space-secrets never got a password. */
-			const mailboxPassword = await ensureInviteMailboxSecret(e, name);
+			const secret = pass.trim();
+			/** @type {string} */
+			let mailboxPassword;
+			if (isInvite) {
+				/* Invite QR: passphrase === mailbox password (provision + space-secrets). */
+				await syncMailboxPassphrase(e, secret, name);
+				mailboxPassword = secret;
+			} else {
+				/* Device code: encrypt with whisper; payload carries existing mailbox secret. */
+				mailboxPassword = await readMailboxPassphrase(e);
+				if (!mailboxPassword) {
+					msg = t('settings.inviteMissingMailbox');
+					return;
+				}
+			}
 			const inviteSession = await buildInviteSession({
 				email: e,
 				displayName: name,
@@ -79,7 +93,7 @@
 				msg = t('settings.inviteMissingMailbox');
 				return;
 			}
-			const payload = await encodeInvite(inviteSession, pass);
+			const payload = await encodeInvite(inviteSession, secret);
 			link = inviteShareUrl(payload);
 			qr = await QRCode.toDataURL(link, {
 				errorCorrectionLevel: 'L',
@@ -111,9 +125,8 @@
 				{isInvite ? t('settings.inviteModalHint') : t('settings.deviceModalHint')}
 			</p>
 			<div class="field-shell">
-				<input
-					class="bare"
-					type="password"
+				<PasswordRevealField
+					variant="bare"
 					bind:value={pass}
 					autocomplete="new-password"
 					placeholder={t('settings.passphrase')}

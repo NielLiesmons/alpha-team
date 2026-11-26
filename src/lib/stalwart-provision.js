@@ -2,8 +2,8 @@
  * Stalwart mailbox provisioning — called from Admin invite mint, never from the Stalwart UI.
  *
  * Creates/resets the IMAP/JMAP account via alpha-api → Stalwart JMAP management
- * (`POST /v1/projects/{project}/mailboxes`). Invitee never types mail fields —
- * the invite carries the password and redeem hydrates localStorage + space-secrets.
+ * (`POST /v1/projects/{project}/mailboxes`). Invite passphrase === mailbox password —
+ * invitee only types the passphrase on join; redeem hydrates localStorage + space-secrets.
  */
 
 import { adminApi } from './mail-api.js';
@@ -82,7 +82,7 @@ export async function disableMailbox(email) {
 	return { ok: false, deferred: true };
 }
 
-/** Random mailbox password for invites (invitee never chooses until reset). */
+/** Random secret for admin reset (not used on invite mint — passphrase is the password). */
 export function generateMailboxPassword(bytes = 12) {
 	const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 	const buf = crypto.getRandomValues(new Uint8Array(bytes));

@@ -30,6 +30,8 @@ export default {
 	'common.uploading': 'Uploaden…',
 	'common.continue': 'Doorgaan',
 	'common.confirm': 'Bevestigen',
+	'common.showPassword': 'Wachtwoord tonen',
+	'common.hidePassword': 'Wachtwoord verbergen',
 	'common.search': 'Zoeken',
 	'common.all': 'Alles',
 	'common.none': 'Geen',
@@ -322,6 +324,17 @@ export default {
 	'settings.inviteQrAlt': 'Profieluitnodiging QR',
 	'settings.passphrase': 'Wachtzin',
 	'settings.passphraseTooShort': 'Wachtzin moet minstens 6 tekens zijn.',
+	'settings.memberPassphrase': 'Mailbox-wachtzin',
+	'settings.memberPassphraseHint':
+		'Delfde geheime voor uitnodiging en Stalwart/JMAP. Tonen, roteren of resetten voor dit lid.',
+	'settings.savePassphrase': 'Opslaan / roteren',
+	'settings.resetPassphrase': 'Resetten',
+	'settings.confirmResetPassphrase':
+		'Mailbox-wachtzin voor {name} resetten? Ze hebben een nieuwe uitnodiging of de nieuwe wachtzin nodig voor Mail.',
+	'settings.memberPassphraseSaved': 'Wachtzin opgeslagen — Stalwart + Drive bijgewerkt.',
+	'settings.memberPassphraseReset': 'Nieuwe wachtzin klaar — deel hem (ook hierboven).',
+	'settings.memberPassphraseDeferred':
+		'Opgeslagen op Drive. Stalwart-provision uitgesteld — zet dezelfde wachtzin daar één keer.',
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'Aan',
@@ -1021,8 +1034,8 @@ export default {
 	'invite.enterMailbox': "Voer een mailboxnaam in (bijv. alex).",
 	'invite.passphraseMin': "Wachtwoordzin moet minstens 6 tekens zijn.",
 	'invite.readyHint': "Uitnodiging klaar — deel de QR of link.",
-	'invite.deferredMailbox': 'Uitnodiging klaar. Stel het mailboxwachtwoord één keer in Stalwart in, deel daarna QR + wachtzin.',
-	'invite.mailboxPasswordOnce': "Mailboxwachtwoord (eenmalig):",
+	'invite.deferredMailbox':
+		'Uitnodiging klaar. Stalwart-aanmaak uitgesteld — zet diezelfde wachtzin daar één keer als mailboxwachtwoord, deel daarna QR + wachtzin.',
 	'mail.settingsPathHint': "Instellingen → je mailbox-e-mail.",
 	'settings.cacheCleared': "{n} cachekeys gewist. Herlaad om te herstellen.",
 	'settings.loadFailed': "Verbonden, maar laden mislukt: {error}",

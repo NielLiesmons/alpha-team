@@ -9,12 +9,12 @@
 	import Modal from './Modal.svelte';
 	import { actor } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
-	import { buildInviteSession, persistInviteSecrets } from '$lib/invite-bootstrap.js';
+	import { buildInviteSession, syncMailboxPassphrase } from '$lib/invite-bootstrap.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { canInvite, upsertMember } from '$lib/members.svelte.js';
-	import { generateMailboxPassword, provisionMailbox } from '$lib/stalwart-provision.js';
 	import { mailDomain as spaceMailDomain } from '$lib/space-host.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import PasswordRevealField from './PasswordRevealField.svelte';
 
 	/** @type {{ open: boolean, onclose?: () => void }} */
 	let { open = $bindable(false), onclose = () => {} } = $props();
@@ -33,7 +33,6 @@
 	let error = $state('');
 	let qr = $state('');
 	let inviteLink = $state('');
-	let mailboxPw = $state('');
 
 	/** @type {HTMLInputElement | undefined} */
 	let focusEl = $state();
@@ -55,7 +54,6 @@
 		error = '';
 		qr = '';
 		inviteLink = '';
-		mailboxPw = '';
 		void tick().then(() => focusEl?.focus());
 	});
 
@@ -69,7 +67,6 @@
 		error = '';
 		qr = '';
 		inviteLink = '';
-		mailboxPw = '';
 		if (!inviter) {
 			error = t('invite.onlyAdmins');
 			return;
@@ -86,13 +83,14 @@
 			error = t('invite.enterMailbox');
 			return;
 		}
-		if (createPass.trim().length < 6) {
+		const secret = createPass.trim();
+		if (secret.length < 6) {
 			error = t('invite.passphraseMin');
 			return;
 		}
 		busy = true;
 		try {
-			const mailboxPassword = generateMailboxPassword();
+			/* Passphrase === mailbox password (Stalwart + redeem + JMAP). */
 			const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 			await upsertMember({
 				email: createEmail,
@@ -101,24 +99,15 @@
 				status: 'invited',
 				invited_at: now
 			});
-			const provision = await provisionMailbox({
-				email: createEmail,
-				password: mailboxPassword,
-				displayName: createName.trim()
-			});
-			if (!provision.ok && !provision.deferred) {
-				throw new Error(provision.error || 'Mailbox provision failed');
-			}
-			await persistInviteSecrets(createEmail, mailboxPassword);
+			const synced = await syncMailboxPassphrase(createEmail, secret, createName.trim());
 			const inviteSession = await buildInviteSession({
 				email: createEmail,
 				displayName: createName.trim(),
 				role: createRole,
-				mailboxPassword
+				mailboxPassword: secret
 			});
-			const payload = await encodeInvite(inviteSession, createPass);
+			const payload = await encodeInvite(inviteSession, secret);
 			inviteLink = inviteShareUrl(payload);
-			mailboxPw = mailboxPassword;
 			qr = await QRCode.toDataURL(inviteLink, {
 				errorCorrectionLevel: 'L',
 				margin: 1,
@@ -126,9 +115,7 @@
 				color: { dark: '#111111', light: '#ffffff' }
 			});
 			step = 'qr';
-			error = provision.deferred
-				? t('invite.deferredMailbox')
-				: t('invite.readyHint');
+			error = synced.deferred ? t('invite.deferredMailbox') : t('invite.readyHint');
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -187,9 +174,8 @@
 					/>
 				</div>
 				<div class="field-shell">
-					<input
-						class="bare"
-						type="password"
+					<PasswordRevealField
+						variant="bare"
 						bind:value={createPass}
 						autocomplete="new-password"
 						placeholder={t('invite.passphrase')}
@@ -214,9 +200,6 @@
 						<img src={qr} alt={t('invite.ready')} width="240" height="240" />
 					</figure>
 				{/if}
-				{#if mailboxPw}
-					<p class="meta">{t('invite.mailboxPasswordOnce')} <code>{mailboxPw}</code></p>
-				{/if}
 				{#if inviteLink}
 					<p class="meta">{inviteLink}</p>
 				{/if}
@@ -228,7 +211,6 @@
 						error = '';
 						qr = '';
 						inviteLink = '';
-						mailboxPw = '';
 					}}>{t('invite.createAnother')}</button
 				>
 			{/if}

@@ -26,6 +26,7 @@
 	} from '$lib/invite-flow.svelte.js';
 	import { markMemberJoined, upsertMember } from '$lib/members.svelte.js';
 	import { pictureUrlFor } from '$lib/avatar.svelte.js';
+	import PasswordRevealField from '$lib/components/PasswordRevealField.svelte';
 	import ProfilePic from '$lib/components/ProfilePic.svelte';
 	import { redirectToReturnToIfAny } from '$lib/return-to.js';
 	import { space, syncSpaceFromHost } from '$lib/sections.js';
@@ -233,7 +234,7 @@
 			});
 			setActiveEmail(session.email);
 			await connectSession(session);
-			await applyInviteBootstrap(session);
+			await applyInviteBootstrap(session, { passphrase: invitePass });
 			/* Genesis / first invite: directory may be empty — upsert from the invite itself.
 			 * upsertMember hydrates Drive first so redeem cannot wipe the Space roster. */
 			const role =
@@ -348,9 +349,9 @@
 				{:else if step === 'password'}
 					<label class="field pass-field">
 						<span class="sr-only">{t('welcome.passphrase')}</span>
-						<input
-							bind:this={focusEl}
-							type="password"
+						<PasswordRevealField
+							variant="panel"
+							bind:element={focusEl}
 							bind:value={invitePass}
 							autocomplete="off"
 							placeholder={t('welcome.passphrase')}

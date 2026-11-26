@@ -30,6 +30,8 @@ export default {
 	'common.uploading': 'Subiendo…',
 	'common.continue': 'Continuar',
 	'common.confirm': 'Confirmar',
+	'common.showPassword': 'Mostrar contraseña',
+	'common.hidePassword': 'Ocultar contraseña',
 	'common.search': 'Buscar',
 	'common.all': 'Todo',
 	'common.none': 'Ninguno',
@@ -322,6 +324,17 @@ export default {
 	'settings.inviteQrAlt': 'QR de invitación al perfil',
 	'settings.passphrase': 'Frase de acceso',
 	'settings.passphraseTooShort': 'La frase debe tener al menos 6 caracteres.',
+	'settings.memberPassphrase': 'Frase del buzón',
+	'settings.memberPassphraseHint':
+		'Mismo secreto para la invitación y Stalwart/JMAP. Ver, rotar o restablecer para este miembro.',
+	'settings.savePassphrase': 'Guardar / rotar',
+	'settings.resetPassphrase': 'Restablecer',
+	'settings.confirmResetPassphrase':
+		'¿Restablecer la frase del buzón de {name}? Necesitarán una nueva invitación o la nueva frase para el correo.',
+	'settings.memberPassphraseSaved': 'Frase guardada — Stalwart + Drive actualizados.',
+	'settings.memberPassphraseReset': 'Nueva frase lista — compártela (también arriba).',
+	'settings.memberPassphraseDeferred':
+		'Guardada en Drive. Provision Stalwart diferida — define la misma frase allí una vez.',
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'Para',
@@ -1021,8 +1034,8 @@ export default {
 	'invite.enterMailbox': "Introduce un buzón (p. ej. alex).",
 	'invite.passphraseMin': "La frase debe tener al menos 6 caracteres.",
 	'invite.readyHint': "Invitación lista — comparte el QR o el enlace.",
-	'invite.deferredMailbox': 'Invitación lista. Define la contraseña del buzón en Stalwart una vez, luego comparte QR + frase.',
-	'invite.mailboxPasswordOnce': "Contraseña del buzón (una vez):",
+	'invite.deferredMailbox':
+		'Invitación lista. Creación Stalwart diferida — define esa misma frase como contraseña del buzón una vez, luego comparte QR + frase.',
 	'mail.settingsPathHint': "Ajustes → el email de tu buzón.",
 	'settings.cacheCleared': "Se borraron {n} claves de caché. Recarga para restaurar.",
 	'settings.loadFailed': "Conectado, pero la carga falló: {error}",

@@ -30,6 +30,8 @@ export default {
 	'common.uploading': 'Téléversement…',
 	'common.continue': 'Continuer',
 	'common.confirm': 'Confirmer',
+	'common.showPassword': 'Afficher le mot de passe',
+	'common.hidePassword': 'Masquer le mot de passe',
 	'common.search': 'Rechercher',
 	'common.all': 'Tout',
 	'common.none': 'Aucun',
@@ -323,6 +325,17 @@ export default {
 	'settings.inviteQrAlt': 'QR d’invitation au profil',
 	'settings.passphrase': 'Phrase secrète',
 	'settings.passphraseTooShort': 'La phrase doit contenir au moins 6 caractères.',
+	'settings.memberPassphrase': 'Phrase secrète boîte mail',
+	'settings.memberPassphraseHint':
+		'Même secret pour l’invitation et Stalwart/JMAP. Afficher, faire tourner ou réinitialiser pour ce membre.',
+	'settings.savePassphrase': 'Enregistrer / faire tourner',
+	'settings.resetPassphrase': 'Réinitialiser',
+	'settings.confirmResetPassphrase':
+		'Réinitialiser la phrase secrète de {name} ? Il leur faudra une nouvelle invitation ou la nouvelle phrase pour le courrier.',
+	'settings.memberPassphraseSaved': 'Phrase enregistrée — Stalwart + Drive à jour.',
+	'settings.memberPassphraseReset': 'Nouvelle phrase prête — partagez-la (affichée ci-dessus).',
+	'settings.memberPassphraseDeferred':
+		'Enregistrée sur Drive. Provision Stalwart différée — définissez la même phrase là-bas une fois.',
 
 	/* ── mail ─────────────────────────────────────────── */
 	'mail.to': 'À',
@@ -1023,8 +1036,8 @@ export default {
 	'invite.enterMailbox': "Entrez un nom de boîte (ex. alex).",
 	'invite.passphraseMin': "La phrase secrète doit faire au moins 6 caractères.",
 	'invite.readyHint': "Invitation prête — partagez le QR ou le lien.",
-	'invite.deferredMailbox': 'Invitation prête. Définissez le mot de passe mail dans Stalwart une fois, puis partagez QR + phrase.',
-	'invite.mailboxPasswordOnce': "Mot de passe boîte (une fois) :",
+	'invite.deferredMailbox':
+		'Invitation prête. Création Stalwart différée — définissez cette même phrase comme mot de passe mail une fois, puis partagez QR + phrase.',
 	'mail.settingsPathHint': "Réglages → l’e-mail de votre boîte.",
 	'settings.cacheCleared': "{n} clés de cache effacées. Rechargez pour réhydrater.",
 	'settings.loadFailed': "Connecté, mais le chargement a échoué : {error}",

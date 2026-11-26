@@ -19,6 +19,7 @@
 	import { markMemberJoined, upsertMember } from '$lib/members.svelte.js';
 	import { refreshFromDrive } from '$lib/workspace.svelte.js';
 	import { t } from '$lib/i18n.svelte.js';
+	import PasswordRevealField from './PasswordRevealField.svelte';
 
 	/** @type {{ open: boolean, onclose?: () => void }} */
 	let { open = $bindable(false), onclose = () => {} } = $props();
@@ -144,7 +145,7 @@
 			setActiveEmail(session.email);
 			progressPct = 70;
 			progressLabel = t('welcome.loadingChat');
-			await applyInviteBootstrap(session);
+			await applyInviteBootstrap(session, { passphrase: invitePass });
 			progressPct = 90;
 			await refreshFromDrive();
 			/* Persist invite role so admin codes unlock full Admin roster on this device. */
@@ -231,9 +232,10 @@
 				{:else if step === 'password'}
 					<label class="field pass-field">
 						<span class="sr-only">{t('welcome.passphrase')}</span>
-						<input
-							bind:this={focusEl}
-							type="password"
+						<PasswordRevealField
+							class="tall"
+							variant="pill"
+							bind:element={focusEl}
 							bind:value={invitePass}
 							autocomplete="off"
 							placeholder={t('welcome.passphrase')}

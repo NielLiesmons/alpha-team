@@ -5,6 +5,7 @@
 	import ThemeSystem from '@alpha/ui/icons/ThemeSystem.svelte';
 	import { onMount } from 'svelte';
 	import AdminCreateMemberModal from './AdminCreateMemberModal.svelte';
+	import PasswordRevealField from './PasswordRevealField.svelte';
 	import ProfileInviteModal from './ProfileInviteModal.svelte';
 	import ProfilePic from './ProfilePic.svelte';
 	import PrimaryButton from './PrimaryButton.svelte';
@@ -149,6 +150,10 @@
 	let mailboxPw = $state('');
 	let mailboxMsg = $state('');
 	let mailboxBusy = $state(false);
+	/** Admin: view / rotate member invite↔mail passphrase. */
+	let memberPassDraft = $state('');
+	let memberPassMsg = $state('');
+	let memberPassBusy = $state(false);
 	let apiTokenDraft = $state('');
 	let apiTokenMsg = $state('');
 	/** Hide pubs token field once invite/space-secrets (or recovery save) hydrated it. */
@@ -184,6 +189,19 @@
 		picMsg = '';
 		nameMsg = '';
 		memberMsg = '';
+		memberPassMsg = '';
+		memberPassDraft = getMailboxPassword(targetEmail);
+		if (canAdminMembers && targetEmail.includes('@') && driveSession.connected) {
+			void (async () => {
+				try {
+					const { readMailboxPassphrase } = await import('$lib/invite-bootstrap.js');
+					const pw = await readMailboxPassphrase(targetEmail);
+					if (pw) memberPassDraft = pw;
+				} catch {
+					/* ignore */
+				}
+			})();
+		}
 	});
 
 	async function saveRole() {
@@ -373,14 +391,14 @@
 		mailboxMsg = '';
 		try {
 			if (mailboxPw.trim()) {
-				await testMailboxLogin(actor.email, mailboxPw.trim());
-				setMailboxPassword(actor.email, mailboxPw.trim());
-				try {
-					const { upsertMailboxSecret } = await import('$lib/drive/space-secrets.js');
-					await upsertMailboxSecret(actor.email, mailboxPw.trim());
-				} catch (err) {
-					console.warn('persist mailbox secret', err);
-				}
+				const secret = mailboxPw.trim();
+				await testMailboxLogin(actor.email, secret);
+				const { syncMailboxPassphrase } = await import('$lib/invite-bootstrap.js');
+				await syncMailboxPassphrase(
+					actor.email,
+					secret,
+					displayNameFromEmail(actor.email) || actor.email
+				);
 				await refreshMail();
 				mailboxMsg = t('settings.mailboxConnected');
 			} else {
@@ -391,6 +409,74 @@
 			mailboxMsg = e instanceof Error ? e.message : String(e);
 		} finally {
 			mailboxBusy = false;
+		}
+	}
+
+	async function saveMemberPassphrase() {
+		if (!canAdminMembers || !targetEmail.includes('@')) return;
+		const secret = memberPassDraft.trim();
+		if (secret.length < 6) {
+			memberPassMsg = t('settings.passphraseTooShort');
+			return;
+		}
+		memberPassBusy = true;
+		memberPassMsg = '';
+		try {
+			const { syncMailboxPassphrase } = await import('$lib/invite-bootstrap.js');
+			const synced = await syncMailboxPassphrase(
+				targetEmail,
+				secret,
+				me?.name || displayNameFromEmail(targetEmail) || targetEmail
+			);
+			if (isSelf) {
+				try {
+					await testMailboxLogin(targetEmail, secret);
+					await refreshMail();
+				} catch (err) {
+					/* Provision may be deferred — still saved on Drive. */
+					console.warn('member passphrase login test', err);
+				}
+			}
+			memberPassMsg = synced.deferred
+				? t('settings.memberPassphraseDeferred')
+				: t('settings.memberPassphraseSaved');
+		} catch (e) {
+			memberPassMsg = e instanceof Error ? e.message : String(e);
+		} finally {
+			memberPassBusy = false;
+		}
+	}
+
+	async function resetMemberPassphrase() {
+		if (!canAdminMembers || !targetEmail.includes('@')) return;
+		if (!confirm(t('settings.confirmResetPassphrase', { name: me?.name || targetEmail }))) return;
+		memberPassBusy = true;
+		memberPassMsg = '';
+		try {
+			const { generateMailboxPassword } = await import('$lib/stalwart-provision.js');
+			const { syncMailboxPassphrase } = await import('$lib/invite-bootstrap.js');
+			const secret = generateMailboxPassword();
+			const synced = await syncMailboxPassphrase(
+				targetEmail,
+				secret,
+				me?.name || displayNameFromEmail(targetEmail) || targetEmail
+			);
+			memberPassDraft = secret;
+			if (isSelf) {
+				try {
+					await testMailboxLogin(targetEmail, secret);
+					await refreshMail();
+				} catch (err) {
+					console.warn('member passphrase reset login test', err);
+				}
+			}
+			memberPassMsg = synced.deferred
+				? t('settings.memberPassphraseDeferred')
+				: t('settings.memberPassphraseReset');
+		} catch (e) {
+			memberPassMsg = e instanceof Error ? e.message : String(e);
+		} finally {
+			memberPassBusy = false;
 		}
 	}
 
@@ -549,6 +635,40 @@
 					{t('settings.deleteFromSpace')}
 				</button>
 			{/if}
+		{/if}
+
+		{#if canAdminMembers && me}
+			<hr class="rule" />
+			<p class="field-label">{t('settings.memberPassphrase')}</p>
+			<p class="hint">{t('settings.memberPassphraseHint')}</p>
+			<label class="row stack">
+				<span>{t('settings.passphrase')}</span>
+				<PasswordRevealField
+					variant="pill"
+					bind:value={memberPassDraft}
+					autocomplete="off"
+					spellcheck={false}
+					disabled={memberPassBusy || !driveSession.connected}
+				/>
+			</label>
+			<div class="actions">
+				<PrimaryButton
+					size="sm"
+					disabled={memberPassBusy || !driveSession.connected || memberPassDraft.trim().length < 6}
+					onclick={() => void saveMemberPassphrase()}
+				>
+					{memberPassBusy ? t('common.saving') : t('settings.savePassphrase')}
+				</PrimaryButton>
+				<button
+					type="button"
+					class="btn ghost"
+					disabled={memberPassBusy || !driveSession.connected}
+					onclick={() => void resetMemberPassphrase()}
+				>
+					{t('settings.resetPassphrase')}
+				</button>
+			</div>
+			{#if memberPassMsg}<p class="status on">{memberPassMsg}</p>{/if}
 		{/if}
 
 		<hr class="rule" />
@@ -764,11 +884,11 @@
 		<p class="hint">{t('settings.mailHint')}</p>
 		<label class="row stack">
 			<span>{t('settings.password')}</span>
-			<input
-				type="password"
+			<PasswordRevealField
+				variant="pill"
 				bind:value={mailboxPw}
 				autocomplete="current-password"
-				spellcheck="false"
+				spellcheck={false}
 				disabled={!actor.email}
 			/>
 		</label>

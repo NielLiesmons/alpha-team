@@ -1,5 +1,8 @@
 /**
  * Pack + apply Team invite bootstrap (Drive + mailbox + publications token).
+ *
+ * Invite passphrase === mailbox password (Stalwart/JMAP). One secret for redeem
+ * and Mail — never mint a separate random mailbox password on invite.
  */
 
 import { getAdminToken, setAdminToken } from './mail-api.js';
@@ -77,41 +80,56 @@ export async function buildInviteSession(profile) {
 }
 
 /**
- * Resolve or mint a mailbox password for invite/reshare (provision Stalwart + space-secrets).
- * Existing Drive/local secrets win; otherwise create a fresh Stalwart password so Mail is OOTB.
+ * Align Stalwart + Drive space-secrets (+ local map) so passphrase === mailbox password.
+ * Used by invite mint, reshare, and Admin Settings rotate/reset.
  * @param {string} email
+ * @param {string} passphrase
  * @param {string} [displayName]
- * @returns {Promise<string>}
+ * @returns {Promise<{ password: string, deferred?: boolean }>}
  */
-export async function ensureInviteMailboxSecret(email, displayName = '') {
+export async function syncMailboxPassphrase(email, passphrase, displayName = '') {
 	const e = String(email || '')
 		.trim()
 		.toLowerCase();
+	const secret = String(passphrase || '').trim();
 	if (!e.includes('@')) throw new Error('Invalid email');
+	if (secret.length < 6) throw new Error('Passphrase must be at least 6 characters.');
 	if (!driveSession.connected || !driveSession.url || !driveSession.token || !driveSession.rootKey) {
 		throw new Error('Connect Drive first.');
 	}
-	const session = {
-		url: driveSession.url,
-		token: driveSession.token,
-		rootKey: driveSession.rootKey
-	};
-	const existing = await resolveMailboxPassword(e, session, getMailboxPassword(e));
-	if (existing) return existing;
 
-	const { generateMailboxPassword, provisionMailbox } = await import('./stalwart-provision.js');
-	const mailboxPassword = generateMailboxPassword();
+	const { provisionMailbox } = await import('./stalwart-provision.js');
 	const provision = await provisionMailbox({
 		email: e,
-		password: mailboxPassword,
+		password: secret,
 		displayName: displayName || e.split('@')[0] || e
 	});
 	if (!provision.ok && !provision.deferred) {
 		throw new Error(provision.error || 'Mailbox provision failed');
 	}
-	await persistInviteSecrets(e, mailboxPassword);
-	setMailboxPassword(e, mailboxPassword);
-	return mailboxPassword;
+	await persistInviteSecrets(e, secret);
+	setMailboxPassword(e, secret);
+	return { password: secret, deferred: Boolean(provision.deferred) };
+}
+
+/**
+ * Read the Space mailbox passphrase for a member (local → Drive space-secrets).
+ * @param {string} email
+ * @returns {Promise<string>}
+ */
+export async function readMailboxPassphrase(email) {
+	const e = String(email || '')
+		.trim()
+		.toLowerCase();
+	if (!e.includes('@')) return '';
+	const session = driveSession.connected
+		? {
+				url: driveSession.url,
+				token: driveSession.token,
+				rootKey: driveSession.rootKey
+			}
+		: null;
+	return resolveMailboxPassword(e, session, getMailboxPassword(e));
 }
 
 /**
@@ -181,14 +199,18 @@ export async function ensureMailboxPassword(email, session) {
 
 /**
  * Apply decoded invite (+ Drive space secrets) onto this device.
+ * Passphrase typed at redeem is the mailbox password when the invite body omits it.
  * @param {import('./drive/invite.js').InviteSession} session
+ * @param {{ passphrase?: string }} [opts]
  */
-export async function applyInviteBootstrap(session) {
+export async function applyInviteBootstrap(session, opts = {}) {
 	const email = String(session.email || '')
 		.trim()
 		.toLowerCase();
-	if (session.mailboxPassword && email) {
-		setMailboxPassword(email, session.mailboxPassword);
+	const fromPass = String(opts.passphrase || '').trim();
+	const secret = String(session.mailboxPassword || fromPass || '').trim();
+	if (secret && email) {
+		setMailboxPassword(email, secret);
 	}
 	if (session.adminToken) {
 		setAdminToken(session.adminToken);
@@ -204,7 +226,7 @@ export async function applyInviteBootstrap(session) {
 	} catch (e) {
 		console.warn('hydrate from space secrets', e);
 	}
-	const pw = email ? getMailboxPassword(email) || session.mailboxPassword || '' : '';
+	const pw = email ? getMailboxPassword(email) || secret || '' : '';
 	if (email && !String(pw || '').trim()) {
 		throw new Error(
 			'This invite has no mailbox password — ask an admin for a fresh invite so Mail works without Settings.'

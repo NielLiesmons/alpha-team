@@ -4,11 +4,7 @@
 	import { actor } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import {
-		buildInviteSession,
-		ensureInviteMailboxSecret,
-		persistInviteSecrets
-	} from '$lib/invite-bootstrap.js';
+	import { buildInviteSession, syncMailboxPassphrase } from '$lib/invite-bootstrap.js';
 	import {
 		canInvite,
 		canManageMembers,
@@ -17,9 +13,9 @@
 		removeMember,
 		upsertMember
 	} from '$lib/members.svelte.js';
-	import { generateMailboxPassword, provisionMailbox } from '$lib/stalwart-provision.js';
 
 	import { mailDomain as spaceMailDomain } from '$lib/space-host.js';
+	import PasswordRevealField from './PasswordRevealField.svelte';
 
 	const mailDomain = $derived(spaceMailDomain());
 	const operator = $derived(canManageMembers(actor.email));
@@ -33,7 +29,6 @@
 	let sharePass2 = $state('');
 	let qrDataUrl = $state('');
 	let inviteLink = $state('');
-	let lastMailboxPw = $state('');
 	let shareBusy = $state(false);
 	let shareMsg = $state('');
 
@@ -74,7 +69,6 @@
 	function clearNewInviteOutput() {
 		qrDataUrl = '';
 		inviteLink = '';
-		lastMailboxPw = '';
 	}
 
 	async function makeMemberInvite() {
@@ -96,9 +90,14 @@
 			shareMsg = 'Passphrases do not match.';
 			return;
 		}
+		const secret = sharePass.trim();
+		if (secret.length < 6) {
+			shareMsg = 'Passphrase must be at least 6 characters.';
+			return;
+		}
 		shareBusy = true;
 		try {
-			const mailboxPassword = generateMailboxPassword();
+			/* Passphrase === mailbox password — one secret for redeem + JMAP. */
 			const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 			await upsertMember({
 				email: inviteEmail,
@@ -107,33 +106,24 @@
 				status: 'invited',
 				invited_at: now
 			});
-			const provision = await provisionMailbox({
-				email: inviteEmail,
-				password: mailboxPassword,
-				displayName: inviteName.trim()
-			});
-			if (!provision.ok && !provision.deferred) {
-				throw new Error(provision.error || 'Mailbox provision failed');
-			}
-			await persistInviteSecrets(inviteEmail, mailboxPassword);
+			const synced = await syncMailboxPassphrase(inviteEmail, secret, inviteName.trim());
 			const session = await buildInviteSession({
 				email: inviteEmail,
 				displayName: inviteName.trim(),
 				role: inviteRole,
-				mailboxPassword
+				mailboxPassword: secret
 			});
-			const payload = await encodeInvite(session, sharePass);
+			const payload = await encodeInvite(session, secret);
 			inviteLink = inviteShareUrl(payload);
-			lastMailboxPw = mailboxPassword;
 			qrDataUrl = await QRCode.toDataURL(inviteLink, {
 				errorCorrectionLevel: 'L',
 				margin: 1,
 				width: 280,
 				color: { dark: '#111111', light: '#ffffff' }
 			});
-			shareMsg = provision.deferred
-				? `Invite ready for ${inviteEmail}. Stalwart create is still manual for now — set this mailbox password there once, then share QR + passphrase. Invitee only types the passphrase.`
-				: `Invite ready for ${inviteEmail}. Share the QR (or link) and whisper the passphrase.`;
+			shareMsg = synced.deferred
+				? `Invite ready for ${inviteEmail}. Stalwart create is deferred — set that same passphrase as the mailbox password there once, then share QR + passphrase.`
+				: `Invite ready for ${inviteEmail}. Share the QR (or link) and whisper the passphrase (also their mailbox password).`;
 		} catch (e) {
 			shareMsg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -247,21 +237,16 @@
 		}
 		reshareBusy = true;
 		try {
-			/* Existing account — full Team bootstrap (Drive + mailbox + pubs).
-			 * Auto-provision if this member never got a space-secrets password. */
-			const mailboxPassword = await ensureInviteMailboxSecret(m.email, m.name);
+			/* Re-share: passphrase rotates/aligns mailbox password so redeem stays OOTB. */
+			const secret = resharePass.trim();
+			await syncMailboxPassphrase(m.email, secret, m.name);
 			const session = await buildInviteSession({
 				email: m.email,
 				displayName: m.name,
 				role: m.role === 'owner' ? 'admin' : m.role,
-				mailboxPassword
+				mailboxPassword: secret
 			});
-			if (!session.mailboxPassword) {
-				reshareMsg =
-					'Could not provision a mailbox password for this member — check alpha-api Stalwart admin secret.';
-				return;
-			}
-			const payload = await encodeInvite(session, resharePass);
+			const payload = await encodeInvite(session, secret);
 			reshareLink = inviteShareUrl(payload);
 			reshareQr = await QRCode.toDataURL(reshareLink, {
 				errorCorrectionLevel: 'L',
@@ -269,7 +254,7 @@
 				width: 280,
 				color: { dark: '#111111', light: '#ffffff' }
 			});
-			reshareMsg = `Code ready for ${m.email}. Share QR/link + passphrase — no new account was created.`;
+			reshareMsg = `Code ready for ${m.email}. Whisper the passphrase (also their mailbox password).`;
 		} catch (e) {
 			reshareMsg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -353,15 +338,24 @@
 					{#if reshareEmail === m.email}
 						<div class="panel">
 							<p class="hint tight">
-								Re-share Drive access for <strong>{m.name}</strong> — same profile, no new mailbox.
+								Re-share for <strong>{m.name}</strong> — passphrase rotates their mailbox password
+								too (same secret for redeem + Mail).
 							</p>
 							<label class="row stack">
 								<span>Passphrase</span>
-								<input type="password" bind:value={resharePass} autocomplete="new-password" />
+								<PasswordRevealField
+									variant="pill"
+									bind:value={resharePass}
+									autocomplete="new-password"
+								/>
 							</label>
 							<label class="row stack">
 								<span>Confirm</span>
-								<input type="password" bind:value={resharePass2} autocomplete="new-password" />
+								<PasswordRevealField
+									variant="pill"
+									bind:value={resharePass2}
+									autocomplete="new-password"
+								/>
 							</label>
 							<div class="actions">
 								<button
@@ -402,8 +396,8 @@
 	<section class="block">
 		<p class="field-label">Invite someone new</p>
 		<p class="hint">
-			Creates a <strong>new</strong> profile + mailbox password inside the invite. For an existing
-			person, use <strong>Share code</strong> on their row above instead.
+			Creates a <strong>new</strong> profile. The passphrase is also their mailbox password. For an
+			existing person, use <strong>Share code</strong> on their row above instead.
 		</p>
 		<label class="row stack">
 			<span>Display name</span>
@@ -431,11 +425,11 @@
 		</label>
 		<label class="row stack">
 			<span>Passphrase</span>
-			<input type="password" bind:value={sharePass} autocomplete="new-password" />
+			<PasswordRevealField variant="pill" bind:value={sharePass} autocomplete="new-password" />
 		</label>
 		<label class="row stack">
 			<span>Confirm</span>
-			<input type="password" bind:value={sharePass2} autocomplete="new-password" />
+			<PasswordRevealField variant="pill" bind:value={sharePass2} autocomplete="new-password" />
 		</label>
 		<div class="actions">
 			<button
@@ -452,12 +446,6 @@
 		</div>
 		{#if inviteLink}
 			<p class="link-out">{inviteLink}</p>
-		{/if}
-		{#if lastMailboxPw}
-			<p class="status on">
-				Mailbox password (set once in Stalwart until API is wired):
-				<code>{lastMailboxPw}</code>
-			</p>
 		{/if}
 		{#if qrDataUrl}
 			<figure class="qr-wrap">
