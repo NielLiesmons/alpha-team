@@ -48,7 +48,7 @@ export default defineConfig({
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
 				/* Query busts stale importScripts after pages seed + immutable adopt. */
-				importScripts: ['/push-sw.js?v=12'],
+				importScripts: ['/push-sw.js?v=13'],
 				/*
 				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
 				 * After rsync deploys, that served stale HTML pointing at deleted hashed
@@ -79,6 +79,16 @@ export default defineConfig({
 				/* Kit appends prerendered HTML globs — ignore so SPA shells stay out of precache. */
 				globIgnores: ['**/api/recover.html', 'prerendered/**'],
 				runtimeCaching: [
+					{
+						/* Kit emits _app/env.js after Workbox’s precache glob — cache it explicitly. */
+						urlPattern: ({ url }) =>
+							url.pathname === '/_app/env.js' || url.pathname === '/_app/version.json',
+						handler: 'StaleWhileRevalidate',
+						options: {
+							cacheName: 'alpha-app-meta-v1',
+							cacheableResponse: { statuses: [200] }
+						}
+					},
 					{
 						urlPattern: ({ request, url }) =>
 							request.mode === 'navigate' &&
