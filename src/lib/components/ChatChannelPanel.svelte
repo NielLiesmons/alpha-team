@@ -47,7 +47,6 @@
 	} from '$lib/chat-sync.svelte.js';
 	import { ui } from '$lib/workspace.svelte.js';
 	import { chatStackFlags } from '$lib/chat-stack.js';
-	import { compareChatMessageAsc } from '$lib/drive/entities.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
 		attachComposerClearPad,
@@ -124,13 +123,23 @@
 	 * (Module $state arrays + helper filters have painted empty on first
 	 * navigate-in when only the array ref was touched.)
 	 */
+	/*
+	 * chatFeed is newest-first. Walk oldest→newest without filter+spread+sort so
+	 * Send’s optimistic unshift doesn’t pay a full compare on the critical path.
+	 */
 	const chronological = $derived.by(() => {
 		const len = chatFeed.length;
 		const tip = len ? chatFeed[0]?.id : '';
 		void tip;
-		return [
-			...visibleChatMessages(chatFeed).filter((m) => (m.channel_id || 'general') === channelId)
-		].sort(compareChatMessageAsc);
+		/** @type {any[]} */
+		const out = [];
+		for (let i = len - 1; i >= 0; i--) {
+			const m = chatFeed[i];
+			if (!m || m.kind === 'reaction') continue;
+			if ((m.channel_id || 'general') !== channelId) continue;
+			out.push(m);
+		}
+		return out;
 	});
 	const stackMap = $derived(chatStackFlags(chronological, activePerson().email || ''));
 	const presence = $derived(
@@ -792,12 +801,18 @@
 
 	function onComposerSent() {
 		pinBottom = true;
-		/* Sync snap while flushSync DOM is still hot — don’t wait tick/rAF for first pin. */
+		leaveBottomIntent = false;
+		showScrollFab = false;
+		pendingNewCount = 0;
+		/* Sync snap only — goBottom’s tick()/double-rAF/measureScroll fought first paint. */
 		if (messagesEl) {
 			messagesEl.scrollTop = Math.max(0, messagesEl.scrollHeight - messagesEl.clientHeight);
 		}
-		void goBottom(true);
-		inputEl?.focus();
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				void goBottom(true, false);
+			});
+		});
 	}
 
 	/** @param {KeyboardEvent} e */

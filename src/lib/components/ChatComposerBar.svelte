@@ -308,17 +308,6 @@
 		if (!sendFlash) sendPressed = false;
 	}
 
-	function flashSendPress() {
-		sendFlash = true;
-		sendPressed = true;
-		if (sendFlashTimer != null) clearTimeout(sendFlashTimer);
-		sendFlashTimer = setTimeout(() => {
-			sendFlashTimer = null;
-			sendPressed = false;
-			sendFlash = false;
-		}, 160);
-	}
-
 	const attachItems = $derived([
 		{ kind: 'photo', label: t('nav.photos'), icon: 'photos' },
 		{ kind: 'file', label: t('nav.drive'), icon: 'folder' },
@@ -621,8 +610,20 @@
 		const textOnly = draft.trim();
 		if (!textOnly && !media.length && !docs.length) return;
 
-		/* Press scale must paint before draft clear unmounts Send → Mic. */
-		flashSendPress();
+		/*
+		 * Instant Send critical path — do NOT wait on press animation, focus,
+		 * composer resize, or goBottom remeasure. Clear + optimistic unshift in
+		 * one flushSync so the bubble + empty field paint this frame.
+		 * sendFlash keeps the Send control mounted (avoids Mic swap) without delaying.
+		 */
+		sendFlash = true;
+		sendPressed = true;
+		if (sendFlashTimer != null) clearTimeout(sendFlashTimer);
+		sendFlashTimer = setTimeout(() => {
+			sendFlashTimer = null;
+			sendPressed = false;
+			sendFlash = false;
+		}, 160);
 
 		const filesSnapshot = pendingFiles;
 		pendingFiles = [];
@@ -645,11 +646,6 @@
 		replyTo = null;
 		const pubRef = resolvePubRef(parent);
 
-		/*
-		 * Instant Send: unshift + clear must hit the DOM in this turn (flushSync),
-		 * then pin. await tick()/Promise.all painted a frame late on mobile Safari;
-		 * encrypt/Drive/cache stay past double-rAF inside postChatMessage.
-		 */
 		/** @type {Promise<unknown>[]} */
 		const sends = [];
 		try {
@@ -677,10 +673,13 @@
 					sends.push(sendOne({ body: textOnly, files: [], parent, pubRef }));
 				}
 			});
+			/* Pin only — sync scrollTop inside onSent; defer focus/resize past paint. */
 			onSent();
-			inputEl?.focus();
-			normalizeComposerEmpty(inputEl);
-			resizeComposerField();
+			requestAnimationFrame(() => {
+				inputEl?.focus();
+				normalizeComposerEmpty(inputEl);
+				resizeComposerField();
+			});
 			await Promise.all(sends);
 		} catch (e) {
 			pendingFiles = filesSnapshot;
