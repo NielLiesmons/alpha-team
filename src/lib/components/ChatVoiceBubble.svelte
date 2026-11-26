@@ -1,8 +1,9 @@
 <script>
 	/**
 	 * Telegram/WhatsApp-style voice row — play + waveform + speed/time.
-	 * Play/pause via the play control; waveform tap/drag seeks (loads clip if needed).
-	 * Controls use data-voice-control so ChatFeedCard can still long-press → message actions.
+	 * Play/pause via the play control. Waveform scrub only while actually playing;
+	 * when idle/paused, tap/long-press (except play) opens message actions.
+	 * Controls use data-voice-control so ChatFeedCard can still long-press → actions.
 	 */
 	import Play from '@alpha/ui/icons/Play.svelte';
 	import Pause from '@alpha/ui/icons/Pause.svelte';
@@ -11,7 +12,6 @@
 		cycleVoiceSpeed,
 		isVoiceClipActive,
 		playVoiceClip,
-		prepareVoiceClip,
 		seekVoiceClip
 	} from '$lib/chat-voice-player.svelte.js';
 	import {
@@ -29,7 +29,8 @@
 	 *   durationMs?: number,
 	 *   author?: string,
 	 *   speakerName?: string,
-	 *   name?: string
+	 *   name?: string,
+	 *   onRequestActions?: (clientX: number, clientY: number) => void
 	 * }}
 	 */
 	let {
@@ -39,7 +40,8 @@
 		durationMs = 0,
 		author = '',
 		speakerName = '',
-		name = ''
+		name = '',
+		onRequestActions
 	} = $props();
 
 	const bars = $derived(generateWaveformBars(msgId || name || 'voice', 40));
@@ -118,16 +120,12 @@
 	}
 
 	/**
-	 * Seek to a fraction of the clip. Loads the clip (paused) when idle so seek
-	 * works before the first play tap.
+	 * Seek while this clip is actively playing (scrub only — never while idle/paused).
 	 * @param {number} fraction
 	 */
-	async function seekToFraction(fraction) {
-		if (!src) return;
+	function seekToFraction(fraction) {
+		if (!src || !playing) return;
 		const f = Math.max(0, Math.min(1, fraction));
-		if (!active) {
-			await prepareVoiceClip(clipOpts());
-		}
 		const total =
 			(active && chatVoicePlayer.durationMs > 0 ? chatVoicePlayer.durationMs : 0) ||
 			durationMs ||
@@ -140,8 +138,9 @@
 	/** @param {PointerEvent} e */
 	function onWavePointerDown(e) {
 		onCtrlPointerDown(e);
-		if (!src || e.button != null && e.button !== 0) return;
-		/* Capture on the wave itself so drag keeps seeking; card must not steal. */
+		if (!src || (e.button != null && e.button !== 0)) return;
+		/* Scrub only while playing — idle/paused taps open message actions instead. */
+		if (!playing) return;
 		waveDragging = true;
 		wavePointerId = e.pointerId;
 		try {
@@ -151,7 +150,7 @@
 		}
 		const el = e.currentTarget;
 		if (el instanceof HTMLElement) {
-			void seekToFraction(fractionFromX(el, e.clientX));
+			seekToFraction(fractionFromX(el, e.clientX));
 		}
 	}
 
@@ -160,7 +159,7 @@
 		if (!waveDragging || wavePointerId !== e.pointerId) return;
 		const el = e.currentTarget;
 		if (el instanceof HTMLElement) {
-			void seekToFraction(fractionFromX(el, e.clientX));
+			seekToFraction(fractionFromX(el, e.clientX));
 		}
 	}
 
@@ -178,9 +177,12 @@
 
 	/** @param {MouseEvent} e */
 	function onWaveClick(e) {
-		/* Seek already handled on pointerdown/drag; suppress residual click. */
 		e.preventDefault();
 		e.stopPropagation();
+		if (wasLongPress()) return;
+		/* Playing: seek already handled on pointerdown/drag. Idle: open actions. */
+		if (playing) return;
+		onRequestActions?.(e.clientX, e.clientY);
 	}
 
 	/** @param {MouseEvent} e */
@@ -190,6 +192,11 @@
 			return;
 		}
 		e.stopPropagation();
+		/* Idle/paused: treat like the rest of the bubble — open actions. */
+		if (!playing) {
+			onRequestActions?.(e.clientX, e.clientY);
+			return;
+		}
 		cycleVoiceSpeed();
 	}
 </script>
@@ -215,8 +222,9 @@
 		<button
 			type="button"
 			class="wave"
+			class:scrubbing={playing}
 			data-voice-control
-			aria-label={t('chat.seekVoice')}
+			aria-label={playing ? t('chat.seekVoice') : t('chat.voiceMessage')}
 			disabled={!src}
 			onpointerdown={onWavePointerDown}
 			onpointermove={onWavePointerMove}
@@ -305,10 +313,14 @@
 		cursor: pointer;
 		min-width: 0;
 		width: 100%;
-		touch-action: none;
+		/* Default: allow bubble long-press / tap → actions. Scrub locks pan while playing. */
+		touch-action: manipulation;
 		-webkit-tap-highlight-color: transparent;
 		position: relative;
 		z-index: 1;
+	}
+	.wave.scrubbing {
+		touch-action: none;
 	}
 	.wave:disabled {
 		cursor: default;

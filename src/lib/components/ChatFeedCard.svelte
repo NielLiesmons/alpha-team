@@ -671,6 +671,7 @@
 									author={msg.author || ''}
 									speakerName={name}
 									name={att.name || t('chat.voiceMessage')}
+									onRequestActions={(x, y) => openOverlayAt(x, y)}
 								/>
 							{:else if mediaKind === 'voice'}
 								<!-- Never fall through to a filename chip — keep a voice-shaped loader. -->
