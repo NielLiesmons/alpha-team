@@ -2,30 +2,72 @@
  * Imported by the Workbox-generated service worker (vite-pwa).
  * Handles Web Push + notification taps for Home Screen PWAs (incl. iOS 16.4+).
  *
- * alpha-sw-boot: v10 — seed alpha-pages-v9 shell on install so airplane-mode
- * kill-reopen has HTML matching the new precache (empty NetworkFirst cache was
- * the offline blank). Push tip/mid handoff unchanged.
+ * alpha-sw-boot: v11 — seed alpha-pages-v10; offline activate copies prior
+ * pages caches so kill-reopen never hits Response.error() after a SW bump.
+ * Push tip/mid handoff unchanged.
  */
 /* eslint-disable no-undef */
 
 /** Must match vite.config.js workbox runtimeCaching cacheName. */
-var PAGES_CACHE = 'alpha-pages-v9';
+var PAGES_CACHE = 'alpha-pages-v10';
 var SHELL_PATHS = ['/', '/chat'];
+
+/**
+ * Copy shell entries from older alpha-pages-* caches into the current one.
+ * Used when install/activate runs offline (fetch seed fails) so NetworkFirst
+ * still has HTML instead of Response.error().
+ * @param {Cache} dest
+ * @returns {Promise<boolean>}
+ */
+async function adoptFromOlderPagesCaches(dest) {
+	try {
+		var names = await caches.keys();
+		var older = names
+			.filter(function (name) {
+				return name.indexOf('alpha-pages-') === 0 && name !== PAGES_CACHE;
+			})
+			/* Higher version suffix first (v9 before v8). */
+			.sort(function (a, b) {
+				return b.localeCompare(a, undefined, { numeric: true });
+			});
+		for (var i = 0; i < older.length; i++) {
+			var src = await caches.open(older[i]);
+			var keys = await src.keys();
+			if (!keys || !keys.length) continue;
+			await Promise.all(
+				keys.map(async function (req) {
+					try {
+						var res = await src.match(req);
+						if (res) await dest.put(req, res.clone());
+					} catch (e) {
+						/* ignore single key */
+					}
+				})
+			);
+			var now = await dest.keys();
+			if (now && now.length) return true;
+		}
+	} catch (e) {
+		/* ignore */
+	}
+	return false;
+}
 
 /**
  * NetworkFirst only fills the pages cache after an online navigation. SW updates
  * bump the cache name → empty cache → offline open fails with Response.error().
- * Seed the current shell during install/activate (online) so kill-reopen offline
- * still has HTML that matches this worker’s precached hashed modules.
+ * Seed via network when online; if offline, adopt the last-good pages cache.
  */
 async function seedPagesCache() {
 	try {
 		var cache = await caches.open(PAGES_CACHE);
+		var fetchedFresh = false;
 		await Promise.all(
 			SHELL_PATHS.map(async function (path) {
 				try {
 					var res = await fetch(path, { cache: 'reload', credentials: 'same-origin' });
 					if (res && res.ok) {
+						fetchedFresh = true;
 						await cache.put(path, res.clone());
 						/* Navigation requests often include the full URL — mirror under that key too. */
 						try {
@@ -39,9 +81,17 @@ async function seedPagesCache() {
 				}
 			})
 		);
-		/* Drop older pages caches only after this generation has at least one shell. */
 		var seeded = await cache.keys();
-		if (seeded && seeded.length) {
+		if (!seeded || !seeded.length) {
+			await adoptFromOlderPagesCaches(cache);
+			seeded = await cache.keys();
+		}
+		/*
+		 * Only drop older pages caches after a FRESH network seed. If we merely
+		 * adopted stale shells (offline bump), keep prior generations so
+		 * handlerDidError can still fall back.
+		 */
+		if (fetchedFresh && seeded && seeded.length) {
 			var names = await caches.keys();
 			await Promise.all(
 				names.map(function (name) {

@@ -381,7 +381,7 @@ function stripEphemeralAttachments(list) {
 
 /** @type {any[] | null} */
 let cacheWritePending = null;
-/** @type {ReturnType<typeof setTimeout> | 0} */
+/** @type {number | ReturnType<typeof setTimeout> | 0} */
 let cacheWriteTimer = 0;
 
 /** Sync localStorage write — prefer `writeChatCache` so send paint isn’t blocked. */
@@ -398,9 +398,9 @@ function writeChatCacheNow(list) {
 }
 
 /**
- * Coalesce durable cache writes after paint. Optimistic send used to
- * JSON.stringify the full feed on the same turn as unshift — that stalled
- * the bubble + cleared composer on mobile.
+ * Coalesce durable cache writes AFTER paint. setTimeout(0) still raced the
+ * first frame on mobile (JSON.stringify of the full feed blocked the bubble).
+ * Double-rAF matches the encrypt deferral so Send feels instant.
  * @param {any[]} list
  */
 function writeChatCache(list) {
@@ -411,12 +411,19 @@ function writeChatCache(list) {
 		return;
 	}
 	if (cacheWriteTimer) return;
-	cacheWriteTimer = setTimeout(() => {
+	const flush = () => {
 		cacheWriteTimer = 0;
 		const next = cacheWritePending;
 		cacheWritePending = null;
 		if (next) writeChatCacheNow(next);
-	}, 0);
+	};
+	if (typeof requestAnimationFrame === 'function') {
+		cacheWriteTimer = requestAnimationFrame(() => {
+			requestAnimationFrame(flush);
+		});
+	} else {
+		cacheWriteTimer = setTimeout(flush, 0);
+	}
 }
 
 /** Stable feed ids excluding optimistic locals — skips a GET on send. */

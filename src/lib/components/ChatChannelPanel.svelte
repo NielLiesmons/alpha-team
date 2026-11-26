@@ -792,6 +792,10 @@
 
 	function onComposerSent() {
 		pinBottom = true;
+		/* Sync snap while flushSync DOM is still hot — don’t wait tick/rAF for first pin. */
+		if (messagesEl) {
+			messagesEl.scrollTop = Math.max(0, messagesEl.scrollHeight - messagesEl.clientHeight);
+		}
 		void goBottom(true);
 		inputEl?.focus();
 	}

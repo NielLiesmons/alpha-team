@@ -3,7 +3,7 @@
 	 * Shared chat/comment composer: plus menu, attachments, voice, quote, send.
 	 * Used by ChatChannelPanel and CommentThread — one UX, wired send paths.
 	 */
-	import { onDestroy, onMount, tick } from 'svelte';
+	import { flushSync, onDestroy, onMount, tick } from 'svelte';
 	import AlphaLogo from '$lib/components/icons/AlphaLogo.svelte';
 	import Voice from '$lib/components/icons/Voice.svelte';
 	import ChatAttachPanel from '$lib/components/ChatAttachPanel.svelte';
@@ -646,43 +646,42 @@
 		const pubRef = resolvePubRef(parent);
 
 		/*
-		 * Paint bubble + clear composer FIRST. postChatMessage unshifts sync and
-		 * defers encrypt/Drive past double-rAF. Do not await Drive here — that
-		 * kept Send upscaled while the main thread worked.
+		 * Instant Send: unshift + clear must hit the DOM in this turn (flushSync),
+		 * then pin. await tick()/Promise.all painted a frame late on mobile Safari;
+		 * encrypt/Drive/cache stay past double-rAF inside postChatMessage.
 		 */
 		/** @type {Promise<unknown>[]} */
 		const sends = [];
 		try {
-			for (const f of media) {
-				sends.push(
-					sendOne({
-						body: (f.caption || '').trim(),
-						files: [f],
-						parent,
-						pubRef
-					})
-				);
-			}
-			if (docs.length) {
-				sends.push(
-					sendOne({
-						body: media.length ? '' : textOnly,
-						files: docs,
-						parent,
-						pubRef
-					})
-				);
-			} else if (textOnly && !media.length) {
-				sends.push(sendOne({ body: textOnly, files: [], parent, pubRef }));
-			}
-			/* Let postChatMessage finish its sync unshift, then paint + pin. */
-			await Promise.all(sends);
-			await tick();
+			flushSync(() => {
+				for (const f of media) {
+					sends.push(
+						sendOne({
+							body: (f.caption || '').trim(),
+							files: [f],
+							parent,
+							pubRef
+						})
+					);
+				}
+				if (docs.length) {
+					sends.push(
+						sendOne({
+							body: media.length ? '' : textOnly,
+							files: docs,
+							parent,
+							pubRef
+						})
+					);
+				} else if (textOnly && !media.length) {
+					sends.push(sendOne({ body: textOnly, files: [], parent, pubRef }));
+				}
+			});
 			onSent();
 			inputEl?.focus();
-			/* Re-assert empty chrome after focus / late CE mutations. */
 			normalizeComposerEmpty(inputEl);
 			resizeComposerField();
+			await Promise.all(sends);
 		} catch (e) {
 			pendingFiles = filesSnapshot;
 			chatUi.error = e instanceof Error ? e.message : String(e);

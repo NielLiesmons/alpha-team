@@ -397,6 +397,7 @@
 					hideShell();
 					try {
 						sessionStorage.removeItem(AUTO_KEY);
+						sessionStorage.removeItem('alpha.boot.offline-reload.v1');
 					} catch (e) {}
 				};
 
@@ -410,45 +411,60 @@
 					}
 				};
 
+				var softReload = function () {
+					try {
+						location.reload();
+					} catch (e) {
+						location.href = location.pathname + location.search;
+					}
+				};
+
 				var paintTrouble = function (auto) {
 					var shell = document.getElementById('alpha-boot-shell');
 					if (!shell) return;
 					var offlineNow = false;
+					var warm = false;
 					try {
 						offlineNow = typeof navigator !== 'undefined' && navigator.onLine === false;
+						warm = document.documentElement.dataset.warmBoot === '1';
 					} catch (e) {}
 					shell.hidden = false;
 					shell.setAttribute('role', 'alert');
-					shell.innerHTML =
-						'<div class="boot-copy">' +
-						'<p class="boot-title">Couldn’t start</p>' +
-						'<p class="boot-body">' +
-						(offlineNow
-							? 'You’re offline. Reload to use the last cached shell — recover needs a network.'
-							: auto
+					/*
+					 * Offline + prior session: never a fatal “couldn’t start” dead-end.
+					 * Soft copy + reload only — /api/recover cannot run without a network.
+					 */
+					if (offlineNow) {
+						shell.innerHTML =
+							'<div class="boot-copy">' +
+							'<p class="boot-title">' +
+							(warm ? 'Still opening offline' : 'You’re offline') +
+							'</p>' +
+							'<p class="boot-body">Using the last cached shell on this device. Tap retry — recover needs a network.</p>' +
+							'<div class="boot-actions">' +
+							'<button type="button" id="alpha-boot-reload">Retry</button>' +
+							'</div></div>';
+					} else {
+						shell.innerHTML =
+							'<div class="boot-copy">' +
+							'<p class="boot-title">Couldn’t start</p>' +
+							'<p class="boot-body">' +
+							(auto
 								? 'Clearing the cached shell automatically…'
 								: 'Cached shell looks stuck. Clear it and reload.') +
-						'</p>' +
-						'<div class="boot-actions">' +
-						'<button type="button" id="alpha-boot-reload">' +
-						(offlineNow ? 'Reload cached app' : 'Reload app') +
-						'</button>' +
-						(offlineNow
-							? ''
-							: '<p class="boot-link">Or open <a href="/api/recover">team.bley.farm/api/recover</a></p>') +
-						'</div></div>';
+							'</p>' +
+							'<div class="boot-actions">' +
+							'<button type="button" id="alpha-boot-reload">Reload app</button>' +
+							'<p class="boot-link">Or open <a href="/api/recover">team.bley.farm/api/recover</a></p>' +
+							'</div></div>';
+					}
 					var btn = document.getElementById('alpha-boot-reload');
 					if (btn) {
 						btn.onclick = function () {
 							btn.disabled = true;
-							btn.textContent = offlineNow ? 'Reloading…' : 'Clearing…';
-							/* Airplane mode: /api/recover cannot run — soft reload only. */
+							btn.textContent = offlineNow ? 'Retrying…' : 'Clearing…';
 							if (offlineNow) {
-								try {
-									location.reload();
-								} catch (e) {
-									location.href = location.pathname + location.search;
-								}
+								softReload();
 								return;
 							}
 							goRecover();
@@ -460,14 +476,32 @@
 					if (started || window.__ALPHA_RECOVERING || escalated) return;
 					escalated = true;
 					/*
-					 * Airplane mode: /api/recover cannot run. Keep the cached shell /
-					 * wave and show manual reload — never navigate into a dead recover loop.
+					 * Airplane mode: /api/recover cannot run. Soft-reload once from the
+					 * cached shell (warm session), then show Retry — never navigate into
+					 * a dead recover loop or a fatal “couldn’t start” with no way out.
 					 */
 					var offline = false;
+					var warm = false;
 					try {
 						offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+						warm = document.documentElement.dataset.warmBoot === '1';
 					} catch (e) {}
 					if (offline) {
+						var OFFLINE_RELOAD_KEY = 'alpha.boot.offline-reload.v1';
+						var alreadyOfflineReload = false;
+						try {
+							alreadyOfflineReload = sessionStorage.getItem(OFFLINE_RELOAD_KEY) === '1';
+						} catch (e3) {}
+						if (warm && !alreadyOfflineReload) {
+							try {
+								sessionStorage.setItem(OFFLINE_RELOAD_KEY, '1');
+							} catch (e4) {}
+							try {
+								console.warn('alpha boot offline — soft reload', reason || '');
+							} catch (e5) {}
+							softReload();
+							return;
+						}
 						paintTrouble(false);
 						try {
 							console.warn('alpha boot offline — skip auto-recover', reason || '');
@@ -564,7 +598,7 @@
 							}
 							autoRecoverOnce('hydration-timeout');
 						},
-						offlineBoot ? 8000 : warmBoot ? 4500 : 2800
+						offlineBoot ? 14000 : warmBoot ? 4500 : 2800
 					);
 				};
 

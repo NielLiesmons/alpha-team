@@ -47,8 +47,8 @@ export default defineConfig({
 			},
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
-				/* Query busts stale importScripts after pages seed + local-first boot. */
-				importScripts: ['/push-sw.js?v=10'],
+				/* Query busts stale importScripts after pages seed + offline adopt. */
+				importScripts: ['/push-sw.js?v=11'],
 				/*
 				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
 				 * After rsync deploys, that served stale HTML pointing at deleted hashed
@@ -68,7 +68,7 @@ export default defineConfig({
 				/*
 				 * Never precache HTML shells. Precache matches before runtime routes, so
 				 * caching `/` / `chat` / … reintroduced cache-only navigations and blanked
-				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v9) instead.
+				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v10) instead.
 				 */
 				globPatterns: ['**/*.{js,css,ico,png,svg,webp,woff,woff2,webmanifest}'],
 				/* Kit appends prerendered HTML globs — ignore so SPA shells stay out of precache. */
@@ -82,7 +82,7 @@ export default defineConfig({
 							!url.pathname.endsWith('/sw.js'),
 						handler: 'NetworkFirst',
 						options: {
-							cacheName: 'alpha-pages-v9',
+							cacheName: 'alpha-pages-v10',
 							/* 0.35s — local-first: prefer cached shell quickly; was 1s. */
 							networkTimeoutSeconds: 0.35,
 							expiration: {
@@ -95,18 +95,39 @@ export default defineConfig({
 									handlerDidError: async ({ request }) => {
 										const reqUrl = request?.url ? new URL(request.url) : null;
 										const path = reqUrl?.pathname || '/';
-										const pageCache = await caches.open('alpha-pages-v9');
-										const match =
-											(await pageCache.match(request, { ignoreSearch: true })) ||
-											(await pageCache.match(path, { ignoreSearch: true })) ||
-											(await pageCache.match('/', { ignoreSearch: true })) ||
-											(await pageCache.match('/chat', { ignoreSearch: true })) ||
-											(await caches.match(request, { ignoreSearch: true })) ||
-											(path !== '/'
-												? await caches.match(path, { ignoreSearch: true })
-												: null) ||
-											(await caches.match('/', { ignoreSearch: true })) ||
-											(await caches.match('/chat', { ignoreSearch: true }));
+										const ignore = { ignoreSearch: true };
+										/** @param {Cache} cache */
+										const fromCache = async (cache) =>
+											(await cache.match(request, ignore)) ||
+											(await cache.match(path, ignore)) ||
+											(await cache.match('/', ignore)) ||
+											(await cache.match('/chat', ignore));
+										const current = await caches.open('alpha-pages-v10');
+										let match = await fromCache(current);
+										if (!match) {
+											const names = (await caches.keys())
+												.filter(
+													(n) =>
+														n.indexOf('alpha-pages-') === 0 &&
+														n !== 'alpha-pages-v10'
+												)
+												.sort((a, b) =>
+													b.localeCompare(a, undefined, { numeric: true })
+												);
+											for (const name of names) {
+												match = await fromCache(await caches.open(name));
+												if (match) break;
+											}
+										}
+										if (!match) {
+											match =
+												(await caches.match(request, ignore)) ||
+												(path !== '/'
+													? await caches.match(path, ignore)
+													: null) ||
+												(await caches.match('/', ignore)) ||
+												(await caches.match('/chat', ignore));
+										}
 										return match || Response.error();
 									}
 								}
