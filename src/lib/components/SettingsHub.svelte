@@ -1,6 +1,7 @@
 <script>
 	/**
-	 * Settings list: stacked active profile + expandable Space roster, then section rows.
+	 * Settings list: real stacked profile deck (collapsed) → fan-out select list
+	 * (expanded) that owns the hub; then section rows when collapsed.
 	 * Detail opens in the third column via selectEntity('settings', id).
 	 */
 	import { onMount } from 'svelte';
@@ -114,7 +115,8 @@
 
 	const activeProfile = $derived(roster.find((p) => p.email === activeEmail) || roster[0]);
 	const otherProfiles = $derived(roster.filter((p) => p.email !== activeEmail));
-	const stackDepth = $derived(Math.min(3, otherProfiles.length));
+	/** Collapsed deck shows at most two real cards under the selected top card. */
+	const stackDepth = $derived(Math.min(2, otherProfiles.length));
 
 	/** Admin (ops) → Notifications → Profile → Appearance → Other Devices → Storage.
 	 *  Non-admin: Notifications first. */
@@ -201,18 +203,24 @@
 			shareMsg = err instanceof Error ? err.message : String(err);
 		}
 	}
+
+	/** Active Select confirms current profile and collapses the deck. */
+	function onSelectActive() {
+		profilesOpen = false;
+	}
 </script>
 
 <div class="hub" class:expanded={profilesOpen}>
-	<div class="stack" class:open={profilesOpen}>
-		<div
-			class="card"
-			class:stacked={!profilesOpen && stackDepth > 0}
-			class:selected={Boolean(activeProfile)}
-		>
-			{#if activeProfile}
-				{@const admin = isAdminRole(activeProfile.role)}
-				<article class="face">
+	<div
+		class="stack"
+		class:open={profilesOpen}
+		class:has-peek={!profilesOpen && stackDepth > 0}
+		style="--depth: {stackDepth}"
+	>
+		{#if activeProfile}
+			{@const admin = isAdminRole(activeProfile.role)}
+			<article class="deck-card main selected" style="--i: 0">
+				<div class="face">
 					<button type="button" class="face-main" onclick={() => openSection('profile')}>
 						<ProfilePic
 							name={displayNameFromEmail(activeProfile.email) || activeProfile.name}
@@ -235,99 +243,123 @@
 						</span>
 					</button>
 					<div class="face-actions">
-						<button
-							type="button"
-							class="chev"
-							class:up={profilesOpen}
-							aria-expanded={profilesOpen}
-							aria-label={profilesOpen ? t('settings.collapseProfiles') : t('settings.expandProfiles')}
-							onclick={(e) => {
-								e.stopPropagation();
-								toggleProfiles();
-							}}
-						>
-							<svg
-								style="width:1.125rem;height:1.125rem"
-								viewBox="0 0 16 16"
-								fill="none"
-								aria-hidden="true"
-							>
-								<path
-									d="M4 6.5 8 10.5 12 6.5"
-									stroke="currentColor"
-									stroke-width="1.6"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								/>
-							</svg>
-						</button>
-					</div>
-				</article>
-			{/if}
-
-			{#if profilesOpen}
-				<div class="roster">
-					{#each otherProfiles as p (p.email)}
-						{@const admin = isAdminRole(p.role)}
-						<article class="row-card">
-							<button type="button" class="row-main" onclick={() => onSwitch(p.email)}>
-								<ProfilePic
-									name={displayNameFromEmail(p.email) || p.name}
-									email={p.email}
-									pictureUrl={pictureUrlFor(p.email)}
-									size={44}
-								/>
-								<span class="meta">
-									<span class="name-row">
-										<span class="name">{displayNameFromEmail(p.email) || p.name}</span>
-										{#if admin}
-											<span
-												class="crown"
-												title={t('settings.admin')}
-												aria-label={t('settings.admin')}><Crown size={12} /></span
-											>
-										{/if}
-									</span>
-									<span class="email">{p.email}</span>
-								</span>
+						{#if profilesOpen}
+							<button type="button" class="select-pill" onclick={onSelectActive}>
+								{t('settings.selectProfile')}
 							</button>
-						</article>
-					{/each}
-					<button type="button" class="add-row" onclick={() => (addProfileOpen = true)}>
-						<span class="add-plus" aria-hidden="true">
-							<svg style="width:1.125rem;height:1.125rem" viewBox="0 0 16 16" fill="none">
-								<path
-									d="M8 3.25v9.5M3.25 8h9.5"
-									stroke="currentColor"
-									stroke-width="1.5"
-									stroke-linecap="round"
-								/>
-							</svg>
-						</span>
-						<span>{t('settings.addProfile')}</span>
-					</button>
+						{:else}
+							<button
+								type="button"
+								class="chev"
+								aria-expanded={false}
+								aria-label={t('settings.expandProfiles')}
+								onclick={(e) => {
+									e.stopPropagation();
+									toggleProfiles();
+								}}
+							>
+								<svg
+									style="width:1.125rem;height:1.125rem"
+									viewBox="0 0 16 16"
+									fill="none"
+									aria-hidden="true"
+								>
+									<path
+										d="M4 6.5 8 10.5 12 6.5"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							</button>
+						{/if}
+					</div>
 				</div>
-			{/if}
-		</div>
-
-		{#if !profilesOpen && stackDepth > 0}
-			{#each Array(stackDepth) as _, i}
-				<div class="layer" style="--i: {i + 1}" aria-hidden="true"></div>
-			{/each}
+			</article>
 		{/if}
+
+		{#each otherProfiles as p, i (p.email)}
+			{@const admin = isAdminRole(p.role)}
+			{@const buried = !profilesOpen && i >= 2}
+			<article
+				class="deck-card other"
+				class:buried
+				style="--i: {i + 1}"
+				aria-hidden={buried ? 'true' : undefined}
+			>
+				<div class="face">
+					<button
+						type="button"
+						class="face-main"
+						tabindex={profilesOpen ? 0 : -1}
+						onclick={() => onSwitch(p.email)}
+					>
+						<ProfilePic
+							name={displayNameFromEmail(p.email) || p.name}
+							email={p.email}
+							pictureUrl={pictureUrlFor(p.email)}
+							size={profilesOpen ? 52 : 48}
+						/>
+						<span class="meta">
+							<span class="name-row">
+								<span class="name">{displayNameFromEmail(p.email) || p.name}</span>
+								{#if admin}
+									<span class="crown" title={t('settings.admin')} aria-label={t('settings.admin')}
+										><Crown size={13} /></span
+									>
+								{/if}
+							</span>
+							<span class="email">{p.email}</span>
+						</span>
+					</button>
+					{#if profilesOpen}
+						<div class="face-actions">
+							<button type="button" class="select-pill" onclick={() => onSwitch(p.email)}>
+								{t('settings.selectProfile')}
+							</button>
+						</div>
+					{/if}
+				</div>
+			</article>
+		{/each}
+
+		<article
+			class="deck-card add"
+			class:buried={!profilesOpen}
+			style="--i: {otherProfiles.length + 1}"
+			aria-hidden={profilesOpen ? undefined : 'true'}
+		>
+			<button type="button" class="add-face" onclick={() => (addProfileOpen = true)}>
+				<span class="meta add-meta">
+					<span class="name">{t('settings.addProfile')}</span>
+				</span>
+				<span class="add-plus glass-action" aria-hidden="true">
+					<svg style="width:1.125rem;height:1.125rem" viewBox="0 0 16 16" fill="none">
+						<path
+							d="M8 3.25v9.5M3.25 8h9.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</span>
+			</button>
+		</article>
 	</div>
 
 	{#if shareMsg}
 		<p class="toast">{shareMsg}</p>
 	{/if}
 
-	<ul class="sections" class:pushed={profilesOpen}>
+	<ul class="sections" class:away={profilesOpen} aria-hidden={profilesOpen}>
 		{#each sections as s (s.id)}
 			<li>
 				<button
 					type="button"
 					class="section-row"
 					class:on={selectedSection === s.id || (s.id === 'admin' && selectedSection === 'advanced')}
+					tabindex={profilesOpen ? -1 : 0}
 					onclick={() => openSection(s.id)}
 				>
 					<span
@@ -372,6 +404,7 @@
 		max-width: 720px;
 	}
 
+	/* +8px L/R around the stacked profile cards display */
 	.stack {
 		position: relative;
 		z-index: 2;
@@ -379,39 +412,103 @@
 		flex-direction: column;
 		align-items: center;
 		width: 100%;
+		padding-inline: 8px;
 		gap: 0;
 		box-sizing: border-box;
+		/* Peek overhang: each under-card shows a band below the top card */
+		padding-bottom: 0;
+		transition: padding-bottom 0.34s cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
-	.card {
+	.stack.has-peek {
+		padding-bottom: calc(var(--depth) * 0.7rem);
+	}
+
+	.stack.open {
+		gap: 0.5rem;
+		padding-bottom: 0;
+	}
+
+	.deck-card {
 		position: relative;
-		z-index: 4;
 		width: 100%;
 		border-radius: var(--radius-16, 1rem);
 		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
 		overflow: hidden;
 		box-sizing: border-box;
-		/* Slightly larger selected — grow inward so hub L/R pad (Tasks 0.375rem) stays */
-		transform: scale(1);
 		transform-origin: top center;
 		transition:
-			transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+			transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 0.28s ease,
+			width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+			margin 0.34s cubic-bezier(0.22, 1, 0.36, 1),
 			box-shadow 0.22s ease;
 	}
 
-	.card.selected {
-		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
+	/* Selected slightly larger — grow inward so stack L/R pad stays */
+	.deck-card.main.selected {
 		transform: scale(1.02);
-		/* Counter scale growth so edges stay inside hub padding */
+		width: calc(100% / 1.02);
+		z-index: 5;
+	}
+
+	.stack.open .deck-card.main.selected {
+		transform: scale(1.02);
 		width: calc(100% / 1.02);
 	}
 
-	/* Flat bottom only while decoy stack layers sit underneath */
-	.card.stacked {
-		border-radius: var(--radius-16, 1rem) var(--radius-16, 1rem) 0 0;
+	/* Collapsed: real under-cards sit behind the main card */
+	.stack:not(.open) .deck-card.other {
+		position: absolute;
+		left: 8px;
+		right: 8px;
+		top: 0;
+		z-index: calc(4 - var(--i));
+		pointer-events: none;
+		transform: translateY(calc(var(--i) * 0.7rem)) scale(calc(1 - var(--i) * 0.045));
+		opacity: calc(1 - var(--i) * 0.22);
+		width: auto;
 	}
 
-	.face {
+	.stack:not(.open) .deck-card.add {
+		position: absolute;
+		left: 8px;
+		right: 8px;
+		top: 0;
+		z-index: 0;
+		width: auto;
+	}
+
+	.stack:not(.open) .deck-card.other.buried,
+	.stack:not(.open) .deck-card.add.buried {
+		opacity: 0;
+		transform: translateY(1.25rem) scale(0.9);
+		pointer-events: none;
+		visibility: hidden;
+	}
+
+	.stack.open .deck-card.other,
+	.stack.open .deck-card.add {
+		position: relative;
+		left: auto;
+		right: auto;
+		top: auto;
+		z-index: 1;
+		pointer-events: auto;
+		visibility: visible;
+		transform: scale(1);
+		opacity: 1;
+		width: 100%;
+		transition-delay: calc(var(--i) * 0.045s);
+	}
+
+	.stack.open .deck-card.add {
+		/* Match unselected / selected grayscale fill — no accent */
+		background: var(--fg-4, color-mix(in srgb, var(--fg) 4%, transparent));
+	}
+
+	.face,
+	.add-face {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -422,8 +519,26 @@
 		min-height: 5.25rem;
 	}
 
-	.face-main,
-	.row-main {
+	.add-face {
+		width: 100%;
+		border: 0;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+		text-align: left;
+		-webkit-tap-highlight-color: transparent;
+		transition: transform 0.15s ease;
+	}
+
+	.add-face:hover {
+		transform: scale(1.01);
+	}
+
+	.add-face:active {
+		transform: scale(0.99);
+	}
+
+	.face-main {
 		flex: 1;
 		min-width: 0;
 		display: flex;
@@ -450,6 +565,11 @@
 		flex-direction: column;
 		gap: 0.1875rem;
 		min-width: 0;
+	}
+
+	.add-meta {
+		flex: 1;
+		justify-content: center;
 	}
 
 	.name-row {
@@ -483,10 +603,11 @@
 		color: var(--fg-33, var(--white44));
 	}
 
-	.chev {
+	/* Glass round / pill chrome — scale only on hover (no color wash) */
+	.chev,
+	.select-pill,
+	.glass-action {
 		flex-shrink: 0;
-		width: 2.25rem;
-		height: 2.25rem;
 		border: 1px solid transparent;
 		border-radius: 999px;
 		background:
@@ -503,110 +624,36 @@
 		-webkit-backdrop-filter: blur(var(--glass-blur));
 		box-sizing: border-box;
 		-webkit-tap-highlight-color: transparent;
-		transition:
-			transform 0.15s ease,
-			color 0.15s ease;
+		transition: transform 0.15s ease;
 	}
 
-	.chev:hover {
-		color: var(--fg, var(--white));
-		transform: scale(1.06);
+	.chev,
+	.glass-action {
+		width: 2.25rem;
+		height: 2.25rem;
 	}
 
-	.chev:active {
-		transform: scale(0.96);
-	}
-
-	.chev svg {
-		transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-	}
-
-	.chev.up svg {
-		transform: rotate(180deg);
-	}
-
-	.layer {
-		--i: 1;
-		width: calc(100% - var(--i) * 1.125rem);
-		height: calc(0.625rem - var(--i) * 0.09375rem);
-		margin: 0;
-		margin-top: 0;
-		border-radius: 0 0 calc(0.875rem - var(--i) * 0.1875rem) calc(0.875rem - var(--i) * 0.1875rem);
-		background: color-mix(in srgb, var(--fg) calc(7.5% - var(--i) * 1.5%), transparent);
-		z-index: calc(3 - var(--i));
-		pointer-events: none;
-		flex-shrink: 0;
-	}
-
-	.roster {
-		width: 100%;
-		display: flex;
-		flex-direction: column;
-		margin: 0;
-		background: transparent;
-		animation: roster-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
-	}
-
-	@keyframes roster-in {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
-	.row-card {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.875rem 0.625rem 0.875rem 1rem;
-		border-top: 1px solid var(--fg-8, var(--white11));
-		box-sizing: border-box;
-		margin: 0;
-		min-height: 4.75rem;
-	}
-
-	.add-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		width: 100%;
-		padding: 0.875rem 1rem;
-		border: 0;
-		border-top: 1px solid var(--fg-8, var(--white11));
-		background: transparent;
-		color: var(--fg-66, var(--white66));
-		font: inherit;
-		font-size: 0.875rem;
+	.select-pill {
+		height: 2.25rem;
+		padding: 0 0.875rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		cursor: pointer;
-		text-align: left;
-		min-height: 4.5rem;
-		box-sizing: border-box;
+		letter-spacing: 0.01em;
 	}
 
-	.add-row:hover {
-		color: var(--fg, var(--white));
-	}
-
-	/* Match list-plus chrome: stroked circle + glyph, not a one-off text + */
-	.add-plus {
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: 50%;
-		display: grid;
-		place-items: center;
-		border: 0.09375rem solid var(--fg-16, color-mix(in srgb, var(--fg) 16%, transparent));
+	.chev:hover,
+	.select-pill:hover,
+	.glass-action:hover,
+	.add-face:hover .glass-action {
+		transform: scale(1.06);
 		color: var(--fg-66, var(--white66));
-		box-sizing: border-box;
-		flex-shrink: 0;
-		background: transparent;
 	}
 
-	.add-row:hover .add-plus {
-		color: var(--fg, var(--white));
-		border-color: var(--fg-33, color-mix(in srgb, var(--fg) 33%, transparent));
+	.chev:active,
+	.select-pill:active,
+	.glass-action:active,
+	.add-face:active .glass-action {
+		transform: scale(0.96);
 	}
 
 	.toast {
@@ -622,14 +669,23 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
+		transform-origin: top center;
 		transition:
+			opacity 0.28s ease,
 			transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-			margin-top 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+			margin 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+			max-height 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+		max-height: 40rem;
+		overflow: hidden;
 	}
 
-	.sections.pushed {
-		margin-top: 1.375rem;
-		transform: translateY(0.25rem);
+	/* Expanded profiles owns the page — hub sections animate away */
+	.sections.away {
+		opacity: 0;
+		transform: translateY(0.75rem) scale(0.98);
+		margin-top: 0;
+		max-height: 0;
+		pointer-events: none;
 	}
 
 	.section-row {
