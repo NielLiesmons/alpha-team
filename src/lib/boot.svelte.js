@@ -4,8 +4,8 @@
  * Local-first: hydrate IDB/LS caches before listsReady; skip network when offline.
  * Returning PWAs unlock the shell synchronously from localStorage so BootSplash
  * never blocks airplane-mode / warm opens. Prerender must not bake BootSplash
- * into static HTML (see +layout.svelte); app.html hides #alpha-boot-shell when
- * a local Drive session + actor already exist (data-warm-boot).
+ * into static HTML (see +layout.svelte). app.html keeps the pre-module wave
+ * until `.shell` mounts — hiding it on warm-boot left a blank screen (worse).
  */
 
 import { actor, loadActor } from './actor.svelte.js';
@@ -106,6 +106,8 @@ export function unlockShellFromLocalSession() {
 	appBoot.error = '';
 	appBoot.stuck = false;
 	appBoot.ready = true;
+	/* Don’t gate Notes/Tasks/Chat lists on async IDB — cache hydrate already ran. */
+	appBoot.listsReady = true;
 	return true;
 }
 

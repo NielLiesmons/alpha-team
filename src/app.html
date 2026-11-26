@@ -44,10 +44,12 @@
 			#alpha-boot-shell[hidden] {
 				display: none !important;
 			}
-			/* Returning session: theme bg only — no full-screen wave while modules hydrate. */
-			html[data-warm-boot] #alpha-boot-shell:not([role='alert']) {
-				display: none !important;
-			}
+			/*
+			 * Do NOT hide #alpha-boot-shell on data-warm-boot. Modules still need to
+			 * download/parse before AppShell can paint — hiding the wave left a blank
+			 * theme screen that felt worse than the loader (7619b1c regression).
+			 * Wave stays until .shell / .welcome / .splash mounts (watchHydration).
+			 */
 			#alpha-boot-shell .boot-copy {
 				max-width: 320px;
 			}
@@ -150,7 +152,8 @@
 		</style>
 		<script>
 			/*
-			 * Warm local session? Hide the pre-module wave before first paint.
+			 * Warm local session? Mark data-warm-boot for a slightly longer
+			 * hydration watchdog — do NOT hide the wave (blank screen is worse).
 			 * Keys match cross-domain-storage.js (cookie wins, then localStorage).
 			 */
 			(function () {
