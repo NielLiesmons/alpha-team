@@ -2,7 +2,7 @@
  * Imported by the Workbox-generated service worker (vite-pwa).
  * Handles Web Push + notification taps for Home Screen PWAs (incl. iOS 16.4+).
  *
- * alpha-sw-boot: v6 — push tap focuses warm client (no navigate reload) + tip/mid handoff.
+ * alpha-sw-boot: v7 — local-first boot (pages-v6) + push tip/mid handoff unchanged.
  */
 /* eslint-disable no-undef */
 

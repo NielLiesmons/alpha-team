@@ -383,6 +383,21 @@
 				var autoRecoverOnce = function (reason) {
 					if (started || window.__ALPHA_RECOVERING || escalated) return;
 					escalated = true;
+					/*
+					 * Airplane mode: /api/recover cannot run. Keep the cached shell /
+					 * wave and show manual reload — never navigate into a dead recover loop.
+					 */
+					var offline = false;
+					try {
+						offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+					} catch (e) {}
+					if (offline) {
+						paintTrouble(false);
+						try {
+							console.warn('alpha boot offline — skip auto-recover', reason || '');
+						} catch (e2) {}
+						return;
+					}
 					var already = false;
 					try {
 						already = sessionStorage.getItem(AUTO_KEY) === '1';
@@ -448,16 +463,24 @@
 					try {
 						obs.observe(document.documentElement, { childList: true, subtree: true });
 					} catch (e) {}
-					/* If Svelte never mounts, don’t wait on a blank shell. */
-					setTimeout(function () {
-						obs.disconnect();
-						if (started || window.__ALPHA_RECOVERING) return;
-						if (document.querySelector('.shell, .welcome, .splash')) {
-							markStarted();
-							return;
-						}
-						autoRecoverOnce('hydration-timeout');
-					}, 2800);
+					/* If Svelte never mounts, don’t wait on a blank shell.
+					 * Offline: give precached modules more time; never /api/recover. */
+					var offlineBoot = false;
+					try {
+						offlineBoot = typeof navigator !== 'undefined' && navigator.onLine === false;
+					} catch (e) {}
+					setTimeout(
+						function () {
+							obs.disconnect();
+							if (started || window.__ALPHA_RECOVERING) return;
+							if (document.querySelector('.shell, .welcome, .splash')) {
+								markStarted();
+								return;
+							}
+							autoRecoverOnce('hydration-timeout');
+						},
+						offlineBoot ? 8000 : 2800
+					);
 				};
 
 				if (document.readyState === 'loading') {

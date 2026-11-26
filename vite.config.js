@@ -47,14 +47,16 @@ export default defineConfig({
 			},
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
-				/* Query busts stale importScripts after push-open / tip-mid handoff fixes. */
-				importScripts: ['/push-sw.js?v=6'],
+				/* Query busts stale importScripts after push-open / tip-mid + local-first boot. */
+				importScripts: ['/push-sw.js?v=7'],
 				/*
 				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
 				 * After rsync deploys, that served stale HTML pointing at deleted hashed
-				 * chunks and blanked installed PWAs until a hard refresh. NetworkFirst
-				 * prefers live HTML when online; offline falls back to last cached page
-				 * or precached `/`.
+				 * chunks and blanked installed PWAs until a hard refresh.
+				 *
+				 * NetworkFirst with a short timeout: prefer live HTML when online,
+				 * fall back to last cached page within ~1s (and immediately offline)
+				 * so airplane-mode / flaky mobile doesn’t sit on the boot wave.
 				 */
 				/* null → no cache-only NavigationRoute (see NetworkFirst below). */
 				navigateFallback: null,
@@ -65,7 +67,7 @@ export default defineConfig({
 				/*
 				 * Never precache HTML shells. Precache matches before runtime routes, so
 				 * caching `/` / `chat` / … reintroduced cache-only navigations and blanked
-				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v3) instead.
+				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v6) instead.
 				 */
 				globPatterns: ['**/*.{js,css,ico,png,svg,webp,woff,woff2,webmanifest}'],
 				/* Kit appends prerendered HTML globs — ignore so SPA shells stay out of precache. */
@@ -79,8 +81,9 @@ export default defineConfig({
 							!url.pathname.endsWith('/sw.js'),
 						handler: 'NetworkFirst',
 						options: {
-							cacheName: 'alpha-pages-v5',
-							networkTimeoutSeconds: 3,
+							cacheName: 'alpha-pages-v6',
+							/* 1s — warm cache paints ASAP; was 3s and felt like a stuck wave offline. */
+							networkTimeoutSeconds: 1,
 							expiration: {
 								maxEntries: 64,
 								maxAgeSeconds: 60 * 60 * 24 * 14
@@ -88,10 +91,17 @@ export default defineConfig({
 							cacheableResponse: { statuses: [200] },
 							plugins: [
 								{
-									handlerDidError: async () => {
+									handlerDidError: async ({ request }) => {
+										const reqUrl = request?.url ? new URL(request.url) : null;
+										const path = reqUrl?.pathname || '/';
 										const match =
+											(await caches.match(request, { ignoreSearch: true })) ||
+											(path !== '/'
+												? await caches.match(path, { ignoreSearch: true })
+												: null) ||
 											(await caches.match('/', { ignoreSearch: true })) ||
-											(await caches.match('/index.html', { ignoreSearch: true }));
+											(await caches.match('/index.html', { ignoreSearch: true })) ||
+											(await caches.match('/chat', { ignoreSearch: true }));
 										return match || Response.error();
 									}
 								}
