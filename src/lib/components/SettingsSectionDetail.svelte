@@ -262,13 +262,15 @@
 					await hydrateDeviceFromSpaceSecrets(driveSession, actor.email, {
 						setMailboxPassword,
 						setAdminToken,
-						getAdminToken
+						getAdminToken,
+						getMailboxPassword
 					});
 				} catch {
 					/* ignore */
 				}
 				pubsTokenReady = Boolean(getAdminToken());
 				apiTokenDraft = getAdminToken();
+				mailboxPw = getMailboxPassword(actor.email);
 			})();
 		}
 	});

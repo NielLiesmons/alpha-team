@@ -140,9 +140,15 @@ export async function resolveMailboxPassword(email, session, localPassword = '')
 
 /**
  * Best-effort: seed local mailbox + publications token from Drive after join.
+ * Never overwrites an existing local mailbox password (Niel / Settings wins).
  * @param {import('./client.js').DriveSession} session
  * @param {string} email
- * @param {{ setMailboxPassword: (email: string, password: string) => void, setAdminToken: (token: string) => void, getAdminToken: () => string }} deps
+ * @param {{
+ *   setMailboxPassword: (email: string, password: string) => void,
+ *   setAdminToken: (token: string) => void,
+ *   getAdminToken: () => string,
+ *   getMailboxPassword?: (email: string) => string
+ * }} deps
  */
 export async function hydrateDeviceFromSpaceSecrets(session, email, deps) {
 	const doc = await loadSpaceSecrets(session);
@@ -150,8 +156,14 @@ export async function hydrateDeviceFromSpaceSecrets(session, email, deps) {
 		.trim()
 		.toLowerCase();
 	const pw = e && doc.mailboxes[e] ? doc.mailboxes[e] : '';
-	if (pw) deps.setMailboxPassword(e, pw);
+	const localPw =
+		typeof deps.getMailboxPassword === 'function' ? String(deps.getMailboxPassword(e) || '').trim() : '';
+	/* Gap-fill only — invite redeem sets local first; boot must not clobber Niel. */
+	if (pw && !localPw) deps.setMailboxPassword(e, pw);
 	const tok = doc.adminToken || '';
 	if (tok && !deps.getAdminToken()) deps.setAdminToken(tok);
-	return { mailboxPassword: pw, adminToken: tok };
+	return {
+		mailboxPassword: localPw || pw,
+		adminToken: tok || deps.getAdminToken() || ''
+	};
 }

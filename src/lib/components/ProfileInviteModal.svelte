@@ -9,7 +9,7 @@
 	import { displayNameFromEmail } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { buildInviteSession } from '$lib/invite-bootstrap.js';
+	import { buildInviteSession, ensureInviteMailboxSecret } from '$lib/invite-bootstrap.js';
 	import { t } from '$lib/i18n.svelte.js';
 	import { memberFor } from '$lib/members.svelte.js';
 
@@ -67,10 +67,13 @@
 		busy = true;
 		try {
 			const role = member?.role === 'owner' ? 'admin' : member?.role || 'member';
+			/* Stuck invitees: mint + provision if space-secrets never got a password. */
+			const mailboxPassword = await ensureInviteMailboxSecret(e, name);
 			const inviteSession = await buildInviteSession({
 				email: e,
 				displayName: name,
-				role
+				role,
+				mailboxPassword
 			});
 			if (!inviteSession.mailboxPassword) {
 				msg = t('settings.inviteMissingMailbox');

@@ -100,8 +100,15 @@ export function switchDeviceProfile(email) {
 		.trim()
 		.toLowerCase();
 	const onDevice = deviceProfiles.find((p) => p.email === e);
+	/** @param {string} active */
+	function hydrateMailbox(active) {
+		void import('./invite-bootstrap.js')
+			.then(({ ensureMailboxPassword }) => ensureMailboxPassword(active))
+			.catch(() => {});
+	}
 	if (onDevice) {
 		setActiveEmail(onDevice.email);
+		hydrateMailbox(onDevice.email);
 		return onDevice;
 	}
 	/* Connected Space: any Drive member can be assumed on this device (shared root). */
@@ -111,6 +118,7 @@ export function switchDeviceProfile(email) {
 	}
 	const row = addDeviceProfile({ email: m.email, name: m.name });
 	setActiveEmail(row.email);
+	hydrateMailbox(row.email);
 	return row;
 }
 

@@ -283,7 +283,8 @@ export async function bootApp() {
 							hydrateDeviceFromSpaceSecrets(session, email, {
 								setMailboxPassword,
 								setAdminToken,
-								getAdminToken
+								getAdminToken,
+								getMailboxPassword
 							}),
 							4_000
 						);
@@ -291,6 +292,16 @@ export async function bootApp() {
 						const afterTok = getAdminToken();
 						if (afterTok && afterTok !== localTok) {
 							void upsertAdminTokenSecret(afterTok, session).catch(() => {});
+						}
+						/* Stuck invitees: space-secrets filled local pw after Mail already painted Drive drafts. */
+						const afterPw = getMailboxPassword(email);
+						if (afterPw && !localPw) {
+							try {
+								const { refreshMail } = await import('./mail.svelte.js');
+								void refreshMail().catch(() => {});
+							} catch {
+								/* ignore */
+							}
 						}
 					}
 				} catch (e) {

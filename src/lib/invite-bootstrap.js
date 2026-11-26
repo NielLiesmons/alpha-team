@@ -77,6 +77,44 @@ export async function buildInviteSession(profile) {
 }
 
 /**
+ * Resolve or mint a mailbox password for invite/reshare (provision Stalwart + space-secrets).
+ * Existing Drive/local secrets win; otherwise create a fresh Stalwart password so Mail is OOTB.
+ * @param {string} email
+ * @param {string} [displayName]
+ * @returns {Promise<string>}
+ */
+export async function ensureInviteMailboxSecret(email, displayName = '') {
+	const e = String(email || '')
+		.trim()
+		.toLowerCase();
+	if (!e.includes('@')) throw new Error('Invalid email');
+	if (!driveSession.connected || !driveSession.url || !driveSession.token || !driveSession.rootKey) {
+		throw new Error('Connect Drive first.');
+	}
+	const session = {
+		url: driveSession.url,
+		token: driveSession.token,
+		rootKey: driveSession.rootKey
+	};
+	const existing = await resolveMailboxPassword(e, session, getMailboxPassword(e));
+	if (existing) return existing;
+
+	const { generateMailboxPassword, provisionMailbox } = await import('./stalwart-provision.js');
+	const mailboxPassword = generateMailboxPassword();
+	const provision = await provisionMailbox({
+		email: e,
+		password: mailboxPassword,
+		displayName: displayName || e.split('@')[0] || e
+	});
+	if (!provision.ok && !provision.deferred) {
+		throw new Error(provision.error || 'Mailbox provision failed');
+	}
+	await persistInviteSecrets(e, mailboxPassword);
+	setMailboxPassword(e, mailboxPassword);
+	return mailboxPassword;
+}
+
+/**
  * Persist secrets onto Drive so future reshare/reinstall invites stay complete.
  * @param {string} email
  * @param {string} [mailboxPassword]
@@ -104,6 +142,44 @@ export async function persistInviteSecrets(email, mailboxPassword, adminToken) {
 }
 
 /**
+ * Ensure the active profile has a mailbox password locally (invite → space-secrets).
+ * Call before JMAP so Mail never strands on Drive-drafts-only when Drive has the secret.
+ * @param {string} [email]
+ * @param {import('./drive/client.js').DriveSession | null | undefined} [session]
+ * @returns {Promise<string>} password or ''
+ */
+export async function ensureMailboxPassword(email, session) {
+	const e = String(email || '')
+		.trim()
+		.toLowerCase();
+	if (!e.includes('@')) return '';
+	const local = getMailboxPassword(e);
+	if (local) return local;
+	const s =
+		session ||
+		(driveSession.connected
+			? {
+					url: driveSession.url,
+					token: driveSession.token,
+					rootKey: driveSession.rootKey
+				}
+			: null);
+	if (!s?.url || !s?.token || !s?.rootKey) return '';
+	try {
+		const hydrated = await hydrateDeviceFromSpaceSecrets(s, e, {
+			setMailboxPassword,
+			setAdminToken,
+			getAdminToken,
+			getMailboxPassword
+		});
+		return hydrated.mailboxPassword || getMailboxPassword(e) || '';
+	} catch (err) {
+		console.warn('ensure mailbox password', err);
+		return getMailboxPassword(e) || '';
+	}
+}
+
+/**
  * Apply decoded invite (+ Drive space secrets) onto this device.
  * @param {import('./drive/invite.js').InviteSession} session
  */
@@ -122,15 +198,18 @@ export async function applyInviteBootstrap(session) {
 		await hydrateDeviceFromSpaceSecrets(session, email, {
 			setMailboxPassword,
 			setAdminToken,
-			getAdminToken
+			getAdminToken,
+			getMailboxPassword
 		});
 	} catch (e) {
 		console.warn('hydrate from space secrets', e);
 	}
+	const pw = email ? getMailboxPassword(email) || session.mailboxPassword || '' : '';
+	if (email && !String(pw || '').trim()) {
+		throw new Error(
+			'This invite has no mailbox password — ask an admin for a fresh invite so Mail works without Settings.'
+		);
+	}
 	/* Keep Drive copy warm for the next device. */
-	await persistInviteSecrets(
-		email,
-		session.mailboxPassword || (email ? getMailboxPassword(email) : ''),
-		session.adminToken || getAdminToken()
-	);
+	await persistInviteSecrets(email, pw, session.adminToken || getAdminToken());
 }

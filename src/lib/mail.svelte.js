@@ -874,7 +874,16 @@ export async function refreshMail() {
 
 	refreshMailInflight = (async () => {
 		const me = mailActorEmail();
-		const pw = me ? getMailboxPassword(me) : '';
+		let pw = me ? getMailboxPassword(me) : '';
+		/* Invite / reinstall: password may only live in Drive space-secrets until hydrate. */
+		if (me && !pw) {
+			try {
+				const { ensureMailboxPassword } = await import('./invite-bootstrap.js');
+				pw = await ensureMailboxPassword(me);
+			} catch (e) {
+				console.warn('mail mailbox hydrate', e);
+			}
+		}
 		const folder = mailView.folder;
 		/* Folder switch or cold start — paint that folder’s cache before network. */
 		if (folder !== paintedMailFolder || mailMessages.length === 0) {

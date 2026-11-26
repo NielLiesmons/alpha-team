@@ -4,7 +4,11 @@
 	import { actor } from '$lib/actor.svelte.js';
 	import { encodeInvite, inviteShareUrl } from '$lib/drive/invite.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
-	import { buildInviteSession, persistInviteSecrets } from '$lib/invite-bootstrap.js';
+	import {
+		buildInviteSession,
+		ensureInviteMailboxSecret,
+		persistInviteSecrets
+	} from '$lib/invite-bootstrap.js';
 	import {
 		canInvite,
 		canManageMembers,
@@ -243,15 +247,18 @@
 		}
 		reshareBusy = true;
 		try {
-			/* Existing account — full Team bootstrap (Drive + mailbox + pubs). */
+			/* Existing account — full Team bootstrap (Drive + mailbox + pubs).
+			 * Auto-provision if this member never got a space-secrets password. */
+			const mailboxPassword = await ensureInviteMailboxSecret(m.email, m.name);
 			const session = await buildInviteSession({
 				email: m.email,
 				displayName: m.name,
-				role: m.role === 'owner' ? 'admin' : m.role
+				role: m.role === 'owner' ? 'admin' : m.role,
+				mailboxPassword
 			});
 			if (!session.mailboxPassword) {
 				reshareMsg =
-					'No mailbox password on Drive for this member yet — open their profile Mail settings once, or create a fresh invite.';
+					'Could not provision a mailbox password for this member — check alpha-api Stalwart admin secret.';
 				return;
 			}
 			const payload = await encodeInvite(session, resharePass);
