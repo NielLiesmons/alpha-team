@@ -1101,8 +1101,11 @@
 		min-height: 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
-		/* Contain rubber-band so pin-snap cannot fight past-bottom bounce. */
-		overscroll-behavior-y: contain;
+		/*
+		 * none (not contain): iOS still rubber-bands past the last bubble with
+		 * contain, which feels like “scroll beyond feed bottom”.
+		 */
+		overscroll-behavior-y: none;
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
@@ -1133,12 +1136,12 @@
 		flex-direction: column;
 		width: 100%;
 		/*
-		 * Size to content (min-content), not the scrollport.
-		 * min-height:100% + justify flex-end inside a flex overflow:auto
-		 * scroller collapses scrollHeight≈clientHeight on mobile — feed
-		 * cannot scroll and chrome-scroll-fade never leaves 0 (a3f2896).
+		 * Stick short threads to the visual bottom WITHOUT min-height:100%.
+		 * Auto top margin absorbs free space in the flex scrollport; when the
+		 * stack is taller than the viewport the margin collapses to 0 and
+		 * scrollHeight grows with content (a3f2896’s min-height:100% broke that).
 		 */
-		min-height: min-content;
+		margin-top: auto;
 	}
 
 	.banner {
@@ -1185,8 +1188,6 @@
 		/* Tight like alpha-chat — stack groups use card margins, not a fat gap. */
 		gap: 0;
 		padding: 8px 0 12px;
-		/* Short threads: sit on the visual bottom without filling the scrollport. */
-		margin-top: auto;
 	}
 
 	.stack > .pub-panel {
