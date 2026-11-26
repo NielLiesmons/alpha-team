@@ -128,6 +128,41 @@ export const chatUi = $state({
 });
 
 /**
+ * Hold the optimistic tip out of feedBlocks for one paint, then release.
+ * ChatChannelPanel mounts a lightweight tip row while holdId is set so Send
+ * does not rebuild/reconcile the full ~300-bubble each-block on the sync path.
+ */
+export const chatSendPaint = $state({
+	/** @type {string | null} */
+	holdId: null,
+	/** @type {any | null} */
+	holdMsg: null
+});
+
+/**
+ * @param {any} msg
+ */
+function armSendPaintHold(msg) {
+	const id = String(msg?.id || '');
+	if (!id) return;
+	chatSendPaint.holdId = id;
+	chatSendPaint.holdMsg = msg;
+	const clear = () => {
+		if (chatSendPaint.holdId === id) {
+			chatSendPaint.holdId = null;
+			chatSendPaint.holdMsg = null;
+		}
+	};
+	if (typeof requestAnimationFrame === 'function') {
+		requestAnimationFrame(() => {
+			requestAnimationFrame(clear);
+		});
+	} else {
+		setTimeout(clear, 0);
+	}
+}
+
+/**
  * Ask CommentThread for `kind:id` to open (and optionally scroll to a comment).
  * @param {'task' | 'note' | 'project' | 'mail' | 'file' | string} type
  * @param {string} entityId
@@ -1430,7 +1465,12 @@ export async function postChatMessage(input) {
 		_outbox: outbox
 	};
 
-	/* Paint immediately — never wait on Drive tip for the bubble. */
+	/*
+	 * Paint immediately — never wait on Drive tip for the bubble.
+	 * Hold the local tip out of feedBlocks until after first paint so the
+	 * channel panel can mount one lightweight row instead of regrouping O(n).
+	 */
+	if (!isReaction) armSendPaintHold(optimistic);
 	chatFeed.unshift(optimistic);
 	if (!isEvent && input.ref && isCommentEntityType(input.ref.type)) {
 		const key = commentKey(/** @type {any} */ (input.ref.type), input.ref.id);

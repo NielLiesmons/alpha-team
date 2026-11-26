@@ -22,6 +22,7 @@
 		chatEphemeral,
 		chatFeed,
 		chatUi,
+		chatSendPaint,
 		chatPublicationRefKey,
 		chatRefMeta,
 		chatProjectBoxProps,
@@ -46,7 +47,11 @@
 		stopChatTipPoll
 	} from '$lib/chat-sync.svelte.js';
 	import { ui } from '$lib/workspace.svelte.js';
-	import { chatStackFlags } from '$lib/chat-stack.js';
+	import { chatStackFlags, continuesChatStack } from '$lib/chat-stack.js';
+	import {
+		createChannelFeedView,
+		syncChannelFeedView
+	} from '$lib/chat-feed-view.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import {
 		attachComposerClearPad,
@@ -119,79 +124,46 @@
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let highlightTimer = null;
 	/*
-	 * Read length + a tip id so splice merges and remounts always re-derive.
-	 * (Module $state arrays + helper filters have painted empty on first
-	 * navigate-in when only the array ref was touched.)
+	 * Identity-preserving feed view: tip unshift / reaction-only wakes reuse
+	 * prior block object identities so Svelte doesn’t reconcile ~300 rows on
+	 * Send. chatSendPaint.holdId keeps the optimistic tip out of feedBlocks for
+	 * one paint (lightweight overlay row) then incremental appendTip merges it.
 	 */
-	/*
-	 * chatFeed is newest-first. Walk oldest→newest without filter+spread+sort so
-	 * Send’s optimistic unshift doesn’t pay a full compare on the critical path.
-	 */
-	const chronological = $derived.by(() => {
+	const feedView = createChannelFeedView();
+	const feedApi = {
+		isChatStatusEvent,
+		chatPublicationRefKey,
+		chatRefMeta,
+		chatStackFlags
+	};
+	const feedSnap = $derived.by(() => {
+		mailTipCache; /* re-tip Mail panels when subjects hydrate */
 		const len = chatFeed.length;
 		const tip = len ? chatFeed[0]?.id : '';
 		void tip;
-		/** @type {any[]} */
-		const out = [];
-		for (let i = len - 1; i >= 0; i--) {
-			const m = chatFeed[i];
-			if (!m || m.kind === 'reaction') continue;
-			if ((m.channel_id || 'general') !== channelId) continue;
-			out.push(m);
-		}
-		return out;
+		const holdId = chatSendPaint.holdId;
+		void holdId;
+		return syncChannelFeedView(
+			feedView,
+			chatFeed,
+			channelId,
+			activePerson().email || '',
+			holdId,
+			feedApi
+		);
 	});
-	const stackMap = $derived(chatStackFlags(chronological, activePerson().email || ''));
+	const chronological = $derived(feedSnap.chronological);
+	const stackMap = $derived(feedSnap.stackMap);
+	const feedBlocks = $derived(feedSnap.feedBlocks);
+	const holdMsg = $derived(
+		chatSendPaint.holdMsg &&
+			(chatSendPaint.holdMsg.channel_id || 'general') === channelId
+			? chatSendPaint.holdMsg
+			: null
+	);
 	const presence = $derived(
 		(chatEphemeral || []).filter((e) => e.channel_id === channelId && e.state !== 'idle')
 	);
-
-	/**
-	 * @type {{
-	 *   type: 'panel' | 'plain' | 'status',
-	 *   key: string,
-	 *   refKey?: string | null,
-	 *   refMeta?: any,
-	 *   messages: any[]
-	 * }[]}
-	 */
-	const feedBlocks = $derived.by(() => {
-		mailTipCache; /* re-tip Mail panels when subjects hydrate */
-		/** @type {{ type: 'panel' | 'plain' | 'status', key: string, refKey?: string | null, refMeta?: any, messages: any[] }[]} */
-		const blocks = [];
-		for (const msg of chronological) {
-			if (isChatStatusEvent(msg)) {
-				blocks.push({
-					type: 'status',
-					key: `status-${msg.id}`,
-					messages: [msg]
-				});
-				continue;
-			}
-			const refKey = chatPublicationRefKey(msg);
-			const last = blocks[blocks.length - 1];
-			if (refKey && last?.type === 'panel' && last.refKey === refKey) {
-				last.messages.push(msg);
-				continue;
-			}
-			if (refKey) {
-				blocks.push({
-					type: 'panel',
-					key: `panel-${refKey}-${msg.id}`,
-					refKey,
-					refMeta: chatRefMeta(msg),
-					messages: [msg]
-				});
-			} else {
-				blocks.push({
-					type: 'plain',
-					key: `msg-${msg.id}`,
-					messages: [msg]
-				});
-			}
-		}
-		return blocks;
-	});
 
 	const TIP_ICON = 22;
 	const TIP_PFP = 20;
@@ -855,9 +827,9 @@
 				<p class="banner"><span class="err">{driveSession.error}</span></p>
 			{/if}
 
-			{#if chronological.length === 0 && (!chatUi.settled || chatUi.loading) && !presence.length}
+			{#if chronological.length === 0 && !holdMsg && (!chatUi.settled || chatUi.loading) && !presence.length}
 				<FeedSkeleton rows={6} />
-			{:else if chronological.length === 0 && !presence.length}
+			{:else if chronological.length === 0 && !holdMsg && !presence.length}
 				<div class="empty">
 					<p class="empty-title">{t('chat.noMessages')}</p>
 					<p class="empty-body">{t('chat.writeBelow')}</p>
@@ -1039,6 +1011,33 @@
 							{/each}
 						{/if}
 					{/each}
+					{#if holdMsg}
+						{@const prevHold = chronological.at(-1)}
+						{@const holdFirst =
+							!prevHold ||
+							!continuesChatStack(prevHold, holdMsg, activePerson().email || '')}
+						{@const holdIso = String(holdMsg.created_at || '')}
+						{@const prevHoldIso = prevHold ? String(prevHold.created_at || '') : ''}
+						{@const showHoldDay = Boolean(
+							holdIso && dayKey(holdIso) !== dayKey(prevHoldIso)
+						)}
+						{#if showHoldDay}
+							<div class="day-chip-row" role="separator" aria-label={formatDayChip(holdIso)}>
+								<span class="day-chip">{formatDayChip(holdIso)}</span>
+							</div>
+						{/if}
+						<div class="bubble-anchor" data-msg-id={holdMsg.id}>
+							<ChatFeedCard
+								msg={holdMsg}
+								parent={findChatParent(holdMsg.reply_to)}
+								when={formatWhen(holdMsg.created_at)}
+								onReply={() => startReply(holdMsg)}
+								onQuoteClick={scrollToQuoted}
+								stackFirst={holdFirst}
+								stackLast={true}
+							/>
+						</div>
+					{/if}
 					{#each presence as e (e.actor + e.state)}
 						<div
 							class="bubble-anchor typing-anchor"
