@@ -297,6 +297,7 @@ export default {
 	'settings.profileActions': 'Actions du profil',
 	'settings.collapseProfiles': 'Réduire les profils',
 	'settings.expandProfiles': 'Développer les profils',
+	'settings.selectProfile': 'Sélectionner',
 	'settings.editProfile': 'Modifier le profil',
 	'settings.shareInvite': 'Partager l’invitation',
 	'settings.invite': 'Inviter',

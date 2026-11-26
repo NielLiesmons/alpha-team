@@ -297,11 +297,12 @@ export default {
 	'settings.profileActions': 'Acciones del perfil',
 	'settings.collapseProfiles': 'Contraer perfiles',
 	'settings.expandProfiles': 'Expandir perfiles',
+	'settings.selectProfile': 'Seleccionar',
 	'settings.editProfile': 'Editar perfil',
 	'settings.shareInvite': 'Compartir invitación',
 	'settings.invite': 'Invitar',
 	'settings.switchTo': 'Cambiar a',
-	'settings.addProfile': 'Añadir perfil',
+	'settings.addProfile': 'Añadir un perfil',
 	'settings.otherDevices': 'Otros dispositivos',
 	'settings.otherDevicesDesc': 'Códigos de acceso para tus otros teléfonos y ordenadores',
 	'settings.otherDevicesHint':

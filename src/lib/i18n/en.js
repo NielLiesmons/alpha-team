@@ -295,11 +295,12 @@ export default {
 	'settings.profileActions': 'Profile actions',
 	'settings.collapseProfiles': 'Collapse profiles',
 	'settings.expandProfiles': 'Expand profiles',
+	'settings.selectProfile': 'Select',
 	'settings.editProfile': 'Edit profile',
 	'settings.shareInvite': 'Share invite',
 	'settings.invite': 'Invite',
 	'settings.switchTo': 'Switch to',
-	'settings.addProfile': 'Add profile',
+	'settings.addProfile': 'Add a profile',
 	'settings.otherDevices': 'Other devices',
 	'settings.otherDevicesDesc': 'Access codes for your other phones & computers',
 	'settings.otherDevicesHint':

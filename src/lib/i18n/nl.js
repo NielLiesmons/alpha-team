@@ -297,6 +297,7 @@ export default {
 	'settings.profileActions': 'Profielacties',
 	'settings.collapseProfiles': 'Profielen samenvouwen',
 	'settings.expandProfiles': 'Profielen uitvouwen',
+	'settings.selectProfile': 'Selecteren',
 	'settings.editProfile': 'Profiel bewerken',
 	'settings.shareInvite': 'Uitnodiging delen',
 	'settings.invite': 'Uitnodigen',
