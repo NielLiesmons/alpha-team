@@ -2,12 +2,13 @@
  * Imported by the Workbox-generated service worker (vite-pwa).
  * Handles Web Push + notification taps for Home Screen PWAs (incl. iOS 16.4+).
  *
- * alpha-sw-boot: v13 — seed alpha-pages-v11; adopt older pages caches; keep the
+ * alpha-sw-boot: v14 — seed alpha-pages-v11; adopt older pages caches; keep the
  * prior workbox precache so stale HTML still resolves hashed modules offline;
  * Cache-first immutable fallback across ALL caches (kills empty-pages /
  * module-mismatch “Still opening offline” loops).
  * Also seed + serve `/_app/env.js` (Kit writes it after Workbox glob — never
  * landed in precache; offline open blanked on that single dynamic import).
+ * Serve `/icons/space-icon.png` from alpha-space-brand-v1 for iOS Add to Home.
  * Push tip/mid handoff unchanged.
  */
 /* eslint-disable no-undef */
@@ -18,6 +19,9 @@ var SHELL_PATHS = ['/', '/chat'];
 /** Kit runtime env + version — not in workbox precache; required for offline boot. */
 var APP_META_PATHS = ['/_app/env.js', '/_app/version.json'];
 var APP_META_CACHE = 'alpha-app-meta-v1';
+/** Decrypted space brand PNG (written by space-brand.svelte.js). */
+var SPACE_ICON_PATH = '/icons/space-icon.png';
+var SPACE_ICON_CACHE = 'alpha-space-brand-v1';
 
 /**
  * Copy shell entries from older alpha-pages-* caches into the current one.
@@ -225,6 +229,29 @@ self.addEventListener('fetch', function (event) {
 		return;
 	}
 	if (url.origin !== self.location.origin) return;
+	/* Space brand icon for iOS apple-touch / Add to Home (never blob:). */
+	if (url.pathname === SPACE_ICON_PATH) {
+		event.respondWith(
+			(async function () {
+				try {
+					var cache = await caches.open(SPACE_ICON_CACHE);
+					var hit =
+						(await cache.match(req, { ignoreSearch: true })) ||
+						(await cache.match(SPACE_ICON_PATH, { ignoreSearch: true })) ||
+						(await cache.match(url.href, { ignoreSearch: true }));
+					if (hit) return hit;
+				} catch (e) {
+					/* fall through */
+				}
+				try {
+					return await fetch(req);
+				} catch (e2) {
+					return Response.error();
+				}
+			})()
+		);
+		return;
+	}
 	/* Kit env/version — CacheFirst across meta + any bucket (same as immutable). */
 	if (APP_META_PATHS.indexOf(url.pathname) !== -1) {
 		event.respondWith(matchImmutable(req));

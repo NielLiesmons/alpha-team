@@ -48,7 +48,7 @@ export default defineConfig({
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
 				/* Query busts stale importScripts after pages seed + immutable adopt. */
-				importScripts: ['/push-sw.js?v=13'],
+				importScripts: ['/push-sw.js?v=14'],
 				/*
 				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
 				 * After rsync deploys, that served stale HTML pointing at deleted hashed

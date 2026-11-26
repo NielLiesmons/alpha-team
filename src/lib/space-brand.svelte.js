@@ -16,12 +16,16 @@ export const BRAND_PATH = 'meta/brand.json';
 export const SPACE_ICON_PATH = 'meta/space-icon.png';
 export const SPACE_ICON_SIZE = 512;
 export const DEFAULT_SPACE_ICON = '/icons/icon-192.png';
+/** Same-origin path served from Cache API via push-sw (iOS Add to Home fetch). */
+export const SPACE_ICON_PUBLIC_PATH = '/icons/space-icon.png';
+export const SPACE_ICON_CACHE = 'alpha-space-brand-v1';
 
 /**
  * @typedef {{
  *   iconUrl: string,
  *   iconPath: string,
- *   ready: boolean
+ *   ready: boolean,
+ *   iconDataUrl: string
  * }} SpaceBrandState
  */
 
@@ -29,7 +33,8 @@ export const DEFAULT_SPACE_ICON = '/icons/icon-192.png';
 export const spaceBrand = $state({
 	iconUrl: DEFAULT_SPACE_ICON,
 	iconPath: '',
-	ready: false
+	ready: false,
+	iconDataUrl: ''
 });
 
 /** @type {string | null} */
@@ -117,6 +122,85 @@ export async function encodeSpaceIconPng(file, size = SPACE_ICON_SIZE) {
 }
 
 /**
+ * @param {Blob | ArrayBuffer | Uint8Array} data
+ * @returns {Promise<string>}
+ */
+async function toPngDataUrl(data) {
+	/** @type {Blob} */
+	let blob;
+	if (data instanceof Blob) {
+		blob = data.type ? data : new Blob([await data.arrayBuffer()], { type: 'image/png' });
+	} else {
+		blob = new Blob([data], { type: 'image/png' });
+	}
+	return await new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result || ''));
+		reader.onerror = () => reject(reader.error || new Error('icon read failed'));
+		reader.readAsDataURL(blob);
+	});
+}
+
+/**
+ * Publish decrypted space icon at a stable same-origin URL for iOS Add to Home.
+ * Safari cannot use blob: apple-touch-icon hrefs; Cache + SW serve this path.
+ * @param {ArrayBuffer | Uint8Array | Blob} data
+ */
+async function persistPublicSpaceIcon(data) {
+	if (typeof caches === 'undefined' || typeof location === 'undefined') return;
+	try {
+		const bytes =
+			data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : new Uint8Array(data);
+		if (!bytes.length) return;
+		const cache = await caches.open(SPACE_ICON_CACHE);
+		const url = new URL(SPACE_ICON_PUBLIC_PATH, location.origin).href;
+		await cache.put(
+			url,
+			new Response(bytes, {
+				headers: {
+					'Content-Type': 'image/png',
+					'Cache-Control': 'public, max-age=31536000'
+				}
+			})
+		);
+	} catch {
+		/* ignore — apple-touch still gets a data URL below */
+	}
+}
+
+/**
+ * Resolve a fetchable icon for apple-touch / manifest (never blob: for iOS).
+ * @param {string} href
+ * @returns {Promise<string>}
+ */
+async function resolveHomescreenIconHref(href) {
+	const raw = String(href || '').trim();
+	if (!raw) return DEFAULT_SPACE_ICON;
+	if (raw.startsWith('data:')) {
+		spaceBrand.iconDataUrl = raw;
+		return raw;
+	}
+	if (spaceBrand.iconDataUrl) return spaceBrand.iconDataUrl;
+	if (raw.startsWith('blob:') || raw.startsWith('http')) {
+		try {
+			const res = await fetch(raw);
+			if (!res.ok) throw new Error('icon fetch failed');
+			const blob = await res.blob();
+			const dataUrl = await toPngDataUrl(blob);
+			if (dataUrl.startsWith('data:')) {
+				spaceBrand.iconDataUrl = dataUrl;
+				await persistPublicSpaceIcon(blob);
+				return dataUrl;
+			}
+		} catch {
+			/* fall through */
+		}
+	}
+	if (raw.startsWith('/') || raw.startsWith('http')) return raw;
+	return DEFAULT_SPACE_ICON;
+}
+
+/**
  * Update document favicon + apple-touch + dynamic web manifest icons.
  * @param {string} [url]
  */
@@ -124,8 +208,8 @@ export function applyDocumentIcons(url) {
 	if (typeof document === 'undefined') return;
 	const href = String(url || spaceIconUrl() || DEFAULT_SPACE_ICON).trim() || DEFAULT_SPACE_ICON;
 
-	/** @param {string} rel @param {string} [sizes] @param {string} [type] */
-	function upsertLink(rel, sizes, type = 'image/png') {
+	/** @param {string} rel @param {string} [sizes] @param {string} [type] @param {string} [linkHref] */
+	function upsertLink(rel, sizes, type = 'image/png', linkHref = href) {
 		let el =
 			/** @type {HTMLLinkElement | null} */ (
 				document.head.querySelector(`link[rel="${rel}"]${sizes ? `[sizes="${sizes}"]` : ''}`)
@@ -138,12 +222,12 @@ export function applyDocumentIcons(url) {
 		}
 		if (sizes) el.sizes = sizes;
 		el.type = type;
-		el.href = href;
+		el.href = linkHref;
 	}
 
+	/* Tab favicons can keep blob:/http — iOS homescreen cannot. */
 	upsertLink('icon', '192x192');
 	upsertLink('icon', '512x512');
-	upsertLink('apple-touch-icon');
 
 	const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
 	const appName = document.querySelector('meta[name="application-name"]');
@@ -151,44 +235,95 @@ export function applyDocumentIcons(url) {
 	if (appleTitle) appleTitle.setAttribute('content', name);
 	if (appName) appName.setAttribute('content', name);
 
-	try {
-		const manifest = {
-			name,
-			short_name: name.slice(0, 12),
-			description: 'Team space',
-			lang: 'en',
-			dir: 'ltr',
-			start_url: '/',
-			scope: '/',
-			id: '/',
-			display: 'standalone',
-			display_override: ['standalone', 'minimal-ui'],
-			orientation: 'any',
-			background_color: '#090909',
-			theme_color: '#090909',
-			categories: ['productivity', 'social', 'utilities'],
-			icons: [
-				{ src: href, sizes: '192x192', type: 'image/png', purpose: 'any' },
-				{ src: href, sizes: '512x512', type: 'image/png', purpose: 'any' },
-				{ src: href, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-			]
-		};
-		const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
-		const next = URL.createObjectURL(blob);
-		let link = /** @type {HTMLLinkElement | null} */ (
-			document.head.querySelector('link[rel="manifest"]')
-		);
-		if (!link) {
-			link = document.createElement('link');
-			link.rel = 'manifest';
-			document.head.appendChild(link);
+	const paintManifest = (/** @type {string} */ iconSrc) => {
+		/*
+		 * Homescreen icon must not be blob: — iOS Add to Home cannot fetch it.
+		 * Prefer data: (iOS 26+ / embedded) and same-origin Cache/SW path.
+		 */
+		const publicSrc =
+			typeof location !== 'undefined' &&
+			(iconSrc.startsWith('data:') || spaceBrand.iconDataUrl)
+				? new URL(SPACE_ICON_PUBLIC_PATH, location.origin).href
+				: null;
+		/* Primary: data URL when we have one; else public cache path; else href. */
+		const appleHref = iconSrc.startsWith('data:')
+			? iconSrc
+			: publicSrc || iconSrc;
+		upsertLink('apple-touch-icon', '180x180', 'image/png', appleHref);
+		/* Secondary public path so system HTTPS fetches can hit the SW cache. */
+		if (publicSrc && appleHref !== publicSrc) {
+			let el = /** @type {HTMLLinkElement | null} */ (
+				document.head.querySelector('link[rel="apple-touch-icon"][data-alpha-public="1"]')
+			);
+			if (!el) {
+				el = document.createElement('link');
+				el.rel = 'apple-touch-icon';
+				el.dataset.alphaPublic = '1';
+				el.sizes = '180x180';
+				el.type = 'image/png';
+				document.head.appendChild(el);
+			}
+			el.href = publicSrc;
 		}
-		link.href = next;
-		if (manifestBlobUrl) URL.revokeObjectURL(manifestBlobUrl);
-		manifestBlobUrl = next;
-	} catch {
-		/* ignore */
+
+		const manifestIcon = iconSrc.startsWith('data:')
+			? iconSrc
+			: publicSrc || iconSrc;
+
+		try {
+			const manifest = {
+				name,
+				short_name: name.slice(0, 12),
+				description: 'Team space',
+				lang: 'en',
+				dir: 'ltr',
+				start_url: '/',
+				scope: '/',
+				id: '/',
+				display: 'standalone',
+				display_override: ['standalone', 'minimal-ui'],
+				orientation: 'any',
+				background_color: '#090909',
+				theme_color: '#090909',
+				categories: ['productivity', 'social', 'utilities'],
+				icons: [
+					{ src: manifestIcon, sizes: '192x192', type: 'image/png', purpose: 'any' },
+					{ src: manifestIcon, sizes: '512x512', type: 'image/png', purpose: 'any' },
+					{ src: manifestIcon, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+				]
+			};
+			const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+			const next = URL.createObjectURL(blob);
+			let link = /** @type {HTMLLinkElement | null} */ (
+				document.head.querySelector('link[rel="manifest"]')
+			);
+			if (!link) {
+				link = document.createElement('link');
+				link.rel = 'manifest';
+				document.head.appendChild(link);
+			}
+			link.href = next;
+			if (manifestBlobUrl) URL.revokeObjectURL(manifestBlobUrl);
+			manifestBlobUrl = next;
+		} catch {
+			/* ignore */
+		}
+	};
+
+	/* Sync path for bundled / http defaults; async upgrade for Drive blob URLs. */
+	if (href.startsWith('blob:')) {
+		paintManifest(spaceBrand.iconDataUrl || DEFAULT_SPACE_ICON);
+		void resolveHomescreenIconHref(href).then((iconSrc) => {
+			if (iconSrc) paintManifest(iconSrc);
+		});
+		return;
 	}
+	if (href.startsWith('data:')) {
+		spaceBrand.iconDataUrl = href;
+		paintManifest(href);
+		return;
+	}
+	paintManifest(href);
 }
 
 /**
@@ -198,6 +333,7 @@ export function syncSpaceBrandDefaults() {
 	if (spaceBrand.iconPath) return;
 	const next = defaultSpaceIconUrl();
 	spaceBrand.iconUrl = next;
+	spaceBrand.iconDataUrl = '';
 	space.iconUrl = next;
 	applyDocumentIcons(next);
 }
@@ -282,10 +418,13 @@ export async function setSpaceIcon(file) {
 		{ path: BRAND_PATH, kind: 'blob', plaintext: JSON.stringify(brand, null, 2) }
 	]);
 	spaceBrand.iconPath = SPACE_ICON_PATH;
+	const dataUrl = await toPngDataUrl(png);
+	spaceBrand.iconDataUrl = dataUrl;
+	await persistPublicSpaceIcon(png);
 	const url = await ensureIconObjectUrl(SPACE_ICON_PATH);
-	const next = url || URL.createObjectURL(new Blob([png], { type: 'image/png' }));
+	const next = url || dataUrl || URL.createObjectURL(new Blob([png], { type: 'image/png' }));
 	spaceBrand.iconUrl = next;
 	space.iconUrl = next;
-	applyDocumentIcons(next);
+	applyDocumentIcons(dataUrl || next);
 	return SPACE_ICON_PATH;
 }
