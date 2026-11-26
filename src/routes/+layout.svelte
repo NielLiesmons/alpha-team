@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { pwaInfo } from 'virtual:pwa-info';
 	import { actor } from '$lib/actor.svelte.js';
-	import { appBoot, bootApp } from '$lib/boot.svelte.js';
+	import { appBoot, bootApp, unlockShellFromLocalSession } from '$lib/boot.svelte.js';
 	import { initBrand } from '$lib/brand.svelte.js';
 	import { driveSession } from '$lib/drive/session.svelte.js';
 	import { initChatWakeListeners } from '$lib/chat-sync.svelte.js';
@@ -21,6 +21,18 @@
 	import WelcomeGate from '$lib/components/WelcomeGate.svelte';
 
 	let { children } = $props();
+
+	/*
+	 * Returning PWA: unlock AppShell from localStorage BEFORE first paint of BootSplash.
+	 * Airplane mode / warm opens must not wait on Drive or async bootApp.
+	 */
+	if (typeof window !== 'undefined') {
+		try {
+			unlockShellFromLocalSession();
+		} catch {
+			/* ignore */
+		}
+	}
 
 	const signedIn = $derived(Boolean(driveSession.connected && actor.email));
 	const onboarding = $derived(Boolean(appBoot.onboarding?.active));

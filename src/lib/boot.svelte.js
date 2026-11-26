@@ -2,6 +2,8 @@
  * App boot + signed-in gate.
  * Signed in = Drive session on this device + mailbox email (“I am”).
  * Local-first: hydrate IDB/LS caches before listsReady; skip network when offline.
+ * Returning PWAs unlock the shell synchronously from localStorage so BootSplash
+ * never blocks airplane-mode / warm opens.
  */
 
 import { actor, loadActor } from './actor.svelte.js';
@@ -68,6 +70,60 @@ function isOffline() {
 }
 
 /**
+ * Sync path: restore Drive session + actor from localStorage and unlock the shell
+ * before any await / network. Returning PWAs skip BootSplash entirely.
+ * @returns {boolean} true when signed-in shell may paint immediately
+ */
+export function unlockShellFromLocalSession() {
+	try {
+		loadActor();
+		loadDeviceProfiles();
+		loadSessionFromStorage();
+	} catch {
+		/* ignore */
+	}
+	if (!activeSessionSafe() || !actor.email) return false;
+	/* Local chat snapshot before first Chat paint (push mid scroll + warm feed). */
+	try {
+		hydrateChatFeedFromCache();
+	} catch {
+		/* ignore */
+	}
+	try {
+		hydratePersonCursorsLocal();
+	} catch {
+		/* ignore */
+	}
+	try {
+		hydrateMembersFromCache(activeSession());
+	} catch {
+		/* ignore */
+	}
+	ui.source = 'drive';
+	driveSession.loading = false;
+	appBoot.error = '';
+	appBoot.stuck = false;
+	appBoot.ready = true;
+	return true;
+}
+
+/**
+ * Best-effort network work with a hard deadline — never block shell / offline.
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @returns {Promise<T | undefined>}
+ */
+function withTimeout(promise, ms) {
+	return Promise.race([
+		Promise.resolve(promise).catch(() => undefined),
+		new Promise((resolve) => {
+			setTimeout(() => resolve(undefined), ms);
+		})
+	]);
+}
+
+/**
  * Restore localStorage + cache, unlock UI, then refresh Drive in background when online.
  * Call once from the root layout.
  */
@@ -96,6 +152,7 @@ export async function bootApp() {
 		} catch {
 			/* ignore */
 		}
+		/* Idempotent if unlockShellFromLocalSession already ran. */
 		loadActor();
 		loadDeviceProfiles();
 		loadSessionFromStorage();
@@ -186,49 +243,59 @@ export async function bootApp() {
 			/* ignore */
 		}
 
-		/* After Drive is up, sync space secrets so Mail/pubs work without Settings. */
-		try {
-			const email = String(actor.email || '')
-				.trim()
-				.toLowerCase();
-			if (email.includes('@')) {
-				const { hydrateDeviceFromSpaceSecrets, upsertAdminTokenSecret, upsertMailboxSecret } =
-					await import('./drive/space-secrets.js');
-				const { getMailboxPassword, setMailboxPassword } = await import('./jmap-mail.js');
-				const { getAdminToken, setAdminToken } = await import('./mail-api.js');
-				const session = activeSession();
-				const localPw = getMailboxPassword(email);
-				const localTok = getAdminToken();
-				/* Push this device’s secrets up so invites/reinstall stay complete.
-				 * PUBLIC_ALPHA_API_TOKEN (via getAdminToken) also seeds space-secrets. */
-				if (localPw) void upsertMailboxSecret(email, localPw, session).catch(() => {});
-				if (localTok) void upsertAdminTokenSecret(localTok, session).catch(() => {});
-				await hydrateDeviceFromSpaceSecrets(session, email, {
-					setMailboxPassword,
-					setAdminToken,
-					getAdminToken
-				});
-				/* After Drive hydrate, push again if we learned a token. */
-				const afterTok = getAdminToken();
-				if (afterTok && afterTok !== localTok) {
-					void upsertAdminTokenSecret(afterTok, session).catch(() => {});
-				}
-			}
-		} catch (e) {
-			console.warn('space secrets hydrate', e);
-		}
-
+		/*
+		 * Offline / local-first: never await Drive. Shell + caches are enough;
+		 * Notes/Tasks stay editable; chat send may fail until reconnect.
+		 */
 		if (isOffline()) {
 			driveSession.syncing = false;
+			driveSession.loading = false;
+			/* Empty IDB is still “ready” offline — show empty states, not forever skeleton. */
+			ui.entitiesReady = true;
 			return;
 		}
 
+		/* Online: secrets + feed catch-up in background — do not block shell. */
 		void (async () => {
 			try {
+				try {
+					const email = String(actor.email || '')
+						.trim()
+						.toLowerCase();
+					if (email.includes('@')) {
+						const { hydrateDeviceFromSpaceSecrets, upsertAdminTokenSecret, upsertMailboxSecret } =
+							await import('./drive/space-secrets.js');
+						const { getMailboxPassword, setMailboxPassword } = await import('./jmap-mail.js');
+						const { getAdminToken, setAdminToken } = await import('./mail-api.js');
+						const session = activeSession();
+						const localPw = getMailboxPassword(email);
+						const localTok = getAdminToken();
+						/* Push this device’s secrets up so invites/reinstall stay complete.
+						 * PUBLIC_ALPHA_API_TOKEN (via getAdminToken) also seeds space-secrets. */
+						if (localPw) void upsertMailboxSecret(email, localPw, session).catch(() => {});
+						if (localTok) void upsertAdminTokenSecret(localTok, session).catch(() => {});
+						await withTimeout(
+							hydrateDeviceFromSpaceSecrets(session, email, {
+								setMailboxPassword,
+								setAdminToken,
+								getAdminToken
+							}),
+							4_000
+						);
+						/* After Drive hydrate, push again if we learned a token. */
+						const afterTok = getAdminToken();
+						if (afterTok && afterTok !== localTok) {
+							void upsertAdminTokenSecret(afterTok, session).catch(() => {});
+						}
+					}
+				} catch (e) {
+					console.warn('space secrets hydrate', e);
+				}
+
 				/* Session is up — pull Primary approvals from Drive so phone/desktop match. */
 				try {
 					const { syncApprovedContactsFromDrive } = await import('./mail-contacts.svelte.js');
-					await syncApprovedContactsFromDrive();
+					await withTimeout(syncApprovedContactsFromDrive(), 4_000);
 				} catch (e) {
 					console.warn('mail approved sync', e);
 				}
