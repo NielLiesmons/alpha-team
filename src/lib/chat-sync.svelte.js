@@ -24,7 +24,11 @@ import { activeSession } from './drive/session.svelte.js';
 const POLL_MS = 500;
 /** Coalesce bursts without delaying tip-change detection by a full poll. */
 const PULL_COALESCE_MS = 80;
-/** Keep read-receipt tip writes off the message tip critical path. */
+/**
+ * Keep read-receipt tip writes off the message tip critical path.
+ * markIncomingMessagesRead also skips `_hint` rows so peer paint from WS
+ * cannot CAS-fight the sender’s still-in-flight message tip.
+ */
 const READ_RECEIPT_DELAY_MS = 2_500;
 
 let pollTimer = /** @type {ReturnType<typeof setTimeout> | null} */ (null);

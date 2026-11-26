@@ -2332,9 +2332,24 @@ async function orderFeedIdsNewestFirst(session, dir, ids, createdAtById = {}) {
 
 /**
  * Serialize chat mailbox appends at the entities layer (UI may fire concurrent sends).
+ * Messages share this chain; receipts/retracts/tombstones go straight to
+ * appendMailboxEntry’s priority queue so they cannot FIFO-starve a send.
  * @type {Promise<unknown>}
  */
 let chatTipWriteChain = Promise.resolve();
+
+/**
+ * @param {() => Promise<any>} fn
+ * @returns {Promise<any>}
+ */
+function enqueueChatMessageTipWrite(fn) {
+	const p = chatTipWriteChain.then(fn, fn);
+	chatTipWriteChain = p.then(
+		() => undefined,
+		() => undefined
+	);
+	return p;
+}
 
 /**
  * @param {import('./client.js').DriveSession} session
@@ -2764,7 +2779,8 @@ async function listCommentIdsFromDir(session, dir, type, entityId) {
  *   knownFeedIds?: string[],
  *   knownCommentIds?: string[],
  *   onLeafStored?: (msg: any) => void,
- *   onTipWritten?: (tip: string) => void
+ *   onTipWritten?: (tip: string) => void,
+ *   onAppendProgress?: () => void
  * }} [opts]
  */
 export async function createChatMessage(session, input, opts = {}) {
@@ -2879,9 +2895,14 @@ export async function createChatMessage(session, input, opts = {}) {
 		: Promise.resolve();
 
 	/* prev tip read inside append at chain turn — keeps 1 RTT when warm. */
-	const runAppend = () => appendMailboxEntry(session, { kind: 'message', message: msg });
+	const runAppend = () =>
+		appendMailboxEntry(
+			session,
+			{ kind: 'message', message: msg },
+			{ onProgress: opts.onAppendProgress }
+		);
 	const [tipAfter] = await Promise.all([
-		(chatTipWriteChain = chatTipWriteChain.then(runAppend, runAppend)),
+		enqueueChatMessageTipWrite(runAppend),
 		commentsPrep
 	]);
 
@@ -2975,20 +2996,15 @@ export async function markChatMessagesRead(session, messages, readerEmail) {
 		});
 	}
 	if (!ids.length) return [];
-	await (chatTipWriteChain = chatTipWriteChain.then(
-		() =>
-			appendMailboxEntry(session, {
-				kind: 'receipts',
-				reader,
-				message_ids: ids
-			}),
-		() =>
-			appendMailboxEntry(session, {
-				kind: 'receipts',
-				reader,
-				message_ids: ids
-			})
-	));
+	/*
+	 * Do not FIFO behind/ ahead of message tip writes on chatTipWriteChain —
+	 * client priority queue already yields receipts to in-flight/queued messages.
+	 */
+	await appendMailboxEntry(session, {
+		kind: 'receipts',
+		reader,
+		message_ids: ids
+	});
 	return updated;
 }
 
@@ -3001,10 +3017,7 @@ export async function markChatMessagesRead(session, messages, readerEmail) {
 export async function deleteChatMessage(session, id, _opts = {}) {
 	const sid = String(id || '').trim();
 	if (!sid || sid.startsWith('local-')) return '';
-	const tip = await (chatTipWriteChain = chatTipWriteChain.then(
-		() => appendMailboxEntry(session, { kind: 'retract', message_id: sid }),
-		() => appendMailboxEntry(session, { kind: 'retract', message_id: sid })
-	));
+	const tip = await appendMailboxEntry(session, { kind: 'retract', message_id: sid });
 	return String(tip || '');
 }
 
@@ -3096,22 +3109,12 @@ export async function softDeleteChatMessage(session, id, opts = {}) {
 		...(prev?.ref ? { ref: prev.ref } : {}),
 		...(prev?.reply_to ? { reply_to: prev.reply_to } : {})
 	};
-	await (chatTipWriteChain = chatTipWriteChain.then(
-		() =>
-			appendMailboxEntry(session, {
-				kind: 'tombstone',
-				message_id: sid,
-				deleted_at: deletedAt,
-				author: tombstone.author
-			}),
-		() =>
-			appendMailboxEntry(session, {
-				kind: 'tombstone',
-				message_id: sid,
-				deleted_at: deletedAt,
-				author: tombstone.author
-			})
-	));
+	await appendMailboxEntry(session, {
+		kind: 'tombstone',
+		message_id: sid,
+		deleted_at: deletedAt,
+		author: tombstone.author
+	});
 	/* Best-effort: remove voice / pic / video blobs after the tombstone lands. */
 	try {
 		await deleteChatAttachments(session, prev?.attachments);

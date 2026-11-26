@@ -58,10 +58,56 @@ const namedTipInflight = new Map();
 let tipWriteChain = Promise.resolve();
 
 /**
- * Serialize chat mailbox appends (messages, receipts, soft-deletes).
- * @type {Promise<unknown>}
+ * Priority mailbox tip queue — messages jump ahead of pending receipts /
+ * retracts / tombstones so mark-read CAS cannot starve an in-flight send.
+ * In-flight op still finishes (cannot preempt mid-CAS); priority is among queued.
+ * @type {{
+ *   kind: string,
+ *   run: () => Promise<string>,
+ *   resolve: (v: string) => void,
+ *   reject: (e: any) => void
+ * }[]}
  */
-let chatTipWriteChainLocal = Promise.resolve();
+let chatTipQueue = [];
+let chatTipPumping = false;
+
+/**
+ * @param {string} kind
+ * @param {() => Promise<string>} run
+ * @returns {Promise<string>}
+ */
+function enqueueChatTipOp(kind, run) {
+	return new Promise((resolve, reject) => {
+		const item = { kind: String(kind || ''), run, resolve, reject };
+		if (item.kind === 'message') {
+			const i = chatTipQueue.findIndex((q) => q.kind !== 'message');
+			if (i === -1) chatTipQueue.push(item);
+			else chatTipQueue.splice(i, 0, item);
+		} else {
+			chatTipQueue.push(item);
+		}
+		void pumpChatTipOps();
+	});
+}
+
+async function pumpChatTipOps() {
+	if (chatTipPumping) return;
+	chatTipPumping = true;
+	try {
+		while (chatTipQueue.length) {
+			const next = chatTipQueue.shift();
+			if (!next) break;
+			try {
+				next.resolve(await next.run());
+			} catch (e) {
+				next.reject(e);
+			}
+		}
+	} finally {
+		chatTipPumping = false;
+		if (chatTipQueue.length) void pumpChatTipOps();
+	}
+}
 
 /** Named tip for the chat mailbox head pointer. */
 export const CHAT_TIP_NAME = 'chat';
@@ -483,19 +529,33 @@ function materializeMailboxMessages(newestFirst, limit, seedMessages = []) {
 
 /**
  * Append-once mailbox entry + CAS tip advance in one Drive RTT.
+ * Messages get more CAS retries + tip re-read on 409; receipts stay short-lived
+ * so they cannot exhaust the sender’s message tip under peer mark-read pressure.
  * @param {DriveSession} session
  * @param {any} entry — { kind:'message', message } | receipts | tombstone | retract
- * @param {{ prevTip?: string }} [opts]
+ * @param {{ prevTip?: string, onProgress?: () => void }} [opts]
  * @returns {Promise<string>} new tip hash
  */
 export async function appendMailboxEntry(session, entry, opts = {}) {
 	const root = parseRootKey(session.rootKey);
+	const kind = String(entry?.kind || '');
+	const isMessage = kind === 'message';
+	/* Messages must win over receipt chatter; receipts soft-fail cheaply. */
+	const maxAttempts = isMessage ? 16 : 4;
 	const run = async () => {
 		let prev =
 			opts.prevTip != null ? String(opts.prevTip) : peekCachedChatTip(session) || '';
 		let rtts = 0;
 		const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-		for (let attempt = 0; attempt < 4; attempt++) {
+		const bump = () => {
+			try {
+				opts.onProgress?.();
+			} catch {
+				/* UI progress must never break append */
+			}
+		};
+		bump();
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			const envelope = {
 				schema: 'alpha.chat_mail/1',
 				prev: prev || null,
@@ -519,6 +579,7 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 				}
 			);
 			rtts += 1;
+			bump();
 			if (res.status === 204 || res.ok) {
 				mailboxEntryCache.set(hash, envelope);
 				rememberMailboxTip(session, hash);
@@ -556,11 +617,11 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 					const next = (mailboxFeedCache.messages || []).map((m) => {
 						const id = String(m?.id || '');
 						if (!id || !ids.has(id)) return m;
-						const prev = Array.isArray(m.read_by)
+						const prevRead = Array.isArray(m.read_by)
 							? m.read_by.map((e) => String(e).toLowerCase())
 							: [];
-						if (!reader || prev.includes(reader)) return m;
-						return { ...m, read_by: [...prev, reader], delivery: 'read' };
+						if (!reader || prevRead.includes(reader)) return m;
+						return { ...m, read_by: [...prevRead, reader], delivery: 'read' };
 					});
 					rememberMailboxFeed(session, hash, next, {
 						complete: Boolean(mailboxFeedCache.complete),
@@ -578,7 +639,7 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 						rtts,
 						tipBytes: ct.length,
 						attempt,
-						kind: String(entry?.kind || '')
+						kind
 					});
 				}
 				return hash;
@@ -591,17 +652,57 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 				} catch {
 					current = '';
 				}
-				prev = current;
+				/* Always re-read tip when 409 body is empty — never retry with stale prev. */
+				if (!current) {
+					try {
+						current = String((await getNamedTip(session, CHAT_TIP_NAME)) || '');
+					} catch {
+						current = '';
+					}
+				}
+				prev = current || prev;
+				bump();
+				/* Brief backoff so peer receipt storms don't burn all attempts instantly. */
+				if (isMessage && attempt >= 2) {
+					const ms = Math.min(40 * (attempt - 1), 250);
+					await new Promise((r) => setTimeout(r, ms));
+				}
 				continue;
 			}
 			const text = await res.text().catch(() => '');
 			throw new Error(`mailbox append: ${res.status} ${text}`.trim());
 		}
+		/*
+		 * Last resort: if the message tip actually landed (204 lost / raced),
+		 * treat as success so the UI never shows false tap-to-retry.
+		 */
+		if (isMessage && entry?.message?.id) {
+			const mid = String(entry.message.id);
+			try {
+				const tipNow = String((await getNamedTip(session, CHAT_TIP_NAME)) || '');
+				if (tipNow) {
+					const { messages } = await loadMailboxMessages(session, {
+						tip: tipNow,
+						limit: 40
+					});
+					if ((messages || []).some((m) => String(m?.id || '') === mid)) {
+						rememberMailboxTip(session, tipNow);
+						if (typeof console !== 'undefined' && console.debug) {
+							console.debug('[chat-latency] appendMailbox healed after CAS', {
+								id: mid.slice(0, 8),
+								tip: tipNow.slice(0, 12)
+							});
+						}
+						return tipNow;
+					}
+				}
+			} catch {
+				/* fall through to exhaust */
+			}
+		}
 		throw new Error('mailbox append CAS exhausted');
 	};
-	return /** @type {Promise<string>} */ (
-		(chatTipWriteChainLocal = chatTipWriteChainLocal.then(run, run))
-	);
+	return enqueueChatTipOp(kind, run);
 }
 
 /**

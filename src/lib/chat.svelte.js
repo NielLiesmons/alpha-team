@@ -708,10 +708,23 @@ function mergeFeedRows(list, prev) {
 					})
 				};
 				delete merged._hint;
+				delete merged._failed;
+				delete merged._pending;
+				delete merged._local;
+				if (!merged.delivery || merged.delivery === 'sending' || merged.delivery === 'failed') {
+					merged.delivery = 'sent';
+				}
 				byId.set(id, merged);
-			} else if (m._hint) {
+			} else if (m._hint || m._failed || m._pending) {
+				/* Tip-wake heals hint ghosts + soft watchdog fails once mailbox has the id. */
 				const next = { ...server };
 				delete next._hint;
+				delete next._failed;
+				delete next._pending;
+				delete next._local;
+				if (!next.delivery || next.delivery === 'sending' || next.delivery === 'failed') {
+					next.delivery = 'sent';
+				}
 				byId.set(id, next);
 			}
 			continue;
@@ -1470,7 +1483,14 @@ export async function markIncomingMessagesRead() {
 	if (!session || !me || chatUi.posting) return '';
 	const channel = chatUi.activeChannelId || 'general';
 	const targets = chatFeed.filter((m) => {
-		if (!m?.id || String(m.id).startsWith('local-')) return false;
+		if (!m?.id || String(m.id).startsWith('local-') || String(m.id).startsWith('hint-')) {
+			return false;
+		}
+		/*
+		 * Never receipt hint-only rows — that CAS-fights the sender’s still-in-flight
+		 * message tip append (peer already painted from WS; tip not durable yet).
+		 */
+		if (m._hint || m._pending || m._failed) return false;
 		if (m.kind === 'reaction' || m.kind === 'event') return false;
 		if ((m.channel_id || 'general') !== channel) return false;
 		const author = String(m.author || '')
@@ -1681,15 +1701,28 @@ export async function postChatMessage(input) {
 		}
 		/** @type {string | null} */
 		let serverId = null;
-		/** Tip congestion used to leave bubbles “sending” forever — surface retry. */
+		/**
+		 * Tip congestion used to leave bubbles “sending” forever — surface retry.
+		 * Sliding deadline: CAS retries / leaf store bump progress so we do not
+		 * false-fail while append is still making forward progress.
+		 */
 		const SEND_WATCHDOG_MS = 45_000;
 		let settled = false;
-		const watchdog = setTimeout(() => {
+		let lastProgressAt = Date.now();
+		const bumpSendProgress = () => {
+			lastProgressAt = Date.now();
+		};
+		const watchdog = setInterval(() => {
 			if (settled) return;
+			if (Date.now() - lastProgressAt < SEND_WATCHDOG_MS) return;
 			const idx = findSendIndex(serverId);
 			if (idx < 0) return;
 			const prevRow = chatFeed[idx];
 			if (prevRow?.delivery === 'sent' || prevRow?._failed) return;
+			/*
+			 * Soft-fail only — if tip later lands, settleFrom / tip-wake heal clears
+			 * _failed. Never set settled=true here or a late success would be ignored.
+			 */
 			chatFeed[idx] = {
 				...prevRow,
 				_pending: false,
@@ -1700,7 +1733,7 @@ export async function postChatMessage(input) {
 				_outbox: prevRow._outbox || outbox
 			};
 			writeChatCache(chatFeed);
-		}, SEND_WATCHDOG_MS);
+		}, 5_000);
 		try {
 			/** @type {any[]} */
 			let attachments = Array.isArray(input.attachments) ? input.attachments : [];
@@ -1746,6 +1779,7 @@ export async function postChatMessage(input) {
 
 			/** Leaf landed — keep “sending” until tip/index write finishes. */
 			function adoptLeaf(/** @type {any} */ leafMsg) {
+				bumpSendProgress();
 				serverId = String(leafMsg.id || '') || null;
 				const idx = findSendIndex(serverId);
 				if (idx < 0) return;
@@ -1779,7 +1813,7 @@ export async function postChatMessage(input) {
 				writeChatCache(chatFeed);
 			}
 
-			/** Tip + feed.json committed — only now show ✓. */
+			/** Tip + feed.json committed — only now show ✓. Heals soft watchdog fails. */
 			function settleFrom(/** @type {any} */ created) {
 				const settledAtt = Array.isArray(created.attachments)
 					? created.attachments.map((a) => ({
@@ -1805,6 +1839,7 @@ export async function postChatMessage(input) {
 					_settledAt: new Date().toISOString()
 				};
 				delete settledMsg._localId;
+				delete settledMsg._hint;
 				/* Keep _outbox until a refresh sees the id on tip — enables retry if tip lied. */
 				feedFetchGen += 1;
 				const idx = findSendIndex(String(created.id || '') || serverId);
@@ -1840,6 +1875,7 @@ export async function postChatMessage(input) {
 				{
 					knownFeedIds: knownFeedIds().filter((id) => id !== localId),
 					knownCommentIds: knownComments,
+					onAppendProgress: bumpSendProgress,
 					onLeafStored: (leafMsg) => {
 						const leaf = {
 							...leafMsg,
@@ -1861,6 +1897,7 @@ export async function postChatMessage(input) {
 					/* Tip durable — settle ✓ here (before createChatMessage returns / putPaths). */
 					onTipWritten: (tip) => {
 						tipWritten = String(tip || '');
+						bumpSendProgress();
 						const wakeMsg = leafForWake || {
 							id: serverId,
 							author,
@@ -1905,25 +1942,73 @@ export async function postChatMessage(input) {
 				}).catch((e) => console.warn('chat push', e));
 			}
 		} catch (e) {
-			settled = true;
-			console.error('[chat] send persist failed', e);
-			const idx = findSendIndex(serverId);
-			if (idx >= 0) {
-				const prev = chatFeed[idx];
-				chatFeed[idx] = {
-					...prev,
-					_pending: false,
-					_failed: true,
-					delivery: 'failed',
-					_local: true,
-					_localId: localId,
-					_outbox: prev._outbox || outbox,
-					_failReason: e instanceof Error ? e.message : String(e)
-				};
+			/*
+			 * Before painting tap-to-retry: if tip already has our id (CAS exhausted
+			 * after a silent land, or heal path), settle ✓ instead of failing.
+			 */
+			let healed = false;
+			if (serverId && session) {
+				try {
+					const { loadMailboxMessages } = await import('./drive/client.js');
+					const { messages } = await loadMailboxMessages(session, { limit: 40 });
+					const hit = (messages || []).find((m) => String(m?.id || '') === serverId);
+					if (hit) {
+						const idxHeal = findSendIndex(serverId);
+						const prevHeal = idxHeal >= 0 ? chatFeed[idxHeal] : null;
+						const healedMsg = {
+							...(prevHeal || {}),
+							...hit,
+							id: hit.id,
+							channel_id: hit.channel_id || channelId,
+							delivery: 'sent',
+							read_by: Array.isArray(hit.read_by) ? hit.read_by : [],
+							_pending: false,
+							_local: false,
+							_failed: false,
+							_settledAt: new Date().toISOString(),
+							...(Array.isArray(prevHeal?.attachments) && prevHeal.attachments.length
+								? { attachments: prevHeal.attachments }
+								: {})
+						};
+						delete healedMsg._localId;
+						delete healedMsg._hint;
+						feedFetchGen += 1;
+						if (idxHeal >= 0) chatFeed[idxHeal] = healedMsg;
+						else chatFeed.unshift(healedMsg);
+						writeChatCache(chatFeed);
+						settled = true;
+						healed = true;
+						if (typeof console !== 'undefined' && console.debug) {
+							console.debug('[chat-latency] send healed from tip after error', {
+								id: String(serverId).slice(0, 8)
+							});
+						}
+					}
+				} catch {
+					/* ignore — fall through to fail */
+				}
 			}
-			writeChatCache(chatFeed);
+			if (!healed) {
+				settled = true;
+				console.error('[chat] send persist failed', e);
+				const idx = findSendIndex(serverId);
+				if (idx >= 0) {
+					const prev = chatFeed[idx];
+					chatFeed[idx] = {
+						...prev,
+						_pending: false,
+						_failed: true,
+						delivery: 'failed',
+						_local: true,
+						_localId: localId,
+						_outbox: prev._outbox || outbox,
+						_failReason: e instanceof Error ? e.message : String(e)
+					};
+				}
+				writeChatCache(chatFeed);
+			}
 		} finally {
-			clearTimeout(watchdog);
+			clearInterval(watchdog);
 			chatUi.posting = false;
 			/* Tip wakes that arrived mid-send were queued — drain now so peers/self refresh. */
 			void import('./chat-sync.svelte.js').then(({ flushChatWake }) => flushChatWake());
