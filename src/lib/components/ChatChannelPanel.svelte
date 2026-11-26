@@ -112,6 +112,8 @@
 	let leaveBottomIntent = false;
 	/** @type {number | null} */
 	let touchY0 = null;
+	/** Finger down on the feed — suppress pin-resize snaps (rubber-band fight). */
+	let feedTouching = false;
 	/** Briefly highlight a jumped-to quoted message. */
 	let highlightId = $state(/** @type {string | null} */ (null));
 	/** @type {ReturnType<typeof setTimeout> | null} */
@@ -348,7 +350,13 @@
 		const scroller = messagesEl;
 		const body = feedBodyEl;
 		if (!scroller || !body) return;
-		return attachFeedPinResize(scroller, body, () => pinBottom, () => snapLock > 0);
+		return attachFeedPinResize(
+			scroller,
+			body,
+			() => pinBottom,
+			() => snapLock > 0,
+			() => feedTouching
+		);
 	});
 
 	/* Grow feed bottom pad with composer height (quote / attach / tall draft). */
@@ -448,6 +456,7 @@
 
 	/** @param {TouchEvent} e */
 	function onFeedTouchStart(e) {
+		feedTouching = true;
 		touchY0 = e.touches[0]?.clientY ?? null;
 	}
 
@@ -461,6 +470,9 @@
 
 	function onFeedTouchEnd() {
 		touchY0 = null;
+		feedTouching = false;
+		/* After rubber-band settles, one quiet remeasure — no snap storm. */
+		queueMicrotask(() => measureScroll());
 	}
 
 	function measureScroll() {
@@ -1089,6 +1101,8 @@
 		min-height: 0;
 		overflow: auto;
 		-webkit-overflow-scrolling: touch;
+		/* Contain rubber-band so pin-snap cannot fight past-bottom bounce. */
+		overscroll-behavior-y: contain;
 		display: flex;
 		flex-direction: column;
 		box-sizing: border-box;
@@ -1117,8 +1131,12 @@
 	.feed-body {
 		display: flex;
 		flex-direction: column;
+		justify-content: flex-end;
 		width: 100%;
-		min-height: min-content;
+		/* At least one viewport of the scroller’s content box — short threads
+		 * sit on the visual bottom without margin-top:auto inflating overscroll. */
+		min-height: 100%;
+		box-sizing: border-box;
 	}
 
 	.banner {
@@ -1165,7 +1183,8 @@
 		/* Tight like alpha-chat — stack groups use card margins, not a fat gap. */
 		gap: 0;
 		padding: 8px 0 12px;
-		margin-top: auto;
+		flex: 0 0 auto;
+		width: 100%;
 	}
 
 	.stack > .pub-panel {

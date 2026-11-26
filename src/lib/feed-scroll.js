@@ -28,13 +28,18 @@ export const FEED_BOTTOM_PAD_CSS = 'calc(120px + env(safe-area-inset-bottom, 0px
  * }} [opts]
  */
 export function attachComposerClearPad(root, dock, opts = {}) {
+	let lastClear = '';
 	const apply = () => {
 		const dockH = Math.max(0, Math.ceil(dock.getBoundingClientRect().height));
 		root.style.setProperty('--composer-dock-h', `${dockH}px`);
 		/* Feed clear = dock height — was +12/16 and sat visibly too high */
-		root.style.setProperty('--composer-clear', `${dockH}px`);
+		const clear = `${dockH}px`;
+		const clearChanged = clear !== lastClear;
+		lastClear = clear;
+		root.style.setProperty('--composer-clear', clear);
 		if (opts.isLocked?.()) return;
-		if (opts.isPinned?.() && opts.scroller) snapFeedToBottom(opts.scroller);
+		/* Only re-snap when clear pad actually changed — resize thrash was a loop. */
+		if (clearChanged && opts.isPinned?.() && opts.scroller) snapFeedToBottom(opts.scroller);
 	};
 	const ro = new ResizeObserver(apply);
 	ro.observe(dock);
@@ -63,7 +68,10 @@ export function isFeedNearBottom(el, px = FEED_NEAR_BOTTOM_PX) {
  */
 export function scrollFeedToBottom(el, behavior = 'auto') {
 	if (!el) return;
-	el.scrollTo({ top: feedMaxScrollTop(el), behavior });
+	const max = feedMaxScrollTop(el);
+	/* No-op when already flush — avoids iOS rubber-band fight / layout loops. */
+	if (behavior === 'auto' && Math.abs(el.scrollTop - max) < 1) return;
+	el.scrollTo({ top: max, behavior });
 }
 
 /** Instant snap (alias). @param {HTMLElement | null | undefined} el */
@@ -110,17 +118,25 @@ export async function snapFeedToBottomSoon(getEl, opts = {}) {
 /**
  * While pinned, keep the scroller at true bottom whenever the body box resizes
  * or its child list mutates (tip-wake / keyed each remounts that briefly collapse height).
- * Skips while `isLocked` (smooth jump in flight).
+ * Skips while `isLocked` (smooth jump in flight) or while the user is touching
+ * (rubber-band overscroll must not fight a snap loop).
  * @param {HTMLElement} scroller
  * @param {HTMLElement} body
  * @param {() => boolean} isPinned
  * @param {() => boolean} [isLocked]
+ * @param {() => boolean} [isTouching]
  */
-export function attachFeedPinResize(scroller, body, isPinned, isLocked) {
+export function attachFeedPinResize(scroller, body, isPinned, isLocked, isTouching) {
 	let raf = 0;
+	let lastMax = -1;
 	const snap = () => {
 		if (isLocked?.()) return;
+		if (isTouching?.()) return;
 		if (!isPinned()) return;
+		const max = feedMaxScrollTop(scroller);
+		/* Skip when height stable and already at bottom — stops refresh thrash. */
+		if (max === lastMax && Math.abs(scroller.scrollTop - max) < 1) return;
+		lastMax = max;
 		snapFeedToBottom(scroller);
 	};
 	const schedule = () => {
@@ -135,11 +151,15 @@ export function attachFeedPinResize(scroller, body, isPinned, isLocked) {
 	const ro = new ResizeObserver(schedule);
 	ro.observe(body);
 	ro.observe(scroller);
+	/*
+	 * childList only on the body root — subtree MutationObserver re-fired on
+	 * every bubble class/attr paint and paired with snap → perf drain + glitch.
+	 */
 	const mo =
 		typeof MutationObserver !== 'undefined'
 			? new MutationObserver(schedule)
 			: null;
-	mo?.observe(body, { childList: true, subtree: true });
+	mo?.observe(body, { childList: true, subtree: false });
 	return () => {
 		if (raf) cancelAnimationFrame(raf);
 		ro.disconnect();
