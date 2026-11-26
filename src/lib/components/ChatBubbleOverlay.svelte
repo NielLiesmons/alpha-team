@@ -196,21 +196,42 @@
 			placed = false;
 			return;
 		}
-		seenCount; /* re-layout when Seen by appears */
-		browserOpen;
 		quick = quickReactionEmojis(24);
-		interactive = false;
-		/* Sync layout ASAP — no left/top CSS transition, so no fly-in. */
+	});
+
+	/* Re-layout when expand / Seen-by changes — do not re-arm inert window. */
+	$effect(() => {
+		if (!open) return;
+		seenCount;
+		browserOpen;
 		layout();
 		queueMicrotask(() => layout());
+	});
 
-		/*
-		 * Keep panels + scrim inert briefly so the open gesture’s residual
-		 * click/pointerup (iOS after long-press) cannot dismiss or react.
-		 */
+	/*
+	 * Arm hits ASAP. Desktop (mouse context-menu) has no residual click — arm
+	 * next frame. Touch keeps a short inert window so long-press pointerup
+	 * cannot land on a reaction. Never re-arm when expanding the emoji browser.
+	 */
+	$effect(() => {
+		if (!open) {
+			interactive = false;
+			return;
+		}
+		interactive = false;
+		const coarse =
+			typeof window !== 'undefined' &&
+			Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
+		const ms = coarse ? 120 : 0;
+		if (ms <= 0) {
+			const frame = requestAnimationFrame(() => {
+				interactive = true;
+			});
+			return () => cancelAnimationFrame(frame);
+		}
 		const fallback = window.setTimeout(() => {
 			interactive = true;
-		}, 280);
+		}, ms);
 		return () => window.clearTimeout(fallback);
 	});
 

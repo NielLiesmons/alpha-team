@@ -206,13 +206,12 @@
 	}
 
 	/** @param {string} emoji */
-	async function onReact(emoji) {
+	function onReact(emoji) {
+		/* Close first; toggleReaction paints the chip synchronously before Drive. */
 		overlayOpen = false;
-		try {
-			await toggleReaction(msg.id, emoji);
-		} catch {
+		void toggleReaction(msg.id, emoji).catch(() => {
 			/* feed will show failure on next refresh */
-		}
+		});
 	}
 
 	/** @param {number} x @param {number} y */
@@ -221,6 +220,7 @@
 		textSelectable = false;
 		overlayX = x;
 		overlayY = y;
+		/* Open synchronously — avoid a frame of empty overlay before place. */
 		overlayOpen = true;
 	}
 
