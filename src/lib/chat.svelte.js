@@ -1473,6 +1473,14 @@ export async function postChatMessage(input) {
 		);
 	}
 
+	/*
+	 * Encrypt / mailbox append AFTER the optimistic bubble has painted.
+	 * Starting the Drive IIFE as a microtask raced paint on mobile — Send stayed
+	 * upscaled while JSON.stringify + crypto prelude blocked the first frame.
+	 * Double-rAF (or setTimeout 0) yields to style/layout/paint first.
+	 * Safe: bubble + outbox already in feed/cache; retry covers failures.
+	 */
+	const runDrivePersist = () => {
 	/* Drive write in background — ✓ only after feed tip is committed. */
 	void (async () => {
 		chatUi.posting = true;
@@ -1716,6 +1724,15 @@ export async function postChatMessage(input) {
 			void import('./chat-sync.svelte.js').then(({ flushChatWake }) => flushChatWake());
 		}
 	})();
+	};
+
+	if (typeof requestAnimationFrame === 'function') {
+		requestAnimationFrame(() => {
+			requestAnimationFrame(runDrivePersist);
+		});
+	} else {
+		setTimeout(runDrivePersist, 0);
+	}
 
 	return optimistic;
 }

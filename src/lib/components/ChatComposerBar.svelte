@@ -646,11 +646,9 @@
 		const pubRef = resolvePubRef(parent);
 
 		/*
-		 * Optimistic first: postChatMessage unshifts the bubble synchronously
-		 * (network stays in a background IIFE). ec59b0c called onSent/goBottom
-		 * *before* unshift, so the first paint was a cleared composer with no
-		 * bubble — felt like send lag on mobile. Kick every sendOne in this
-		 * turn, await tick so Svelte paints bubble + clear together, then pin.
+		 * Paint bubble + clear composer FIRST. postChatMessage unshifts sync and
+		 * defers encrypt/Drive past double-rAF. Do not await Drive here — that
+		 * kept Send upscaled while the main thread worked.
 		 */
 		/** @type {Promise<unknown>[]} */
 		const sends = [];
@@ -677,13 +675,14 @@
 			} else if (textOnly && !media.length) {
 				sends.push(sendOne({ body: textOnly, files: [], parent, pubRef }));
 			}
+			/* Let postChatMessage finish its sync unshift, then paint + pin. */
+			await Promise.all(sends);
 			await tick();
 			onSent();
 			inputEl?.focus();
 			/* Re-assert empty chrome after focus / late CE mutations. */
 			normalizeComposerEmpty(inputEl);
 			resizeComposerField();
-			await Promise.all(sends);
 		} catch (e) {
 			pendingFiles = filesSnapshot;
 			chatUi.error = e instanceof Error ? e.message : String(e);
