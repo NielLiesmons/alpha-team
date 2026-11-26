@@ -288,7 +288,36 @@
 	const pendingDocs = $derived(
 		pendingFiles.filter((f) => f.kind !== 'image' && f.kind !== 'video')
 	);
-	const canSend = $derived(Boolean(draft.trim()) || pendingFiles.length > 0);
+	/**
+	 * Keep Send mounted through the press flash — clearing draft would swap to Mic
+	 * before :active/:pressed can paint (mobile “zero scale”).
+	 */
+	let sendPressed = $state(false);
+	let sendFlash = $state(false);
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let sendFlashTimer = null;
+	const canSend = $derived(
+		Boolean(draft.trim()) || pendingFiles.length > 0 || sendFlash
+	);
+
+	function armSendPress() {
+		sendPressed = true;
+	}
+
+	function clearSendPress() {
+		if (!sendFlash) sendPressed = false;
+	}
+
+	function flashSendPress() {
+		sendFlash = true;
+		sendPressed = true;
+		if (sendFlashTimer != null) clearTimeout(sendFlashTimer);
+		sendFlashTimer = setTimeout(() => {
+			sendFlashTimer = null;
+			sendPressed = false;
+			sendFlash = false;
+		}, 160);
+	}
 
 	const attachItems = $derived([
 		{ kind: 'photo', label: t('nav.photos'), icon: 'photos' },
@@ -558,6 +587,9 @@
 		const docs = pendingFiles.filter((f) => f.kind !== 'image' && f.kind !== 'video');
 		const textOnly = draft.trim();
 		if (!textOnly && !media.length && !docs.length) return;
+
+		/* Press scale must paint before draft clear unmounts Send → Mic. */
+		flashSendPress();
 
 		const filesSnapshot = pendingFiles;
 		pendingFiles = [];
@@ -1543,8 +1575,13 @@
 					<button
 						type="button"
 						class="side-btn send"
+						class:pressed={sendPressed}
 						tabindex={voiceRecording ? -1 : 0}
 						aria-label={t('chat.send')}
+						onpointerdown={armSendPress}
+						onpointerup={clearSendPress}
+						onpointercancel={clearSendPress}
+						onpointerleave={clearSendPress}
 						onclick={() => void send()}
 					>
 						<span class="send-ico"><AlphaLogo size={18} /></span>
@@ -1779,23 +1816,32 @@
 		color: #fff;
 		/* Match chrome CTAs — scale only, no color wash. */
 		transition: transform 0.15s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+		-webkit-tap-highlight-color: transparent;
+		touch-action: manipulation;
 	}
 
-	.side-btn.send:hover {
+	/*
+	 * Pointer `.pressed` — not :hover/:active alone. iOS often skips :active, and
+	 * draft clear unmounts Send before :active can paint (8c99420 looked live but
+	 * felt like zero scale on mobile).
+	 */
+	.side-btn.send:hover:not(.pressed) {
 		transform: scale(1.06);
 	}
 
-	.side-btn.send:active {
+	.side-btn.send:active,
+	.side-btn.send.pressed {
 		transform: scale(0.96);
 	}
 
 	/* Mobile: exaggerate press so Send feedback is obvious under a finger. */
 	@media (max-width: 767px) {
-		.side-btn.send:hover {
+		.side-btn.send:hover:not(.pressed) {
 			transform: scale(1.14);
 		}
 
-		.side-btn.send:active {
+		.side-btn.send:active,
+		.side-btn.send.pressed {
 			transform: scale(0.86);
 		}
 	}
