@@ -2,6 +2,11 @@
  * Keep layout height in sync with the visible viewport (keyboard / iOS chrome).
  * Sets --app-height and --vv-top on :root for shells and fixed overlays.
  *
+ * Pair with `interactive-widget=overlays-content` so the soft keyboard does not
+ * also resize the layout viewport — otherwise new iOS (Safari 27.3+) applies
+ * the inset twice (browser resize + this bridge) and shoves the chat composer
+ * toward the top of the screen.
+ *
  * Desktop: leave --app-height unset so CSS falls back to 100dvh — visualViewport
  * tracking fights browser / page zoom. Mobile (≤767px or coarse pointer) only.
  */
@@ -42,6 +47,7 @@ export function startViewportBridge() {
 		const vv = window.visualViewport;
 		const h = Math.round(vv?.height ?? window.innerHeight);
 		const top = Math.round(vv?.offsetTop ?? 0);
+		/* Pin chrome to the visual viewport (height + iOS pan offset) — once. */
 		root.style.setProperty('--app-height', `${h}px`);
 		root.style.setProperty('--vv-top', `${top}px`);
 	};

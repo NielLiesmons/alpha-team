@@ -3069,7 +3069,17 @@
 	@media (max-width: 767px) {
 		.detail {
 			position: fixed;
-			inset: 0;
+			/*
+			 * Pin to visualViewport (not layout inset:0). With overlays-content the
+			 * keyboard does not resize layout — --vv-top + --app-height place the
+			 * sheet once above the keyboard (avoids double-inset shove).
+			 */
+			top: var(--vv-top, 0px);
+			left: 0;
+			right: 0;
+			bottom: auto;
+			height: var(--app-height, 100dvh);
+			max-height: var(--app-height, 100dvh);
 			z-index: 55;
 			width: 100%;
 			/* Match mobile shell (desktop sidebar) — stay mounted off-screen for slide */

@@ -1431,7 +1431,11 @@
 		--chrome-fade: var(--bg);
 		--chrome-scroll-fade: 0;
 		display: flex;
-		/* --app-height tracks visualViewport so the keyboard shrinks the app */
+		/*
+		 * --app-height / --vv-top track visualViewport (overlays-content). Pin the
+		 * shell once — never also rely on interactive-widget=resizes-content.
+		 */
+		margin-top: var(--vv-top, 0px);
 		height: var(--app-height, 100dvh);
 		max-height: var(--app-height, 100dvh);
 		width: 100%;
