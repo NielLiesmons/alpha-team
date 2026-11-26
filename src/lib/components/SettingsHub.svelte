@@ -214,7 +214,15 @@
 			{@const admin = isAdminRole(activeProfile.role)}
 			<article class="deck-card main selected" style="--i: 0">
 				<div class="face">
-					<button type="button" class="face-main" onclick={() => openSection('profile')}>
+					<button
+						type="button"
+						class="face-main"
+						aria-expanded={profilesOpen}
+						aria-label={profilesOpen
+							? t('settings.selectProfile')
+							: t('settings.expandProfiles')}
+						onclick={toggleProfiles}
+					>
 						<ProfilePic
 							name={displayNameFromEmail(activeProfile.email) || activeProfile.name}
 							email={activeProfile.email}
