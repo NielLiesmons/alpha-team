@@ -90,17 +90,63 @@ function bodyMentionsMe(body, me) {
 	);
 }
 
+/** @type {{ feedLen: number, tip: string, tasksLen: number, membersLen: number, me: string, items: ChatActivityItem[] } | null} */
+let activityForMeCache = null;
+
 /**
  * Chronological activity aimed at the signed-in person (newest first).
  * @returns {ChatActivityItem[]}
  */
 export function activityForMe() {
 	/* Do not subscribe to cursorsTick here — list shape is feed/tasks only. */
-	chatFeed.length;
-	tasks.length;
-	members.length;
+	const feedLen = chatFeed.length;
+	const tip = feedLen ? String(chatFeed[0]?.id || '') : '';
+	const tipMsg = feedLen ? chatFeed[0] : null;
+	const tasksLen = tasks.length;
+	const membersLen = members.length;
 	const me = meEmail();
-	if (!me) return [];
+	if (!me) {
+		activityForMeCache = null;
+		return [];
+	}
+	/*
+	 * Own / local tip cannot create activity aimed at me — keep the prior list
+	 * so Chat Send doesn’t rebuild notifications on the sync path.
+	 */
+	if (
+		activityForMeCache &&
+		activityForMeCache.me === me &&
+		activityForMeCache.tasksLen === tasksLen &&
+		activityForMeCache.membersLen === membersLen &&
+		feedLen === activityForMeCache.feedLen + 1 &&
+		tip !== activityForMeCache.tip &&
+		tipMsg &&
+		(String(tipMsg.id || '').startsWith('local-') ||
+			String(tipMsg.author || '')
+				.trim()
+				.toLowerCase() === me) &&
+		tipMsg.kind !== 'reaction'
+	) {
+		activityForMeCache = {
+			feedLen,
+			tip,
+			tasksLen,
+			membersLen,
+			me,
+			items: activityForMeCache.items
+		};
+		return activityForMeCache.items;
+	}
+	if (
+		activityForMeCache &&
+		activityForMeCache.feedLen === feedLen &&
+		activityForMeCache.tip === tip &&
+		activityForMeCache.tasksLen === tasksLen &&
+		activityForMeCache.membersLen === membersLen &&
+		activityForMeCache.me === me
+	) {
+		return activityForMeCache.items;
+	}
 
 	/** @type {Map<string, any>} */
 	const byId = new Map();
@@ -205,7 +251,9 @@ export function activityForMe() {
 		});
 	}
 
-	return items.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+	items.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+	activityForMeCache = { feedLen, tip, tasksLen, membersLen, me, items };
+	return items;
 }
 
 /**

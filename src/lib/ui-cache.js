@@ -3,7 +3,7 @@
  * and new frontend builds without fighting stale feed / leaf / workspace snapshots.
  */
 
-import { chatFeed, chatUi } from './chat.svelte.js';
+import { chatFeed, chatUi, reindexChatReactions } from './chat.svelte.js';
 
 const LOCAL_KEYS = [
 	'alpha.chat.feed.v1',
@@ -85,6 +85,7 @@ export async function clearLocalUiCache() {
 	chatUi.loading = false;
 	chatUi.syncing = false;
 	chatUi.error = null;
+	reindexChatReactions();
 
 	await clearLeafIdb();
 	return { clearedKeys, leafDb: true };

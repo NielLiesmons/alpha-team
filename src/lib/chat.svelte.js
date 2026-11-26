@@ -19,7 +19,7 @@ import {
 import { recentEmojis, rememberEmoji } from './emoji.js';
 import { peekCachedChatTip } from './drive/client.js';
 import { normalizeChatAttachment } from './drive/media-kind.js';
-import { activeSession, driveSession } from './drive/session.svelte.js';
+import { activeSession, driveSession, loadSessionFromStorage } from './drive/session.svelte.js';
 import { notifyChatRecipients } from './push.js';
 import { mailTipFor } from './mail.svelte.js';
 import {
@@ -49,6 +49,63 @@ const REF_TYPE_SCHEMA = {
 
 /** @type {any[]} */
 export const chatFeed = $state([]);
+
+/**
+ * Reaction aggregates keyed by target message id.
+ * Cards subscribe to this — NOT raw `chatFeed` — so a normal Send unshift
+ * does not re-scan the full feed inside every ChatFeedCard.
+ * @type {{
+ *   epoch: number,
+ *   byTarget: Map<string, { emoji: string, count: number, mine: boolean, authors: string[] }[]>
+ * }}
+ */
+export const chatReactionIndex = $state({
+	epoch: 0,
+	byTarget: new Map()
+});
+
+/** Stable empty list for cards with no reactions (keeps $derived referentially stable). */
+const EMPTY_REACTIONS = Object.freeze([]);
+
+/**
+ * Rebuild reaction chip aggregates. Call after reaction rows change or a full
+ * feed replace — never from plain chat Send (that path must stay O(1) per card).
+ */
+export function reindexChatReactions() {
+	const me = (activePerson().email || '').trim().toLowerCase();
+	/** @type {Map<string, Map<string, { emoji: string, count: number, mine: boolean, authors: string[] }>>} */
+	const nested = new Map();
+	for (const m of chatFeed) {
+		if (m?.kind !== 'reaction') continue;
+		const target = String(m.reply_to || '');
+		if (!target) continue;
+		const emoji = String(m.reaction || m.body || '').trim();
+		if (!emoji) continue;
+		const author = String(m.author || '')
+			.trim()
+			.toLowerCase();
+		let byEmoji = nested.get(target);
+		if (!byEmoji) {
+			byEmoji = new Map();
+			nested.set(target, byEmoji);
+		}
+		const prev = byEmoji.get(emoji) || { emoji, count: 0, mine: false, authors: [] };
+		prev.count += 1;
+		if (author && !prev.authors.includes(author)) prev.authors.push(author);
+		if (me && author === me) prev.mine = true;
+		byEmoji.set(emoji, prev);
+	}
+	/** @type {Map<string, { emoji: string, count: number, mine: boolean, authors: string[] }[]>} */
+	const byTarget = new Map();
+	for (const [target, byEmoji] of nested) {
+		byTarget.set(
+			target,
+			[...byEmoji.values()].sort((a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji))
+		);
+	}
+	chatReactionIndex.byTarget = byTarget;
+	chatReactionIndex.epoch += 1;
+}
 
 /** Cache: `${type}:${id}` → messages */
 /** @type {Record<string, any[]>} */
@@ -471,9 +528,23 @@ export function hydrateChatFeedFromCache() {
 	const cached = readChatCache();
 	if (!Array.isArray(cached) || !cached.length) return false;
 	if (chatFeed.length === 0) {
-		/* Stale in-flight rows from a killed tab → failed (never silent vanish). */
+		/*
+		 * Mid-send rows from a killed tab: keep local-* outbox as pending and
+		 * resume after session is ready. Instant “tap to retry” on every hard
+		 * refresh made Send look broken even when Drive never failed.
+		 */
 		const rows = stripEphemeralAttachments(cached).map((m) => {
 			if (!m?._pending && m?.delivery !== 'sending') return m;
+			const id = String(m?.id || '');
+			if (m?._outbox && id.startsWith('local-')) {
+				return {
+					...m,
+					_pending: true,
+					_failed: false,
+					_local: true,
+					delivery: 'sending'
+				};
+			}
 			return {
 				...m,
 				_pending: false,
@@ -483,13 +554,54 @@ export function hydrateChatFeedFromCache() {
 			};
 		});
 		chatFeed.push(...rows);
-		/* Failed bubbles carry their own retry — never a global pendingLost banner. */
-		if (rows.some((m) => m._failed)) writeChatCache(chatFeed);
+		if (rows.some((m) => m._failed || (m._pending && m._outbox))) writeChatCache(chatFeed);
 		rebuildHasCommentsIndex(chatFeed);
+		reindexChatReactions();
+		if (rows.some((m) => m._pending && m._outbox && String(m.id || '').startsWith('local-'))) {
+			scheduleChatOutboxResume();
+		}
 	}
 	chatUi.settled = true;
 	chatUi.loading = false;
 	return true;
+}
+
+/** @type {ReturnType<typeof setTimeout> | 0} */
+let outboxResumeTimer = 0;
+
+function scheduleChatOutboxResume() {
+	if (typeof window === 'undefined') return;
+	if (outboxResumeTimer) return;
+	outboxResumeTimer = setTimeout(() => {
+		outboxResumeTimer = 0;
+		void resumeChatOutbox();
+	}, 0);
+}
+
+/**
+ * Re-drive local-* outbox rows left pending after a hard refresh / kill.
+ * Only retries ids that never got a server id (avoids duping a landed tip).
+ */
+export async function resumeChatOutbox() {
+	try {
+		if (!activeSession()) loadSessionFromStorage();
+	} catch {
+		/* ignore */
+	}
+	if (!activeSession() || isNavigatorOffline()) return;
+	const stuck = chatFeed.filter(
+		(m) =>
+			m?._outbox &&
+			(m._pending || m._failed) &&
+			String(m.id || '').startsWith('local-')
+	);
+	for (const m of stuck) {
+		try {
+			await retryChatMessage(m);
+		} catch (e) {
+			console.error('[chat] outbox resume failed', e);
+		}
+	}
 }
 
 /** Soft-delete / tombstone marker on a feed row. */
@@ -722,6 +834,7 @@ export async function refreshChatFeed(opts = {}) {
 			/* Keep pending/failed locals — stripping them made reopen vanish sends. */
 			writeChatCache(merged);
 			rebuildHasCommentsIndex(merged);
+			reindexChatReactions();
 		};
 
 		const list = await withDeadline(
@@ -942,28 +1055,15 @@ export function quickReactionEmojis(limit = 24) {
 
 /**
  * Aggregate reaction leaves that target a message (`kind=reaction`, `reply_to`).
+ * Reads `chatReactionIndex` only — plain Send must not invalidate every card.
  * @param {string} messageId
  * @returns {{ emoji: string, count: number, mine: boolean, authors: string[] }[]}
  */
 export function reactionsForMessage(messageId) {
 	const id = String(messageId || '');
-	if (!id) return [];
-	const me = (activePerson().email || '').trim().toLowerCase();
-	/** @type {Map<string, { emoji: string, count: number, mine: boolean, authors: string[] }>} */
-	const byEmoji = new Map();
-	for (const m of chatFeed) {
-		if (m?.kind !== 'reaction') continue;
-		if (String(m.reply_to || '') !== id) continue;
-		const emoji = String(m.reaction || m.body || '').trim();
-		if (!emoji) continue;
-		const author = String(m.author || '').trim().toLowerCase();
-		const prev = byEmoji.get(emoji) || { emoji, count: 0, mine: false, authors: [] };
-		prev.count += 1;
-		if (author && !prev.authors.includes(author)) prev.authors.push(author);
-		if (me && author === me) prev.mine = true;
-		byEmoji.set(emoji, prev);
-	}
-	return [...byEmoji.values()].sort((a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji));
+	if (!id) return EMPTY_REACTIONS;
+	void chatReactionIndex.epoch;
+	return chatReactionIndex.byTarget.get(id) || EMPTY_REACTIONS;
 }
 
 /**
@@ -1167,6 +1267,7 @@ export function applyReactionHint(hint) {
 			chatFeed.splice(i, 1);
 		}
 		writeChatCache(chatFeed);
+		reindexChatReactions();
 		return;
 	}
 
@@ -1192,6 +1293,7 @@ export function applyReactionHint(hint) {
 		_hint: true
 	});
 	writeChatCache(chatFeed);
+	reindexChatReactions();
 }
 
 /**
@@ -1233,6 +1335,7 @@ export async function toggleReaction(messageId, emoji) {
 		const idx = chatFeed.findIndex((m) => m.id === removeId);
 		if (idx >= 0) chatFeed.splice(idx, 1);
 		writeChatCache(chatFeed);
+		reindexChatReactions();
 		/* Peer paint immediately — tip wake follows once retract lands. */
 		publishReactionWake({
 			op: 'remove',
@@ -1257,6 +1360,7 @@ export async function toggleReaction(messageId, emoji) {
 			/* Roll back optimistic remove */
 			chatFeed.unshift(existing);
 			writeChatCache(chatFeed);
+			reindexChatReactions();
 			throw e;
 		}
 		return null;
@@ -1278,6 +1382,7 @@ export async function toggleReaction(messageId, emoji) {
 	};
 	chatFeed.unshift(optimistic);
 	writeChatCache(chatFeed);
+	reindexChatReactions();
 	/* Fan out hint ASAP so peers paint before mailbox pull (messages already felt instant). */
 	publishReactionWake({
 		op: 'add',
@@ -1323,10 +1428,12 @@ export async function toggleReaction(messageId, emoji) {
 		if (idx >= 0) chatFeed[idx] = created;
 		else chatFeed.unshift(created);
 		writeChatCache(chatFeed);
+		reindexChatReactions();
 		return created;
 	} catch (e) {
 		const idx = chatFeed.findIndex((m) => m.id === localId);
 		if (idx >= 0) chatFeed.splice(idx, 1);
+		reindexChatReactions();
 		throw e;
 	}
 }
@@ -1384,7 +1491,15 @@ export async function markIncomingMessagesRead() {
  * }} input
  */
 export async function postChatMessage(input) {
-	const session = activeSession();
+	let session = activeSession();
+	if (!session) {
+		try {
+			loadSessionFromStorage();
+		} catch {
+			/* ignore */
+		}
+		session = activeSession();
+	}
 	const author = activePerson().email;
 	if (!author) throw new Error('Pick who you are in Settings first');
 	const isReaction = input.kind === 'reaction';
@@ -1481,17 +1596,9 @@ export async function postChatMessage(input) {
 	writeChatCache(chatFeed);
 
 	if (!session) {
-		const idx = chatFeed.findIndex((m) => m.id === localId);
-		if (idx >= 0) {
-			chatFeed[idx] = {
-				...chatFeed[idx],
-				_pending: false,
-				_failed: true,
-				delivery: 'failed'
-			};
-		}
-		/* Bubble shows _failed + retry — no global banner. */
+		/* Keep pending + outbox; resume when Drive session finishes hydrating. */
 		writeChatCache(chatFeed);
+		scheduleChatOutboxResume();
 		return optimistic;
 	}
 
@@ -1521,16 +1628,34 @@ export async function postChatMessage(input) {
 	}
 
 	/*
-	 * Encrypt / mailbox append AFTER the optimistic bubble has painted.
-	 * Starting the Drive IIFE as a microtask raced paint on mobile — Send stayed
-	 * upscaled while JSON.stringify + crypto prelude blocked the first frame.
-	 * Double-rAF (or setTimeout 0) yields to style/layout/paint first.
-	 * Safe: bubble + outbox already in feed/cache; retry covers failures.
+	 * Encrypt / mailbox append AFTER optimistic paint.
+	 * Composer Send uses flushSync — DOM is already committed; queueMicrotask is
+	 * enough and more reliable than double-rAF (which could stall under load and
+	 * leave bubbles stranded until the 45s watchdog → false “tap to retry”).
 	 */
 	const runDrivePersist = () => {
 	/* Drive write in background — ✓ only after feed tip is committed. */
 	void (async () => {
 		chatUi.posting = true;
+		/* Re-read session in case storage hydrated after the click turn. */
+		session = activeSession() || session;
+		if (!session) {
+			const idx = findSendIndex(null);
+			if (idx >= 0) {
+				chatFeed[idx] = {
+					...chatFeed[idx],
+					_pending: false,
+					_failed: true,
+					delivery: 'failed',
+					_local: true,
+					_localId: localId,
+					_outbox: chatFeed[idx]._outbox || outbox
+				};
+				writeChatCache(chatFeed);
+			}
+			chatUi.posting = false;
+			return;
+		}
 		/** @type {string | null} */
 		let serverId = null;
 		/** Tip congestion used to leave bubbles “sending” forever — surface retry. */
@@ -1750,6 +1875,7 @@ export async function postChatMessage(input) {
 			}
 		} catch (e) {
 			settled = true;
+			console.error('[chat] send persist failed', e);
 			const idx = findSendIndex(serverId);
 			if (idx >= 0) {
 				const prev = chatFeed[idx];
@@ -1760,7 +1886,8 @@ export async function postChatMessage(input) {
 					delivery: 'failed',
 					_local: true,
 					_localId: localId,
-					_outbox: prev._outbox || outbox
+					_outbox: prev._outbox || outbox,
+					_failReason: e instanceof Error ? e.message : String(e)
 				};
 			}
 			writeChatCache(chatFeed);
@@ -1773,13 +1900,9 @@ export async function postChatMessage(input) {
 	})();
 	};
 
-	if (typeof requestAnimationFrame === 'function') {
-		requestAnimationFrame(() => {
-			requestAnimationFrame(runDrivePersist);
-		});
-	} else {
-		setTimeout(runDrivePersist, 0);
-	}
+	/* After flushSync paint, microtask is enough — don’t wait two animation frames. */
+	if (typeof queueMicrotask === 'function') queueMicrotask(runDrivePersist);
+	else setTimeout(runDrivePersist, 0);
 
 	return optimistic;
 }

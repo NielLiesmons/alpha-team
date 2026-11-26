@@ -10,7 +10,7 @@
 
 import { actor, loadActor } from './actor.svelte.js';
 import { refreshMembersAndAvatars, warmAvatarUrlsFromCache } from './avatar.svelte.js';
-import { hydrateChatFeedFromCache, refreshChatFeed } from './chat.svelte.js';
+import { hydrateChatFeedFromCache, refreshChatFeed, resumeChatOutbox } from './chat.svelte.js';
 import { loadDeviceProfiles } from './device-profiles.svelte.js';
 import { ensurePendingFlushListeners, refreshBackgroundDrive } from './drive-refresh.js';
 import { driveSession, loadSessionFromStorage, activeSession } from './drive/session.svelte.js';
@@ -244,6 +244,12 @@ export async function bootApp() {
 		try {
 			const { flushPendingPushOpen } = await import('./chat-sync.svelte.js');
 			flushPendingPushOpen();
+		} catch {
+			/* ignore */
+		}
+		/* Local-* outbox left pending after hard refresh — finish Drive persist. */
+		try {
+			void resumeChatOutbox();
 		} catch {
 			/* ignore */
 		}

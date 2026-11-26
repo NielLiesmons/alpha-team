@@ -374,12 +374,48 @@ export function readCursor(key) {
 	return Number(personCursors.values[fieldFor(key)] || 0) || 0;
 }
 
+/** @type {{ len: number, tip: string, seen: number, me: string, n: number } | null} */
+let newChatCountCache = null;
+
 export function newChatCount() {
 	cursorsTick.value;
 	const len = chatFeed.length;
 	const me = meEmail();
-	if (!me || !personCursors.ready || len === 0) return 0;
+	if (!me || !personCursors.ready || len === 0) {
+		newChatCountCache = null;
+		return 0;
+	}
 	const seen = Number(personCursors.values.chat_seen_at || 0) || 0;
+	const tip = String(chatFeed[0]?.id || '');
+	const tipMsg = chatFeed[0];
+	/*
+	 * Own / local tip unshift cannot change the unread badge — reuse the prior
+	 * count so Send doesn’t walk the full feed on the critical path.
+	 */
+	if (
+		newChatCountCache &&
+		newChatCountCache.me === me &&
+		newChatCountCache.seen === seen &&
+		len === newChatCountCache.len + 1 &&
+		tip !== newChatCountCache.tip &&
+		tipMsg &&
+		(String(tipMsg.id || '').startsWith('local-') ||
+			String(tipMsg.author || '')
+				.trim()
+				.toLowerCase() === me)
+	) {
+		newChatCountCache = { len, tip, seen, me, n: newChatCountCache.n };
+		return newChatCountCache.n;
+	}
+	if (
+		newChatCountCache &&
+		newChatCountCache.len === len &&
+		newChatCountCache.tip === tip &&
+		newChatCountCache.seen === seen &&
+		newChatCountCache.me === me
+	) {
+		return newChatCountCache.n;
+	}
 
 	/** @type {Set<string>} */
 	const myMsgIds = new Set();
@@ -412,6 +448,7 @@ export function newChatCount() {
 		}
 		n += 1;
 	}
+	newChatCountCache = { len, tip, seen, me, n };
 	return n;
 }
 
