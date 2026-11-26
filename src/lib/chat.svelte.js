@@ -459,6 +459,10 @@ const CHAT_FEED_LIMIT = 2000;
 
 /** Bumped on each refresh / settle so stale fetches cannot clobber newer state. */
 let feedFetchGen = 0;
+/** Single-flight mailbox catch-up — open/boot/poll used to stampede 3 walks. */
+let feedRefreshInflight = /** @type {Promise<void> | null} */ (null);
+/** @type {{ tip?: string, catchUp?: boolean, quiet?: boolean } | null} */
+let feedRefreshQueued = null;
 
 function readChatCache() {
 	if (typeof localStorage === 'undefined') return null;
@@ -780,7 +784,7 @@ function feedRowsEquivalent(a, b) {
 /**
  * @param {{ tip?: string, catchUp?: boolean, quiet?: boolean }} [opts]
  * — bus tip hash skips a raced getNamedTip.
- * — catchUp: force title-pill wave (cold open / explicit crawl).
+ * — catchUp: force title-pill wave only when the feed is truly empty.
  * — quiet: never flash the wave (tip-poll / receipt echo / background wake).
  */
 export async function refreshChatFeed(opts = {}) {
@@ -801,15 +805,58 @@ export async function refreshChatFeed(opts = {}) {
 		chatUi.settled = true;
 		return;
 	}
+
+	/*
+	 * Coalesce open/boot/poll stampedes into one mailbox walk. Queued callers
+	 * inherit the strongest catch-up intent and any bus tip.
+	 */
+	if (feedRefreshInflight) {
+		const prev = feedRefreshQueued || {};
+		const nextTip = String(opts.tip || prev.tip || '').trim();
+		feedRefreshQueued = {
+			quiet: prev.quiet === true && opts.quiet === true,
+			catchUp: Boolean(prev.catchUp || opts.catchUp),
+			...(nextTip ? { tip: nextTip } : {})
+		};
+		return feedRefreshInflight;
+	}
+
+	const run = async () => {
+		/** @type {{ tip?: string, catchUp?: boolean, quiet?: boolean }} */
+		let runOpts = { ...opts };
+		try {
+			for (;;) {
+				await refreshChatFeedOnce(session, runOpts);
+				const queued = feedRefreshQueued;
+				feedRefreshQueued = null;
+				if (!queued) break;
+				runOpts = queued;
+			}
+		} finally {
+			feedRefreshInflight = null;
+		}
+	};
+	feedRefreshInflight = run();
+	return feedRefreshInflight;
+}
+
+/**
+ * @param {import('./drive/client.js').DriveSession} session
+ * @param {{ tip?: string, catchUp?: boolean, quiet?: boolean }} opts
+ */
+async function refreshChatFeedOnce(session, opts) {
 	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
 	/*
-	 * Title-pill wave only for real cold catch-up / first settle — never for the
-	 * ~500ms tip poll or receipt-driven tip echoes (that looped a crushing wave).
+	 * Title-pill wave only for a truly empty feed — warm local-first opens must
+	 * never Metaball while a quiet background tip walk catches up.
 	 */
 	const showSync =
-		opts.quiet !== true && (opts.catchUp === true || !chatUi.settled);
+		opts.quiet !== true &&
+		chatFeed.length === 0 &&
+		(opts.catchUp === true || !chatUi.settled);
 	if (showSync) chatUi.syncing = true;
+	else if (chatFeed.length > 0) chatUi.syncing = false;
 	chatUi.error = null;
 	const gen = ++feedFetchGen;
 	const seedRows = chatFeed.slice();
@@ -821,56 +868,72 @@ export async function refreshChatFeed(opts = {}) {
 		chatUi.syncing = false;
 		chatUi.settled = true;
 	};
-	try {
-		const apply = (/** @type {any[]} */ list) => {
-			if (gen !== feedFetchGen) return;
-			/*
-			 * Merge against the LIVE feed, not a start-of-fetch snapshot.
-			 * A send that lands while listFeedMessages is in flight must survive apply().
-			 */
-			const live = chatFeed.slice();
-			/* Empty tip/ids miss must not wipe a warm localStorage feed (empty flash). */
-			if (!list?.length && (live.length || seedRows.length)) {
+	/**
+	 * Merge walked leaves into the live feed. Additive merges still apply when
+	 * a newer gen superseded us — otherwise open stampedes dropped the delta
+	 * while rememberMailboxTip advanced and later polls skipped the gap.
+	 * @param {any[]} list
+	 * @param {{ allowStale?: boolean }} [applyOpts]
+	 */
+	const apply = (list, applyOpts = {}) => {
+		const allowStale = applyOpts.allowStale === true;
+		if (!allowStale && gen !== feedFetchGen) return;
+		/*
+		 * Merge against the LIVE feed, not a start-of-fetch snapshot.
+		 * A send that lands while listFeedMessages is in flight must survive apply().
+		 */
+		const live = chatFeed.slice();
+		/* Empty tip/ids miss must not wipe a warm localStorage feed (empty flash). */
+		if (!list?.length && (live.length || seedRows.length)) {
+			if (gen === feedFetchGen) {
 				chatUi.loading = false;
 				chatUi.settled = true;
-				return;
 			}
-			const liveIds = new Set(live.map((m) => String(m?.id || '')).filter(Boolean));
-			const meLc = (activePerson().email || '').trim().toLowerCase();
-			for (const row of list || []) {
-				const id = String(row?.id || '');
-				if (!id || liveIds.has(id)) continue;
-				const kind = String(row?.kind || 'chat');
-				if (kind === 'reaction' || kind === 'event') continue;
-				const author = String(row?.author || '').trim();
-				if (!author || (meLc && author.toLowerCase() === meLc)) continue;
-				clearChatEphemeralForActor(author, {
-					channel_id: String(row?.channel_id || 'general'),
-					at: row?.created_at
-				});
-			}
-			const merged = mergeFeedRows(list, live);
-			if (!merged.length && !chatFeed.length) return;
-			if (!merged.length && chatFeed.length) {
+			return;
+		}
+		const liveIds = new Set(live.map((m) => String(m?.id || '')).filter(Boolean));
+		const meLc = (activePerson().email || '').trim().toLowerCase();
+		for (const row of list || []) {
+			const id = String(row?.id || '');
+			if (!id || liveIds.has(id)) continue;
+			const kind = String(row?.kind || 'chat');
+			if (kind === 'reaction' || kind === 'event') continue;
+			const author = String(row?.author || '').trim();
+			if (!author || (meLc && author.toLowerCase() === meLc)) continue;
+			clearChatEphemeralForActor(author, {
+				channel_id: String(row?.channel_id || 'general'),
+				at: row?.created_at
+			});
+		}
+		const merged = mergeFeedRows(list, live);
+		if (!merged.length && !chatFeed.length) return;
+		if (!merged.length && chatFeed.length) {
+			if (gen === feedFetchGen) {
 				chatUi.loading = false;
 				chatUi.settled = true;
-				return;
 			}
-			/* Quiet tip polls with nothing new must not remount the feed / yank the composer. */
-			if (feedRowsEquivalent(merged, live)) {
+			return;
+		}
+		/* Quiet tip polls with nothing new must not remount the feed / yank the composer. */
+		if (feedRowsEquivalent(merged, live)) {
+			if (gen === feedFetchGen) {
 				chatUi.loading = false;
 				chatUi.settled = true;
-				return;
 			}
-			chatFeed.splice(0, chatFeed.length, ...merged);
+			return;
+		}
+		chatFeed.splice(0, chatFeed.length, ...merged);
+		if (gen === feedFetchGen) {
 			chatUi.loading = false;
 			chatUi.settled = true;
-			/* Keep pending/failed locals — stripping them made reopen vanish sends. */
-			writeChatCache(merged);
-			rebuildHasCommentsIndex(merged);
-			reindexChatReactions();
-		};
+		}
+		/* Keep pending/failed locals — stripping them made reopen vanish sends. */
+		writeChatCache(merged);
+		rebuildHasCommentsIndex(merged);
+		reindexChatReactions();
+	};
 
+	try {
 		const list = await withDeadline(
 			listFeedMessages(session, CHAT_FEED_LIMIT, {
 				/* Reuse warm rows so tip wakes only download new leaves (keeps tip I/O free). */
@@ -878,14 +941,13 @@ export async function refreshChatFeed(opts = {}) {
 				...(busTip ? { tip: busTip } : {}),
 				onPartial: (partial) => {
 					/* Leaf-cache hits / early batches — drop skeleton before network misses finish. */
-					if (partial?.length) apply(partial);
+					if (partial?.length) apply(partial, { allowStale: true });
 				}
 			}),
 			CHAT_FEED_SYNC_MS
 		);
-		/* A newer refresh or settle won — do not clobber. */
-		if (gen !== feedFetchGen) return;
-		apply(list);
+		/* Final apply: still merge additives if a settle bumped gen mid-walk. */
+		apply(list, { allowStale: true });
 	} catch (e) {
 		if (gen === feedFetchGen) {
 			const msg = e instanceof Error ? e.message : String(e);

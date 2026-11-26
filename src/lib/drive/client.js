@@ -867,9 +867,29 @@ export async function loadMailboxMessages(session, opts = {}) {
 		}
 		if (!walkStop && msgCount >= limit) break;
 		hash = prev;
-		if (typeof opts.onPartial === 'function' && msgCount > 0 && msgCount % 12 === 0) {
+		/*
+		 * Paint the first new leaf ASAP (cold-open 1–2 message gaps), then every
+		 * 12 — waiting for %12 alone left short deltas invisible until walk end.
+		 */
+		if (
+			typeof opts.onPartial === 'function' &&
+			msgCount > 0 &&
+			(msgCount === 1 || msgCount % 12 === 0)
+		) {
 			opts.onPartial(materializeMailboxMessages(newestFirst, limit, priorFeed || []));
 		}
+	}
+	/*
+	 * Incremental walk that never visited the tip leaf must NOT stamp the live tip.
+	 * Stamping tip+priorFeed made the next open warm-hit / lastTip-skip the delta
+	 * forever (desktop sends while phone was closed stayed missing).
+	 */
+	if (walkStop && newestFirst.length === 0) {
+		return {
+			tip: priorMeta?.tip || '',
+			messages: (priorFeed || []).map((m) => structuredClone(m)),
+			complete: priorComplete
+		};
 	}
 	const messages = materializeMailboxMessages(newestFirst, limit, priorFeed || []);
 	/*

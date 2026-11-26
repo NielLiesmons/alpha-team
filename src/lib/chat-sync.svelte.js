@@ -7,6 +7,7 @@ import { refreshMembersAndAvatars } from './avatar.svelte.js';
 import {
 	hydrateChatFeedFromCache,
 	refreshChatFeed,
+	chatFeed,
 	chatUi,
 	markIncomingMessagesRead
 } from './chat.svelte.js';
@@ -97,12 +98,13 @@ export async function pullChatIfNeeded(force = false) {
 		 */
 		if (force || tipChanged || lastChatPull === 0) {
 			/*
-			 * Quiet once settled — tip-poll / focus / receipt echoes must not flash
-			 * the title Metaball or remount the composer every few seconds.
-			 * Cold first pull still waves (!settled → catchUp).
+			 * Warm local feed → quiet background catch-up (no title wave).
+			 * Wave only when there is nothing to paint yet.
+			 * Force open always walks even when lastTip already matches — phone
+			 * may have stamped tip without merging leaves while closed.
 			 */
-			const settled = Boolean(chatUi.settled);
-			await refreshChatFeed({ quiet: settled, catchUp: !settled });
+			const warm = chatFeed.length > 0 || Boolean(chatUi.settled);
+			await refreshChatFeed({ quiet: warm, catchUp: !warm });
 			/*
 			 * Only advance lastTip when the mailbox walk remembered this tip.
 			 * Stamping bare getNamedTip after a timeout left tipChanged=false forever
@@ -184,7 +186,10 @@ export async function wakeChatFromTip(tip) {
 	inFlight = true;
 	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	try {
-		await refreshChatFeed({ tip: t, quiet: Boolean(chatUi.settled) });
+		await refreshChatFeed({
+			tip: t,
+			quiet: chatFeed.length > 0 || Boolean(chatUi.settled)
+		});
 		const cached = peekCachedChatTip(session) || '';
 		/*
 		 * Only advance lastTip when the mailbox walk actually landed on this tip.

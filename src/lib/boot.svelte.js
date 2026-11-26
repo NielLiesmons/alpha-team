@@ -10,7 +10,12 @@
 
 import { actor, loadActor } from './actor.svelte.js';
 import { refreshMembersAndAvatars, warmAvatarUrlsFromCache } from './avatar.svelte.js';
-import { hydrateChatFeedFromCache, refreshChatFeed, resumeChatOutbox } from './chat.svelte.js';
+import {
+	chatFeed,
+	hydrateChatFeedFromCache,
+	refreshChatFeed,
+	resumeChatOutbox
+} from './chat.svelte.js';
 import { loadDeviceProfiles } from './device-profiles.svelte.js';
 import { ensurePendingFlushListeners, refreshBackgroundDrive } from './drive-refresh.js';
 import { driveSession, loadSessionFromStorage, activeSession } from './drive/session.svelte.js';
@@ -321,7 +326,8 @@ export async function bootApp() {
 				} catch (e) {
 					console.warn('mail approved sync', e);
 				}
-				await refreshChatFeed();
+				/* Quiet when local cache already paints — tip walk without Metaball. */
+				await refreshChatFeed({ quiet: chatFeed.length > 0, catchUp: chatFeed.length === 0 });
 				/* Re-flush in case a tap landed between session-up and this crawl. */
 				try {
 					const { flushPendingPushOpen } = await import('./chat-sync.svelte.js');

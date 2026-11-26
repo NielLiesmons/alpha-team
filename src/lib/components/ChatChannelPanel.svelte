@@ -271,7 +271,7 @@
 			chatUi.loading = true;
 		}
 		void refreshChatFeed({
-			/* Warm reopen is quiet; cold empty feed still gets the catch-up wave. */
+			/* Local-first: never wave when cache painted; quiet tip catch-up merges delta. */
 			quiet: Boolean(warm),
 			catchUp: !warm
 		}).then(() => {
