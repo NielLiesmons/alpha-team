@@ -2,9 +2,68 @@
  * Imported by the Workbox-generated service worker (vite-pwa).
  * Handles Web Push + notification taps for Home Screen PWAs (incl. iOS 16.4+).
  *
- * alpha-sw-boot: v9 — warm-boot skip splash (pages-v8) + push tip/mid handoff unchanged.
+ * alpha-sw-boot: v10 — seed alpha-pages-v9 shell on install so airplane-mode
+ * kill-reopen has HTML matching the new precache (empty NetworkFirst cache was
+ * the offline blank). Push tip/mid handoff unchanged.
  */
 /* eslint-disable no-undef */
+
+/** Must match vite.config.js workbox runtimeCaching cacheName. */
+var PAGES_CACHE = 'alpha-pages-v9';
+var SHELL_PATHS = ['/', '/chat'];
+
+/**
+ * NetworkFirst only fills the pages cache after an online navigation. SW updates
+ * bump the cache name → empty cache → offline open fails with Response.error().
+ * Seed the current shell during install/activate (online) so kill-reopen offline
+ * still has HTML that matches this worker’s precached hashed modules.
+ */
+async function seedPagesCache() {
+	try {
+		var cache = await caches.open(PAGES_CACHE);
+		await Promise.all(
+			SHELL_PATHS.map(async function (path) {
+				try {
+					var res = await fetch(path, { cache: 'reload', credentials: 'same-origin' });
+					if (res && res.ok) {
+						await cache.put(path, res.clone());
+						/* Navigation requests often include the full URL — mirror under that key too. */
+						try {
+							await cache.put(new Request(path, { mode: 'navigate' }), res.clone());
+						} catch (e2) {
+							/* ignore — Request mode navigate may be restricted */
+						}
+					}
+				} catch (e) {
+					/* Offline SW update — keep whatever is already in the cache. */
+				}
+			})
+		);
+		/* Drop older pages caches only after this generation has at least one shell. */
+		var seeded = await cache.keys();
+		if (seeded && seeded.length) {
+			var names = await caches.keys();
+			await Promise.all(
+				names.map(function (name) {
+					if (name.indexOf('alpha-pages-') === 0 && name !== PAGES_CACHE) {
+						return caches.delete(name);
+					}
+					return Promise.resolve();
+				})
+			);
+		}
+	} catch (e) {
+		/* never break install */
+	}
+}
+
+self.addEventListener('install', function (event) {
+	event.waitUntil(seedPagesCache());
+});
+
+self.addEventListener('activate', function (event) {
+	event.waitUntil(seedPagesCache());
+});
 
 self.addEventListener('push', (event) => {
 	event.waitUntil(handlePush(event));

@@ -26,8 +26,8 @@
 	/*
 	 * Returning PWA: unlock AppShell from localStorage BEFORE first paint of BootSplash.
 	 * Airplane mode / warm opens must not wait on Drive or async bootApp.
-	 * Prerender stays wave-free (see markup) — static HTML used to bake BootSplash
-	 * into every page, so kill-reopen PWAs always flashed the Metaball until hydrate.
+	 * Prerender stays wave-free (see markup). Pre-module #alpha-boot-shell wave stays
+	 * until .shell mounts — hiding it on warm-boot left a blank screen.
 	 */
 	if (browser) {
 		try {
@@ -86,6 +86,16 @@
 		/** @param {Event} e */
 		function onPreloadError(e) {
 			e.preventDefault?.();
+			/* Airplane mode: /api/recover cannot run — soft reload only. */
+			const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+			if (offline) {
+				try {
+					location.reload();
+				} catch {
+					/* ignore */
+				}
+				return;
+			}
 			if (sessionStorage.getItem('alpha.chunk-reload') === '1') {
 				location.replace('/api/recover');
 				return;

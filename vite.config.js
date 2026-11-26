@@ -47,16 +47,17 @@ export default defineConfig({
 			},
 			workbox: {
 				// App shell only — never intercept Drive API / cross-origin traffic.
-				/* Query busts stale importScripts after push-open / tip-mid + local-first boot. */
-				importScripts: ['/push-sw.js?v=9'],
+				/* Query busts stale importScripts after pages seed + local-first boot. */
+				importScripts: ['/push-sw.js?v=10'],
 				/*
 				 * Do NOT use navigateFallback → createHandlerBoundToURL (cache-only).
 				 * After rsync deploys, that served stale HTML pointing at deleted hashed
 				 * chunks and blanked installed PWAs until a hard refresh.
 				 *
 				 * NetworkFirst with a short timeout: prefer live HTML when online,
-				 * fall back to last cached page within ~0.35s (and immediately offline)
-				 * so airplane-mode / flaky mobile doesn’t sit on the boot wave.
+				 * fall back to last cached page within ~0.35s (and immediately offline).
+				 * push-sw.js seeds `/` + `/chat` into this cache on install so airplane
+				 * kill-reopen is not stuck on an empty runtime cache after a version bump.
 				 */
 				/* null → no cache-only NavigationRoute (see NetworkFirst below). */
 				navigateFallback: null,
@@ -67,7 +68,7 @@ export default defineConfig({
 				/*
 				 * Never precache HTML shells. Precache matches before runtime routes, so
 				 * caching `/` / `chat` / … reintroduced cache-only navigations and blanked
-				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v8) instead.
+				 * PWAs after deploy. Pages use NetworkFirst (alpha-pages-v9) instead.
 				 */
 				globPatterns: ['**/*.{js,css,ico,png,svg,webp,woff,woff2,webmanifest}'],
 				/* Kit appends prerendered HTML globs — ignore so SPA shells stay out of precache. */
@@ -81,7 +82,7 @@ export default defineConfig({
 							!url.pathname.endsWith('/sw.js'),
 						handler: 'NetworkFirst',
 						options: {
-							cacheName: 'alpha-pages-v8',
+							cacheName: 'alpha-pages-v9',
 							/* 0.35s — local-first: prefer cached shell quickly; was 1s. */
 							networkTimeoutSeconds: 0.35,
 							expiration: {
@@ -94,13 +95,17 @@ export default defineConfig({
 									handlerDidError: async ({ request }) => {
 										const reqUrl = request?.url ? new URL(request.url) : null;
 										const path = reqUrl?.pathname || '/';
+										const pageCache = await caches.open('alpha-pages-v9');
 										const match =
+											(await pageCache.match(request, { ignoreSearch: true })) ||
+											(await pageCache.match(path, { ignoreSearch: true })) ||
+											(await pageCache.match('/', { ignoreSearch: true })) ||
+											(await pageCache.match('/chat', { ignoreSearch: true })) ||
 											(await caches.match(request, { ignoreSearch: true })) ||
 											(path !== '/'
 												? await caches.match(path, { ignoreSearch: true })
 												: null) ||
 											(await caches.match('/', { ignoreSearch: true })) ||
-											(await caches.match('/index.html', { ignoreSearch: true })) ||
 											(await caches.match('/chat', { ignoreSearch: true }));
 										return match || Response.error();
 									}
