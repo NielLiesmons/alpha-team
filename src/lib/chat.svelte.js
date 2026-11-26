@@ -30,7 +30,9 @@ import {
 	rememberMailTipFromRef
 } from './mail.svelte.js';
 import {
+	ensureWorkspaceEntity,
 	enterprises,
+	isWorkspaceEntityMissing,
 	notes,
 	projects,
 	selectEntity,
@@ -2453,6 +2455,19 @@ function entitiesStillResolving() {
 	return !workspaceUi.entitiesReady || driveSession.loading;
 }
 
+/**
+ * Missing tip-row id: Loading until Drive confirms gone; then muted Deleted.
+ * Kicks ensureWorkspaceEntity so peer tips hydrate ASAP (chat tip ≠ Space crawl).
+ * @param {'task' | 'note' | 'project' | 'enterprise'} kind
+ * @param {string} id
+ */
+function tipRefResolveState(kind, id) {
+	if (entitiesStillResolving()) return 'loading';
+	if (isWorkspaceEntityMissing(kind, id)) return 'deleted';
+	ensureWorkspaceEntity(kind, id);
+	return 'loading';
+}
+
 export function chatRefMeta(msg) {
 	const ref = msg?.ref;
 	if (!ref?.type) return null;
@@ -2465,7 +2480,7 @@ export function chatRefMeta(msg) {
 		tasks.length;
 		const task = tasks.find((x) => x.id === ref.id);
 		if (!task) {
-			const loading = entitiesStillResolving();
+			const loading = tipRefResolveState('task', ref.id) === 'loading';
 			return {
 				kind: typeName || 'Task',
 				title: loading ? t('chat.loadingTask') : t('chat.deletedTask'),
@@ -2492,7 +2507,7 @@ export function chatRefMeta(msg) {
 		notes.length;
 		const n = notes.find((x) => x.id === ref.id);
 		if (!n) {
-			const loading = entitiesStillResolving();
+			const loading = tipRefResolveState('note', ref.id) === 'loading';
 			return {
 				kind: typeName || 'Note',
 				title: loading ? t('chat.loadingNote') : t('chat.deletedNote'),
@@ -2516,7 +2531,7 @@ export function chatRefMeta(msg) {
 		projects.length;
 		const p = projects.find((x) => x.id === ref.id);
 		if (!p) {
-			const loading = entitiesStillResolving();
+			const loading = tipRefResolveState('project', ref.id) === 'loading';
 			return {
 				kind: typeName || 'Project',
 				title: loading ? t('chat.loadingProject') : t('chat.deletedProject'),
@@ -2542,7 +2557,7 @@ export function chatRefMeta(msg) {
 		enterprises.length;
 		const e = enterprises.find((x) => x.id === ref.id);
 		if (!e) {
-			const loading = entitiesStillResolving();
+			const loading = tipRefResolveState('enterprise', ref.id) === 'loading';
 			return {
 				kind: 'Enterprise',
 				title: loading ? t('chat.loadingEnterprise') : t('chat.deletedEnterprise'),

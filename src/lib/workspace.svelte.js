@@ -42,7 +42,7 @@ import { hydrateAvatarUrls } from './avatar.svelte.js';
 import { ensureMembers } from './members.svelte.js';
 import { activeSession, driveSession } from './drive/session.svelte.js';
 import { getLastAppliedTip, setLastAppliedTip } from './drive/tip-gate.js';
-import { getTip } from './drive/client.js';
+import { getPath, getTip } from './drive/client.js';
 import { loadWorkspaceLeaves } from './drive/workspace-load.js';
 import { loadPersonCursors } from './person-cursors.svelte.js';
 import { idbGet, idbSet, workspaceCacheKey } from './local-db.js';
@@ -105,6 +105,165 @@ export const ui = $state({
 	 */
 	entitiesReady: false
 });
+
+/**
+ * Per-id tip-row resolve: missing refs stay Loading until Drive confirms gone.
+ * Touch `epoch` so chatRefMeta re-runs when inflight / missing flips.
+ */
+export const entityResolveUi = $state({
+	epoch: 0,
+	/** @type {Record<string, true>} */
+	missing: {}
+});
+
+/** @type {Map<string, Promise<'ok' | 'missing' | 'error'>>} */
+const entityEnsureInflight = new Map();
+
+/** @param {'task' | 'note' | 'project' | 'enterprise'} kind @param {string} id */
+function entityResolveKey(kind, id) {
+	return `${kind}:${id}`;
+}
+
+/** @param {'task' | 'note' | 'project' | 'enterprise'} kind @param {string} id */
+export function isWorkspaceEntityMissing(kind, id) {
+	entityResolveUi.epoch;
+	return Boolean(entityResolveUi.missing[entityResolveKey(kind, id)]);
+}
+
+/** @param {'task' | 'note' | 'project' | 'enterprise'} kind @param {string} id */
+export function isWorkspaceEntityEnsuring(kind, id) {
+	entityResolveUi.epoch;
+	return entityEnsureInflight.has(entityResolveKey(kind, id));
+}
+
+/** @param {'task' | 'note' | 'project' | 'enterprise'} kind @param {string} id */
+function entityDrivePath(kind, id) {
+	if (kind === 'task') return `tasks/${id}/task.json`;
+	if (kind === 'note') return `notes/${id}/note.json`;
+	if (kind === 'project') return `projects/${id}/project.json`;
+	return `enterprises/${id}/enterprise.json`;
+}
+
+/**
+ * Upsert a Drive leaf into the matching workspace list (tip-row eager hydrate).
+ * @param {'task' | 'note' | 'project' | 'enterprise'} kind
+ * @param {any} doc
+ */
+function ingestWorkspaceDoc(kind, doc) {
+	if (!doc?.id) return;
+	const plist = projects.map((p) => p._drive ?? p);
+	if (kind === 'task') {
+		const uiTask = toUiTask(doc, plist);
+		const i = tasks.findIndex((t) => String(t.id) === String(uiTask.id));
+		if (i >= 0) tasks[i] = mergeConfirmed(tasks[i], uiTask);
+		else tasks.unshift(uiTask);
+		return;
+	}
+	if (kind === 'note') {
+		const uiNote = toUiNote(doc, plist);
+		const i = notes.findIndex((n) => String(n.id) === String(uiNote.id));
+		if (i >= 0) notes[i] = mergeConfirmed(notes[i], uiNote);
+		else notes.unshift(uiNote);
+		return;
+	}
+	if (kind === 'project') {
+		const row = {
+			id: doc.id,
+			title: doc.title,
+			description: doc.description || doc.body || '',
+			status: doc.status || 'planned',
+			icon: doc.icon ?? null,
+			enterprise_ids: Array.isArray(doc.enterprise_ids) ? doc.enterprise_ids : [],
+			primary_enterprise_id:
+				doc.primary_enterprise_id ||
+				(Array.isArray(doc.enterprise_ids) && doc.enterprise_ids[0]) ||
+				null,
+			depends_on: Array.isArray(doc.depends_on) ? doc.depends_on : [],
+			milestones: Array.isArray(doc.milestones) ? doc.milestones : [],
+			slug: doc.slug,
+			_drive: doc
+		};
+		const i = projects.findIndex((p) => String(p.id) === String(row.id));
+		if (i >= 0) projects[i] = { ...projects[i], ...row };
+		else projects.unshift(row);
+		return;
+	}
+	const row = {
+		...doc,
+		description: doc.description || doc.body || ''
+	};
+	const i = enterprises.findIndex((e) => String(e.id) === String(row.id));
+	if (i >= 0) enterprises[i] = { ...enterprises[i], ...row };
+	else enterprises.unshift(row);
+}
+
+/**
+ * Eagerly fetch a tip-row entity by id. Retries briefly when Space tip lags chat.
+ * Only marks Deleted after path-not-found exhausts retries (not on network blips).
+ * @param {'task' | 'note' | 'project' | 'enterprise'} kind
+ * @param {string} id
+ */
+export function ensureWorkspaceEntity(kind, id) {
+	const sid = String(id || '').trim();
+	if (!sid || !kind) return;
+	const key = entityResolveKey(kind, sid);
+	if (entityResolveUi.missing[key] || entityEnsureInflight.has(key)) return;
+
+	const run = (async () => {
+		const session = activeSession();
+		if (!session) {
+			entityResolveUi.missing = { ...entityResolveUi.missing, [key]: true };
+			return /** @type {const} */ ('missing');
+		}
+		/* Offline + warm lists: absent id is gone for this device. */
+		if (isOffline()) {
+			entityResolveUi.missing = { ...entityResolveUi.missing, [key]: true };
+			return /** @type {const} */ ('missing');
+		}
+
+		const path = entityDrivePath(kind, sid);
+		let lastErr = /** @type {unknown} */ (null);
+		for (let attempt = 0; attempt < 4; attempt++) {
+			try {
+				const bytes = await getPath(session, path);
+				const doc = JSON.parse(new TextDecoder().decode(bytes));
+				ingestWorkspaceDoc(kind, doc);
+				if (entityResolveUi.missing[key]) {
+					const next = { ...entityResolveUi.missing };
+					delete next[key];
+					entityResolveUi.missing = next;
+				}
+				scheduleWorkspacePersist();
+				return /** @type {const} */ ('ok');
+			} catch (e) {
+				lastErr = e;
+				const msg = e instanceof Error ? e.message : String(e);
+				if (!msg.includes('path not found')) {
+					console.warn('ensureWorkspaceEntity', kind, sid, e);
+					/* Hold inflight briefly so tip rows don't hammer Drive. */
+					await new Promise((r) => setTimeout(r, 1600));
+					return /** @type {const} */ ('error');
+				}
+				if (attempt < 3) {
+					await new Promise((r) => setTimeout(r, 180 * (attempt + 1)));
+					continue;
+				}
+			}
+		}
+		entityResolveUi.missing = { ...entityResolveUi.missing, [key]: true };
+		if (lastErr) console.warn('ensureWorkspaceEntity missing', kind, sid, lastErr);
+		return /** @type {const} */ ('missing');
+	})();
+
+	entityEnsureInflight.set(
+		key,
+		run.finally(() => {
+			entityEnsureInflight.delete(key);
+			entityResolveUi.epoch += 1;
+		})
+	);
+	entityResolveUi.epoch += 1;
+}
 
 /**
  * Open an entity in the third column (does not open the create/edit modal).
@@ -299,6 +458,8 @@ function clearWorkspace() {
 	replaceArray(metrics, []);
 	replaceArray(captureForms, []);
 	replaceArray(dataViews, []);
+	entityResolveUi.missing = {};
+	entityResolveUi.epoch += 1;
 	ui.projectId = null;
 	ui.noteId = null;
 	ui.selection = null;

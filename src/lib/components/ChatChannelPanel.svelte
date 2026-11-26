@@ -48,7 +48,14 @@
 		startChatTipPoll,
 		stopChatTipPoll
 	} from '$lib/chat-sync.svelte.js';
-	import { ui } from '$lib/workspace.svelte.js';
+	import {
+		enterprises,
+		entityResolveUi,
+		notes,
+		projects,
+		tasks,
+		ui
+	} from '$lib/workspace.svelte.js';
 	import { chatStackFlags, continuesChatStack } from '$lib/chat-stack.js';
 	import {
 		createChannelFeedView,
@@ -140,6 +147,14 @@
 	};
 	const feedSnap = $derived.by(() => {
 		mailTipCache; /* re-tip Mail panels when subjects hydrate */
+		/* Tip-row entity hydrate (Loading → title / Deleted) via refreshPanelMeta. */
+		tasks.length;
+		notes.length;
+		projects.length;
+		enterprises.length;
+		entityResolveUi.epoch;
+		ui.entitiesReady;
+		driveSession.loading;
 		const len = chatFeed.length;
 		const tip = len ? chatFeed[0]?.id : '';
 		void tip;
