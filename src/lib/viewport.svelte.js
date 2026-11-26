@@ -2,10 +2,11 @@
  * Keep layout height in sync with the visible viewport (keyboard / iOS chrome).
  * Sets --app-height and --vv-top on :root for shells and fixed overlays.
  *
- * Pair with `interactive-widget=overlays-content` so the soft keyboard does not
- * also resize the layout viewport — otherwise new iOS (Safari 27.3+) applies
- * the inset twice (browser resize + this bridge) and shoves the chat composer
- * toward the top of the screen.
+ * interactive-widget:
+ * - Default (app.html) = `resizes-content` — Android Chrome/PWA needs the layout
+ *   viewport to shrink or the keyboard covers the chat composer.
+ * - iOS / iPadOS → `overlays-content` via syncInteractiveWidget(). Safari 27.3+
+ *   otherwise applies resize + this bridge and double-insets the composer up.
  *
  * Desktop: leave --app-height unset so CSS falls back to 100dvh — visualViewport
  * tracking fights browser / page zoom. Mobile (≤767px or coarse pointer) only.
@@ -19,6 +20,39 @@ function isMobileViewport() {
 	return (
 		window.matchMedia('(max-width: 767px)').matches ||
 		window.matchMedia('(pointer: coarse)').matches
+	);
+}
+
+/** iPhone / iPad / iPadOS-desktop-UA — not Android. */
+export function isAppleTouchDevice() {
+	if (typeof navigator === 'undefined') return false;
+	const ua = navigator.userAgent || '';
+	if (/iPad|iPhone|iPod/.test(ua)) return true;
+	/* iPadOS 13+ reports as MacIntel with touch. */
+	if (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1) {
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Android: resizes-content (composer stays above kb).
+ * iOS: overlays-content (avoid double-inset with --app-height).
+ */
+function syncInteractiveWidget() {
+	if (typeof document === 'undefined') return;
+	const meta = document.querySelector('meta[name="viewport"]');
+	if (!meta) return;
+	const widget = isAppleTouchDevice() ? 'overlays-content' : 'resizes-content';
+	let content = String(meta.getAttribute('content') || '');
+	content = content
+		.replace(/,?\s*interactive-widget=(?:overlays|resizes)-content/gi, '')
+		.replace(/,\s*,/g, ',')
+		.replace(/^\s*,\s*|\s*,\s*$/g, '')
+		.trim();
+	meta.setAttribute(
+		'content',
+		content ? `${content}, interactive-widget=${widget}` : `interactive-widget=${widget}`
 	);
 }
 
@@ -38,6 +72,8 @@ export function startViewportBridge() {
 		window.matchMedia('(max-width: 767px)'),
 		window.matchMedia('(pointer: coarse)')
 	];
+
+	syncInteractiveWidget();
 
 	const apply = () => {
 		if (!isMobileViewport()) {

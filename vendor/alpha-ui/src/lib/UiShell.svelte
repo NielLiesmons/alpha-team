@@ -1432,8 +1432,9 @@
 		--chrome-scroll-fade: 0;
 		display: flex;
 		/*
-		 * --app-height / --vv-top track visualViewport (overlays-content). Pin the
-		 * shell once — never also rely on interactive-widget=resizes-content.
+		 * --app-height / --vv-top track visualViewport. iOS uses overlays-content;
+		 * Android uses resizes-content (see viewport.svelte.js) so the keyboard
+		 * does not cover the composer.
 		 */
 		margin-top: var(--vv-top, 0px);
 		height: var(--app-height, 100dvh);

@@ -4,8 +4,32 @@
 		<meta charset="utf-8" />
 		<meta
 			name="viewport"
-			content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=overlays-content"
+			content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content"
 		/>
+		<script>
+			/* Android needs resizes-content (default) or the kb covers the composer.
+			 * iOS Safari 27.3+ double-insets with resize + --app-height — overlays-content. */
+			(function () {
+				try {
+					var ua = navigator.userAgent || '';
+					var ios =
+						/iPad|iPhone|iPod/.test(ua) ||
+						(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+					if (!ios) return;
+					var meta = document.querySelector('meta[name="viewport"]');
+					if (!meta) return;
+					var c = String(meta.getAttribute('content') || '').replace(
+						/,?\s*interactive-widget=(?:overlays|resizes)-content/gi,
+						''
+					);
+					meta.setAttribute(
+						'content',
+						c.replace(/^\s*,\s*|\s*,\s*$/g, '').trim() +
+							', interactive-widget=overlays-content'
+					);
+				} catch (e) {}
+			})();
+		</script>
 		<meta name="theme-color" content="#090909" />
 		<meta name="color-scheme" content="dark light" />
 		<meta name="mobile-web-app-capable" content="yes" />

@@ -3070,9 +3070,9 @@
 		.detail {
 			position: fixed;
 			/*
-			 * Pin to visualViewport (not layout inset:0). With overlays-content the
-			 * keyboard does not resize layout — --vv-top + --app-height place the
-			 * sheet once above the keyboard (avoids double-inset shove).
+			 * Pin to visualViewport (not layout inset:0). iOS: overlays-content +
+			 * --vv-top/--app-height once. Android: resizes-content + same pin so
+			 * the composer stays above the keyboard.
 			 */
 			top: var(--vv-top, 0px);
 			left: 0;
