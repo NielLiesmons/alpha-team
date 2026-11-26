@@ -118,7 +118,7 @@
 		color: var(--fg-66);
 	}
 
-	/* Primary CTA: ink-on-bg — never accent wash. */
+	/* Primary CTA: --button-primary-* (quiet ink-on-bg) — never solid --fg wash. */
 	.install-cta {
 		display: flex;
 		align-items: center;
@@ -129,9 +129,8 @@
 		padding: 0 14px;
 		border: none;
 		border-radius: 999px;
-		background: var(--button-primary-bg, var(--fg));
-		background-color: var(--fg);
-		color: var(--button-primary-fg, var(--bg));
+		background: var(--button-primary-bg, var(--fg-8));
+		color: var(--button-primary-fg, var(--fg));
 		font: inherit;
 		font-size: 0.8125rem;
 		font-weight: 650;
