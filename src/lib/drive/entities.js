@@ -2885,6 +2885,16 @@ export async function createChatMessage(session, input, opts = {}) {
 		commentsPrep
 	]);
 
+	/*
+	 * Tip is durable — wake peers + settle ✓ before best-effort comments.json
+	 * (putPaths must not delay checkmark / tip-wake).
+	 */
+	try {
+		if (tipAfter) opts.onTipWritten?.(String(tipAfter));
+	} catch {
+		/* realtime wake must never break send */
+	}
+
 	/* Entity comments index still lives on the Space tip (rare vs chat sends). */
 	if (wantsComments && refType && refId) {
 		try {
@@ -2913,11 +2923,6 @@ export async function createChatMessage(session, input, opts = {}) {
 			tip: tipAfter ? String(tipAfter).slice(0, 12) : '',
 			mode: 'mailbox-append'
 		});
-	}
-	try {
-		if (tipAfter) opts.onTipWritten?.(String(tipAfter));
-	} catch {
-		/* realtime wake must never break send */
 	}
 	return msg;
 }

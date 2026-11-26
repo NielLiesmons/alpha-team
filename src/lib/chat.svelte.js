@@ -34,6 +34,27 @@ import { projectDisplayIcon, projectLifecycle } from './project-status.js';
 import { getContentType, resolveContentTypeCard } from './content-types/index.js';
 import { t } from './i18n.svelte.js';
 
+/**
+ * Cached dynamic import of realtime — avoids chat↔realtime cycle while keeping
+ * publishMessageHint / publishTipWake near-sync after the first load.
+ * @type {Promise<typeof import('./realtime.svelte.js')> | null}
+ */
+let realtimeModP = null;
+function loadRealtime() {
+	return (realtimeModP ??= import('./realtime.svelte.js'));
+}
+
+/** Prefetch bus module + open WS (call from chat panel mount / before send). */
+export function prefetchChatRealtime() {
+	void loadRealtime().then((m) => {
+		try {
+			m.ensureRealtime();
+		} catch {
+			/* ignore */
+		}
+	});
+}
+
 /** Chat ref.type → entity schema / package lookup */
 const REF_TYPE_SCHEMA = {
 	task: 'alpha.task/4',
@@ -1300,7 +1321,7 @@ export function applyReactionHint(hint) {
  * @param {{ tip?: string, op: 'add' | 'remove', message_id: string, emoji: string, author: string, id?: string }} payload
  */
 function publishReactionWake(payload) {
-	void import('./realtime.svelte.js').then(({ publishTipWake, publishReactionHint }) => {
+	void loadRealtime().then(({ publishTipWake, publishReactionHint }) => {
 		if (payload.tip) publishTipWake(payload.tip);
 		publishReactionHint(payload);
 	});
@@ -1352,7 +1373,7 @@ export async function toggleReaction(messageId, emoji) {
 				knownFeedIds: knownFeedIds()
 			});
 			if (tip) {
-				void import('./realtime.svelte.js').then(({ publishTipWake }) => {
+				void loadRealtime().then(({ publishTipWake }) => {
 					publishTipWake(tip);
 				});
 			}
@@ -1634,6 +1655,8 @@ export async function postChatMessage(input) {
 	 * leave bubbles stranded until the 45s watchdog → false “tap to retry”).
 	 */
 	const runDrivePersist = () => {
+	/* Warm realtime module + WS while we encrypt / append (no cycle via static import). */
+	prefetchChatRealtime();
 	/* Drive write in background — ✓ only after feed tip is committed. */
 	void (async () => {
 		chatUi.posting = true;
@@ -1827,14 +1850,15 @@ export async function postChatMessage(input) {
 						/*
 						 * Peer paint ASAP (before tip CAS) — same path as reaction hints.
 						 * Tip wake below still heals Drive SoT.
+						 * loadRealtime() is cached — sync publish once the module is warm.
 						 */
 						if (!isReaction && kind !== 'reaction') {
-							void import('./realtime.svelte.js').then(({ publishMessageHint }) => {
+							void loadRealtime().then(({ publishMessageHint }) => {
 								publishMessageHint(leaf);
 							});
 						}
 					},
-					/* Tip + message payload so peers paint even if `message` type is old API. */
+					/* Tip durable — settle ✓ here (before createChatMessage returns / putPaths). */
 					onTipWritten: (tip) => {
 						tipWritten = String(tip || '');
 						const wakeMsg = leafForWake || {
@@ -1848,15 +1872,22 @@ export async function postChatMessage(input) {
 							...(input.reply_to ? { reply_to: input.reply_to } : {}),
 							...(attachments.length ? { attachments } : {})
 						};
-						void import('./realtime.svelte.js').then(({ publishTipWake }) => {
+						if (!settled && leafForWake) {
+							settleFrom(leafForWake);
+							settled = true;
+						}
+						void loadRealtime().then(({ publishTipWake }) => {
 							publishTipWake(tip, isReaction || kind === 'reaction' ? null : wakeMsg);
 						});
 					}
 				}
 			);
 
-			settleFrom(created);
-			settled = true;
+			/* Fallback if onTipWritten did not run (empty tip) — still only after append success. */
+			if (!settled) {
+				settleFrom(created);
+				settled = true;
+			}
 
 			/* Wake other devices (Home Screen PWA push). Never block the send UX. */
 			if (!isReaction && kind !== 'reaction') {

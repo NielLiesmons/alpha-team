@@ -51,6 +51,29 @@ async function importAesKey(keyBytes) {
 }
 
 /**
+ * Cached AES-GCM CryptoKey per root+path (chat/mail append hits the same AAD every send).
+ * Same ciphertext semantics — only skips repeated SHA-256 + importKey.
+ * @type {Map<string, CryptoKey>}
+ */
+const pathAesKeyCache = new Map();
+
+/**
+ * @param {Uint8Array} root
+ * @param {string} path
+ */
+async function pathAesKey(root, path) {
+	const cacheKey = `${bytesToHex(root)}|${path}`;
+	let key = pathAesKeyCache.get(cacheKey);
+	if (key) return key;
+	const keyBytes = await derivePathKey(root, path);
+	key = await importAesKey(keyBytes);
+	/* Bound growth if many paths ever appear; chat/mail + dir '' are the hot ones. */
+	if (pathAesKeyCache.size > 64) pathAesKeyCache.clear();
+	pathAesKeyCache.set(cacheKey, key);
+	return key;
+}
+
+/**
  * Encrypt plaintext under a random file key. Returns { ciphertext: nonce||ct, fileKeyHex }.
  * @param {Uint8Array} _root
  * @param {string} _path
@@ -73,9 +96,8 @@ export async function encrypt(_root, _path, plaintext) {
  * @param {Uint8Array} plaintext
  */
 export async function encryptWithRoot(root, path, plaintext) {
-	const keyBytes = await derivePathKey(root, path);
+	const key = await pathAesKey(root, path);
 	const nonce = crypto.getRandomValues(new Uint8Array(12));
-	const key = await importAesKey(keyBytes);
 	const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, plaintext));
 	const out = new Uint8Array(12 + ct.length);
 	out.set(nonce, 0);
@@ -89,8 +111,11 @@ export async function encryptWithRoot(root, path, plaintext) {
  * @param {Uint8Array} ciphertext
  */
 export async function decrypt(root, path, ciphertext) {
-	const keyBytes = await derivePathKey(root, path);
-	return decryptWithKey(keyBytes, ciphertext);
+	if (ciphertext.length < 12) throw new Error('ciphertext too short');
+	const key = await pathAesKey(root, path);
+	const nonce = ciphertext.slice(0, 12);
+	const ct = ciphertext.slice(12);
+	return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, key, ct));
 }
 
 /**

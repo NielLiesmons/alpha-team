@@ -34,6 +34,7 @@
 		isChatStatusEvent,
 		loadComments,
 		openChatRef,
+		prefetchChatRealtime,
 		refreshChatFeed,
 		requestOpenComments,
 		visibleChatMessages
@@ -255,6 +256,8 @@
 	onMount(() => {
 		mountedChannel = channelId;
 		startChatTipPoll();
+		/* Open WS + cache realtime module before first Send (hint/tip-wake stay sync). */
+		prefetchChatRealtime();
 		const warm = hydrateChatFeedFromCache() || chatFeed.length > 0;
 		if (warm) {
 			chatUi.loading = false;
