@@ -290,15 +290,21 @@ let lastTypingSent = 0;
 /** Debounced typing for the open composer (throttle WS spam, refresh expiry). */
 export function signalTyping(channelId) {
 	const now = Date.now();
-	/* Re-publish at most ~1.2s so peers refresh expires_at without flooding. */
+	const cid = String(channelId || 'general');
+	/*
+	 * Never JSON.stringify + sock.send on the calling stack (composer oninput).
+	 * Throttle still applies; idle timer reset is cheap and stays sync.
+	 */
 	if (now - lastTypingSent > 1_200) {
 		lastTypingSent = now;
-		publishEphemeral({ channel_id: channelId, state: 'typing' });
+		const publish = () => publishEphemeral({ channel_id: cid, state: 'typing' });
+		if (typeof queueMicrotask === 'function') queueMicrotask(publish);
+		else setTimeout(publish, 0);
 	}
 	if (typingIdleTimer != null) clearTimeout(typingIdleTimer);
 	typingIdleTimer = setTimeout(() => {
 		lastTypingSent = 0;
-		publishEphemeral({ channel_id: channelId, state: 'idle' });
+		publishEphemeral({ channel_id: cid, state: 'idle' });
 	}, 4_000);
 }
 
