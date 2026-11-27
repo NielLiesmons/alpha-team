@@ -191,19 +191,13 @@
 
 	.row-end {
 		position: absolute;
-		/* ~12px inset from pill edge — count was kissing the right stroke. */
-		right: 0.75rem;
+		right: 0.375rem;
 		top: 50%;
+		width: 1.5rem;
 		height: 1.5rem;
 		transform: translateY(-50%);
-		display: inline-flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 0.375rem;
-		width: max-content;
-		max-width: calc(100% - 2.5rem);
-		padding-left: 0.75rem;
-		box-sizing: border-box;
+		display: grid;
+		place-items: center;
 		pointer-events: none;
 	}
 

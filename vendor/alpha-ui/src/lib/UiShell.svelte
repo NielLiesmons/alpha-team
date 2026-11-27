@@ -2103,20 +2103,15 @@
 
 	.row-end {
 		position: absolute;
-		/* ~12px inset from pill edge — count was kissing the right stroke. */
-		right: 0.75rem;
+		right: 0.375rem;
 		top: 50%;
+		min-width: 1.5rem;
 		height: 1.5rem;
 		transform: translateY(-50%);
-		display: inline-flex;
+		display: flex;
 		align-items: center;
 		justify-content: flex-end;
 		gap: 0.375rem;
-		/* Hug dot+count / + stack — no fixed min-width shenanigans. */
-		width: max-content;
-		max-width: calc(100% - 2.5rem);
-		padding-left: 0.75rem;
-		box-sizing: border-box;
 		pointer-events: none;
 	}
 
@@ -2156,6 +2151,11 @@
 
 	.nav-row.active .count {
 		color: var(--white66);
+	}
+
+	/* Chat unread only: breathe from pill edge — do not shift creatable + stacks. */
+	.nav-row :global(.unread-mark) {
+		padding-inline-end: 0.75rem;
 	}
 
 	/* UnreadMark count: muted white on dark nav — never accent / full ink. */
