@@ -974,6 +974,8 @@ async function refreshChatFeedOnce(session, opts) {
 			listFeedMessages(session, CHAT_FEED_LIMIT, {
 				/* Reuse warm rows so tip wakes only download new leaves (keeps tip I/O free). */
 				seedRows,
+				/* Open/resume catch-up deep-heals holey/incomplete caches; quiet polls stay delta. */
+				catchUp: opts.catchUp === true,
 				...(busTip ? { tip: busTip } : {}),
 				onPartial: (partial) => {
 					/* Leaf-cache hits / early batches — drop skeleton before network misses finish. */

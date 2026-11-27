@@ -4,6 +4,7 @@
  */
 
 import { idbDel, idbGet, idbSet } from '../local-db.js';
+import { mailboxFeedHasHoles } from '../mailbox-feed.js';
 import {
 	bytesToHex,
 	decrypt,
@@ -28,15 +29,19 @@ let rootDirCache = null;
 let mailboxTipCache = null;
 /**
  * Materialized chat mailbox feed.
- * `complete` = last walk reached genesis (prev empty). Incomplete IDB snaps must
- * never warm-hit — phones otherwise stick on a truncated tip-matched cache.
+ * `complete` = last walk reached genesis (prev empty) or incremental merge onto
+ * a contiguous complete chain. Incomplete IDB snaps must never warm-hit —
+ * phones otherwise stick on a truncated tip-matched cache.
+ * `holesAccepted` = genesis walk still missing reply_to parents (retracted /
+ * legacy) — do not keep forcing deep heal walks for those.
  * @type {{
  *   key: string,
  *   tip: string,
  *   messages: any[],
  *   complete: boolean,
  *   count: number,
- *   tailHash: string
+ *   tailHash: string,
+ *   holesAccepted: boolean
  * } | null}
  */
 let mailboxFeedCache = null;
@@ -133,7 +138,11 @@ function rootDirIdbKey(session) {
 }
 
 function mailboxFeedIdbKey(session) {
-	return `alpha.drive.chatmail.v1:${sessionCacheKey(session)}`;
+	/*
+	 * v2: drop CAS-poisoned v1 snaps that stamped complete:true with mid-chain
+	 * holes (409 append prepended only the local leaf). Cold open rebuilds once.
+	 */
+	return `alpha.drive.chatmail.v2:${sessionCacheKey(session)}`;
 }
 
 /**
@@ -183,20 +192,22 @@ function rememberMailboxTip(session, tip) {
  * @param {DriveSession} session
  * @param {string} tip
  * @param {any[]} messages
- * @param {{ complete?: boolean, tailHash?: string }} [meta]
+ * @param {{ complete?: boolean, tailHash?: string, holesAccepted?: boolean }} [meta]
  */
 function rememberMailboxFeed(session, tip, messages, meta = {}) {
 	rememberMailboxTip(session, tip);
 	const rows = Array.isArray(messages) ? messages.map((m) => structuredClone(m)) : [];
 	const complete = Boolean(meta.complete);
 	const tailHash = String(meta.tailHash || '');
+	const holesAccepted = Boolean(meta.holesAccepted);
 	mailboxFeedCache = {
 		key: sessionCacheKey(session),
 		tip: tip || '',
 		messages: rows,
 		complete,
 		count: rows.length,
-		tailHash
+		tailHash,
+		holesAccepted
 	};
 	void idbSet(mailboxFeedIdbKey(session), {
 		at: Date.now(),
@@ -204,23 +215,36 @@ function rememberMailboxFeed(session, tip, messages, meta = {}) {
 		messages: rows,
 		complete,
 		count: rows.length,
-		tailHash
+		tailHash,
+		holesAccepted
 	}).catch(() => {});
 }
 
 /**
- * In-memory mailbox feed integrity meta (tip / count / complete) — no network.
+ * In-memory mailbox feed integrity meta (tip / count / complete / holes) — no network.
  * @param {DriveSession} session
- * @returns {{ tip: string, count: number, complete: boolean, tailHash: string } | null}
+ * @returns {{
+ *   tip: string,
+ *   count: number,
+ *   complete: boolean,
+ *   tailHash: string,
+ *   holesAccepted: boolean,
+ *   hasHoles: boolean
+ * } | null}
  */
 export function peekMailboxFeedMeta(session) {
 	if (!session || !mailboxFeedCache) return null;
 	if (mailboxFeedCache.key !== sessionCacheKey(session)) return null;
+	const holesAccepted = Boolean(mailboxFeedCache.holesAccepted);
+	const hasHoles =
+		!holesAccepted && mailboxFeedHasHoles(mailboxFeedCache.messages || []);
 	return {
 		tip: mailboxFeedCache.tip || '',
 		count: mailboxFeedCache.count || mailboxFeedCache.messages?.length || 0,
 		complete: Boolean(mailboxFeedCache.complete),
-		tailHash: mailboxFeedCache.tailHash || ''
+		tailHash: mailboxFeedCache.tailHash || '',
+		holesAccepted,
+		hasHoles
 	};
 }
 
@@ -583,53 +607,102 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 			if (res.status === 204 || res.ok) {
 				mailboxEntryCache.set(hash, envelope);
 				rememberMailboxTip(session, hash);
-				/* Prepend message into warm feed cache when possible. */
-				if (entry?.kind === 'message' && entry.message && mailboxFeedCache) {
-					const key = sessionCacheKey(session);
-					if (mailboxFeedCache.key === key) {
+				const cacheKeyNow = sessionCacheKey(session);
+				if (mailboxFeedCache?.key === cacheKeyNow) {
+					const oldTip = mailboxFeedCache.tip || '';
+					const oldComplete = Boolean(mailboxFeedCache.complete);
+					const oldHolesAccepted = Boolean(mailboxFeedCache.holesAccepted);
+					const oldTail = mailboxFeedCache.tailHash || '';
+					/*
+					 * CAS 409 retry: peer leaves sit between new tip and our old tip.
+					 * Prepending only our entry (or advancing a receipt tip) while
+					 * keeping complete:true poisoned warm-hit / stopAt forever —
+					 * catch-up then only painted the last few messages.
+					 */
+					const raced = attempt > 0;
+					/** @type {any[]} */
+					let baseMessages = mailboxFeedCache.messages || [];
+					let linked = !raced || !oldTip || oldTip === hash;
+					if (raced && oldTip && oldTip !== hash) {
+						/** @type {{ hash: string, prev?: string | null, entry?: any }[]} */
+						const gap = [];
+						let h = String(envelope.prev || '');
+						linked = false;
+						for (let guard = 0; h && guard < 64; guard++) {
+							if (h === oldTip) {
+								linked = true;
+								break;
+							}
+							try {
+								const doc = await decryptMailboxEntry(session, root, h);
+								gap.push({
+									hash: h,
+									prev: doc?.prev ?? null,
+									entry: doc?.entry
+								});
+								h = doc?.prev ? String(doc.prev) : '';
+								if (!h) break;
+							} catch {
+								break;
+							}
+						}
+						if (h === oldTip) linked = true;
+						if (gap.length) {
+							baseMessages = materializeMailboxMessages(gap, 5000, baseMessages);
+						}
+					}
+					const nextComplete = raced ? Boolean(linked && oldComplete) : oldComplete;
+					const nextHolesAccepted = nextComplete ? oldHolesAccepted : false;
+
+					/* Prepend message into warm feed cache when possible. */
+					if (entry?.kind === 'message' && entry.message) {
 						const next = [
 							structuredClone(entry.message),
-							...mailboxFeedCache.messages.filter((m) => m?.id !== entry.message.id)
+							...baseMessages.filter((m) => m?.id !== entry.message.id)
 						];
 						rememberMailboxFeed(session, hash, next, {
-							complete: Boolean(mailboxFeedCache.complete),
-							tailHash: mailboxFeedCache.tailHash || ''
+							complete: nextComplete,
+							tailHash: oldTail,
+							holesAccepted: nextHolesAccepted
 						});
+					} else if (entry?.kind === 'receipts') {
+						/*
+						 * Keep warm materialization — receipt tip advances used to wipe
+						 * tip:'' and force a fat mailbox rebuild every ~few seconds (title
+						 * wave + composer jank). Apply read_by locally and advance tip.
+						 */
+						const reader = String(entry.reader || '')
+							.trim()
+							.toLowerCase();
+						/** @type {Set<string>} */
+						const ids = new Set(
+							(Array.isArray(entry.message_ids) ? entry.message_ids : []).map((id) =>
+								String(id || '').trim()
+							)
+						);
+						const next = baseMessages.map((m) => {
+							const id = String(m?.id || '');
+							if (!id || !ids.has(id)) return m;
+							const prevRead = Array.isArray(m.read_by)
+								? m.read_by.map((e) => String(e).toLowerCase())
+								: [];
+							if (!reader || prevRead.includes(reader)) return m;
+							return { ...m, read_by: [...prevRead, reader], delivery: 'read' };
+						});
+						rememberMailboxFeed(session, hash, next, {
+							complete: nextComplete,
+							tailHash: oldTail,
+							holesAccepted: nextHolesAccepted
+						});
+					} else {
+						/* Retract / tombstone — invalidate; next pull rebuilds. */
+						mailboxFeedCache = {
+							...mailboxFeedCache,
+							tip: '',
+							complete: false,
+							holesAccepted: false
+						};
 					}
-				} else if (
-					entry?.kind === 'receipts' &&
-					mailboxFeedCache?.key === sessionCacheKey(session)
-				) {
-					/*
-					 * Keep warm materialization — receipt tip advances used to wipe
-					 * tip:'' and force a fat mailbox rebuild every ~few seconds (title
-					 * wave + composer jank). Apply read_by locally and advance tip.
-					 */
-					const reader = String(entry.reader || '')
-						.trim()
-						.toLowerCase();
-					/** @type {Set<string>} */
-					const ids = new Set(
-						(Array.isArray(entry.message_ids) ? entry.message_ids : []).map((id) =>
-							String(id || '').trim()
-						)
-					);
-					const next = (mailboxFeedCache.messages || []).map((m) => {
-						const id = String(m?.id || '');
-						if (!id || !ids.has(id)) return m;
-						const prevRead = Array.isArray(m.read_by)
-							? m.read_by.map((e) => String(e).toLowerCase())
-							: [];
-						if (!reader || prevRead.includes(reader)) return m;
-						return { ...m, read_by: [...prevRead, reader], delivery: 'read' };
-					});
-					rememberMailboxFeed(session, hash, next, {
-						complete: Boolean(mailboxFeedCache.complete),
-						tailHash: mailboxFeedCache.tailHash || ''
-					});
-				} else if (mailboxFeedCache?.key === sessionCacheKey(session)) {
-					/* Retract / tombstone — invalidate; next pull rebuilds. */
-					mailboxFeedCache = { ...mailboxFeedCache, tip: '', complete: false };
 				}
 				if (typeof console !== 'undefined' && console.debug) {
 					console.debug('[chat-latency] appendMailbox', {
@@ -710,7 +783,7 @@ export async function appendMailboxEntry(session, entry, opts = {}) {
 
 /**
  * Walk chat mailbox from tip → prev until limit messages (or stopAt hash).
- * Server tip is authority: incomplete local caches never warm-hit permanently.
+ * Server tip is authority: incomplete / holey local caches never warm-hit permanently.
  * @param {DriveSession} session
  * @param {{
  *   limit?: number,
@@ -744,13 +817,15 @@ export async function loadMailboxMessages(session, opts = {}) {
 				 * truncated phones reconcile to the full server chain once.
 				 */
 				const complete = snap.complete === true;
+				const holesAccepted = snap.holesAccepted === true;
 				mailboxFeedCache = {
 					key: cacheKey,
 					tip: String(snap.tip || ''),
 					messages: snap.messages.map((m) => structuredClone(m)),
 					complete,
 					count: snap.messages.length,
-					tailHash: String(snap.tailHash || '')
+					tailHash: String(snap.tailHash || ''),
+					holesAccepted
 				};
 				if (mailboxFeedCache.tip) {
 					mailboxTipCache = { key: cacheKey, tip: mailboxFeedCache.tip };
@@ -780,22 +855,36 @@ export async function loadMailboxMessages(session, opts = {}) {
 			throw e;
 		}
 	}
+	const priorHolesAccepted = Boolean(
+		mailboxFeedCache &&
+			mailboxFeedCache.key === cacheKey &&
+			mailboxFeedCache.holesAccepted
+	);
+	const priorRawFeed =
+		mailboxFeedCache &&
+		mailboxFeedCache.key === cacheKey &&
+		Array.isArray(mailboxFeedCache.messages) &&
+		mailboxFeedCache.messages.length > 0
+			? mailboxFeedCache.messages
+			: null;
+	const priorHasHoles =
+		Boolean(priorRawFeed) &&
+		!priorHolesAccepted &&
+		mailboxFeedHasHoles(priorRawFeed);
 	const priorMeta =
 		mailboxFeedCache && mailboxFeedCache.key === cacheKey
 			? {
 					complete: Boolean(mailboxFeedCache.complete),
 					tailHash: mailboxFeedCache.tailHash || '',
-					tip: mailboxFeedCache.tip || ''
+					tip: mailboxFeedCache.tip || '',
+					holesAccepted: priorHolesAccepted,
+					hasHoles: priorHasHoles
 				}
 			: null;
 	const priorTip = peekCachedChatTip(session);
 	const priorFeed =
-		mailboxFeedCache &&
-		mailboxFeedCache.key === cacheKey &&
-		mailboxFeedCache.tip === (stopAt || priorTip) &&
-		Array.isArray(mailboxFeedCache.messages) &&
-		mailboxFeedCache.messages.length > 0
-			? mailboxFeedCache.messages
+		priorRawFeed && mailboxFeedCache?.tip === (stopAt || priorTip)
+			? priorRawFeed
 			: null;
 
 	/*
@@ -804,12 +893,17 @@ export async function loadMailboxMessages(session, opts = {}) {
 	 * and skip later tipChanged polls (cross-device self messages vanished).
 	 */
 	if (!tip) {
-		rememberMailboxFeed(session, '', [], { complete: true, tailHash: '' });
+		rememberMailboxFeed(session, '', [], {
+			complete: true,
+			tailHash: '',
+			holesAccepted: true
+		});
 		return { tip: '', messages: [], complete: true };
 	}
 	/*
-	 * Warm hit only for a COMPLETE chain at the live tip. tip+partial was the
-	 * phone/desktop divergence: same tip hash, missing medium-old rows.
+	 * Warm hit only for a COMPLETE contiguous chain at the live tip.
+	 * tip+partial / tip+holes was the phone divergence: same tip hash, missing
+	 * medium-old rows that peers still reply to.
 	 */
 	if (
 		!force &&
@@ -818,7 +912,8 @@ export async function loadMailboxMessages(session, opts = {}) {
 		mailboxFeedCache.tip === tip &&
 		mailboxFeedCache.complete === true &&
 		Array.isArray(mailboxFeedCache.messages) &&
-		mailboxFeedCache.messages.length > 0
+		mailboxFeedCache.messages.length > 0 &&
+		(!priorHasHoles || priorHolesAccepted)
 	) {
 		rememberMailboxTip(session, tip);
 		return {
@@ -832,10 +927,12 @@ export async function loadMailboxMessages(session, opts = {}) {
 	/** @type {{ hash: string, prev?: string | null, entry?: any }[]} */
 	const newestFirst = [];
 	/*
-	 * Incremental tip→stopAt only when prior feed is a complete chain we can merge.
-	 * Incomplete / missing complete → full tip→prev (server tip is authority).
+	 * Incremental tip→stopAt only when prior feed is a complete contiguous chain.
+	 * Incomplete / holes → full tip→prev (Drive tip is authority).
 	 */
-	const priorComplete = Boolean(priorMeta?.complete && priorFeed);
+	const priorComplete = Boolean(
+		priorMeta?.complete && priorFeed && (!priorHasHoles || priorHolesAccepted)
+	);
 	let walkStop = '';
 	if (priorComplete) {
 		walkStop = stopAt || priorTip || '';
@@ -898,12 +995,16 @@ export async function loadMailboxMessages(session, opts = {}) {
 		};
 	}
 	const messages = materializeMailboxMessages(newestFirst, limit, priorFeed || []);
+	const resultHoles = mailboxFeedHasHoles(messages);
 	/*
 	 * Completeness: full genesis walk, or incremental prefix merged onto a
-	 * previously complete chain. Limit truncation / decrypt break → incomplete.
+	 * previously complete contiguous chain. Limit truncation / decrypt break /
+	 * unresolved holes → incomplete so the next open/resume deep-heals.
 	 */
 	const stoppedAtPrior = Boolean(walkStop && !reachedGenesis && newestFirst.length > 0);
-	const complete = reachedGenesis || (stoppedAtPrior && priorComplete);
+	const complete =
+		reachedGenesis || (stoppedAtPrior && priorComplete && !resultHoles);
+	const holesAccepted = Boolean(reachedGenesis && resultHoles);
 	const nextTail = complete
 		? stoppedAtPrior
 			? priorMeta?.tailHash || tailHash
@@ -914,7 +1015,11 @@ export async function loadMailboxMessages(session, opts = {}) {
 	 * permanent warm hit and hides remigrated history until hard cache wipe.
 	 */
 	if (messages.length > 0 || !walkStop) {
-		rememberMailboxFeed(session, tip, messages, { complete, tailHash: nextTail || '' });
+		rememberMailboxFeed(session, tip, messages, {
+			complete,
+			tailHash: nextTail || '',
+			holesAccepted
+		});
 	}
 	if (typeof opts.onPartial === 'function') opts.onPartial(messages);
 	if (typeof console !== 'undefined' && console.debug) {
@@ -925,6 +1030,7 @@ export async function loadMailboxMessages(session, opts = {}) {
 			ids: messages.length,
 			netFetches,
 			complete,
+			holes: resultHoles,
 			tip: tip.slice(0, 12)
 		});
 	}

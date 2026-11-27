@@ -22,6 +22,7 @@ import { putMediaBlob } from './media.js';
 import { inferMediaKind, mimeFromNameAndType } from './media-kind.js';
 import { compressImageFile } from '$lib/compress-image.js';
 import { generateMediaPreview, previewJsonDoc } from './media-preview.js';
+import { canIncrementalMailboxCatchUp, mailboxFeedHasHoles } from '../mailbox-feed.js';
 
 /** v3: re-check remigrate when local mailbox cache was incomplete (truncated IDB). */
 const LEGACY_CHAT_MIGRATE_KEY = 'alpha.chat.mailboxMigrate.v3';
@@ -2456,10 +2457,17 @@ export async function listFeedIds(session) {
 /**
  * Load feed from append-only chat mailbox (tip → prev walk).
  * Pass seedRows so tip-wake can paint immediately; walk only fetches new envelopes.
- * Incomplete local tip caches force a full reconcile (Drive tip = authority).
+ * Incomplete / holey local tip caches force a full reconcile (Drive tip = authority).
+ * Open/resume catchUp prefers a deep heal when the cache is not known contiguous;
+ * quiet tip polls stay incremental on a healthy complete chain.
  * @param {import('./client.js').DriveSession} session
  * @param {number} [limit]
- * @param {{ onPartial?: (rows: any[]) => void, seedRows?: any[], tip?: string }} [opts]
+ * @param {{
+ *   onPartial?: (rows: any[]) => void,
+ *   seedRows?: any[],
+ *   tip?: string,
+ *   catchUp?: boolean
+ * }} [opts]
  */
 export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	const seedRows = Array.isArray(opts.seedRows) ? opts.seedRows : [];
@@ -2469,16 +2477,40 @@ export async function listFeedMessages(session, limit = FEED_MAX, opts = {}) {
 	const meta = peekMailboxFeedMeta(session);
 	const cachedTip = peekCachedChatTip(session) || '';
 	const busTip = String(opts.tip || '').trim();
+	const seedHoles = mailboxFeedHasHoles(seedRows);
+	const hasHoles = Boolean(meta?.hasHoles) || (seedHoles && meta?.holesAccepted !== true);
 	/*
-	 * Incremental tip→stopAt only when local chain is known-complete.
-	 * Truncated IDB (tip match, missing rows) must full-walk once.
+	 * Incremental tip→stopAt only when local chain is known-complete + contiguous.
+	 * Truncated IDB / CAS-poisoned tip match / reply_to holes → full tip→prev.
 	 * Bus tip skips getNamedTip (avoids stale in-flight poll racing the wake).
+	 * catchUp open/resume: same gate — healthy cache stays fast; holes deep-heal.
 	 */
-	const canIncremental = Boolean(cachedTip && meta?.complete);
+	const canIncremental = canIncrementalMailboxCatchUp({
+		cachedTip,
+		complete: Boolean(meta?.complete),
+		hasHoles,
+		holesAccepted: Boolean(meta?.holesAccepted)
+	});
+	if (
+		opts.catchUp === true &&
+		!canIncremental &&
+		typeof console !== 'undefined' &&
+		console.debug
+	) {
+		console.debug('[chat-latency] catchUp deep heal', {
+			hasHoles,
+			complete: Boolean(meta?.complete),
+			cachedTip: cachedTip.slice(0, 12)
+		});
+	}
 	let { messages } = await loadMailboxMessages(session, {
 		limit,
 		stopAt: canIncremental ? cachedTip : '',
-		force: !canIncremental && Boolean(meta && !meta.complete),
+		/*
+		 * Force skips tip-matched warm hits when the cache is incomplete or holey.
+		 * Quiet tip polls on a healthy complete chain stay incremental (stopAt).
+		 */
+		force: !canIncremental,
 		...(busTip ? { tip: busTip } : {}),
 		onPartial: opts.onPartial
 	});
