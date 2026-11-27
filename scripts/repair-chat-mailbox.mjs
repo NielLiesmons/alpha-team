@@ -4,7 +4,7 @@
  * Does not rewrite tip history — only appends missing ids (newest tip stays valid).
  *
  * Usage:
- *   ALPHA_DRIVE_URL=https://drive.bley.farm \
+ *   ALPHA_DRIVE_URL=https://drive.example.com \
  *   ALPHA_DRIVE_TOKEN=… \
  *   ALPHA_DRIVE_ROOT_KEY=… \
  *   node scripts/repair-chat-mailbox.mjs

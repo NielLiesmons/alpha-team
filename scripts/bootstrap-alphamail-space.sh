@@ -4,12 +4,12 @@
 # Does NOT copy bley tokens or root keys. ROOT cipher key stays on devices only.
 #
 # Usage (from laptop):
-#   scp -i ~/.ssh/bley-deploy deploy/Caddyfile.team.alphamail.xyz \
+#   scp -i ~/.ssh/alpha-deploy deploy/Caddyfile.team.alphamail.xyz \
 #       deploy/services/alpha-drive-alphamail.service \
 #       deploy/services/alpha-api-alphamail.service \
 #       scripts/bootstrap-alphamail-space.sh \
-#       root@37.27.152.36:/tmp/
-#   ssh -i ~/.ssh/bley-deploy root@37.27.152.36 bash /tmp/bootstrap-alphamail-space.sh
+#       root@$DEPLOY_HOST:/tmp/
+#   ssh -i ~/.ssh/alpha-deploy root@$DEPLOY_HOST bash /tmp/bootstrap-alphamail-space.sh
 set -euo pipefail
 
 APEX=alphamail.xyz
