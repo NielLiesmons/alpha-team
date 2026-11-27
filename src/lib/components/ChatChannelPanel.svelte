@@ -271,7 +271,8 @@
 
 	onMount(() => {
 		mountedChannel = channelId;
-		startChatTipPoll();
+		/* Arm quiet tip poll only — open catch-up below owns the title wave. */
+		startChatTipPoll({ skipForce: true });
 		/* Open WS + cache realtime module before first Send (hint/tip-wake stay sync). */
 		prefetchChatRealtime();
 		const warm = hydrateChatFeedFromCache() || chatFeed.length > 0;
@@ -287,9 +288,13 @@
 			chatUi.loading = true;
 		}
 		void refreshChatFeed({
-			/* Local-first: never wave when cache painted; quiet tip catch-up merges delta. */
-			quiet: Boolean(warm),
-			catchUp: !warm
+			/*
+			 * Local-first paint already happened above. This open catch-up always
+			 * tips the mailbox and shows the title wave once — even with warm cache.
+			 * Tip polls / live wakes stay quiet after this settles.
+			 */
+			quiet: false,
+			catchUp: true
 		}).then(() => {
 			const nextTail = chronological.at(-1)?.id ? String(chronological.at(-1).id) : '';
 			lastTailId = nextTail;

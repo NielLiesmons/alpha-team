@@ -5,6 +5,10 @@
 
 import { refreshMembersAndAvatars } from './avatar.svelte.js';
 import {
+	CHAT_RESUME_AWAY_MS,
+	resumeNeedsCatchUpWave
+} from './chat-catchup.js';
+import {
 	hydrateChatFeedFromCache,
 	refreshChatFeed,
 	chatFeed,
@@ -43,6 +47,20 @@ let pendingBusTip = /** @type {string | null} */ (null);
 let pendingRepull = false;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let readReceiptTimer = null;
+/** visibilitychange → hidden timestamp; drives resume catch-up wave. */
+let lastHiddenAt = 0;
+
+/**
+ * @param {{ catchUp?: boolean, quiet?: boolean }} [opts]
+ * @returns {{ quiet: boolean, catchUp: boolean }}
+ */
+function refreshOptsForPull(opts = {}) {
+	if (opts.catchUp === true) return { quiet: false, catchUp: true };
+	if (opts.quiet === true) return { quiet: true, catchUp: false };
+	/* Default tip-poll / force-while-open: quiet once cache or prior settle exists. */
+	const warm = chatFeed.length > 0 || Boolean(chatUi.settled);
+	return { quiet: warm, catchUp: !warm };
+}
 
 /**
  * Stamp the tip we already applied so quiet receipt writes / local appends do
@@ -88,7 +106,13 @@ export function flushReadReceipts() {
 	});
 }
 
-export async function pullChatIfNeeded(force = false) {
+/**
+ * @param {boolean} [force]
+ * @param {{ catchUp?: boolean, quiet?: boolean }} [opts]
+ * — catchUp: open/resume user-visible tip walk (title wave once).
+ * — quiet: tip-poll / echo path — never wave.
+ */
+export async function pullChatIfNeeded(force = false, opts = {}) {
 	const session = activeSession();
 	if (!session) return;
 	/* Don't clobber an in-flight send with a mid-write tip snapshot. */
@@ -104,6 +128,7 @@ export async function pullChatIfNeeded(force = false) {
 	if (!force && now - lastChatPull < PULL_COALESCE_MS) return;
 	inFlight = true;
 	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+	const refreshOpts = refreshOptsForPull(opts);
 	try {
 		let tip = '';
 		try {
@@ -115,16 +140,11 @@ export async function pullChatIfNeeded(force = false) {
 		/*
 		 * Only reload the feed when the chat named tip moved (or first/forced pull).
 		 * Space tip changes (cursors, tasks) must not stampede chat leaf fetches.
+		 * Force open always walks even when lastTip already matches — phone may
+		 * have stamped tip without merging leaves while closed.
 		 */
 		if (force || tipChanged || lastChatPull === 0) {
-			/*
-			 * Warm local feed → quiet background catch-up (no title wave).
-			 * Wave only when there is nothing to paint yet.
-			 * Force open always walks even when lastTip already matches — phone
-			 * may have stamped tip without merging leaves while closed.
-			 */
-			const warm = chatFeed.length > 0 || Boolean(chatUi.settled);
-			await refreshChatFeed({ quiet: warm, catchUp: !warm });
+			await refreshChatFeed(refreshOpts);
 			/*
 			 * Only advance lastTip when the mailbox walk remembered this tip.
 			 * Stamping bare getNamedTip after a timeout left tipChanged=false forever
@@ -144,7 +164,9 @@ export async function pullChatIfNeeded(force = false) {
 						(typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0
 					),
 					tipChanged,
-					force
+					force,
+					catchUp: refreshOpts.catchUp,
+					quiet: refreshOpts.quiet
 				});
 			}
 		}
@@ -156,7 +178,7 @@ export async function pullChatIfNeeded(force = false) {
 		pendingRepull = false;
 		if (queued) void wakeChatFromTip(queued);
 		/* Tip-check only — force:true here stampeded full feed reloads every poll. */
-		else if (repull) void pullChatIfNeeded(false);
+		else if (repull) void pullChatIfNeeded(false, { quiet: true });
 	}
 }
 
@@ -206,9 +228,11 @@ export async function wakeChatFromTip(tip) {
 	inFlight = true;
 	const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 	try {
+		/* Live peer tip while open — quiet; open/resume catch-up owns the wave. */
 		await refreshChatFeed({
 			tip: t,
-			quiet: chatFeed.length > 0 || Boolean(chatUi.settled)
+			quiet: chatFeed.length > 0 || Boolean(chatUi.settled),
+			catchUp: false
 		});
 		const cached = peekCachedChatTip(session) || '';
 		/*
@@ -240,12 +264,25 @@ export async function wakeChatFromTip(tip) {
 	}
 }
 
+/**
+ * @param {{ catchUp?: boolean, quiet?: boolean, persisted?: boolean }} [opts]
+ */
+function forcePullOnResume(opts = {}) {
+	const wave =
+		opts.catchUp === true ||
+		opts.persisted === true ||
+		resumeNeedsCatchUpWave(lastHiddenAt, Date.now(), CHAT_RESUME_AWAY_MS);
+	if (wave) lastHiddenAt = 0;
+	void pullChatIfNeeded(true, wave ? { catchUp: true } : { quiet: true });
+}
+
 function onVisibility() {
 	if (typeof document === 'undefined') return;
 	if (document.visibilityState === 'visible') {
-		void pullChatIfNeeded(true);
-		startChatTipPoll();
+		forcePullOnResume();
+		startChatTipPoll({ skipForce: true });
 	} else {
+		lastHiddenAt = Date.now();
 		stopChatTipPoll();
 	}
 }
@@ -409,19 +446,31 @@ function armChatTipPoll() {
 	}, POLL_MS);
 }
 
-/** Call when ChatChannelPanel mounts / chat route focused. */
-export function startChatTipPoll() {
+/**
+ * Call when ChatChannelPanel mounts / chat route focused.
+ * @param {{ skipForce?: boolean, catchUp?: boolean }} [opts]
+ * — skipForce: visibility already forced a pull; only (re)arm the quiet poll.
+ * — catchUp: panel open path wants the title wave (default force stays quiet).
+ */
+export function startChatTipPoll(opts = {}) {
 	watching = true;
 	/*
 	 * Always force-pull on Chat focus — poll may already be armed from the
 	 * shell visibility listener, and a prior timeout can leave lastTip ahead
 	 * of chatFeed (own messages from another device missing until force).
+	 * Panel mount does its own catchUp refresh; skipForce avoids a quiet
+	 * stampede that would race / clear the open wave.
 	 */
-	if (pollTimer != null) {
-		void pullChatIfNeeded(true);
+	if (opts.skipForce === true) {
+		if (pollTimer == null) armChatTipPoll();
 		return;
 	}
-	void pullChatIfNeeded(true).finally(() => armChatTipPoll());
+	const pullOpts = opts.catchUp === true ? { catchUp: true } : { quiet: true };
+	if (pollTimer != null) {
+		void pullChatIfNeeded(true, pullOpts);
+		return;
+	}
+	void pullChatIfNeeded(true, pullOpts).finally(() => armChatTipPoll());
 }
 
 export function stopChatTipPoll() {
@@ -437,17 +486,27 @@ export function stopChatTipPoll() {
 /** Once from root layout — focus/push wake without requiring chat mount. */
 export function initChatWakeListeners() {
 	if (typeof window === 'undefined') return () => {};
-	const onFocus = () => void pullChatIfNeeded(true);
-	const onPageShow = () => {
+	const onFocus = () => {
+		/*
+		 * Window focus alone is noisy (devtools, OS chrome). Only wave when we
+		 * actually left the tab/PWA for a meaningful stretch.
+		 */
+		if (resumeNeedsCatchUpWave(lastHiddenAt, Date.now(), CHAT_RESUME_AWAY_MS)) {
+			forcePullOnResume({ catchUp: true });
+		} else {
+			void pullChatIfNeeded(true, { quiet: true });
+		}
+	};
+	const onPageShow = (/** @type {PageTransitionEvent} */ ev) => {
 		consumePushOpenQuery();
-		void pullChatIfNeeded(true);
+		forcePullOnResume({ persisted: Boolean(ev?.persisted) });
 	};
 	const onOnline = () => {
 		/* Drop a hung catch-up wave, then force tip pull after airplane mode. */
 		chatUi.syncing = false;
 		chatUi.loading = false;
 		chatUi.settled = true;
-		void pullChatIfNeeded(true);
+		void pullChatIfNeeded(true, { catchUp: true });
 	};
 	const onOffline = () => {
 		chatUi.syncing = false;
@@ -463,9 +522,11 @@ export function initChatWakeListeners() {
 	/*
 	 * Always poll while visible — reactions do not get push wakes, and chat
 	 * panel mount is not required for peer reaction visibility.
+	 * Shell boot stays quiet; ChatChannelPanel mount owns the open catch-up wave.
 	 */
 	consumePushOpenQuery();
 	if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+		/* Quiet force — ChatChannelPanel mount owns the open catch-up wave. */
 		startChatTipPoll();
 	}
 	return () => {

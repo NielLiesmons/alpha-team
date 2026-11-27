@@ -11,7 +11,6 @@
 import { actor, loadActor } from './actor.svelte.js';
 import { refreshMembersAndAvatars, warmAvatarUrlsFromCache } from './avatar.svelte.js';
 import {
-	chatFeed,
 	hydrateChatFeedFromCache,
 	refreshChatFeed,
 	resumeChatOutbox
@@ -326,8 +325,11 @@ export async function bootApp() {
 				} catch (e) {
 					console.warn('mail approved sync', e);
 				}
-				/* Quiet when local cache already paints — tip walk without Metaball. */
-				await refreshChatFeed({ quiet: chatFeed.length > 0, catchUp: chatFeed.length === 0 });
+				/*
+				 * First boot catch-up: wave when Chat chrome is up (even warm cache).
+				 * Panel mount coalesces into the same single-flight walk.
+				 */
+				await refreshChatFeed({ quiet: false, catchUp: true });
 				/* Re-flush in case a tap landed between session-up and this crawl. */
 				try {
 					const { flushPendingPushOpen } = await import('./chat-sync.svelte.js');

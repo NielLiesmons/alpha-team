@@ -16,6 +16,7 @@ import {
 	sortChatMessagesNewestFirst,
 	sortChatMessagesOldestFirst
 } from './drive/entities.js';
+import { mergeChatRefreshOpts, shouldShowChatSyncWave } from './chat-catchup.js';
 import { recentEmojis, rememberEmoji } from './emoji.js';
 import { peekCachedChatTip } from './drive/client.js';
 import { normalizeChatAttachment } from './drive/media-kind.js';
@@ -802,8 +803,8 @@ function feedRowsEquivalent(a, b) {
 /**
  * @param {{ tip?: string, catchUp?: boolean, quiet?: boolean }} [opts]
  * — bus tip hash skips a raced getNamedTip.
- * — catchUp: force title-pill wave only when the feed is truly empty.
- * — quiet: never flash the wave (tip-poll / receipt echo / background wake).
+ * — catchUp: title-pill wave for this open/resume catch-up (even with warm cache).
+ * — quiet: never flash the wave (tip-poll / receipt echo / live peer wake).
  */
 export async function refreshChatFeed(opts = {}) {
 	const session = activeSession();
@@ -829,13 +830,20 @@ export async function refreshChatFeed(opts = {}) {
 	 * inherit the strongest catch-up intent and any bus tip.
 	 */
 	if (feedRefreshInflight) {
-		const prev = feedRefreshQueued || {};
-		const nextTip = String(opts.tip || prev.tip || '').trim();
-		feedRefreshQueued = {
-			quiet: prev.quiet === true && opts.quiet === true,
-			catchUp: Boolean(prev.catchUp || opts.catchUp),
-			...(nextTip ? { tip: nextTip } : {})
-		};
+		feedRefreshQueued = mergeChatRefreshOpts(feedRefreshQueued, opts);
+		/*
+		 * Promote the title wave immediately when an open/resume catch-up queues
+		 * behind a quiet tip walk that already started (boot/poll race).
+		 */
+		if (
+			shouldShowChatSyncWave({
+				quiet: opts.quiet,
+				catchUp: opts.catchUp,
+				settled: chatUi.settled
+			})
+		) {
+			chatUi.syncing = true;
+		}
 		return feedRefreshInflight;
 	}
 
@@ -866,15 +874,15 @@ async function refreshChatFeedOnce(session, opts) {
 	/* Skeleton only when we have nothing to paint — never clear the feed mid-fetch. */
 	chatUi.loading = chatFeed.length === 0;
 	/*
-	 * Title-pill wave only for a truly empty feed — warm local-first opens must
-	 * never Metaball while a quiet background tip walk catches up.
+	 * Open/resume catch-up waves even with warm local-first paint. Tip polls and
+	 * live peer wakes pass quiet so the Metaball does not loop while chat stays open.
 	 */
-	const showSync =
-		opts.quiet !== true &&
-		chatFeed.length === 0 &&
-		(opts.catchUp === true || !chatUi.settled);
-	if (showSync) chatUi.syncing = true;
-	else if (chatFeed.length > 0) chatUi.syncing = false;
+	const showSync = shouldShowChatSyncWave({
+		quiet: opts.quiet,
+		catchUp: opts.catchUp,
+		settled: chatUi.settled
+	});
+	chatUi.syncing = showSync;
 	chatUi.error = null;
 	const gen = ++feedFetchGen;
 	const seedRows = chatFeed.slice();
@@ -883,7 +891,16 @@ async function refreshChatFeedOnce(session, opts) {
 	const clearSyncChrome = () => {
 		if (gen !== feedFetchGen) return;
 		chatUi.loading = false;
-		chatUi.syncing = false;
+		/*
+		 * Keep the wave up across a coalesced follow-up catch-up walk so open
+		 * chrome does not flicker off between single-flight iterations.
+		 */
+		const keepWave = shouldShowChatSyncWave({
+			quiet: feedRefreshQueued?.quiet,
+			catchUp: feedRefreshQueued?.catchUp,
+			settled: true
+		});
+		if (!keepWave) chatUi.syncing = false;
 		chatUi.settled = true;
 	};
 	/**
