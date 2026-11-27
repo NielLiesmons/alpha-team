@@ -178,8 +178,9 @@ export async function bootApp() {
 			/* ignore */
 		}
 		try {
+			/* Early index hydrate so feed shortcodes skeleton → image without waiting on picker. */
 			const { refreshCustomEmojis } = await import('./custom-emoji.svelte.js');
-			void refreshCustomEmojis().catch(() => {});
+			void refreshCustomEmojis({ force: true }).catch(() => {});
 		} catch {
 			/* ignore */
 		}
@@ -338,6 +339,12 @@ export async function bootApp() {
 					/* ignore */
 				}
 				void refreshMembersAndAvatars().catch((e) => console.warn('members/avatars', e));
+				try {
+					const { refreshCustomEmojis } = await import('./custom-emoji.svelte.js');
+					void refreshCustomEmojis({ force: true }).catch(() => {});
+				} catch {
+					/* ignore */
+				}
 				void refreshBackgroundDrive().then(() => {
 					/* Opt-in demo seed only — never auto-seed customer Spaces. */
 					const seedEggs =

@@ -9,7 +9,9 @@
 		customEmojiByName,
 		customEmojiFailed,
 		customEmojiIndexReady,
-		customEmojiUrl
+		customEmojiUrl,
+		ensureCustomEmojiUrl,
+		kickCustomEmojiRefresh
 	} from '$lib/custom-emoji.svelte.js';
 	import { isCustomEmojiToken } from '$lib/message-emoji.js';
 
@@ -19,20 +21,39 @@
 	const shortcode = $derived(isCustomEmojiToken(token));
 	const custom = $derived(shortcode ? customEmojiByName(token) : null);
 	const src = $derived(custom ? customEmojiUrl(token) : null);
-	const failed = $derived(custom ? customEmojiFailed(custom.path) : false);
+	const pathFailed = $derived(custom ? customEmojiFailed(custom.path) : false);
 	const label = $derived(custom ? `:${custom.name}:` : token);
 	const indexReady = $derived(customEmojiIndexReady());
+	/** Unknown shortcode only after a successful index hydrate. */
+	const unknown = $derived(Boolean(shortcode && indexReady && !custom));
 
 	let imgFailed = $state(false);
+	let retriedImg = $state(false);
 
 	$effect(() => {
 		src;
 		imgFailed = false;
+		retriedImg = false;
+	});
+
+	/*
+	 * Feed often paints :name: before boot index lands — keep skeleton pulsing and
+	 * kick (debounced) refresh so we never stick on blank/failed forever.
+	 */
+	$effect(() => {
+		if (!shortcode) return;
+		if (!indexReady) kickCustomEmojiRefresh();
+		else if (!custom) kickCustomEmojiRefresh({ force: true });
+	});
+
+	$effect(() => {
+		if (!custom?.path || src) return;
+		void ensureCustomEmojiUrl(custom.path);
 	});
 </script>
 
 {#if shortcode}
-	{#if src && !failed && !imgFailed}
+	{#if src && !imgFailed}
 		<img
 			class="chat-emoji custom {className}"
 			src={src}
@@ -43,12 +64,18 @@
 			draggable="false"
 			onerror={() => {
 				imgFailed = true;
+				if (!retriedImg && custom?.path) {
+					retriedImg = true;
+					void ensureCustomEmojiUrl(custom.path, { force: true }).then((url) => {
+						if (url) imgFailed = false;
+					});
+				}
 			}}
 		/>
 	{:else}
 		<span
 			class="chat-emoji skel {className}"
-			class:failed={failed || imgFailed || (indexReady && !custom)}
+			class:failed={unknown || pathFailed || (imgFailed && retriedImg)}
 			style:width="{size}px"
 			style:height="{size}px"
 			title={label}

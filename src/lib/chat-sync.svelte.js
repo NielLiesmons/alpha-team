@@ -1,9 +1,10 @@
 /**
  * Fast chat wake: realtime tip bus first, tip poll as fallback while chat is open.
- * Also refreshes members/avatars when tip moves (cross-device profile pics).
+ * Also refreshes members/avatars + custom emoji index when tip moves.
  */
 
 import { refreshMembersAndAvatars } from './avatar.svelte.js';
+import { refreshCustomEmojis } from './custom-emoji.svelte.js';
 import {
 	CHAT_RESUME_AWAY_MS,
 	resumeNeedsCatchUpWave
@@ -156,8 +157,11 @@ export async function pullChatIfNeeded(force = false, opts = {}) {
 			lastChatPull = Date.now();
 			/* Receipt tip writes compete with message tip CAS — defer. */
 			scheduleReadReceipts();
-			/* Members/avatars live on Space tip — refresh on force only, not every chat tip. */
-			if (force) void refreshMembersAndAvatars().catch(() => {});
+			/* Members/avatars + emoji index live on Space tip — force open/resume only. */
+			if (force) {
+				void refreshMembersAndAvatars().catch(() => {});
+				void refreshCustomEmojis({ force: true }).catch(() => {});
+			}
 			if (typeof console !== 'undefined' && console.debug) {
 				console.debug('[chat-latency] pullChat', {
 					ms: Math.round(

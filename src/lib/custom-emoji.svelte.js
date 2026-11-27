@@ -4,11 +4,15 @@
  * Layout:
  *   media/emoji/index.json   alpha.custom_emoji_index/1
  *   media/emoji/{id}.png     96×96 center-cropped PNG (alpha preserved)
+ *
+ * Display URLs come from media-cache (shared inflight decrypt, IDB, no revoke).
+ * Index refresh is single-flight; transient misses never permanently blacklist a path.
  */
 
 import { activePerson } from './actor.svelte.js';
-import { getPath, putPath } from './drive/client.js';
+import { getPath, peekCachedTip, putPath } from './drive/client.js';
 import { sha256Hex } from './drive/crypto.js';
+import { getAttachmentObjectUrl } from './drive/media-cache.js';
 import { activeSession } from './drive/session.svelte.js';
 import { customEmojiShortcode } from './message-emoji.js';
 
@@ -24,6 +28,11 @@ const INDEX_PATH = 'media/emoji/index.json';
 /** Display size in chat is ~32–64px; 96 keeps @2x/@3x sharp without heavy payloads. */
 export const CUSTOM_EMOJI_SIZE = 96;
 
+/** Soft cooldown after a path miss before retry (ms). */
+const FAIL_RETRY_MS = 4_000;
+/** Cap automatic retries so a deleted path cannot spin forever. */
+const FAIL_RETRY_MAX = 5;
+
 /**
  * @typedef {{
  *   id: string,
@@ -37,19 +46,27 @@ export const CUSTOM_EMOJI_SIZE = 96;
 /** @type {CustomEmoji[]} */
 export const customEmojis = $state([]);
 
-/** @type {Record<string, string>} path → object URL */
+/** @type {Record<string, string>} path → object URL (media-cache owned — never revoke) */
 const urlByPath = $state(/** @type {Record<string, string>} */ ({}));
 
-/** @type {Set<string>} */
-const loadingUrls = new Set();
+/** @type {Map<string, Promise<string | null>>} */
+const loadingUrls = new Map();
 
-/** @type {Set<string>} paths that failed to load (no raw :name: fallback). */
-const failedUrls = $state(/** @type {Set<string>} */ (new Set()));
+/** @type {Map<string, number>} path → last fail timestamp */
+const failedAt = new Map();
+/** @type {Map<string, number>} path → soft-retry count */
+const failCount = new Map();
 
 /** Tick so failed/loaded readers stay reactive. */
 let emojiUiTick = $state(0);
 
 let loaded = false;
+/** Space root tip observed when index last hydrated successfully. */
+let lastIndexTip = '';
+/** @type {Promise<CustomEmoji[]> | null} */
+let refreshInflight = null;
+/** Last time we kicked a background refresh from a renderer. */
+let lastKickAt = 0;
 
 /** True after first successful index read (empty index still counts). */
 export function customEmojiIndexReady() {
@@ -57,11 +74,20 @@ export function customEmojiIndexReady() {
 	return loaded;
 }
 
-/** @param {string} [path] */
+/**
+ * True after soft retries are exhausted for this path (deleted / never uploaded).
+ * Transient Drive misses stay soft (skeleton keeps pulsing + retries).
+ * @param {string} [path]
+ */
 export function customEmojiFailed(path) {
 	emojiUiTick;
 	const p = String(path || '').trim();
-	return Boolean(p && failedUrls.has(p));
+	if (!p) return false;
+	return (failCount.get(p) || 0) >= FAIL_RETRY_MAX;
+}
+
+function bumpUi() {
+	emojiUiTick += 1;
 }
 
 function normName(name) {
@@ -136,23 +162,30 @@ export async function encodeCustomEmojiPng(file) {
 
 /**
  * @param {import('./drive/client.js').DriveSession} session
+ * @returns {Promise<{ items: CustomEmoji[], ok: boolean }>}
  */
 async function readIndex(session) {
 	try {
 		const bytes = await getPath(session, INDEX_PATH);
 		const doc = JSON.parse(new TextDecoder().decode(bytes));
 		const items = Array.isArray(doc?.items) ? doc.items : Array.isArray(doc) ? doc : [];
-		return items
-			.map((row) => ({
-				id: String(row?.id || '').trim(),
-				name: normName(row?.name),
-				path: String(row?.path || '').trim(),
-				created_at: String(row?.created_at || ''),
-				created_by: String(row?.created_by || '')
-			}))
-			.filter((e) => e.id && e.name && e.path);
-	} catch {
-		return [];
+		return {
+			ok: true,
+			items: items
+				.map((row) => ({
+					id: String(row?.id || '').trim(),
+					name: normName(row?.name),
+					path: String(row?.path || '').trim(),
+					created_at: String(row?.created_at || ''),
+					created_by: String(row?.created_by || '')
+				}))
+				.filter((e) => e.id && e.name && e.path)
+		};
+	} catch (e) {
+		const msg = String(e?.message || e || '');
+		/* Missing index = empty Space — success. Network/decrypt errors stay !ok. */
+		if (/path not found/i.test(msg)) return { ok: true, items: [] };
+		return { ok: false, items: [] };
 	}
 }
 
@@ -177,55 +210,138 @@ async function writeIndex(session, items) {
 	);
 }
 
-export async function refreshCustomEmojis() {
+/**
+ * Load / refresh the Space custom-emoji index.
+ * Single-flight; skips when Space tip unchanged unless `force`.
+ * @param {{ force?: boolean }} [opts]
+ */
+export async function refreshCustomEmojis(opts = {}) {
+	const force = Boolean(opts.force);
 	const session = activeSession();
 	if (!session) {
 		customEmojis.splice(0, customEmojis.length);
 		loaded = false;
+		lastIndexTip = '';
+		bumpUi();
 		return [];
 	}
-	const items = await readIndex(session);
-	customEmojis.splice(0, customEmojis.length, ...items);
-	loaded = true;
-	emojiUiTick += 1;
-	for (const e of items) void ensureCustomEmojiUrl(e.path);
-	return items;
+
+	const tipNow = peekCachedTip(session) || '';
+	if (!force && loaded && tipNow && tipNow === lastIndexTip) {
+		return customEmojis.slice();
+	}
+
+	if (refreshInflight) return refreshInflight;
+
+	refreshInflight = (async () => {
+		try {
+			const { items, ok } = await readIndex(session);
+			if (!ok) {
+				/* Keep prior list if any; do not claim ready with a false empty. */
+				if (!loaded) bumpUi();
+				return customEmojis.slice();
+			}
+			customEmojis.splice(0, customEmojis.length, ...items);
+			loaded = true;
+			lastIndexTip = peekCachedTip(session) || tipNow || lastIndexTip;
+			/* Clear soft-fails so new/known paths retry after tip move. */
+			failedAt.clear();
+			failCount.clear();
+			bumpUi();
+			/* Lazy URL resolve — ChatEmoji / picker kick ensure; avoid decrypt stampede. */
+			return items;
+		} finally {
+			refreshInflight = null;
+		}
+	})();
+
+	return refreshInflight;
+}
+
+/**
+ * Kick a background index refresh from a renderer (debounced).
+ * Safe to call from $effect / derived paths.
+ * @param {{ force?: boolean }} [opts]
+ */
+export function kickCustomEmojiRefresh(opts = {}) {
+	if (!activeSession()) return;
+	const now = Date.now();
+	if (now - lastKickAt < 1_200) return;
+	lastKickAt = now;
+	/* Unknown shortcode after hydrate → force tip re-read (peer may have added emoji). */
+	void refreshCustomEmojis({ force: Boolean(opts.force) || !loaded }).catch(() => {});
 }
 
 /**
  * @param {string} path
+ * @param {{ force?: boolean }} [opts]
  */
-export async function ensureCustomEmojiUrl(path) {
+export async function ensureCustomEmojiUrl(path, opts = {}) {
 	const p = String(path || '').trim();
 	if (!p) return null;
-	if (urlByPath[p]) return urlByPath[p];
-	if (failedUrls.has(p)) return null;
-	if (loadingUrls.has(p)) return null;
+	if (urlByPath[p] && !opts.force) return urlByPath[p];
+
+	if (!opts.force && (failCount.get(p) || 0) >= FAIL_RETRY_MAX) return null;
+
+	const failTs = failedAt.get(p);
+	if (!opts.force && failTs != null && Date.now() - failTs < FAIL_RETRY_MS) {
+		const wait = Math.max(50, FAIL_RETRY_MS - (Date.now() - failTs) + 50);
+		setTimeout(() => {
+			void ensureCustomEmojiUrl(p);
+		}, wait);
+		return null;
+	}
+
+	const pending = loadingUrls.get(p);
+	if (pending) return pending;
+
 	const session = activeSession();
 	if (!session) return null;
-	loadingUrls.add(p);
-	try {
-		const bytes = await getPath(session, p);
-		const copy = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-		const blob = new Blob(
-			[copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength)],
-			{ type: 'image/png' }
-		);
-		const prev = urlByPath[p];
-		if (prev) URL.revokeObjectURL(prev);
-		if (failedUrls.has(p)) {
-			failedUrls.delete(p);
-			emojiUiTick += 1;
+
+	const work = (async () => {
+		try {
+			const res = await getAttachmentObjectUrl(session, {
+				path: p,
+				kind: 'image',
+				content_type: 'image/png',
+				name: 'emoji.png'
+			});
+			const url = res?.url || null;
+			if (!url) {
+				const n = (failCount.get(p) || 0) + 1;
+				failCount.set(p, n);
+				failedAt.set(p, Date.now());
+				bumpUi();
+				if (n < FAIL_RETRY_MAX) {
+					setTimeout(() => {
+						void ensureCustomEmojiUrl(p);
+					}, FAIL_RETRY_MS + 50);
+				}
+				return null;
+			}
+			failedAt.delete(p);
+			failCount.delete(p);
+			urlByPath[p] = url;
+			bumpUi();
+			return url;
+		} catch {
+			const n = (failCount.get(p) || 0) + 1;
+			failCount.set(p, n);
+			failedAt.set(p, Date.now());
+			bumpUi();
+			if (n < FAIL_RETRY_MAX) {
+				setTimeout(() => {
+					void ensureCustomEmojiUrl(p);
+				}, FAIL_RETRY_MS + 50);
+			}
+			return null;
+		} finally {
+			loadingUrls.delete(p);
 		}
-		urlByPath[p] = URL.createObjectURL(blob);
-		return urlByPath[p];
-	} catch {
-		failedUrls.add(p);
-		emojiUiTick += 1;
-		return null;
-	} finally {
-		loadingUrls.delete(p);
-	}
+	})();
+
+	loadingUrls.set(p, work);
+	return work;
 }
 
 /**
@@ -233,6 +349,7 @@ export async function ensureCustomEmojiUrl(path) {
  * @param {string} [path]
  */
 export function customEmojiUrlForPath(path) {
+	emojiUiTick;
 	const p = String(path || '').trim();
 	if (!p) return null;
 	const cached = urlByPath[p];
@@ -246,6 +363,7 @@ export function customEmojiUrlForPath(path) {
  * @returns {CustomEmoji | null}
  */
 export function customEmojiByName(nameOrCode) {
+	emojiUiTick;
 	const code = customEmojiShortcode(nameOrCode);
 	const name = code.replace(/^:|:$/g, '');
 	if (!name) return null;
@@ -274,7 +392,7 @@ export async function uploadCustomEmoji(file, name) {
 	if (!/^[a-z0-9_]{2,32}$/.test(n)) {
 		throw new Error('Name must be 2–32 letters, numbers, or underscores.');
 	}
-	if (!loaded) await refreshCustomEmojis();
+	if (!loaded) await refreshCustomEmojis({ force: true });
 	if (customEmojis.some((e) => e.name === n)) {
 		throw new Error(`:${n}: already exists — pick another name.`);
 	}
@@ -296,7 +414,10 @@ export async function uploadCustomEmoji(file, name) {
 	const next = [...customEmojis, row];
 	await writeIndex(session, next);
 	customEmojis.splice(0, customEmojis.length, ...next);
-	await ensureCustomEmojiUrl(path);
+	loaded = true;
+	lastIndexTip = peekCachedTip(session) || lastIndexTip;
+	bumpUi();
+	await ensureCustomEmojiUrl(path, { force: true });
 	return row;
 }
 
@@ -310,4 +431,6 @@ export async function removeCustomEmoji(id) {
 	const next = customEmojis.filter((e) => e.id !== sid);
 	await writeIndex(session, next);
 	customEmojis.splice(0, customEmojis.length, ...next);
+	lastIndexTip = peekCachedTip(session) || lastIndexTip;
+	bumpUi();
 }
