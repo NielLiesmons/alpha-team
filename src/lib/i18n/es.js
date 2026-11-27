@@ -95,7 +95,7 @@ export default {
 	'aud.publisherPlaceholder': 'su@gmail.com',
 	'aud.addPublisher': 'Autorizar',
 	'aud.publisherAdded': 'Editor autorizado.',
-	'aud.noPublishers': 'Sin editores aún — los miembros pueden seguir escribiendo en Admin.',
+	'aud.noPublishers': 'Sin editores aún — los miembros pueden seguir escribiendo en Team.',
 	'aud.sendTo': 'Enviar a la lista',
 	'aud.needToken': 'Configura el token API de Publications en Ajustes para gestionar audiencias.',
 	'web.noSite': 'Aún no hay sitio público para este Space.',

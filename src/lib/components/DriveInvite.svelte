@@ -324,7 +324,7 @@
 		<p class="field-label">Members</p>
 		<p class="hint">
 			Edit people on this Space, delete them, or re-share an invite code for an existing profile
-			(does not create a new account). Roles gate the Admin UI only — Drive still uses the shared
+			(does not create a new account). Roles gate the Team UI only — Drive still uses the shared
 			space key.
 		</p>
 		<ul class="member-list">

@@ -1,5 +1,5 @@
 /**
- * Player → Admin → Player handoff.
+ * Player → Team → Player handoff.
  * Player opens Admin with ?return_to=<player origin>/ so after Drive + actor
  * cookies are written, Admin redirects back in the same tab (iOS Safari ITP-safe).
  */

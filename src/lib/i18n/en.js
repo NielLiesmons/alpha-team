@@ -96,7 +96,7 @@ export default {
 	'aud.publisherPlaceholder': 'their@gmail.com',
 	'aud.addPublisher': 'Allow',
 	'aud.publisherAdded': 'Publisher allowed.',
-	'aud.noPublishers': 'No publishers yet — Space members can still compose in Admin.',
+	'aud.noPublishers': 'No publishers yet — Space members can still compose in Team.',
 	'aud.sendTo': 'Send to list',
 	'aud.needToken': 'Set the Publications API token in Settings to manage audiences.',
 	'web.noSite': 'No public site for this Space yet.',

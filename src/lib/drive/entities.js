@@ -696,7 +696,7 @@ export async function listNotes(session, projectId) {
 }
 
 /**
- * Map Drive note → Admin UI row.
+ * Map Drive note → Team UI row.
  * @param {any} n
  * @param {any[]} projectList
  */
@@ -1342,7 +1342,7 @@ export async function addTracksToPlaylist(session, playlist, trackIds) {
 }
 
 /**
- * Map Drive task → Admin UI row.
+ * Map Drive task → Team UI row.
  * @param {any} t
  * @param {any[]} projectList
  */

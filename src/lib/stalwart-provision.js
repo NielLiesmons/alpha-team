@@ -1,5 +1,5 @@
 /**
- * Stalwart mailbox provisioning — called from Admin invite mint, never from the Stalwart UI.
+ * Stalwart mailbox provisioning — called from Team invite mint, never from the Stalwart UI.
  *
  * Creates/resets the IMAP/JMAP account via alpha-api → Stalwart JMAP management
  * (`POST /v1/projects/{project}/mailboxes`). Invite passphrase === mailbox password —

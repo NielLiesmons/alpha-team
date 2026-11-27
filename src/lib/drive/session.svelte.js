@@ -1,5 +1,5 @@
 /**
- * Device-only Drive credentials. Shared across Admin + Player on the Space apex
+ * Device-only Drive credentials. Shared across Team + Player on the Space apex
  * via cookie Domain=.{apex} (see cross-domain-storage.js).
  */
 

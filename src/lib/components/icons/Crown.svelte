@@ -1,7 +1,7 @@
 <script>
 	import BaseIcon from './BaseIcon.svelte';
 
-	/** Admin crown — show beside name; never as a text role label. */
+	/** Team crown — show beside name; never as a text role label. */
 	/** @type {{ size?: number, className?: string }} */
 	let { size = 14, className = '' } = $props();
 </script>

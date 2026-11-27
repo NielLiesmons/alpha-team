@@ -1,7 +1,7 @@
 <script>
 	/**
 	 * Add Profile — paste invite / profile code (WelcomeGate UX) inside DS Modal.
-	 * Admin account creation lives in Admin → Create member, not here.
+	 * Admin account creation lives in Team → Create member, not here.
 	 */
 	import { tick } from 'svelte';
 	import SheetTopbar from '@alpha/ui/SheetTopbar.svelte';
@@ -148,7 +148,7 @@
 			await applyInviteBootstrap(session, { passphrase: invitePass });
 			progressPct = 90;
 			await refreshFromDrive();
-			/* Persist invite role so admin codes unlock full Admin roster on this device. */
+			/* Persist invite role so admin codes unlock full Team roster on this device. */
 			const role =
 				session.role === 'owner' || session.role === 'admin' || session.role === 'member'
 					? session.role

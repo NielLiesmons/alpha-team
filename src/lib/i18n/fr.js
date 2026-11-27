@@ -95,7 +95,7 @@ export default {
 	'aud.publisherPlaceholder': 'leur@gmail.com',
 	'aud.addPublisher': 'Autoriser',
 	'aud.publisherAdded': 'Éditeur autorisé.',
-	'aud.noPublishers': 'Aucun éditeur — les membres peuvent toujours composer dans Admin.',
+	'aud.noPublishers': 'Aucun éditeur — les membres peuvent toujours composer dans Team.',
 	'aud.sendTo': 'Envoyer à la liste',
 	'aud.needToken': 'Définissez le jeton API Publications dans Réglages pour gérer les audiences.',
 	'web.noSite': 'Pas encore de site public pour cet Espace.',

@@ -1,2 +1,2 @@
-/** Legacy Admin Player → standalone alpha-player. */
+/** Legacy Team Player route → standalone alpha-player. */
 export const prerender = true;

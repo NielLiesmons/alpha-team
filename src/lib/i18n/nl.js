@@ -95,7 +95,7 @@ export default {
 	'aud.publisherPlaceholder': 'hun@gmail.com',
 	'aud.addPublisher': 'Toestaan',
 	'aud.publisherAdded': 'Uitgever toegestaan.',
-	'aud.noPublishers': 'Nog geen uitgevers — leden kunnen nog steeds in Admin schrijven.',
+	'aud.noPublishers': 'Nog geen uitgevers — leden kunnen nog steeds in Team schrijven.',
 	'aud.sendTo': 'Verzenden naar lijst',
 	'aud.needToken': 'Stel het Publications API-token in bij Instellingen om doelgroepen te beheren.',
 	'web.noSite': 'Nog geen openbare site voor deze Space.',
