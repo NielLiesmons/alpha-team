@@ -1,10 +1,10 @@
 ---
-description: Alpha Admin visual system — accents, icons, buttons, destructive chrome
+description: Alpha Team visual system — accents, icons, buttons, destructive chrome
 globs: src/**/*.{svelte,css,js}
 alwaysApply: true
 ---
 
-# Alpha Admin design system (agents)
+# Alpha Team design system (agents)
 
 Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §3 / §3b).
 
@@ -12,7 +12,7 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 
 - Accent is a **whisper** for checks, sparse marks, focus — **not** selected cards, section rows, FABs, body text, or primary CTAs.
 - Never paint selected Settings cards / list rows with accent border or accent wash. Use grayscale fill (`--fg-4` / `--fg-8`).
-- Alpha default / Admin / Niel: **three** accents — `--accent-1` blurple (success/checks), `--accent-2` gold (in-progress / Sending… / Publishing…), `--accent-3` rouge (urgency marks + destructive icons). Customer sites may still derive companions from one brand accent.
+- Alpha default / Team / Niel: **three** accents — `--accent-1` blurple (success/checks), `--accent-2` gold (in-progress / Sending… / Publishing…), `--accent-3` rouge (urgency marks + destructive icons). Customer sites may still derive companions from one brand accent.
 
 ## Feed / list rows (2nd column)
 
@@ -43,7 +43,7 @@ Canonical product write-up: `../alpha-docs/ADR-shared-design-system.md` (esp. §
 
 - **Never** show a visual drag handle / grabber pill on Modal, CreateSheet, or generic bottom sheets — not on mobile, not on desktop.
 - Shared top chrome (`SheetTopbar`): close **X** (left) + centered title + trailing. Desktop 28 glass / 14px title; mobile 44 round / **17px** title (match `ChromeMobileBar`). Create sheets: **no** SheetTopbar row — content owns title/actions (overlay / Escape / drag-dismiss). Nav Create/Search still use Modal + SheetTopbar. Chrome icon pills: **scale only** on hover — no color wash.
-- **Exception — comment panels:** X + centered “Comments” + `Drag` grabber (right) for resize / drag-under-min dismiss. Same pattern in Admin `CommentThread` and public `CommentSection`.
+- **Exception — comment panels:** X + centered “Comments” + `Drag` grabber (right) for resize / drag-under-min dismiss. Same pattern in Team `CommentThread` and public `CommentSection`.
 - Comment FAB ↔ panel morph: fixed `--comments-radius` per breakpoint so only width/height animate — never transition `border-radius`. Desktop: **22px** (half of 44px FAB) on the full rounded floating card; mobile: `--radius-hero` (**34px**) top radii only.
 - Mobile modal/sheet top radii: `--radius-hero` (34px) concentric with round chrome buttons (12 pad + 22). Desktop cards: `calc(var(--radius-hero) - 2px)`, centered.
 - Mobile sheets may still support drag-down-to-dismiss as a gesture.
@@ -82,7 +82,7 @@ Canonical surface + rows: `@alpha/ui/popover.css` (`.alpha-popover`, `.alpha-pop
 ## Settings profiles
 
 - No duplicate “Profiles” header under the shell Settings title.
-- Admin = **crown** beside name; do not print owner/admin/member labels on cards.
+- Team = **crown** beside name; do not print owner/admin/member labels on cards.
 - Cards use **Modal glass** (`--modal-bg` / `--glass-panel` + `--glass-blur` + `--glass-border`) — not `--fg-4` wash. Selected card slightly larger; same quiet stroke as unselected + Add.
 - Collapsed hub: **real** card stack — selected on top, max **two** other profile cards underneath (lower opacity + more scale-down each). Stack display gets **+8px** L/R pad.
 - Expand (chevronDown): cards **morph continuously** from under the stack (margin + scale — no staggered pop-in); animate hub sections away so the deck owns the page. Chevron → glass **Select** pill on every profile card.

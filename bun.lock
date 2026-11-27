@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "alpha-admin",
+      "name": "alpha-team",
       "dependencies": {
         "@alpha/ui": "file:vendor/alpha-ui",
         "@tiptap/core": "^3.32.0",

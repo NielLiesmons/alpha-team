@@ -1,5 +1,5 @@
 # Alpha VPS Caddy — Team control plane for nielliesmons.fr
-# Primary: team.nielliesmons.fr → /var/www/admin (shared Admin/Team build)
+# Primary: team.nielliesmons.fr → /var/www/admin (shared Team build)
 # Legacy:  admin.nielliesmons.fr → permanent redirect to team.nielliesmons.fr
 #
 # Apply (as root): merge into /etc/caddy/Caddyfile, then

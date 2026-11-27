@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Safe static deploy for Alpha Admin → /var/www/admin
+# Safe static deploy for Alpha Team → /var/www/admin
 # Public host is team.{apex} (legacy admin.{apex} redirects there).
 #
 # Required: DEPLOY_HOST (hostname or IP of the deploy target).

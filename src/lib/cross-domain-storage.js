@@ -1,5 +1,5 @@
 /**
- * Shared session storage across Admin ↔ Player on the same Space apex
+ * Shared session storage across Team ↔ Player on the same Space apex
  * (cookies with `Domain=.{apex}` + localStorage mirror).
  *
  * Cookie wins on read (cross-subdomain); write updates both.
@@ -132,5 +132,5 @@ export function clearShared(key, legacyKeys = []) {
 
 export const DRIVE_SESSION_KEY = 'alpha.drive.session.v1';
 export const ACTOR_KEY = 'alpha.actor.v1';
-/** Pre-shared-session Admin actor key */
+/** Pre-shared-session Team actor key (legacy name) */
 export const ACTOR_LEGACY_KEYS = ['alpha-admin-actor.v1'];

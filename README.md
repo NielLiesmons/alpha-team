@@ -1,4 +1,4 @@
-# Alpha Admin
+# Alpha Team
 
 Operator UI for an Alpha **Space** (team / family / SMB): Chat, Mail, Files, Tasks, Notes, Websites.
 
