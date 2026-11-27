@@ -173,10 +173,13 @@
 		const cap = String(att?.caption || '').trim();
 		return !cap || cap === body;
 	});
+	/** 1–3 emoji body → large glyphs (quote chrome does not disqualify). */
 	const emojiOnly = $derived.by(() => {
-		if (isReply || hasAttachments) return null;
+		if (hasAttachments) return null;
 		return emojiOnlyInfo(msg.body);
 	});
+	/** Transparent sticker shell — only when there is no quote to host. */
+	const emojiSticker = $derived(Boolean(emojiOnly) && !isReply);
 	const bodyTokens = $derived.by(() => {
 		members.length;
 		const people = members.map((m) => ({
@@ -558,7 +561,7 @@
 				class="bubble"
 				class:quoted={isReply}
 				class:mine={isMine}
-				class:emoji-only={Boolean(emojiOnly)}
+				class:emoji-only={emojiSticker}
 				class:stack-first={stackFirst}
 				class:stack-last={stackLast}
 				class:stack-mid={!stackFirst && !stackLast}
@@ -571,7 +574,7 @@
 				role="group"
 				aria-label={isMine ? t('chat.yourMessage') : t('chat.messageFrom', { name })}
 			>
-			{#if showAuthor && stackFirst && !emojiOnly && !isMine}
+			{#if showAuthor && stackFirst && !emojiSticker && !isMine}
 				<div class="bubble-head">
 					<span class="author" style:color={nameColor(msg.author, name)}>{name}</span>
 					{#if when}<span class="when">{when}</span>{/if}
@@ -742,7 +745,7 @@
 					{/each}
 				</p>
 			{/if}
-			{#if isMine && stackLast && !emojiOnly && (showReceipt || when)}
+			{#if isMine && stackLast && !emojiSticker && (showReceipt || when)}
 				<div class="meta-out">
 					{#if when}<span class="when">{when}</span>{/if}
 					{#if showReceipt}
@@ -777,7 +780,7 @@
 					{/if}
 				</div>
 			{/if}
-			{#if msg._failed && !emojiOnly}
+			{#if msg._failed && !emojiSticker}
 				<button
 					type="button"
 					class="fail-retry"
@@ -795,7 +798,7 @@
 			</div>
 			{/if}
 
-			{#if isMine && stackLast && emojiOnly && (showReceipt || when)}
+			{#if isMine && stackLast && emojiSticker && (showReceipt || when)}
 				<div class="meta-out meta-out-sticker">
 					{#if when}<span class="when">{when}</span>{/if}
 					{#if showReceipt}
@@ -830,7 +833,7 @@
 					{/if}
 				</div>
 			{/if}
-			{#if msg._failed && emojiOnly}
+			{#if msg._failed && emojiSticker}
 				<button
 					type="button"
 					class="fail-retry fail-retry-sticker"
@@ -1440,6 +1443,11 @@
 		line-height: 1;
 		color: inherit;
 		white-space: nowrap;
+	}
+
+	/* Quoted reply keeps bubble chrome — inset large emoji like body text. */
+	.bubble.quoted .text.emoji-only-text {
+		padding: 0 11px !important;
 	}
 
 	.bubble.mine .text {
