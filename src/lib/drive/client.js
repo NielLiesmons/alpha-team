@@ -868,11 +868,17 @@ export async function loadMailboxMessages(session, opts = {}) {
 		if (!walkStop && msgCount >= limit) break;
 		hash = prev;
 		/*
-		 * Paint the first new leaf ASAP (cold-open 1–2 message gaps), then every
-		 * 12 — waiting for %12 alone left short deltas invisible until walk end.
+		 * Mid-walk paint is for full tip→prev walks only (cold / incomplete).
+		 * Incremental tip→stopAt catch-up must NOT paint the tip leaf alone —
+		 * that made reopen flash newest-first, then older missed leaves above.
+		 * Hold until walk end (final onPartial below) for one coherent merge.
+		 * Live single-leaf tip wakes still finish after one decrypt + stopAt,
+		 * so final apply stays as fast as the old msgCount===1 path.
+		 * Cold empty walks: first leaf ASAP, then every 12.
 		 */
 		if (
 			typeof opts.onPartial === 'function' &&
+			!walkStop &&
 			msgCount > 0 &&
 			(msgCount === 1 || msgCount % 12 === 0)
 		) {
